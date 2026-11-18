@@ -1,0 +1,4781 @@
+{
+ "date": "2026-11-18",
+ "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 17 or 18, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the White House statements and House and Senate floor speeches printed in the Nov. 17, 2026 Congressional Record, as read on Nov. 18 at about 9:06 ET, less the stories earlier pages already used. PBS NewsHour carries Associated Press reporting. Quotes under five words were left out, as were commentators' accounts of what an official said, tributes and procedural remarks. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
+ "lede": [
+  "On Nov. 17 and 18, officeholders in NPR and PBS NewsHour stories, White House statements and the Congressional Record spoke about the Nov. 13 FAA ground stop and the administration's $50 billion air traffic request, President Trump's trip to Asia and his trade statements with Thailand and the Philippines, the race for Senate Democratic leader, and a Senate permitting bill.",
+  "The House floor that day was largely given to public-lands, wildlife and tribal land bills, and the Senate floor to judicial confirmations, permitting and the Dream Act. This page lists 139 statements by 30 officeholders. Checks of the factual statements are running one at a time, and the page is republished as results come in."
+ ],
+ "stories": [
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/17/nx-s1-6042514/jack-reed-faa-oversight-ground-stop-funding",
+   "headline": "Sen. Jack Reed says FAA needs a real plan, not just more money",
+   "published": "2026-11-17T06:58-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/17/g-s1-153950/up-first-newsletter-faa-ground-stop-trump-asia-trip-nvidia-lindsay-clancy",
+   "headline": "Trump is in Asia ahead of Xi, Putin summit. And, tech leaders want Huang back at Nvidia",
+   "published": "2026-11-17T07:20-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/watch-live-senate-armed-services-committee-confirmation-hearing-for-hung-cao-as-navy-secretary",
+   "headline": "WATCH: Navy nominee Hung Cao acknowledges Iran war is 'a strain' in confirmation hearing",
+   "published": "2026-11-17T09:21-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/17/nx-s1-6044213/jensen-huang-nvidia-congress",
+   "headline": "Nvidia board says it does not intend to reinstate Jensen Huang as CEO",
+   "published": "2026-11-17T12:36-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/nation/debunking-social-media-posts-that-claim-a-90-day-blackout-will-start-nov-17",
+   "headline": "Debunking social media posts that claim a 90-day blackout will start Nov. 17",
+   "published": "2026-11-17T13:17-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/trump-administration-details-its-50-billion-request-for-aviation-system-improvements",
+   "headline": "Trump administration details its $50 billion request for aviation system improvements",
+   "published": "2026-11-17T14:27-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides",
+   "headline": "Van Hollen's bid to replace Schumer puts pressure on Democrats to take sides",
+   "published": "2026-11-17T14:52-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/world/trump-arrives-in-philippines-to-kick-off-asia-trip-with-economic-deals-and-talks-with-allies",
+   "headline": "Trump arrives in Philippines to kick off Asia trip with economic deals and talks with allies",
+   "published": "2026-11-17T16:23-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/world/china-and-canada-expand-tariff-relief-while-relations-with-the-u-s-are-strained",
+   "headline": "China and Canada expand tariff relief while relations with the U.S. are strained",
+   "published": "2026-11-17T18:20-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/biden-releases-memoir-recounting-his-presidency-and-decision-to-drop-out-in-2024",
+   "headline": "Biden releases memoir recounting his presidency and decision to drop out in 2024",
+   "published": "2026-11-17T18:35-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/whats-in-trumps-50-billion-air-traffic-control-overhaul-plan",
+   "headline": "What's in Trump's $50 billion air traffic control overhaul plan",
+   "published": "2026-11-17T18:40-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/17/g-s1-151567/alaska-senate-results-peltola-sullivan",
+   "headline": "Mary Peltola flips Alaska's Senate seat into Democrats' column",
+   "published": "2026-11-17T22:27-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/18/nx-s1-6037808/meta-instagram-schools-teens-safety",
+   "headline": "Project Gryffindor: Meta's plan to get more school kids using Instagram",
+   "published": "2026-11-18T05:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/18/nx-s1-5954231/snap-work-rules-retirees",
+   "headline": "She retired early to care for family. New work rules for food aid disrupted that",
+   "published": "2026-11-18T05:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/18/nx-s1-6042889/east-potomac-golf-history-future",
+   "headline": "How the East Potomac golf course became a D.C. landmark — and what could happen to it",
+   "published": "2026-11-18T05:02-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin",
+   "headline": "Trump lands in China with key meetings with Xi and Putin on the agenda",
+   "published": "2026-11-18T05:32-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/18/g-s1-154145/up-first-newsletter-mary-peltola-alaska-trump-asia-nvidia-tech-issues-ai",
+   "headline": "Mary Peltola flips Alaska's Senate seat. And, Nvidia won't reinstate Jensen Huang",
+   "published": "2026-11-18T07:14-05:00"
+  },
+  {
+   "outlet": "White House briefings and statements",
+   "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+   "headline": "Presidential Message on American Education Week",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "White House briefings and statements",
+   "url": "https://www.whitehouse.gov/briefings-statements/2026/11/quad-leaders-summit-joint-press-release/",
+   "headline": "Quad Leaders’ Summit Joint Press Release",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "White House briefings and statements",
+   "url": "https://www.whitehouse.gov/briefings-statements/2026/11/joint-statement-on-an-agreement-between-the-united-states-of-america-and-the-kingdom-of-thailand-on-reciprocal-trade/",
+   "headline": "Joint Statement on an Agreement Between the United States of America and the Kingdom of Thailand on Reciprocal Trade",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6230-2.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6232.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6233-2.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6244.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6247.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6250-4.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6251.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-2.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-5.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  },
+  {
+   "outlet": "Congressional Record",
+   "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+   "headline": "[Congressional Record Volume 172, Number 174 (Tuesday, November 17, 2026)]",
+   "published": "2026-11-17"
+  }
+ ],
+ "statements": [
+  {
+   "id": 1,
+   "speaker": "Jack Reed",
+   "office": "U.S. Senator from Rhode Island",
+   "party": "D",
+   "context": "Interviewed on NPR's Morning Edition on November 17 about the administration's request for $50 billion for air traffic control after the November 13 nationwide ground stop.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "RI",
+   "about_states": [],
+   "quote": "They're just trying to throw money at a problem",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/17/nx-s1-6042514/jack-reed-faa-oversight-ground-stop-funding"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 2,
+   "speaker": "Jack Reed",
+   "office": "U.S. Senator from Rhode Island",
+   "party": "D",
+   "context": "Ranking Democrat on the Senate Armed Services Committee, in opening remarks at the November 17 confirmation hearing of acting Navy Secretary Hung Cao, on the Iran war.",
+   "topic": "Iran war and the Navy",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "RI",
+   "about_states": [],
+   "quote": "the munitions expended and damage sustained from Operation Epic Fury alone will take years to recover",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-senate-armed-services-committee-confirmation-hearing-for-hung-cao-as-navy-secretary"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 3,
+   "speaker": "Mark Kelly",
+   "office": "U.S. Senator from Arizona",
+   "party": "D",
+   "context": "Speaking at the November 17 Senate Armed Services Committee confirmation hearing for acting Navy Secretary Hung Cao, relaying a report his office received about food on deployed warships.",
+   "topic": "Iran war and the Navy",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "AZ",
+   "about_states": [],
+   "quote": "One parent told us that there's their kid, lost more than 45 pounds in six months because of a lack of food",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-senate-armed-services-committee-confirmation-hearing-for-hung-cao-as-navy-secretary"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a record (the hearing transcript, the senator's office or a published report) shows a parent reported a deployed sailor lost more than 45 pounds in six months for lack of food. False if a record shows no such report was made. Cannot be determined if no record of the report can be found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 4,
+   "speaker": "Elizabeth Warren",
+   "office": "U.S. Senator from Massachusetts",
+   "party": "D",
+   "context": "Questioning acting Navy Secretary Hung Cao at his November 17 Senate Armed Services Committee confirmation hearing on the cost of the Iran war.",
+   "topic": "Iran war and the Navy",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "MA",
+   "about_states": [],
+   "quote": "Reported as: Sen. Elizabeth Warren, a Democrat from Massachusetts, grilled Cao on the costs of the Iran war, noting that independent estimates or media reports say the naval blockade on Iranian shipping costs about $32.5 million a day and Iranian strikes on the Navy's regional headquarters in Bahrain did at least $400 million in damage.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-senate-armed-services-committee-confirmation-hearing-for-hung-cao-as-navy-secretary"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if independent estimates or media reports put the naval blockade of Iranian shipping at about $32.5 million a day and the damage from Iranian strikes on the Navy's Bahrain headquarters at $400 million or more. False if the estimates cited say materially different figures. Cannot be determined if no such estimates can be found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 5,
+   "speaker": "Markwayne Mullin",
+   "office": "Secretary of Homeland Security",
+   "party": "R",
+   "context": "Asked by a Fox News correspondent on November 15 whether Americans should worry about social media claims of a 90-day blackout after the FAA ground stop.",
+   "topic": "Outages and blackout rumors",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "We're in good shape here, the panic that people want to draw from is unfounded.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/nation/debunking-social-media-posts-that-claim-a-90-day-blackout-will-start-nov-17"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 7,
+   "speaker": "Markwayne Mullin",
+   "office": "Secretary of Homeland Security",
+   "party": "R",
+   "context": "Responding on November 15 to a question about the United Kingdom's guidance that households keep emergency supplies.",
+   "topic": "Outages and blackout rumors",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Mullin said the UK doesn't have the same safeguards and emergency preparedness the U.S has.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/nation/debunking-social-media-posts-that-claim-a-90-day-blackout-will-start-nov-17"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if U.S. federal emergency-preparedness arrangements are documented as more extensive than the United Kingdom's on the same measures. False if the UK's documented arrangements match or exceed the U.S. on those measures. Cannot be determined if no common measure exists to compare.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 8,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Statement issued as Senate Democrats prepare for the December 1 leadership vote in which Maryland Sen. Chris Van Hollen is challenging him.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "and I have the votes to continue serving as Democratic Leader",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Schumer is re-elected Democratic leader or a public count shows a majority of the caucus backing him. False if he loses the December 1 vote. Cannot be determined before the vote without a public count.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 9,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Described to the Senate Democratic caucus at a luncheon the week of November 9 as his agenda for the next Congress.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "Reported as: Schumer shared his agenda for the next Congress in a caucus luncheon last week, laying out a plan to try to quickly pass legislation on healthcare and tariffs and to launch multiple investigations into President Donald Trump's Republican administration.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 10,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "Making the case on November 17 for replacing Chuck Schumer as Senate Democratic leader in the December 1 vote.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "To deliver, we need new leadership",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 11,
+   "speaker": "John Hickenlooper",
+   "office": "U.S. Senator from Colorado",
+   "party": "D",
+   "context": "Speaking to reporters on November 16 about the Senate Democratic leadership contest after Democrats' midterm gains.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "CO",
+   "about_states": [],
+   "quote": "We flipped nine seats, and the person who actually helps put it all together and do all that, and all of a sudden, there's a revolt.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Democrats gained nine Senate seats from Republicans in the 2026 midterms, per official results. False if the official net or gross flip count differs from nine. Cannot be determined if races counted in the figure are still uncalled.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 12,
+   "speaker": "Tim Kaine",
+   "office": "U.S. Senator from Virginia",
+   "party": "D",
+   "context": "Speaking to reporters on November 16 about Chuck Schumer's role in the Democrats' midterm Senate results.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "Chuck delivered an amazing win",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 13,
+   "speaker": "Jon Ossoff",
+   "office": "U.S. Senator from Georgia",
+   "party": "D",
+   "context": "Reelected Georgia senator speaking to reporters on November 16, undecided between Chuck Schumer and Chris Van Hollen for Senate Democratic leader.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "GA",
+   "about_states": [],
+   "quote": "I want to hear from any candidate what their vision is for the floor and managing the caucus",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 14,
+   "speaker": "Mazie Hirono",
+   "office": "U.S. Senator from Hawaii",
+   "party": "D",
+   "context": "Hawaii senator backing Chuck Schumer for Senate Democratic leader, speaking about hearing from the incoming freshman senators.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "HI",
+   "about_states": [],
+   "quote": "I think that we have to make sure that all these voices are heard",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 15,
+   "speaker": "Bernie Sanders",
+   "office": "U.S. Senator from Vermont",
+   "party": "I",
+   "context": "Vermont senator, an independent who caucuses with Democrats, at a press conference the week of November 9 with Sen. Elissa Slotkin.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "VT",
+   "about_states": [],
+   "quote": "Reported as: Michigan Sen. Elissa Slotkin appeared last week at a press conference with Vermont Sen. Bernie Sanders, an independent who caucuses with Democrats, as he declared that he would not support Schumer.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/van-hollens-bid-to-replace-schumer-puts-pressure-on-democrats-to-take-sides"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 16,
+   "speaker": "Sean Duffy",
+   "office": "Secretary of Transportation",
+   "party": "R",
+   "context": "Defending on November 17 his decision to order a nationwide ground stop on November 13, as reported on PBS NewsHour.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I get like it was hard for people. But I would rather have that story than the other story that we didn't do our job, and we let risk into the system, but we kept flying",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/whats-in-trumps-50-billion-air-traffic-control-overhaul-plan"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 17,
+   "speaker": "Sean Duffy",
+   "office": "Secretary of Transportation",
+   "party": "R",
+   "context": "Speaking to Senate Republicans and the press on November 17 about the cause of the November 13 nationwide FAA ground stop, as described by a PBS NewsHour correspondent.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: He again reiterated that it is was a faulty router made by Juniper Networks that was to blame.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/whats-in-trumps-50-billion-air-traffic-control-overhaul-plan"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the FAA or another official account attributes the November 13 ground stop to a faulty Juniper Networks router. False if an official account names a different cause. Cannot be determined if no official cause has been published.",
+   "premise": null,
+   "counter_statements": [
+    55
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 18,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Asked by reporters in Manila on November 17 about recent service outages involving Microsoft, the FAA and JPMorgan Chase.",
+   "topic": "Outages and blackout rumors",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "When you're big and powerful and you have all the money, things like that happen. It's fine.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/trump-arrives-in-philippines-to-kick-off-asia-trip-with-economic-deals-and-talks-with-allies"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 19,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Asked in Manila on November 17 about a CNN report that Iran was planning to attack Washington with a dirty bomb or chemical weapons.",
+   "topic": "Iran war and the Navy",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Well, if there is, they will pay a price the likes of which no country has ever paid before",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/trump-arrives-in-philippines-to-kick-off-asia-trip-with-economic-deals-and-talks-with-allies"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 20,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Asked in Manila on November 17 about a CNN report that Iran was planning an attack on Washington.",
+   "topic": "Iran war and the Navy",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "But we take it very seriously because they happen to be crazy.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/trump-arrives-in-philippines-to-kick-off-asia-trip-with-economic-deals-and-talks-with-allies"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 21,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking in Manila on November 17 after signing a trade statement with Thailand.",
+   "topic": "Trade deals in Asia",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "to finalizing the details of our formal agreement in the coming weeks",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/trump-arrives-in-philippines-to-kick-off-asia-trip-with-economic-deals-and-talks-with-allies"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 22,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking in Manila on November 17 about the trade statement signed with Thailand.",
+   "topic": "Trade deals in Asia",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Trump said Tuesday that Thailand would buy $2.6 billion in U.S. agricultural products.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/trump-arrives-in-philippines-to-kick-off-asia-trip-with-economic-deals-and-talks-with-allies"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the U.S.-Thailand trade statement or a government release says Thailand will buy $2.6 billion in U.S. agricultural products. False if official documents give a different figure or no purchase commitment. Cannot be determined if no official document addresses purchases.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 23,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking on November 17 in Manila about prospects for ending the war in Ukraine ahead of the trilateral meeting with Xi Jinping and Vladimir Putin.",
+   "topic": "Ukraine war",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I think it's very close to getting it done",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 24,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking on November 17 in Manila about Russian troop deaths and the war in Ukraine.",
+   "topic": "Ukraine war",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: But Trump said on Tuesday that the deaths of tens of thousands of Russian troops every month had created an opening to resolve the conflict.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if U.S., U.K. or other official estimates put Russian troop deaths at tens of thousands a month in recent months. False if official estimates put monthly deaths well below 20,000. Cannot be determined if no official monthly estimate exists. The claim that this created an opening to end the war is not assessed.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 25,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Plans stated before the November 19 trilateral meeting in Shenzhen, China, with Chinese President Xi Jinping and Russian President Vladimir Putin.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: On Thursday, at a first-ever trilateral, Trump said he plans to talk with Xi and Putin about limiting nuclear weapons and bringing an end to the war in Ukraine, which began in 2022 with Russia's invasion.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 26,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Asked the week of November 16 why the U.S. had not been more aggressive in cutting off China's access to advanced computer chips.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "We have a very good relationship with China, and you don't want to insult them.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 27,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking on November 17 about whether Chinese President Xi Jinping will raise Taiwan's sovereignty in their meeting.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I'm sure he'll raise it",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 28,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking in Manila on November 18 at a lunch with Philippine President Ferdinand Marcos Jr.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Our people share common history, common values, common interests, common architectural tastes",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 29,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking in Manila on November 18 after meeting Philippine President Ferdinand Marcos Jr.",
+   "topic": "Trade deals in Asia",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: He said after their meeting that the two nations had reached a trade deal on Wednesday, though he had also said last year that an agreement had been reached.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the U.S. and Philippine governments announced a trade agreement on November 18, 2026. False if neither government announced one. Cannot be determined if only one side describes it as reached.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 30,
+   "speaker": "Marco Rubio",
+   "office": "Secretary of State and National Security Adviser",
+   "party": "R",
+   "context": "Speaking to reporters on November 18 about outages involving Microsoft, the FAA, JPMorgan Chase and the National Security Agency's communications network.",
+   "topic": "Outages and blackout rumors",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: He told reporters there was \"zero\" evidence that the outages are connected or tied to rival nations, cyber hackers or criminals.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if officials have published no evidence linking the recent outages to foreign states, hackers or criminals. False if an official finding attributes any of the outages to such actors. Cannot be determined if investigations have not reported.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "Secretary of State Marco Rubio said there is no evidence that these incidents are related to one another or involve a malign actor or cybercriminal.",
+     "outlet": "NPR",
+     "url": "https://www.npr.org/2026/11/18/g-s1-154145/up-first-newsletter-mary-peltola-alaska-trump-asia-nvidia-tech-issues-ai"
+    }
+   ],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 31,
+   "speaker": "Marco Rubio",
+   "office": "Secretary of State and National Security Adviser",
+   "party": "R",
+   "context": "Speaking to reporters on November 18 about the cause of the recent outages involving Microsoft, the FAA, JPMorgan Chase and the National Security Agency.",
+   "topic": "Outages and blackout rumors",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Sometimes when you are going in to fix your system because you've identified a vulnerability, it creates a short-term disruption",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if an official account attributes any of the recent outages to maintenance or a fix for an identified vulnerability. False if official accounts attribute all of them to other causes. Cannot be determined if no official cause has been published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 32,
+   "speaker": "Marco Rubio",
+   "office": "Secretary of State and National Security Adviser",
+   "party": "R",
+   "context": "Speaking to reporters on November 18 in Shenzhen about whether President Trump would meet North Korean leader Kim Jong Un.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Rubio clarified on Wednesday that Trump was \"serious\" about meeting with Kim as a way of resolving tensions with North Korea.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6045518/trump-china-xi-putin"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Trump himself has said he is willing or intends to meet Kim Jong Un. False if Trump has ruled out a meeting. Cannot be determined if Trump has made no statement on it.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 33,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking to reporters on November 16 about a federal judge's order keeping East Potomac Park in Washington, D.C., open for two weeks.",
+   "topic": "Washington, D.C. building projects",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "What she's done is she stopped it for 15 days",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6042889/east-potomac-golf-history-future"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the federal judge's order keeps East Potomac Park open or blocks the project for about 15 days. False if the order's stated duration differs materially. Cannot be determined if the order's text cannot be found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 34,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Describing over the weekend of November 14 his plan to redevelop the East Potomac Park golf course in Washington, D.C.",
+   "topic": "Washington, D.C. building projects",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "All over the World it will be acclaimed as being the Best Golf Course anywhere.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6042889/east-potomac-golf-history-future"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 35,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking about his plan to redevelop the East Potomac Park golf course in Washington, D.C.",
+   "topic": "Washington, D.C. building projects",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Reported as: Trump said locals will get a 50% discount.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6042889/east-potomac-golf-history-future"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 36,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Responding on social media and to the press the week of November 14 to a federal judge's order keeping East Potomac Park in Washington, D.C., open.",
+   "topic": "Washington, D.C. building projects",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Reported as: In comments on social media and to the press, President Trump slammed her decision and said his administration will appeal.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/18/nx-s1-6042889/east-potomac-golf-history-future"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 37,
+   "speaker": "Joe Biden",
+   "office": "Former President of the United States",
+   "party": "D",
+   "context": "Passage from his memoir \"Promise Me, America,\" published November 17, read aloud by PBS NewsHour anchor Amna Nawaz.",
+   "topic": "Biden memoir",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I was elected to the Senate as a 29-year-old kid. I left the presidency as an 82-year-old man.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/biden-releases-memoir-recounting-his-presidency-and-decision-to-drop-out-in-2024"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Biden was 29 when elected to the Senate (November 1972) and 82 when he left the presidency (January 20, 2025). False if either age is wrong. Cannot be determined if the dates cannot be confirmed.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 38,
+   "speaker": "Joe Biden",
+   "office": "Former President of the United States",
+   "party": "D",
+   "context": "Passage from his memoir \"Promise Me, America,\" published November 17, on his decision to run for reelection in 2024, read aloud by PBS NewsHour anchor Amna Nawaz.",
+   "topic": "Biden memoir",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I believe I was the best person to do it",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/biden-releases-memoir-recounting-his-presidency-and-decision-to-drop-out-in-2024"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 39,
+   "speaker": "Joe Biden",
+   "office": "Former President of the United States",
+   "party": "D",
+   "context": "Passage from his memoir \"Promise Me, America,\" published November 17, on his decision to run for reelection in 2024, read aloud by PBS NewsHour anchor Amna Nawaz.",
+   "topic": "Biden memoir",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "the only person who'd ever beaten Donald Trump",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/biden-releases-memoir-recounting-his-presidency-and-decision-to-drop-out-in-2024"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if, as of 2024, Biden was the only candidate to have defeated Donald Trump in a general or primary election. False if anyone else had beaten Trump in an election he contested. Cannot be determined if the record of contests is incomplete.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 40,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Presidential Message on American Education Week, published by the White House on November 17.",
+   "topic": "Education policy",
+   "broad_topic": "Education",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Since its inception in 1979, the Department of Education has managed to waste over 3 trillion taxpayer dollars without directly educating students or improving their academic performance.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Department of Education spending since 1979 exceeds $3 trillion and that spending is documented as producing no direct education or improvement. False if total spending since 1979 is below $3 trillion. Cannot be determined if the claim turns on what counts as waste.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 41,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Presidential Message on American Education Week, published by the White House on November 17.",
+   "topic": "Education policy",
+   "broad_topic": "Education",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "National assessments in recent years reveal alarming trends, with mathematics and reading scores plummeting",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if recent NAEP results show math and reading scores falling sharply. False if recent NAEP results show scores flat or rising. Cannot be determined if the change is mixed across grades and subjects.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 42,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Presidential Message on American Education Week, published by the White House on November 17, on the cause of declining national assessment scores.",
+   "topic": "Education policy",
+   "broad_topic": "Education",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "as a result of nonsensical leftist policies and Federal Government ineffectiveness",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 43,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Presidential Message on American Education Week, published by the White House on November 17.",
+   "topic": "Education policy",
+   "broad_topic": "Education",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I proudly directed the Secretary of Education to facilitate the closure of the Department of Education",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a presidential directive instructed the Secretary of Education to facilitate closing the Department. False if no such directive exists. Cannot be determined if the directive's text cannot be found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 44,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Presidential Message on American Education Week, published by the White House on November 17, on his executive orders and education funding.",
+   "topic": "Education policy",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "my Executive Orders bar programs that receive Department of Education funds from advancing unlawful “Diversity, Equity, and Inclusion” mandates",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if an executive order bars recipients of Department of Education funds from advancing DEI mandates the order calls unlawful. False if no executive order contains that bar. Cannot be determined if the orders' reach is disputed in court.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 45,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Presidential Message on American Education Week, published by the White House on November 17.",
+   "topic": "Education policy",
+   "broad_topic": "Education",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Under my leadership, taxpayers will no longer be burdened with billions of dollars wasted on progressive social experiments and obsolete programs.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 46,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Presidential Message on American Education Week, published by the White House on November 17.",
+   "topic": "Education policy",
+   "broad_topic": "Education",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Together, we will restore greatness to our classrooms, renew confidence in American education, and ensure that every child has the opportunity to pursue their own unique American Dream.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-american-education-week-ddcb/",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 47,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Joint press release of the Quad Leaders' Summit in Manila on November 17, signed with the leaders of Australia, India and Japan, on a maritime exercise.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "In 2027, our respective P-8 and P-3C patrol aircraft are scheduled to fly in a maritime exercise for the first time in a Quad context, making our seas safer.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/quad-leaders-summit-joint-press-release/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/quad-leaders-summit-joint-press-release/",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "The president announced that the Quad would conduct an exercise featuring maritime patrol aircraft and launch an accelerator to speed the development of artificial intelligence.",
+     "outlet": "PBS NewsHour",
+     "url": "https://www.pbs.org/newshour/world/trump-arrives-in-philippines-to-kick-off-asia-trip-with-economic-deals-and-talks-with-allies"
+    }
+   ],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 48,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Joint statement with Thailand's prime minister, issued November 17 in Manila, on negotiations for a reciprocal trade agreement.",
+   "topic": "Trade deals in Asia",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "have reached substantial conclusion in their negotiations for an Agreement Between the United States of America and the Kingdom of Thailand on Reciprocal Trade",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/joint-statement-on-an-agreement-between-the-united-states-of-america-and-the-kingdom-of-thailand-on-reciprocal-trade/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/joint-statement-on-an-agreement-between-the-united-states-of-america-and-the-kingdom-of-thailand-on-reciprocal-trade/",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the U.S.-Thailand joint statement says the two sides reached substantial conclusion of negotiations on a reciprocal trade agreement. False if it says otherwise. Cannot be determined if the statement cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 49,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about the federal civilian workforce.",
+   "topic": "Federal workforce and pay",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "Now, the administration is denying our Federal civil servants their annual cost-of-living adjustments.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the administration has proposed or set a 0% cost-of-living or pay adjustment for federal civilian employees for 2026 or 2027. False if a raise has been proposed or set. Cannot be determined if no pay plan has been issued.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 50,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about federal employee pay.",
+   "topic": "Federal workforce and pay",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "Congress must pass a raise for Federal employees this year.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 51,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about the November 13 nationwide FAA ground stop.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "We just had a major crisis, an airport disruption across the country, and over 9,000 flights were grounded on Friday alone.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if FAA or flight-tracking records show more than 9,000 flights grounded or cancelled on Friday, November 13, 2026. False if the count for that day is well below 9,000. Cannot be determined if no count for that day is published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 52,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about the administration's $50 billion request for air traffic control modernization.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "Rather than take responsibility, Secretary Duffy was quick to blame Congress, while also asking for an additional $50 billion.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Secretary Duffy publicly blamed Congress for the outage and the administration requested an additional $50 billion. False if he did not blame Congress or no $50 billion request was made. Cannot be determined if his statements cannot be found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 53,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about funding Congress has already provided for FAA modernization.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "Let's remember that Congress just gave them $5 billion for FAA telecom modernizations and system upgrades as part of a broader $12.5 billion FAA package.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if recent law provided $12.5 billion for the FAA, of which about $5 billion is for telecommunications and system upgrades. False if the amounts differ materially. Cannot be determined if the law's text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 54,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about how much of the FAA modernization funding has been spent.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "They have only spent $1 billion of those dollars. Nearly all of it has gone unspent",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official figures show about $1 billion of that $12.5 billion spent (outlays) to date. False if official figures show substantially more spent. Cannot be determined if no spending figure is published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 55,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about the cause of the November 13 FAA ground stop.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "the FAA problem that occurred on Friday was actually a configuration issue.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if an official account attributes the November 13 FAA failure to a configuration issue. False if an official account names a different cause, such as hardware failure. Cannot be determined if no official cause has been published.",
+   "premise": null,
+   "counter_statements": [
+    17
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 56,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, calling for limits on FAA network maintenance.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "I am calling for a moratorium on all nonvital network maintenance through 2026 to make sure that this does not happen again during this holiday season.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 57,
+   "speaker": "Suhas Subramanyam",
+   "office": "U.S. Representative from Virginia",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about Transportation Secretary Sean Duffy.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "we need a Secretary who has a clue",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6229-4.htm",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 58,
+   "speaker": "John Joyce",
+   "office": "U.S. Representative from Pennsylvania",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, about train derailments in Blair County, Pennsylvania.",
+   "topic": "Railway safety",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "PA",
+   "about_states": [
+    "PA"
+   ],
+   "quote": "Last month, Blair County experienced the fourth train derailment since February of this year, which included cars carrying hazardous materials.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6230-2.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6230-2.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if FRA records show four derailments in Blair County, Pennsylvania, from February to October 2026, the latest in October involving hazardous-material cars. False if the records show a different count or no hazmat cars in the October derailment. Cannot be determined if the records do not reach October 2026.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 59,
+   "speaker": "John Joyce",
+   "office": "U.S. Representative from Pennsylvania",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, about oversight of railroad safety after derailments in Blair County, Pennsylvania.",
+   "topic": "Railway safety",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "PA",
+   "about_states": [
+    "PA"
+   ],
+   "quote": "I will continue to fight for accountability and take action to prevent further derailments in the communities where I serve.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6230-2.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6230-2.htm",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 60,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about sacred sites and public lands in New Mexico.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "NM",
+   "about_states": [
+    "NM"
+   ],
+   "quote": "the places that are currently under attack by an administration that sees these lands as nothing more than an opportunity to give away to multinational corporations for mining and oil and gas drilling",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6232.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6232.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 61,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about the Senate's Bipartisan American Affordability and Jobs Act permitting bill.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "This bill would undermine the Clean Water Act, the National Environmental Policy Act, and the Endangered Species Act, bedrock environmental",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6232.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6232.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill's text amends or limits the Clean Water Act, NEPA and the Endangered Species Act. False if the bill leaves all three unchanged. Cannot be determined if whether the changes undermine the laws turns on legal reading.",
+   "premise": null,
+   "counter_statements": [
+    127
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 62,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, about the Senate's Bipartisan American Affordability and Jobs Act permitting bill.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "This bill would undermine the fundamentals of Tribal sovereignty and the ability of our Tribal nations to protect cultural and sacred sites",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6232.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6232.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill's text reduces tribal consultation or tribal authority over cultural and sacred sites. False if the bill leaves those provisions unchanged. Cannot be determined if the effect turns on legal reading.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "that would directly undermine Tribal sovereignty, sacred sites, and the ability of Tribes to manage their cultural resources",
+     "outlet": "Congressional Record",
+     "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm"
+    }
+   ],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 63,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Don Young Doug LaMalfa Indian Buffalo Management Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "In the late 19th century, North America's buffalo population fell from tens of millions to approximately 1,000.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if historical records put the North American buffalo population at tens of millions before the late 19th century and about 1,000 at its low. False if the documented low differs materially. Cannot be determined if estimates conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 64,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Don Young Doug LaMalfa Indian Buffalo Management Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "estimates now placing the U.S. buffalo population at more than 200,000",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if current estimates put the U.S. buffalo population above 200,000. False if current estimates are well below 200,000. Cannot be determined if no current estimate exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 65,
+   "speaker": "Jeff Hurd",
+   "office": "U.S. Representative from Colorado",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Indian Buffalo Management Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CO",
+   "about_states": [],
+   "quote": "It works through existing grant programs and authorizes no new spending.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill authorizes no new appropriations and CBO scores it at no new spending. False if the bill authorizes new appropriations. Cannot be determined if no text or score is available.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 66,
+   "speaker": "Jeff Hurd",
+   "office": "U.S. Representative from Colorado",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Southern Ute Tribe's buffalo herd in Colorado.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "CO",
+   "about_states": [
+    "CO"
+   ],
+   "quote": "The Southern Ute Tribe has managed its own bison herd for decades.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if records show the Southern Ute Tribe has managed its own bison herd for decades. False if the herd was established within the last 20 years. Cannot be determined if no record of the herd's start is found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 67,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Responsible Cormorant Management and Control Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "Double-crested cormorants have recovered significantly since their listing under the Migratory Bird Treaty Act in 1972.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if double-crested cormorants were added to the Migratory Bird Treaty Act protections in 1972 and their population has grown substantially since. False if they were protected earlier or the population has not grown. Cannot be determined if records conflict.",
+   "premise": null,
+   "counter_statements": [
+    68
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 68,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the Responsible Cormorant Management and Control Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "Cormorants have been protected under the Migratory Bird Treaty Act for over 100 years.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if double-crested cormorants have been protected under the Migratory Bird Treaty Act since 1926 or earlier. False if their protection began in 1972. Cannot be determined if the listing history is unclear.",
+   "premise": null,
+   "counter_statements": [
+    67
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 69,
+   "speaker": "Tim Walberg",
+   "office": "U.S. Representative from Michigan",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Responsible Cormorant Management and Control Act, about the Great Lakes.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "MI",
+   "about_states": [],
+   "quote": "They hold over 20 percent of the world's freshwater",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Great Lakes hold more than 20% of the world's surface fresh water. False if official figures put it well below 20%. Cannot be determined if the figure depends on a definition of freshwater.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 70,
+   "speaker": "Tim Walberg",
+   "office": "U.S. Representative from Michigan",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Responsible Cormorant Management and Control Act, about Great Lakes fishing.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "MI",
+   "about_states": [],
+   "quote": "Fishing in the Great Lakes alone contributes more than $5 billion to the regional economy and supports over 75,000 jobs.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official or academic estimates put Great Lakes fishing's economic contribution above $5 billion and jobs above 75,000. False if estimates are well below either figure. Cannot be determined if no estimate exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 71,
+   "speaker": "Tim Walberg",
+   "office": "U.S. Representative from Michigan",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Responsible Cormorant Management and Control Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "MI",
+   "about_states": [],
+   "quote": "The Great Lakes are home to the largest breeding population of cormorants in the United States, with over 70 percent of the population nesting in the Great Lakes alone.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if surveys show the Great Lakes hold the largest U.S. breeding population of double-crested cormorants and over 70% of the population nests there. False if surveys show a smaller share or a larger population elsewhere. Cannot be determined if no survey gives a share.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 72,
+   "speaker": "Tim Walberg",
+   "office": "U.S. Representative from Michigan",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Responsible Cormorant Management and Control Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "MI",
+   "about_states": [],
+   "quote": "Populations of double-crested cormorants are exploding in regions across the country, and in some cases doubling every 4 years.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6238.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if surveys show regional double-crested cormorant populations growing rapidly, some doubling about every four years. False if surveys show populations stable or declining. Cannot be determined if no survey covers growth rates.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 73,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Barona Group of Capitan Grande Band of Mission Indians Land Transfer Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "AR",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "Originally, the Tribe's reservation spanned over 15,000 acres until the city of San Diego initiated a land sale in 1931 so it could build the El Capitan Reservoir.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Barona/Capitan Grande reservation exceeded 15,000 acres and San Diego initiated a land sale in 1931 for El Capitan Reservoir. False if the acreage or year differs materially. Cannot be determined if records conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 74,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Barona Group of Capitan Grande Band of Mission Indians Land Transfer Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "AR",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "The land transfer will not impact or alter existing water rights and service agreements",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill's text preserves existing water rights and service agreements. False if the text alters them. Cannot be determined if the text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 75,
+   "speaker": "Darrell Issa",
+   "office": "U.S. Representative from California",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Barona Band land transfer bill.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "CA",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "However, the real beneficiary is the Federal Government.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 76,
+   "speaker": "Darrell Issa",
+   "office": "U.S. Representative from California",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Barona Band land transfer bill.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "Currently the Bureau of Land Management spends a not insignificant number of dollars every year and growing maintaining 847 acres of land that earns no money",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the land to be transferred is 847 acres managed by BLM and produces no revenue. False if the acreage or manager differs. Cannot be determined if no record of the parcel is found. 'Not insignificant' maintenance cost is not assessed.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 77,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the Common Sense 250 Act for a Thomas Paine memorial in Washington, D.C.",
+   "topic": "Washington, D.C. building projects",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "NM",
+   "about_states": [
+    "DC"
+   ],
+   "quote": "In contrast to how the current administration is attempting to plaster Washington, D.C., with vanity projects requested by the President in violation of current law",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a court or the GAO has found an administration building project in Washington, D.C., to violate current law. False if no such finding exists and the projects are authorized. Cannot be determined if legality is disputed and unresolved.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 78,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Common Sense 250 Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "AR",
+   "about_states": [
+    "DC"
+   ],
+   "quote": "In 2022, Congress authorized the Thomas Paine Memorial Association to establish a privately funded commemorative work honoring Thomas Paine for his contribution to our Nation's founding.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a 2022 law authorized the Thomas Paine Memorial Association to establish a privately funded commemorative work. False if no such authorization was enacted in 2022. Cannot be determined if the law cannot be found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 79,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Common Sense 250 Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "momentum grew to adopt the Declaration of Independence, which was signed just 6 months after the publication of ``Common Sense.''",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Declaration of Independence was signed about six months after Common Sense was published (January 10, 1776). False if the interval differs materially. Cannot be determined if dates conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 80,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on his Common Sense 250 Act for a Thomas Paine memorial.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "Tom Paine arrived in America in 1774, 2 years before the American Revolution.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Thomas Paine arrived in America in 1774. False if he arrived in another year. Cannot be determined if records conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 81,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on his Common Sense 250 Act for a Thomas Paine memorial.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "It spread across the Colonies and became the best-selling book of all time, other than the Bible, in the Colonies.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if historians describe Common Sense as the best-selling book in the colonies other than the Bible. False if historians name another best-seller. Cannot be determined if sales records do not decide it.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 82,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on his Common Sense 250 Act for a Thomas Paine memorial.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "George Washington had the troops at Valley Forge read the words of ``Common Sense'' to each other by campfire light",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a historical record shows Washington had Common Sense read to troops at Valley Forge. False if the record shows the reading was of a different work or at a different place. Cannot be determined if no record exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 83,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the stalled placement of a Thomas Paine memorial on the National Mall.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "MD",
+   "about_states": [
+    "DC"
+   ],
+   "quote": "That recommendation has yet to be transmitted to Congress, which has slowed down our work.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6242.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the recommendation on placing a Thomas Paine memorial in Area I has not been transmitted to Congress. False if it has been transmitted. Cannot be determined if no record addresses it.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 84,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Crossett Experimental Forest Act, about the Crossett Experimental Forest in Arkansas.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Agriculture",
+   "speaker_state": "AR",
+   "about_states": [
+    "AR"
+   ],
+   "quote": "Although the forest encompasses just 1,685 acres in southern Arkansas",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Crossett Experimental Forest covers about 1,685 acres in southern Arkansas. False if the acreage differs materially. Cannot be determined if no record gives the acreage.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 85,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the Crossett Experimental Forest Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Agriculture",
+   "speaker_state": "NM",
+   "about_states": [
+    "AR"
+   ],
+   "quote": "The Crossett Experimental Forest was established in 1933",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Crossett Experimental Forest was established in 1933. False if established in another year. Cannot be determined if records conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 86,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the Crossett Experimental Forest Act, about the U.S. Forest Service.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "the research mission of the Forest Service is under attack by the administration",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 87,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Crossett Experimental Forest Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "the United States is the number one importer of wood and paper products.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if trade data show the U.S. is the world's largest importer of wood and paper products. False if another country imports more. Cannot be determined if data do not rank importers.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 88,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Crossett Experimental Forest Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "sawmills and paper mills are closing all across the country, our Nation's forests are going up in flames.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6243.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if records show many U.S. sawmill and paper mill closures recently and widespread wildfire acreage. False if records show mill counts stable or rising. Cannot be determined if 'all across the country' turns on reading.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 89,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Earth MRI Reauthorization Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Energy",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "The USGS has quadrupled the Nation's geophysical survey data coverage since its inception.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6244.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6244.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if USGS reports that geophysical survey coverage has quadrupled since Earth MRI began. False if USGS figures show a smaller increase. Cannot be determined if no figure is published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 90,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the Earth MRI Reauthorization Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Energy",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "It provided $320 million over 5 years and allowed the USGS and State geologic surveys to map new regions of the country",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6244.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6244.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Infrastructure Investment and Jobs Act provided about $320 million over five years for Earth MRI. False if the amount differs materially. Cannot be determined if the law's text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 91,
+   "speaker": "Rob Wittman",
+   "office": "U.S. Representative from Virginia",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on his Earth MRI Reauthorization Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "China controls 70 percent of rare earth mining, 90 percent of rare earth separation and processing, and 93 percent of rare earth magnet manufacturing.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6244.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6244.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official estimates put China's share at about 70% of rare earth mining, 90% of separation and processing and 93% of magnet manufacturing. False if official estimates differ materially. Cannot be determined if sources conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 92,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the bill to reauthorize the African American Civil Rights Network.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "AR",
+   "about_states": [
+    "AR",
+    "DC"
+   ],
+   "quote": "Today, the network consists of over 200 sites",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the African American Civil Rights Network has more than 200 sites. False if it has well under 200. Cannot be determined if no current count is published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 93,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the bill to reauthorize the African American Civil Rights Network.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "The network includes 29 States with designated sites open to visitors.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if network sites open to visitors are in 29 states. False if the count differs. Cannot be determined if no current count is published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 94,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the bill to reauthorize the African American Civil Rights Network.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "At a time when we have seen attempts to try to rewrite history, particularly in our national parks",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 95,
+   "speaker": "James Clyburn",
+   "office": "U.S. Representative from South Carolina",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on his bill to reauthorize the African American Civil Rights Network, about Sarah Mae Flemming in Columbia, South Carolina.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "SC",
+   "about_states": [
+    "SC"
+   ],
+   "quote": "a year and a half before Rosa Parks sat down on that bus in Montgomery, Alabama, Sarah Mae Flemming, 6 days before her 21st birthday, sat down on a bus in Columbia, South Carolina, and was physically removed from the bus",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if records show Sarah Mae Flemming was removed from a Columbia, South Carolina, bus in June 1954, about 18 months before Rosa Parks's arrest and six days before her 21st birthday. False if the dates differ materially. Cannot be determined if records conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 96,
+   "speaker": "James Clyburn",
+   "office": "U.S. Representative from South Carolina",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on his bill to reauthorize the African American Civil Rights Network, about South Carolina's economy.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "SC",
+   "about_states": [
+    "SC"
+   ],
+   "quote": "Today, our primary industries are transportation and tourism, and the fastest growing segment of tourism is heritage tourism.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6246.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if South Carolina data name transportation and tourism as primary industries and heritage tourism as tourism's fastest-growing segment. False if data show otherwise. Cannot be determined if no data rank segments.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 97,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Pit River Land Transfer Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "AR",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "The Pit River Tribe, which was federally recognized in 1976, consists of 11 different California Tribal bands and resides on a 100-square-mile reservation.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6247.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6247.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Pit River Tribe was federally recognized in 1976, consists of 11 bands and has a reservation of about 100 square miles. False if any of these differs materially. Cannot be determined if records conflict.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 98,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the Pit River Land Transfer Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "AR",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "H.R. 2400 passed the House on suspension in December 2025. The Senate then made minor technical amendments and passed it by unanimous consent in September 2026.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6247.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6247.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if H.R. 2400 passed the House under suspension in December 2025 and the Senate passed it amended by unanimous consent in September 2026. False if either action's date or method differs. Cannot be determined if the bill's actions cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 99,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the South Dakota Water Feasibility Studies Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "NM",
+   "about_states": [
+    "SD"
+   ],
+   "quote": "As introduced, the language includes explicit authorizations for appropriations totaling $30 million for three new Bureau of Reclamation feasibility studies.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill as introduced authorized $30 million in appropriations for three Bureau of Reclamation feasibility studies. False if the amount or number of studies differs. Cannot be determined if the text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 100,
+   "speaker": "Melanie Stansbury",
+   "office": "U.S. Representative from New Mexico",
+   "party": "D",
+   "context": "Speaking on the House floor on November 17, on the South Dakota Water Feasibility Studies Act, about House leadership.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "NM",
+   "about_states": [],
+   "quote": "While leadership has blocked consideration of these bills time and time again",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 101,
+   "speaker": "Bruce Westerman",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Speaking on the House floor on November 17, on the South Dakota Water Feasibility Studies Act.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "AR",
+   "about_states": [
+    "SD"
+   ],
+   "quote": "The bill also provides for a Federal cost share of no more than 50 percent for each study.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill caps the federal cost share for each study at 50%. False if the cap differs. Cannot be determined if the text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 102,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about President Trump's trip to the ASEAN summit in Manila.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "Trump arrived in Manila only 30 minutes before the summit ended and is off to China tomorrow to spend the rest of the week with Xi Jinping.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Trump arrived in Manila about 30 minutes before the summit ended and was scheduled to leave for China the next day. False if he arrived substantially earlier or his schedule differs. Cannot be determined if no official schedule or report gives the timing.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 103,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about President Trump's trip to Asia.",
+   "topic": "Trump's Asia trip",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "Trump is more interested in securing headlines than in upholding our national security.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 104,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about White House renovations.",
+   "topic": "Washington, D.C. building projects",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "NY",
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Trump has unveiled a slew of new White House renovations that will cost millions of taxpayer dollars.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if announced White House renovations are projected to cost millions in taxpayer funds. False if they are privately funded with no taxpayer cost. Cannot be determined if funding sources are not disclosed.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 105,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about President Trump and White House renovations.",
+   "topic": "Washington, D.C. building projects",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "The only talent Trump has is for wasting Americans' hard-earned tax dollars.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 106,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about the November 13 nationwide FAA ground stop.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "Forget upgrading air traffic control after 17,000 flights were grounded this weekend.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if FAA or flight-tracking records show about 17,000 flights grounded or cancelled over the November 13-15 weekend. False if the count is well below 17,000. Cannot be determined if no count is published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 107,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about the Nvidia chief executive's resignation and alleged Chinese intelligence ties.",
+   "topic": "Nvidia and China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "Forget explaining why his administration didn't reveal that a Chinese spy infiltrated one of America's leading companies.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a Chinese intelligence agent was found to have infiltrated a leading U.S. company and the administration did not disclose it. False if no such finding exists or the administration disclosed it. Cannot be determined if the facts are only alleged.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 108,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Bipartisan American Affordability and Jobs Act and deregulation.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "In fact, we have voted 25 different CRA--Congressional Review Act--resolutions of disapproval to undo burdensome, Biden-era regulations.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Congress record shows 25 CRA disapproval resolutions voted on in this Congress against Biden-era rules. False if the count differs materially. Cannot be determined if the record cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 109,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Senate's past housing legislation.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "We passed the 21st Century ROAD to Housing Act, which cuts some of the redtape that has driven up the price of housing by making it difficult to build new homes.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Senate passed the 21st Century ROAD to Housing Act and it contains provisions easing building regulation. False if the Senate did not pass it. Cannot be determined if its passage record cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 110,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Bipartisan American Affordability and Jobs Act.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "The Federal permitting process is broken.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 111,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Potomac Interceptor sewer pipe that burst earlier this year.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "SD",
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Last week, I mentioned the Potomac Interceptor, which burst earlier this year and sent nearly 250 million gallons of raw sewage spewing into the Potomac River.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Potomac Interceptor burst in 2026 and released nearly 250 million gallons of sewage. False if the volume differs materially or the year differs. Cannot be determined if no official volume is published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 112,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Potomac Interceptor sewer pipe and federal permitting.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "SD",
+   "about_states": [
+    "DC"
+   ],
+   "quote": "The local water company identified vulnerabilities in this 60-year-old sewer pipe a full 7 years before it burst, but proposed repairs languished in the Federal permitting process year after year after year.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if records show DC Water identified vulnerabilities in the Potomac Interceptor seven years before the break and repairs were delayed in federal permitting. False if records show no such delay. Cannot be determined if records do not address permitting.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 113,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about federal environmental review times.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "It takes 4\\1/2\\ years, on average, for Federal Agencies to approve an environmental impact statement.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official data put the average time to complete an environmental impact statement at about 4.5 years. False if official data differ materially. Cannot be determined if no official average exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 114,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about federal environmental review times.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "And if a NEPA lawsuit is filed over a proposed project, it takes almost 2 years to resolve it.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if studies put the average time to resolve a NEPA lawsuit at almost two years. False if studies show a materially different average. Cannot be determined if no study exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 115,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Bipartisan American Affordability and Jobs Act.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "the Council of Economic Advisers estimates that provisions in this bill could save a typical household hundreds of dollars on energy bills and other expenses every single year",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Council of Economic Advisers published an estimate that provisions of this bill could save a typical household hundreds of dollars a year. False if CEA published no such estimate or a different figure. Cannot be determined if the CEA document cannot be found. This is a check of what CEA said.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 116,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Bipartisan American Affordability and Jobs Act and farmers and ranchers.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Agriculture",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "it extends Clean Water Act permits from 5 to 10 years, giving farmers more time to complete projects before having to renew their permits.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill extends Clean Water Act permit terms from 5 to 10 years. False if the text sets a different term. Cannot be determined if the text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 117,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about data center provisions in the Bipartisan American Affordability and Jobs Act.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "That starts with requiring--requiring--data centers to shoulder their own energy costs, whether that is their operating and construction costs or the cost of grid improvements needed to accommodate them.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill's text requires data centers to pay their own energy, construction and grid-upgrade costs. False if it contains no such requirement. Cannot be determined if the text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 118,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Senate's pace of confirming President Trump's judicial nominees.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "We confirmed one yesterday and another today.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Senate confirmed one judge on November 16 and another on November 17, 2026. False if the confirmations on those days differ. Cannot be determined if the record cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 119,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about upcoming judicial confirmations.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "We are going to confirm four more judges this week.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 120,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about judicial confirmations through the end of the year.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "By the end of this year, we will have installed dozens of additional judges onto the courts.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 121,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the history of judicial confirmations by unanimous consent.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "For the first 227 years under our Constitution--1789 to 2016--this Senate confirmed 94 percent of judicial nominees by unanimous consent.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a published count shows about 94% of judicial nominees confirmed by unanimous consent from 1789 to 2016. False if the published share differs materially. Cannot be determined if no such count exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 122,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about judicial confirmations in the current Congress.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "In this Congress, with President Trump making the nominations, not a single judge has cleared this body by unanimous consent--not one--because of Democrat obstruction.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if no judicial nominee was confirmed by unanimous consent or voice vote in the 119th Congress. False if any was. Cannot be determined if the record cannot be read. The cause attributed to Democrats is not assessed.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 123,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the pace of judicial confirmations.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "This Republican Senate has already confirmed judges at the fastest pace in decades.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the count of judges confirmed in this Senate to date is the highest for the same point of a term in decades. False if a recent Senate confirmed more by the same point. Cannot be determined if no comparable count exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 124,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about President Trump's judicial nominees.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "Today, more judges who are serving in the Federal courts were nominated by President Trump compared to any other recent President.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if more sitting federal judges were appointed by Trump than by any other recent president. False if another recent president's appointees outnumber Trump's among sitting judges. Cannot be determined if no current count exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 125,
+   "speaker": "John Barrasso",
+   "office": "U.S. Senator from Wyoming",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about Democrats and judicial nominees.",
+   "topic": "Judicial confirmations",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "WY",
+   "about_states": [],
+   "quote": "The priority of the Democrats is to stonewall President Trump.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 126,
+   "speaker": "Alan Armstrong",
+   "office": "U.S. Senator from Oklahoma",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about data center provisions in the Bipartisan American Affordability and Jobs Act.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Energy",
+   "speaker_state": "OK",
+   "about_states": [],
+   "quote": "requiring new facilities to pay 100 percent of all grid upgrade costs and pay the full tariff on the existing system, rather than receiving subsidized rates",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill requires new large-load facilities to pay 100% of grid-upgrade costs and the full existing tariff. False if the text lacks these requirements. Cannot be determined if the text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 127,
+   "speaker": "Alan Armstrong",
+   "office": "U.S. Senator from Oklahoma",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Bipartisan American Affordability and Jobs Act and environmental protections.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "OK",
+   "about_states": [],
+   "quote": "it does not compromise our environmental protections",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill leaves environmental protection laws unchanged. False if the text amends or limits them. Cannot be determined if whether changes compromise protections turns on legal reading.",
+   "premise": null,
+   "counter_statements": [
+    61
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 128,
+   "speaker": "Alan Armstrong",
+   "office": "U.S. Senator from Oklahoma",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the coalition supporting the Bipartisan American Affordability and Jobs Act.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Energy",
+   "speaker_state": "OK",
+   "about_states": [],
+   "quote": "the renewables industry, the fossil fuel industry, hydropower, geothermal, and mining all stuck together to support this legislation",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if trade groups for renewables, fossil fuels, hydropower, geothermal and mining publicly supported the bill. False if any of those groups opposed it. Cannot be determined if their positions are not public.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 129,
+   "speaker": "Alan Armstrong",
+   "office": "U.S. Senator from Oklahoma",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the Bipartisan American Affordability and Jobs Act and mining.",
+   "topic": "Senate permitting reform bill",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "OK",
+   "about_states": [],
+   "quote": "We have already been losing our mining sector to foreign competitors like China, which can approve a project overnight.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5705-7.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if data show U.S. mining output or share falling relative to China and China approves projects in a very short time. False if data show the U.S. mining sector growing relative to China. Cannot be determined if 'overnight' turns on reading.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 130,
+   "speaker": "Eric Schmitt",
+   "office": "U.S. Senator from Missouri",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about progress on air traffic control modernization funded last year.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "Since the authorization and the Working Families Tax Cut, a little over a year ago, 70 percent of copper wire has been replaced with fiber, nearly 470 radios converted to modernized systems, new electronic flight strips installed in 25 control towers, 220-plus new IP voice switches in place.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-5.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-5.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if FAA records show about 70% of copper replaced with fiber, about 470 radios converted, electronic flight strips in 25 towers and 220+ IP voice switches since the funding. False if FAA figures differ materially. Cannot be determined if FAA has published no progress figures.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 131,
+   "speaker": "Eric Schmitt",
+   "office": "U.S. Senator from Missouri",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about his Modern Skies Act.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "The Modern Skies Act, which I introduced months ago, would invest $30 billion to finish that work, building on the $12.5 billion downpayment already made through the Working Families Tax Cut.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-5.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-5.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Modern Skies Act would provide $30 billion and $12.5 billion was provided in last year's law. False if either figure differs. Cannot be determined if the bill's text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 132,
+   "speaker": "Eric Schmitt",
+   "office": "U.S. Senator from Missouri",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about the state of the air traffic control system.",
+   "topic": "FAA ground stop and air traffic funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "Our air traffic control system depends on aging infrastructure, antiquated equipment, and communications technology designed for decades past.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-5.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-5.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if GAO or FAA reports describe air traffic control systems as aging and obsolete. False if those reports describe them as current. Cannot be determined if no such report exists.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 133,
+   "speaker": "Eric Schmitt",
+   "office": "U.S. Senator from Missouri",
+   "party": "R",
+   "context": "Speaking on the Senate floor on November 17, about his Gateway Partnership Act for Gateway Arch National Park in St. Louis.",
+   "topic": "Public lands, parks and wildlife bills",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "MO",
+   "about_states": [
+    "MO"
+   ],
+   "quote": "this would authorize the National Park Service's ability to enter into a defined agreement with the Gateway Arch Park Foundation to manage, market, and execute private events at Gateway Arch National Park.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-2.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5709-2.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the bill authorizes NPS to enter an agreement with the Gateway Arch Park Foundation to manage, market and run private events at the park. False if the bill's text differs. Cannot be determined if the text cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 134,
+   "speaker": "Dick Durbin",
+   "office": "U.S. Senator from Illinois",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about the Dream Act and public opinion.",
+   "topic": "Dreamers and immigration",
+   "broad_topic": "Immigration",
+   "speaker_state": "IL",
+   "about_states": [],
+   "quote": "81 percent of Americans support citizenship for Dreamers, including 56 percent of Republicans.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a published poll found 81% of Americans, including 56% of Republicans, support citizenship for Dreamers. False if the poll cited shows different figures. Cannot be determined if no such poll is found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 135,
+   "speaker": "Dick Durbin",
+   "office": "U.S. Senator from Illinois",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about President Trump and a bipartisan immigration deal.",
+   "topic": "Dreamers and immigration",
+   "broad_topic": "Immigration",
+   "speaker_state": "IL",
+   "about_states": [],
+   "quote": "Just last week, President Trump said he was willing to work with Democrats on a bipartisan immigration deal.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if in the week before November 17, 2026, Trump publicly said he was willing to work with Democrats on a bipartisan immigration deal. False if no such statement was made that week. Cannot be determined if records of his statements that week are incomplete.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 136,
+   "speaker": "Dick Durbin",
+   "office": "U.S. Senator from Illinois",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about the 2013 bipartisan immigration bill.",
+   "topic": "Dreamers and immigration",
+   "broad_topic": "Immigration",
+   "speaker_state": "IL",
+   "about_states": [],
+   "quote": "I have pushed for this legislation to be included in bipartisan measures like the 2013 Gang of 8 immigration bill, which passed the Senate with 68 votes.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the 2013 Senate immigration bill (S. 744) included Dream Act provisions and passed the Senate with 68 votes. False if the vote count differs or it lacked those provisions. Cannot be determined if the record cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 137,
+   "speaker": "Dick Durbin",
+   "office": "U.S. Senator from Illinois",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about the 2013 bipartisan immigration bill in the House.",
+   "topic": "Dreamers and immigration",
+   "broad_topic": "Immigration",
+   "speaker_state": "IL",
+   "about_states": [],
+   "quote": "Paul Ryan refused to call it or amend it or consider it.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Speaker Paul Ryan declined to bring S. 744 to the House floor. False if the Speaker at the time was someone else or the bill was brought up. Cannot be determined if records conflict. (Note: S. 744 died in the House in 2013-14, when John Boehner was Speaker.)",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 138,
+   "speaker": "Dick Durbin",
+   "office": "U.S. Senator from Illinois",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about his advocacy for Dreamers.",
+   "topic": "Dreamers and immigration",
+   "broad_topic": "Immigration",
+   "speaker_state": "IL",
+   "about_states": [],
+   "quote": "I have come to the floor of the Senate over 150 times to share the stories of Dreamers",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Congressional Record shows Durbin delivered more than 150 floor speeches telling Dreamers' stories. False if the record shows far fewer. Cannot be determined if no count is available.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 139,
+   "speaker": "Dick Durbin",
+   "office": "U.S. Senator from Illinois",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about the Dream Act.",
+   "topic": "Dreamers and immigration",
+   "broad_topic": "Immigration",
+   "speaker_state": "IL",
+   "about_states": [],
+   "quote": "I am not going to give up on the Dreamers.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 140,
+   "speaker": "Dick Durbin",
+   "office": "U.S. Senator from Illinois",
+   "party": "D",
+   "context": "Speaking on the Senate floor on November 17, about passing the Dream Act before the end of the 119th Congress.",
+   "topic": "Dreamers and immigration",
+   "broad_topic": "Immigration",
+   "speaker_state": "IL",
+   "about_states": [],
+   "quote": "We have enough time left to get it done this year.",
+   "reported_by": {
+    "outlet": "Congressional Record",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  }
+ ]
+}
