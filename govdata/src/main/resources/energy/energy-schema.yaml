@@ -3005,6 +3005,140 @@ partitionedTables:
         batchPartitionColumns: []
 
   # ---------------------------------------------------------------------------
+  # EIA NATURAL GAS TRADE - monthly imports and exports by type and partner country
+  # ---------------------------------------------------------------------------
+  - name: eia_natural_gas_trade
+    timeColumn: period  # YYYY-MM observation month; no daily column
+    freshness:
+      type: hash
+    pattern: "type=eia_ng_trade/trade_route=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: trade_route
+          type: VARCHAR
+    comment: >
+      EIA API v2 U.S. natural gas imports and exports, monthly since 1973 (route
+      natural-gas/move/expc for exports, move/impc for imports). One row per series and
+      month, by trade type (LNG, pipeline, CNG, vessel, truck) and partner country, in
+      million cubic feet, plus the matching average prices in $/Mcf as separate price rows.
+      Answers LNG export questions (series N9133US2 for total LNG exports) that the
+      production, storage and Henry Hub tables cannot. Totals (partner_code NUS-Z00) and
+      country rows coexist: filter one or the other before summing. Point-of-exit detail
+      by state/port (route move/poe2) is not included; daily LNG feedgas is commercial data
+      and out of scope.
+
+    dimensions:
+      type:
+        - eia_ng_trade
+      trade_route:
+        - expc
+        - impc
+
+    columns:
+      - name: trade_route
+        type: string
+        nullable: false
+        comment: "EIA API route this row came from: expc (exports) or impc (imports)"
+      - name: direction
+        type: string
+        nullable: false
+        comment: "export or import"
+      - name: period
+        type: string
+        nullable: false
+        comment: "Reporting month, YYYY-MM"
+      - name: year
+        type: integer
+        nullable: false
+        comment: "Calendar year of the period"
+      - name: month
+        type: integer
+        nullable: true
+        comment: "Calendar month (1-12)"
+      - name: series_id
+        type: string
+        nullable: false
+        comment: "EIA series identifier, e.g. N9133US2 = U.S. LNG exports (MMcf), N9132US2 = pipeline exports"
+      - name: series_description
+        type: string
+        nullable: true
+        comment: "Full EIA series description"
+      - name: partner_code
+        type: string
+        nullable: true
+        comment: "EIA duoarea code: NUS-Z00 = U.S. total, otherwise NUS-N<xx> for the partner country"
+      - name: partner_country
+        type: string
+        nullable: true
+        comment: "Partner country (ISO3 code as published by EIA) or 'U.S.' for the all-partner total. Totals and countries coexist, so filter partner_code = 'NUS-Z00' for totals or exclude it when summing countries"
+      - name: process_code
+        type: string
+        nullable: true
+        comment: "EIA process code (ENG LNG exports, ENP pipeline exports, IML LNG imports, IRP pipeline imports, PNG/PNP/PML/PRP prices, etc.)"
+      - name: process_name
+        type: string
+        nullable: true
+        comment: "EIA process description"
+      - name: trade_type
+        type: string
+        nullable: true
+        comment: "LNG, pipeline, CNG, vessel, truck, vessel_and_truck, re-export, or total (all types), derived from process_code"
+      - name: measure
+        type: string
+        nullable: true
+        comment: "volume (MMcf) or price ($/Mcf); volume and price rows are separate series"
+      - name: volume_mmcf
+        type: double
+        nullable: true
+        comment: "Volume in million cubic feet; null on price rows"
+      - name: price_dollars_per_mcf
+        type: double
+        nullable: true
+        comment: "Average price in dollars per thousand cubic feet; null on volume rows"
+      - name: units
+        type: string
+        nullable: true
+        comment: "Unit label as published (MMCF or $/MCF)"
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/natural-gas/move/{trade_route}/data/?frequency=monthly&data[0]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaNaturalGasTradeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_ng_trade/trade_route=*/"
+      partition:
+        columns: [type, trade_route]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_natural_gas_trade
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        # Whole history per route in one fetch; do not year-batch the lone partition.
+        batchPartitionColumns: []
+
+  # ---------------------------------------------------------------------------
   # EIA CRUDE OIL IMPORTS - EIA-814 Monthly Import Survey
   # ---------------------------------------------------------------------------
   - name: eia_crude_oil_imports
@@ -3847,6 +3981,9 @@ constraints:
 
   eia_natural_gas_price:
     primaryKey: [series_id, report_date]
+
+  eia_natural_gas_trade:
+    primaryKey: [series_id, period]
 
   eia_crude_oil_imports:
     primaryKey: [importer_name, origin_country_code, refinery_site_id, rpt_period]

@@ -1596,6 +1596,103 @@ FROM (
 ) t;
 
 -- ============================================================
+-- eia_natural_gas_trade
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true);
+
+-- T2: row_count (~40,000 export + import series-months since 1973)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 30000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 30000, 'expected >= 30000 monthly trade rows across expc + impc'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value (product-level constants are not checked; direction/trade_route have 2 values)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type')
+) t;
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'series_id IS NULL OR period IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true)
+WHERE series_id IS NULL OR period IS NULL;
+
+-- T7: expected_values - volumes non-negative and below 1,000,000 MMcf/month (US total
+-- exports peak near 700,000); prices between 0 and 100 $/Mcf; known anchor series present
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'volume_mmcf outside [0, 1000000] or price outside [0, 100]'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true)
+  WHERE (volume_mmcf IS NOT NULL AND (volume_mmcf < 0 OR volume_mmcf > 1000000))
+     OR (price_dollars_per_mcf IS NOT NULL AND (price_dollars_per_mcf < 0 OR price_dollars_per_mcf > 100))
+) t;
+
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T7b_lng_export_anchor',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1,
+  'series N9133US2 (U.S. LNG exports) present'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true)
+WHERE series_id = 'N9133US2' AND volume_mmcf > 0;
+
+-- T8: pk_duplication guard
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_natural_gas_trade', 'T8_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'duplicate (series_id, period) groups'
+FROM (
+  SELECT series_id, period FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_trade', allow_moved_paths := true)
+  GROUP BY series_id, period HAVING COUNT(*) > 1
+) t;
+
+-- ============================================================
 -- eia_crude_oil_imports
 -- ============================================================
 
