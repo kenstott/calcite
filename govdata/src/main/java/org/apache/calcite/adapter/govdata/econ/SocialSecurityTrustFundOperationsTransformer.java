@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
  * <p>Each page carries three tables: the summary (total income, total cost, net change, reserves
  * at end of year), the income components and the cost components, each with one row per calendar
  * year in millions of dollars. They are joined on the year into one row per fund and year. SSA
- * prints {@code &hellip;} where a component does not exist yet and {@code (c)} for "less than
+ * prints an ellipsis entity where a component does not exist yet and {@code (c)} for "less than
  * $500,000"; both become null. A page whose tables, row counts or cells do not match the expected
  * layout fails the run.
  */
