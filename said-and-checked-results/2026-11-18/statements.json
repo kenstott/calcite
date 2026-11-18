@@ -2,8 +2,9 @@
  "date": "2026-11-18",
  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 17 or 18, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the White House statements and House and Senate floor speeches printed in the Nov. 17, 2026 Congressional Record, as read on Nov. 18 at about 9:06 ET, less the stories earlier pages already used. PBS NewsHour carries Associated Press reporting. Quotes under five words were left out, as were commentators' accounts of what an official said, tributes and procedural remarks. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
  "lede": [
-  "On Nov. 17 and 18, officeholders in NPR and PBS NewsHour stories, White House statements and the Congressional Record spoke about the Nov. 13 FAA ground stop and the administration's $50 billion air traffic request, President Trump's trip to Asia and his trade statements with Thailand and the Philippines, the race for Senate Democratic leader, and a Senate permitting bill.",
-  "The House floor that day was largely given to public-lands, wildlife and tribal land bills, and the Senate floor to judicial confirmations, permitting and the Dream Act. This page lists 139 statements by 30 officeholders. Checks of the factual statements are running one at a time, and the page is republished as results come in."
+  "On Nov. 17 and 18, officeholders quoted by NPR and PBS NewsHour, in White House statements and on the House and Senate floors spoke chiefly about the Nov. 13 FAA ground stop and the administration's request for $50 billion in air traffic control funding, President Trump's trip to Asia and his trade statements with Thailand and the Philippines, the contest for Senate Democratic leader, and a Senate permitting bill.",
+  "The House floor that day was given largely to public-lands, wildlife and tribal land bills, and the Senate floor to judicial confirmations, permitting and the Dream Act. This page lists 139 statements by 30 officeholders; 95 of them assert facts that evidence could test, and all 95 were checked.",
+  "Of those, 45 were supported and 45 were unsettled, most often because the claim turned on a loose term, a legal reading or a question still under investigation, such as the root cause of the ground stop, which the FAA says is still being investigated. Three were unsupported, meaning no evidence was found. Two were contradicted by primary documents: one on how long cormorants have been protected under the Migratory Bird Treaty Act, and one on which agency manages land in a tribal land transfer bill. None was rated false."
  ],
  "stories": [
   {
@@ -5333,10 +5334,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsupported",
+   "finding": "No poll was found reporting both 81% of Americans and 56% of Republicans supporting citizenship for Dreamers. The American Immigration Council's 2018 survey has an 81% figure only for a subgroup of conservative and Republican voters. Searched: the AskAmerica catalog (no polling tables), that survey, and web search results pointing to polls with different wording (legal status rather than citizenship) that were not opened.",
+   "evidence": [
+    {
+     "label": "American Immigration Council, National 2018 Immigration Survey",
+     "url": "https://www.americanimmigrationcouncil.org/poll/national-2018-immigration-survey/"
+    }
+   ],
+   "check_run": "q244/askamerica/2026-11-18"
   },
   {
    "id": 135,
@@ -5365,10 +5371,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "In a 60 Minutes interview aired Nov. 8, 2026, Trump said 'I'd love to do something on immigration' and that he could work out a deal with Democrats (as reported by OSV News). That was nine days before the speech, in the prior calendar week.",
+   "evidence": [
+    {
+     "label": "OSV News via Catholic Review, Trump on 60 Minutes",
+     "url": "https://catholicreview.org/trump-tells-60-minutes-immigration-policy-too-tough-open-to-making-a-deal-with-democrats/"
+    },
+    {
+     "label": "Daily Caller, White House on an immigration deal",
+     "url": "https://dailycaller.com/2026/11/09/trump-amnesty-democrats-white-house-amnesty/"
+    }
+   ],
+   "check_run": "q244/askamerica/2026-11-18"
   },
   {
    "id": 136,
@@ -5397,10 +5412,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "S. 744 passed the Senate 68-32 on June 27, 2013 (roll call 168), as the Senate's vote record and AskAmerica's recorded-vote data show; the bill included DREAM Act provisions (Section 2103, as compiled by Wikipedia).",
+   "evidence": [
+    {
+     "label": "law.bill_recorded_votes (S. 744, 113th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+     "askamerica": true,
+     "sql": "SELECT action_date, action_text, vote_chamber, roll_number FROM law.bill_recorded_votes WHERE congress=113 AND bill_type='s' AND bill_number=744 ORDER BY action_date"
+    },
+    {
+     "label": "Senate roll call vote 168, 113th Congress, 1st session",
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1131/vote_113_1_00168.xml"
+    }
+   ],
+   "check_run": "q244/askamerica/2026-11-18"
   },
   {
    "id": 137,
@@ -5429,10 +5455,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "S. 744 died in the House in the 113th Congress, when John Boehner was Speaker; Boehner and House Republicans said it would not get a floor vote (as compiled by Wikipedia). Paul Ryan became Speaker in October 2015. No primary record was read, and the statement may refer to later Dreamer legislation.",
+   "evidence": [
+    {
+     "label": "Border Security, Economic Opportunity, and Immigration Modernization Act of 2013 (Wikipedia)",
+     "url": "https://en.wikipedia.org/wiki/Border_Security,_Economic_Opportunity,_and_Immigration_Modernization_Act_of_2013"
+    }
+   ],
+   "check_run": "q244/askamerica/2026-11-18"
   },
   {
    "id": 138,
@@ -5461,10 +5492,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "In the same Nov. 17 speech Durbin calls it his '154th Dreamer story', but that is his own running count; no independent tally of his floor speeches was found, and the warehouse has no floor-speech data.",
+   "evidence": [
+    {
+     "label": "Congressional Record, Senate, Nov. 17, 2026, Durbin on Dreamers",
+     "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgS5710.htm"
+    }
+   ],
+   "check_run": "q245/askamerica/2026-11-18"
   },
   {
    "id": 139,
