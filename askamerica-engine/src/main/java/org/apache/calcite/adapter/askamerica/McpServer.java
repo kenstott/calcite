@@ -15473,6 +15473,10 @@ public class McpServer {
             }
             String verb = "POST".equalsIgnoreCase(method) ? "POST" : "GET";
             c = (HttpURLConnection) url.openConnection();
+            if (c instanceof javax.net.ssl.HttpsURLConnection) {
+                ((javax.net.ssl.HttpsURLConnection) c)
+                    .setSSLSocketFactory(ExtraTrustRoots.socketFactory());
+            }
             c.setRequestMethod(verb);
             c.setConnectTimeout(15000);
             c.setReadTimeout(30000);
