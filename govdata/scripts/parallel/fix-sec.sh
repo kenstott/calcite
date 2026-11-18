@@ -82,7 +82,19 @@
 #
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# bash reads a script incrementally from its file offset, so rewriting this file while a run is in
+# progress (a merge, a pull, an edit) makes bash resume mid-line and run a fragment such as `_q`
+# from `psql_q` (#1318). Run from a private snapshot so the on-disk file can change freely; the
+# snapshot is unlinked once bash holds it open.
+if [ -z "${FIX_SEC_SNAPSHOT:-}" ]; then
+  FIX_SEC_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  _snap="$(mktemp "${TMPDIR:-/tmp}/fix-sec.XXXXXX")" || exit 1
+  cp "$FIX_SEC_SELF" "$_snap" || exit 1
+  export FIX_SEC_SNAPSHOT="$_snap" FIX_SEC_SELF
+  exec bash "$_snap" "$@"
+fi
+rm -f "$FIX_SEC_SNAPSHOT"
+SCRIPT_DIR="$(dirname "$FIX_SEC_SELF")"
 source "$SCRIPT_DIR/common.sh"
 source "$SCRIPT_DIR/fix-sec-lib.sh"
 load_env
@@ -172,7 +184,7 @@ while [ $# -gt 0 ]; do
     --heap)           shift; HEAP_GB="${1:-}" ;;
     --wait-for-workers) WAIT_MINUTES=120 ;;
     --wait-for-workers=*) WAIT_MINUTES="${1#*=}" ;;
-    -h|--help)        sed -n '18,63p' "$0" >&2; exit 0 ;;
+    -h|--help)        sed -n '18,63p' "$FIX_SEC_SELF" >&2; exit 0 ;;
     *) echo "fix-sec: unknown argument '$1'" >&2; exit 2 ;;
   esac
   shift
