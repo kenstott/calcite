@@ -2072,7 +2072,7 @@ FROM (SELECT SUM(act_assets) / SUM(act_liabilities) AS r FROM iceberg_scan('s3:/
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
 SELECT 'fiscal', 'fhwa_program_apportionments', 'T1_row_count',
-  CASE WHEN n >= 4000 THEN 'pass' ELSE 'fail' END, n, 4000,
+  CASE WHEN n >= 2815 THEN 'pass' ELSE 'fail' END, n, 2815,
   'FY2022-26: 51 states x 9 programs + 52 x 2 BFP rows per year = 563 per year'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fhwa_program_apportionments', allow_moved_paths := true));
 
