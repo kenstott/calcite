@@ -770,6 +770,18 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         return existingTable;
       }
 
+      // A pure column addition (every existing column survives by name and type, partition spec
+      // intact) is evolved in place, the way IcebergMaterializer does: old data files read the
+      // new columns as null, which is correct because those rows predate the columns. Dropping
+      // with purge here erased a table's whole history to add a column (reproduced in the DQ
+      // bucket on edu.f33_district_finance, kenstott/govdata-ops#1322: a 3-year table was left
+      // with only the one year the run rewrote).
+      Table evolved = evolveForPureColumnAdditions(targetTableId, existingTable, expectedColumns,
+          actualPartitionColumnNames);
+      if (evolved != null) {
+        return evolved;
+      }
+
       // Schema drift → drop + recreate. The purge is deferred to the first flush that has rows to
       // commit (see applyPendingRecreate), so until then the existing table stays readable and intact.
       LOGGER.warn("Iceberg table '{}' has {}. Dropping and recreating it is deferred until the first "
@@ -784,6 +796,55 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         targetTableId, expectedColumns.size(), actualPartitionColumnNames);
     return IcebergCatalogManager.createTableFromColumns(
         catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
+  }
+
+  /**
+   * Evolves {@code existingTable} in place when the drift is nothing but added columns.
+   *
+   * @return the evolved table, or null when the drift is anything else (a renamed, retyped or
+   *         removed column, or a partition-spec change) and the drop-and-recreate path applies
+   */
+  private Table evolveForPureColumnAdditions(String targetTableId, Table existingTable,
+      List<IcebergCatalogManager.ColumnDef> expectedColumns, List<String> partitionColumnNames) {
+    Set<String> existingPartitionColumnNames = new HashSet<String>();
+    for (org.apache.iceberg.PartitionField field : existingTable.spec().fields()) {
+      existingPartitionColumnNames.add(existingTable.schema().findColumnName(field.sourceId()));
+    }
+    if (!existingPartitionColumnNames.containsAll(partitionColumnNames)) {
+      return null;
+    }
+    final String added = org.apache.calcite.adapter.file.iceberg.IcebergMaterializer
+        .pureColumnAdditions(existingTable.schema(), expectedColumns);
+    if (added == null) {
+      return null;
+    }
+    final Table[] result = new Table[1];
+    CrossProcessCommitLock.runExclusive(existingTable.location(), () -> {
+      Table current = IcebergCatalogManager.loadTable(catalogConfig, targetTableId);
+      UpdateSchema update = current.updateSchema();
+      boolean any = false;
+      for (IcebergCatalogManager.ColumnDef col : expectedColumns) {
+        if (current.schema().findField(col.getName()) != null) {
+          continue;
+        }
+        org.apache.iceberg.types.Type type = IcebergCatalogManager.mapToIcebergType(col.getType());
+        if (col.getDoc() != null && !col.getDoc().isEmpty()) {
+          update.addColumn(col.getName(), type, col.getDoc());
+        } else {
+          update.addColumn(col.getName(), type);
+        }
+        any = true;
+      }
+      if (any) {
+        update.commit();
+        current.refresh();
+      }
+      result[0] = current;
+    });
+    LOGGER.info("Evolved Iceberg table '{}': added column(s) [{}], existing rows preserved "
+        + "(no drop, no rewrite)", targetTableId, added);
+    withdrawPublishedSchemaCache(result[0]);
+    return result[0];
   }
 
   /** Drift-driven recreate waiting for the first batch that has rows to commit. */

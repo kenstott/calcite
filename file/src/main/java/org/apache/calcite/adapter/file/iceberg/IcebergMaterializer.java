@@ -3068,7 +3068,7 @@ public class IcebergMaterializer {
    * @return a comma-separated list of the column names that would be added, for logging, or null
    *         if this is not a pure addition (some existing column is missing, renamed, or retyped)
    */
-  static String pureColumnAdditions(Schema existingSchema,
+  public static String pureColumnAdditions(Schema existingSchema,
       List<IcebergCatalogManager.ColumnDef> expectedColumns) {
     Map<String, IcebergCatalogManager.ColumnDef> expectedByName =
         new LinkedHashMap<String, IcebergCatalogManager.ColumnDef>();
