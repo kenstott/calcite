@@ -107,7 +107,16 @@ for schema in "${_schemas[@]}"; do
     # rclone lsf on a single nonexistent path exits 0 with empty stdout — NOT a nonzero exit —
     # so existence must be judged by output, not exit code (verified directly; an exit-code
     # check here silently misrouted a plain reference table into the Iceberg path and crashed).
-    _vh=$(r2_rclone 300 lsf "${MINIO_REMOTE}:${BUCKET}/${schema}/${table}/metadata/version-hint.text" 2>/dev/null)
+    # rclone exits 3 (directory not found) for a folder with no version-hint.text; that is the
+    # "not an Iceberg table" answer. Any other nonzero exit (timeout 124, network) is a real
+    # failure: log it at error level and count the table as failed, never exit silently under set -e.
+    _vh_rc=0
+    _vh=$(r2_rclone 300 lsf "${MINIO_REMOTE}:${BUCKET}/${schema}/${table}/metadata/version-hint.text" 2>/dev/null) || _vh_rc=$?
+    if [ "$_vh_rc" -ne 0 ] && [ "$_vh_rc" -ne 3 ]; then
+      log_error "catchup-sync-r2: [$schema/$table] version-hint lookup failed (rclone rc=${_vh_rc}); table not examined"
+      _fail=1
+      continue
+    fi
     if [ -n "$_vh" ]; then
       if sync_iceberg_table "$schema" "$table"; then _ok=$((_ok + 1)); else _fail=1; fi
     else
