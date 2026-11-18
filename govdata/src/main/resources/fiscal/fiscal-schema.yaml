@@ -4201,11 +4201,16 @@ partitionedTables:
       address, not necessarily the bridge's physical location — the same
       convention as this table's sibling USAspending award tables
       (broadband_reconnect_awards, broadband_arra_awards); the award
-      description usually names the specific bridge/corridor. Closes the
-      program-level counterpart to usaspending_by_state (which carries only an
-      undifferentiated per-state total with no program breakdown): filtering
-      this table to cfda_number = '20.263' isolates Bridge Formula Program
-      dollars per state, the gap this table was built for. A full crawl each
+      description usually names the specific bridge/corridor. Program-level
+      counterpart to usaspending_by_state (which carries only an
+      undifferentiated per-state total with no program breakdown). It holds only
+      the award-level 20.263/20.264 records USAspending itemizes; it is NOT the
+      total Bridge Formula Program apportionment or obligation per state. The
+      20.263 rows sum to about $5.7B against the $27.5B FY2022-26 BFP
+      apportionment, because much BFP money is obligated through the Federal-aid
+      highway program and never appears as a discrete 20.263 award. Do not use it
+      as a per-state BFP total or to rank states by bridge money received; state
+      shares here can differ widely from the apportionment shares. A full crawl each
       run (not year-partitioned): the award-search endpoint has no reliable
       date-filter parameter that matches how award records are dated
       (obligation vs. performance-start vary by award), and the result set is
