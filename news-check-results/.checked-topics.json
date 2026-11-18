@@ -1355,5 +1355,145 @@
       "everyman": 3
     },
     "note": "Deficit, debt and every line item reproduced from Treasury tables in the warehouse. One wrong number: CBO's 2036 debt is $56.2tn, not $46.7tn. Receipts and outlays are adjusted on different bases."
+  },
+  {
+    "topic_slug": "mpamag-existing-home-sales-16-year-low-rates-since-2000",
+    "headline": "Existing-home sales fall to their lowest level since 2010",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q1/askamerica/2026-11-17",
+    "pinocchios": 1,
+    "source_url": "https://www.mpamag.com/us/mortgage-industry/market-updates/existing-home-sales-fall-to-their-lowest-level-since-2010/597210",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Sales figures match NAR and FRED (3.75M, lowest since 2010). The article's 'highest since 2000' rate claim drops NAR's 2023 exception; October and November 2023 both averaged above October 2026's 7.33%, so even Yun's 'single month' caveat is one month short."
+  },
+  {
+    "topic_slug": "ibtimes-nyc-murders-record-low-first-10-months",
+    "headline": "Zohran Mamdani Faces New Debate as NYC Murders Hit Record Low After 10 Months in Office",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q2/askamerica/2026-11-17",
+    "pinocchios": 0,
+    "source_url": "https://www.ibtimes.co.uk/new-york-murders-record-low-2026-1831821",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Every NYPD figure matches the 9 Nov release (230 murders vs 244 in 2017); FBI Return A confirms 2017 as the prior January-October low. The Mamdani-credit claim is reported as commentary and the article says the decline predates him."
+  },
+  {
+    "topic_slug": "sacurrent-texas-maternal-death-rate-pre-pandemic",
+    "headline": "Texas maternal death rate drops to pre-pandemic levels as mental health becomes the leading cause",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q3/askamerica/2026-11-17",
+    "pinocchios": 0,
+    "source_url": "https://www.sacurrent.com/news/texas-news/texas-maternal-death-rate-drops-to-pre-pandemic-levels-as-mental-health-becomes-the-leading-cause/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "The 20.5 and 23.5 ratios match the DSHS report. The severe maternal morbidity figure is misstated (83.9, not 83.5), and the 2021 comparison excludes COVID deaths; with them 2021 was 39.1. Gap filed: govdata-ops#1282."
+  },
+  {
+    "topic_slug": "dotnews-boston-public-schools-enrollment-21-percent-decade",
+    "headline": "BPS enrollment continues to decline; nearly 2,000 fewer students this year",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q4/askamerica/2026-11-17",
+    "pinocchios": 2,
+    "source_url": "https://www.dotnews.com/2026/11/12/bps-enrollment-continues-to-decline-nearly-2000-fewer-students-this-year/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "resume run; askamerica caught the reversed pre-pandemic Seattle comparison via edu.ccd_districts"
+  },
+  {
+    "topic_slug": "bostonglobe-nh-wild-river-fire-historic",
+    "headline": "Amid battle against historic N.H. wildfire, concern about other fires",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q5/askamerica/2026-11-17",
+    "pinocchios": 0,
+    "source_url": "https://bostonglobe.com/2026/11/12/metro/nh-historic-wildfire-risk",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "resume run; filed govdata-ops#1300 (no state wildfire occurrence counts)"
+  },
+  {
+    "topic_slug": "wgme-portland-maine-warm-start-november",
+    "headline": "Portland logs second-warmest start to November as drought lingers across Maine",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q6/askamerica/2026-11-17",
+    "pinocchios": 1,
+    "source_url": "https://wgme.com/news/local/portland-logs-second-warmest-start-to-november-as-drought-lingers-across-maine",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "resume run; resolution: broadened fact-check-a-news-article recipe (partial-period normals, full-record ranks)"
+  },
+  {
+    "topic_slug": "aaf-customs-duties-down-39-percent-oct-2026",
+    "headline": "Debt and Deficit (Lack of) Progress Report: October 2026",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q7/askamerica/2026-11-17",
+    "pinocchios": 0,
+    "source_url": "https://www.americanactionforum.org/insight/debt-and-deficit-lack-of-progress-report-october-2026/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "resume run; resolution: fact-check recipe step 9 (abnormal base period)"
+  },
+  {
+    "topic_slug": "247wallst-six-fdic-bank-failures-past-year",
+    "headline": "Six FDIC-Insured Banks Failed in the Past Year. Here's Each One Ranked by Size, Led by Irvine's Nano Banc",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q8/askamerica/2026-11-17",
+    "pinocchios": 1,
+    "source_url": "https://247wallst.com/personal-finance/2026/11/15/six-fdic-insured-banks-failed-in-the-past-year-heres-each-one-ranked-by-size-led-by-irvines-nano-banc/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "resume run; askamerica and expert both caught the 'largest published estimate' error"
+  },
+  {
+    "topic_slug": "theregister-cve-count-passes-100k-2026",
+    "headline": "This year's bug count just passed 100K",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q9/askamerica/2026-11-17",
+    "pinocchios": 0,
+    "source_url": "https://www.theregister.com/security/2026/11/13/this-years-bug-count-just-passed-100k/5309882",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "resume run; filed govdata-ops#1301 (cyber_vuln.vulnerabilities missing ~25k 2026 CVEs)"
+  },
+  {
+    "topic_slug": "iowafb-november-crop-report-record-soybean-yield",
+    "headline": "November Crop Production Report: USDA Cuts Corn Yield, Markets Rally",
+    "checked_date": "2026-11-17",
+    "run_subpath": "q10/askamerica/2026-11-17",
+    "pinocchios": 0,
+    "source_url": "https://www.iowafarmbureau.com/Article/November-Crop-Production-Report-USDA-Cuts-Corn-Yield-Markets-Rally",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "resume run; all 19 claims reproduced from ag.nass_* tables"
   }
 ]

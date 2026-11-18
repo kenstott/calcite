@@ -445,10 +445,33 @@ class ClaimGroupsTest {
     ArrayNode few = claims(author("Rents rose 4 percent", "true", null).put("central", true));
     assertEquals(subject + " are too few to rate.", ClaimScoring.headline(subject, few));
 
-    assertNull(ClaimScoring.headlineProblem(subject));
-    String problem = ClaimScoring.headlineProblem("Rents are up because of immigration");
+    assertNull(ClaimScoring.headlineProblem(subject, ClaimScoring.headlineClause(good)));
+    String problem = ClaimScoring.headlineProblem("Rents are up because of immigration", null);
     assertNotNull(problem);
     assertTrue(problem.contains("subject of the headline"), problem);
+    // The engine's own headline passed back as the title is still just the subject.
+    assertNull(ClaimScoring.headlineProblem(headline, ClaimScoring.headlineClause(good)));
+  }
+
+  /** News checks q8 and q10, 2026-11-17: titles that carried their own verdict were published
+   *  with the engine's verdict appended after it. */
+  @Test void aTitleThatAlreadyStatesAVerdictIsRefused() {
+    String[] titles = {
+        "The 24/7 Wall St. article's claims about the six failed banks, their sizes and "
+            + "insurance-fund costs are mostly accurate, with one self-contradicting cost claim "
+            + "(1 Pinocchio)",
+        "The Iowa Farm Bureau November 2026 Crop Production article's claims about USDA corn "
+            + "and soybean yields, state forecasts and market reaction are accurate: 0 Pinocchios",
+        "The Ledger article's claims about rents and wages are largely false",
+    };
+    for (String title : titles) {
+      String problem = ClaimScoring.headlineProblem(title, "are balanced and accurate");
+      assertNotNull(problem, title);
+      assertTrue(problem.contains("already states a verdict"), problem);
+    }
+    assertNull(ClaimScoring.headlineProblem("The Iowa Farm Bureau article's claims about USDA "
+        + "corn and soybean yields, state forecasts and market reaction",
+        "are balanced and accurate"));
   }
 
   @Test void theMiddleVerdictIsPartiallyFalse() {

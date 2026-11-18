@@ -538,28 +538,66 @@ final class ClaimScoring {
      * piece.
      */
     static String headline(String subject, JsonNode claims) {
-        String block = headlineBlock(claims);
+        String clause = headlineClause(claims);
         String s = subject.trim().replaceAll("[.!?\\s]+$", "");
-        if (block == null) {
+        if (clause == null) {
             return s;
         }
-        String clause = verdictClause(score(claims, block));
         return s.endsWith(clause) ? s + "." : s + " " + clause + ".";
     }
 
-    /** A validation's {@code title} must be the headline's subject; null when it is. */
-    static String headlineProblem(String title) {
-        if (title != null && HEADLINE_SUBJECT.matcher(title).find()) {
-            return null;
+    /** The verdict clause {@link #headline} appends; null when no single party speaks for the
+     *  piece. Call only on claims {@link #enforce} accepted. */
+    static String headlineClause(JsonNode claims) {
+        String block = headlineBlock(claims);
+        return block == null ? null : verdictClause(score(claims, block));
+    }
+
+    /**
+     * A validation's {@code title} must be the headline's subject, with no verdict of its own;
+     * null when it is. {@code engineClause} is the clause {@link #headline} would append (null
+     * when unknown): a title that already ends with exactly that clause is the engine's own
+     * headline passed back, and is accepted.
+     *
+     * <p>A verdict in the title is refused because the engine appends its own: on 2026-11-17
+     * two news checks titled "... are mostly accurate, with one self-contradicting cost claim
+     * (1 Pinocchio)" and "... are accurate: 0 Pinocchios" were published as "... (1 Pinocchio)
+     * are mostly accurate." and "... 0 Pinocchios are balanced and accurate."
+     */
+    static String headlineProblem(String title, String engineClause) {
+        String refusal = "validation refused: for a validation `title` is the subject of the "
+            + "headline only — \"The <publication> article's claims about <a>, <b> and <c>\" — "
+            + "naming the publication and the two or three topics its claims are about, with no "
+            + "verdict. The engine completes the sentence from the scores. Rewrite `title` in "
+            + "that form.";
+        if (title == null || !HEADLINE_SUBJECT.matcher(title).find()) {
+            return refusal;
         }
-        return "validation refused: for a validation `title` is the subject of the headline "
-            + "only — \"The <publication> article's claims about <a>, <b> and <c>\" — naming the "
-            + "publication and the two or three topics its claims are about, with no verdict. "
-            + "The engine completes the sentence from the scores. Rewrite `title` in that form.";
+        String subject = title.trim().replaceAll("[.!?\\s]+$", "");
+        if (engineClause != null && subject.endsWith(" " + engineClause)) {
+            subject = subject.substring(0, subject.length() - engineClause.length() - 1);
+        }
+        java.util.regex.Matcher verdict = TITLE_VERDICT.matcher(subject);
+        if (verdict.find()) {
+            return refusal + " This title already states a verdict (\"" + verdict.group()
+                + "\"), and the engine's verdict would be appended after it. Remove it, and any "
+                + "Pinocchio rating, from `title`.";
+        }
+        return null;
     }
 
     private static final java.util.regex.Pattern HEADLINE_SUBJECT =
         java.util.regex.Pattern.compile("(?i)\\bclaims\\b");
+
+    /** A verdict or rating written into a validation title: a Pinocchio count, "too few to
+     *  rate", or a verb followed within three words by a verdict adjective ("are mostly
+     *  accurate", "is largely false"). */
+    private static final java.util.regex.Pattern TITLE_VERDICT = java.util.regex.Pattern.compile(
+        "(?i)\\bpinocchios?\\b|\\btoo few to rate\\b"
+        + "|\\b(are|is|were|was|hold up|check out)\\s+(\\w+\\s+){0,3}?"
+        + "(accurate|inaccurate|true|untrue|false|correct|incorrect|wrong|misleading"
+        + "|biased|unbiased|balanced|honest|dishonest|exaggerated|overstated|understated"
+        + "|supported|unsupported|verified)\\b");
 
     static String honestyLabel(int score) {
         return score >= 90 ? "honest"

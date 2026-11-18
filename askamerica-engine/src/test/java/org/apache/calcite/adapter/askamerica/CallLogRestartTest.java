@@ -160,6 +160,55 @@ class CallLogRestartTest {
     assertEquals(5, MAPPER.readTree(lines.get(1)).path("rows").asInt());
   }
 
+  /** Daily eval, 2026-11-17: a resumed check runs in a new engine process, and its save
+   *  overwrote the calls.jsonl the first session had written, losing that session's SQL. */
+  @Test void aSaveInANewProcessKeepsTheEarlierSessionsCalls(@TempDir Path dir)
+      throws Exception {
+    ObjectNode first = call("query", 1, 60 * 60_000L);
+    first.put("sql", "SELECT COUNT(*) FROM banking.failures");
+    callLog().add(first);
+    McpServer.saveCallLog(dir.toFile());
+
+    // A new process: an empty log whose seq numbering starts again at 1.
+    callLog().clear();
+    ObjectNode resumed = call("query", 1, 1000L);
+    resumed.put("sql", "SELECT MAX(closing_date) FROM banking.failures");
+    callLog().add(resumed);
+    McpServer.saveCallLog(dir.toFile());
+
+    List<String> lines = Files.readAllLines(dir.resolve("calls.jsonl"));
+    assertEquals(2, lines.size(), String.join("\n", lines));
+    assertEquals("SELECT COUNT(*) FROM banking.failures",
+        MAPPER.readTree(lines.get(0)).path("sql").asText());
+    assertEquals("SELECT MAX(closing_date) FROM banking.failures",
+        MAPPER.readTree(lines.get(1)).path("sql").asText());
+  }
+
+  @Test void aSecondSaveInTheSameProcessDoesNotRepeatCalls(@TempDir Path dir)
+      throws Exception {
+    callLog().add(call("search_catalog", 1, 2000L));
+    McpServer.saveCallLog(dir.toFile());
+    callLog().add(call("query", 2, 1000L));
+    McpServer.saveCallLog(dir.toFile());
+
+    List<String> lines = Files.readAllLines(dir.resolve("calls.jsonl"));
+    assertEquals(2, lines.size(), String.join("\n", lines));
+    assertEquals("search_catalog", MAPPER.readTree(lines.get(0)).path("tool").asText());
+    assertEquals("query", MAPPER.readTree(lines.get(1)).path("tool").asText());
+  }
+
+  @Test void anUnreadableExistingCallLogIsReportedNotOverwritten(@TempDir Path dir)
+      throws Exception {
+    Path file = dir.resolve("calls.jsonl");
+    Files.write(file, "{\"tool\":\"quer\n".getBytes(StandardCharsets.UTF_8));
+    callLog().add(call("query", 1, 1000L));
+    IllegalStateException e = org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> McpServer.saveCallLog(dir.toFile()));
+    assertTrue(e.getMessage().contains("line 1"), e.getMessage());
+    assertEquals("{\"tool\":\"quer\n",
+        new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+  }
+
   @Test void savingAnEmptyCallLogIsRefused(@TempDir Path dir) throws Exception {
     IllegalArgumentException e = org.junit.jupiter.api.Assertions.assertThrows(
         IllegalArgumentException.class, () -> McpServer.saveCallLog(dir.toFile()));

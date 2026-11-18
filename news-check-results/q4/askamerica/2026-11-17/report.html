@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Dorchester Reporter article's claims about BPS enrollment, the decade-long decline and the Seattle comparison are biased and partly false; 2 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Dorchester Reporter article's claims about BPS enrollment, the decade-long decline and the Seattle comparison are biased and partly false; 2 claims could not be confirmed.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://www.dotnews.com/2026/11/12/bps-enrollment-continues-to-decline-nearly-2000-fewer-students-this-year/">https://www.dotnews.com/2026/11/12/bps-enrollment-continues-to-decline-nearly-2000-fewer-students-this-year/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Boston vs Seattle district enrollment (NCES CCD)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="303" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="303" viewBox="0 0 412 303" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="303" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Enrollment, school years ending 2013-2024</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="84" y1="212.84" x2="390" y2="212.84" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="76" y="216.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="84" y1="186.70" x2="390" y2="186.70" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="76" y="190.70" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10,000</text>
+      <line class="grid" x1="84" y1="160.56" x2="390" y2="160.56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="76" y="164.56" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20,000</text>
+      <line class="grid" x1="84" y1="134.42" x2="390" y2="134.42" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="76" y="138.42" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30,000</text>
+      <line class="grid" x1="84" y1="108.28" x2="390" y2="108.28" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="76" y="112.28" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40,000</text>
+      <line class="grid" x1="84" y1="82.14" x2="390" y2="82.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="76" y="86.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50,000</text>
+      <line class="grid" x1="84" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="76" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60,000</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="84" y1="56" x2="84" y2="212.84" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="84" y1="212.84" x2="390" y2="212.84" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="134.42" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 134.42)">Students</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2013" class="tick" x="96.75" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 96.75 226.84)">2013</text>
+      <text id="p1-xtick-2014" class="tick" x="122.25" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 122.25 226.84)">2014</text>
+      <text id="p1-xtick-2015" class="tick" x="147.75" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 147.75 226.84)">2015</text>
+      <text id="p1-xtick-2016" class="tick" x="173.25" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 173.25 226.84)">2016</text>
+      <text id="p1-xtick-2017" class="tick" x="198.75" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 198.75 226.84)">2017</text>
+      <text id="p1-xtick-2018" class="tick" x="224.25" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 224.25 226.84)">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="249.75" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 249.75 226.84)">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="275.25" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 275.25 226.84)">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="300.75" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 300.75 226.84)">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="326.25" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 326.25 226.84)">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="351.75" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 351.75 226.84)">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="377.25" y="226.84" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 377.25 226.84)">2024</text>
+    </g>
+    <g id="p1-series-boston" class="series">
+      <path id="p1-line-boston" class="line" d="M 96.75 70.90 L 122.25 70.87 L 147.75 71.98 L 173.25 72.63 L 198.75 75.18 L 224.25 78.39 L 249.75 80.89 L 275.25 87.08 L 300.75 92.15 L 326.25 91.64 L 351.75 93.27 L 377.25 92.35" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>2013 — Boston: 54,300</title>
+        <circle id="p1-mark-boston-2013" class="point" cx="96.75" cy="70.90" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="96.75" cy="70.90" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2014 — Boston: 54,312</title>
+        <circle id="p1-mark-boston-2014" class="point" cx="122.25" cy="70.87" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="122.25" cy="70.87" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2015 — Boston: 53,885</title>
+        <circle id="p1-mark-boston-2015" class="point" cx="147.75" cy="71.98" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="147.75" cy="71.98" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2016 — Boston: 53,640</title>
+        <circle id="p1-mark-boston-2016" class="point" cx="173.25" cy="72.63" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="173.25" cy="72.63" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2017 — Boston: 52,664</title>
+        <circle id="p1-mark-boston-2017" class="point" cx="198.75" cy="75.18" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="198.75" cy="75.18" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2018 — Boston: 51,433</title>
+        <circle id="p1-mark-boston-2018" class="point" cx="224.25" cy="78.39" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="224.25" cy="78.39" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2019 — Boston: 50,480</title>
+        <circle id="p1-mark-boston-2019" class="point" cx="249.75" cy="80.89" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="249.75" cy="80.89" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2020 — Boston: 48,112</title>
+        <circle id="p1-mark-boston-2020" class="point" cx="275.25" cy="87.08" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="275.25" cy="87.08" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Boston: 46,169</title>
+        <circle id="p1-mark-boston-2021" class="point" cx="300.75" cy="92.15" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="300.75" cy="92.15" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Boston: 46,367</title>
+        <circle id="p1-mark-boston-2022" class="point" cx="326.25" cy="91.64" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="326.25" cy="91.64" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Boston: 45,742</title>
+        <circle id="p1-mark-boston-2023" class="point" cx="351.75" cy="93.27" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="351.75" cy="93.27" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Boston: 46,094</title>
+        <circle id="p1-mark-boston-2024" class="point" cx="377.25" cy="92.35" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="377.25" cy="92.35" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-seattle" class="series">
+      <path id="p1-line-seattle" class="line" d="M 96.75 80.81 L 122.25 74.73 L 147.75 73.47 L 173.25 71.12 L 198.75 70.19 L 224.25 68.36 L 249.75 66.49 L 275.25 71.75 L 300.75 78.37 L 326.25 78.90 L 351.75 80.13 L 377.25 80.12" fill="none" stroke="#ea580c" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>2013 — Seattle: 50,509</title>
+        <circle id="p1-mark-seattle-2013" class="point" cx="96.75" cy="80.81" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="96.75" cy="80.81" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2014 — Seattle: 52,834</title>
+        <circle id="p1-mark-seattle-2014" class="point" cx="122.25" cy="74.73" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="122.25" cy="74.73" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2015 — Seattle: 53,317</title>
+        <circle id="p1-mark-seattle-2015" class="point" cx="147.75" cy="73.47" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="147.75" cy="73.47" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2016 — Seattle: 54,215</title>
+        <circle id="p1-mark-seattle-2016" class="point" cx="173.25" cy="71.12" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="173.25" cy="71.12" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2017 — Seattle: 54,573</title>
+        <circle id="p1-mark-seattle-2017" class="point" cx="198.75" cy="70.19" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="198.75" cy="70.19" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2018 — Seattle: 55,271</title>
+        <circle id="p1-mark-seattle-2018" class="point" cx="224.25" cy="68.36" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="224.25" cy="68.36" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2019 — Seattle: 55,986</title>
+        <circle id="p1-mark-seattle-2019" class="point" cx="249.75" cy="66.49" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="249.75" cy="66.49" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2020 — Seattle: 53,973</title>
+        <circle id="p1-mark-seattle-2020" class="point" cx="275.25" cy="71.75" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="275.25" cy="71.75" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Seattle: 51,443</title>
+        <circle id="p1-mark-seattle-2021" class="point" cx="300.75" cy="78.37" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="300.75" cy="78.37" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Seattle: 51,238</title>
+        <circle id="p1-mark-seattle-2022" class="point" cx="326.25" cy="78.90" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="326.25" cy="78.90" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Seattle: 50,770</title>
+        <circle id="p1-mark-seattle-2023" class="point" cx="351.75" cy="80.13" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="351.75" cy="80.13" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Seattle: 50,773</title>
+        <circle id="p1-mark-seattle-2024" class="point" cx="377.25" cy="80.12" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="377.25" cy="80.12" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-boston" x="146" y="269" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-boston" class="legend-label" x="162" y="278" fill="#1f2328" font-size="11" style="font-size:11px">Boston</text>
+      <rect id="p1-legend-swatch-seattle" x="215" y="269" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-seattle" class="legend-label" x="231" y="278" fill="#1f2328" font-size="11" style="font-size:11px">Seattle</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="footnote" x="20" y="393" fill="#6b7280">NCES counts differ in definition from BPS/DESE Oct 1 counts. Overall rating: 2 Pinocchios.</text>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:53395/a/d8b4bb782e6f89a8f20b9d55ce3fa26a.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p><strong>2 Pinocchios.</strong> Headline figures (44,846; down 1,978 or 4.2% from 46,824; prior drop 1,769) are arithmetically consistent with the paper's Jan 2026 report. The Seattle comparison is backwards and stale; the 'decade' decline (21%) conflicts with state data cited by WBUR (about 9,000 fewer); and the 2017-18 and charter/METCO figures could not be sourced. Also: the Dec 2025 projection was a further drop of about 1,300; the actual drop was 1,978. 'First time below 45,000' depends on which BPS count is used (Globe, July 2026: 'just over 44,000' per state data).</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 67/100 — mixed</strong> &middot; <strong>Bias +50/100 — biased</strong></p><p>8 claims graded, 0 not gradable, 5 fell short. In this article only.</p></div>
+<p><strong>3</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>1</strong> mostly false &middot; <strong>1</strong> false &middot; <strong>2</strong> unsupported &middot; <strong>8</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>This year's official enrollment figure was 44,846 students in all grades, which was a decline of 1,978 from last year.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-false"><td>6</td><td>Seattle (Washington) Public Schools data shows prior to the pandemic they had around 53,000 students, slightly lower than BPS at the time.</td><td><strong>false</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://nces.ed.gov/ccd/">NCES CCD</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>There are 11,014 fewer student this year than in 2017-18, according to BPS statistics.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-mostly-false"><td>7</td><td>Seattle's enrollment has also declined, they are still at approximately 51,000 students</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.seattleschools.org/about/">Seattle Public Schools</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Last year's numbers showed Boston's public charter schools at around 11,000 students in all grades, and the METCO program has seen approximately 10 percent enrollment growth in recent years.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>This year's enrollment dipped below 45,000 students for the first time</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>2</td><td>That follows a decline of 1,769 students in 2025-26.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></td></tr><tr class="verdict-true"><td>8</td><td>BPS is seeking to close schools to arrive at 95 school facilities by 2030. If the most recent closures are approved by the Committee, they will have 97 facilities</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/11/05/bps-to-close-charlestown-high-move-binca-to-fields-corner/">Dorchester Reporter Nov 5</a>; <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-unsupported"><td>10</td><td>Last year's numbers showed Boston's public charter schools at around 11,000 students in all grades, and the METCO program has seen approximately 10 percent enrollment growth in recent years.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>8</td><td>BPS is seeking to close schools to arrive at 95 school facilities by 2030. If the most recent closures are approved by the Committee, they will have 97 facilities</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/11/05/bps-to-close-charlestown-high-move-binca-to-fields-corner/">Dorchester Reporter Nov 5</a>; <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></td></tr><tr class="verdict-mostly-false"><td>7</td><td>Seattle's enrollment has also declined, they are still at approximately 51,000 students</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.seattleschools.org/about/">Seattle Public Schools</a></td></tr><tr class="verdict-false"><td>6</td><td>Seattle (Washington) Public Schools data shows prior to the pandemic they had around 53,000 students, slightly lower than BPS at the time.</td><td><strong>false</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://nces.ed.gov/ccd/">NCES CCD</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>This year's enrollment dipped below 45,000 students for the first time</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>There are 11,014 fewer student this year than in 2017-18, according to BPS statistics.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>2</td><td>That follows a decline of 1,769 students in 2025-26.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></td></tr><tr class="verdict-true"><td>1</td><td>This year's official enrollment figure was 44,846 students in all grades, which was a decline of 1,978 from last year.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>1</td><td>This year's official enrollment figure was 44,846 students in all grades, which was a decline of 1,978 from last year.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Last year's numbers showed Boston's public charter schools at around 11,000 students in all grades, and the METCO program has seen approximately 10 percent enrollment growth in recent years.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>8</td><td>BPS is seeking to close schools to arrive at 95 school facilities by 2030. If the most recent closures are approved by the Committee, they will have 97 facilities</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/11/05/bps-to-close-charlestown-high-move-binca-to-fields-corner/">Dorchester Reporter Nov 5</a>; <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></td></tr><tr class="verdict-false"><td>6</td><td>Seattle (Washington) Public Schools data shows prior to the pandemic they had around 53,000 students, slightly lower than BPS at the time.</td><td><strong>false</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://nces.ed.gov/ccd/">NCES CCD</a></td></tr><tr class="verdict-mostly-false"><td>7</td><td>Seattle's enrollment has also declined, they are still at approximately 51,000 students</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.seattleschools.org/about/">Seattle Public Schools</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>This year's enrollment dipped below 45,000 students for the first time</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>There are 11,014 fewer student this year than in 2017-18, according to BPS statistics.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>2</td><td>That follows a decline of 1,769 students in 2025-26.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-false"><td>6</td><td>Seattle (Washington) Public Schools data shows prior to the pandemic they had around 53,000 students, slightly lower than BPS at the time.</td><td><strong>false</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://nces.ed.gov/ccd/">NCES CCD</a></td></tr><tr class="verdict-mostly-false"><td>7</td><td>Seattle's enrollment has also declined, they are still at approximately 51,000 students</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.seattleschools.org/about/">Seattle Public Schools</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>This year's enrollment dipped below 45,000 students for the first time</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>2</td><td>That follows a decline of 1,769 students in 2025-26.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></td></tr><tr class="verdict-true"><td>8</td><td>BPS is seeking to close schools to arrive at 95 school facilities by 2030. If the most recent closures are approved by the Committee, they will have 97 facilities</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/11/05/bps-to-close-charlestown-high-move-binca-to-fields-corner/">Dorchester Reporter Nov 5</a>; <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></td></tr><tr class="verdict-true"><td>1</td><td>This year's official enrollment figure was 44,846 students in all grades, which was a decline of 1,978 from last year.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>There are 11,014 fewer student this year than in 2017-18, according to BPS statistics.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Last year's numbers showed Boston's public charter schools at around 11,000 students in all grades, and the METCO program has seen approximately 10 percent enrollment growth in recent years.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-unsupported"><td>10</td><td>Last year's numbers showed Boston's public charter schools at around 11,000 students in all grades, and the METCO program has seen approximately 10 percent enrollment growth in recent years.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>2</td><td>That follows a decline of 1,769 students in 2025-26.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></td></tr><tr class="verdict-true"><td>1</td><td>This year's official enrollment figure was 44,846 students in all grades, which was a decline of 1,978 from last year.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>This year's enrollment dipped below 45,000 students for the first time</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr><tr class="verdict-true"><td>8</td><td>BPS is seeking to close schools to arrive at 95 school facilities by 2030. If the most recent closures are approved by the Committee, they will have 97 facilities</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.dotnews.com/2026/11/05/bps-to-close-charlestown-high-move-binca-to-fields-corner/">Dorchester Reporter Nov 5</a>; <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></td></tr><tr class="verdict-false"><td>6</td><td>Seattle (Washington) Public Schools data shows prior to the pandemic they had around 53,000 students, slightly lower than BPS at the time.</td><td><strong>false</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://nces.ed.gov/ccd/">NCES CCD</a></td></tr><tr class="verdict-mostly-false"><td>7</td><td>Seattle's enrollment has also declined, they are still at approximately 51,000 students</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.seattleschools.org/about/">Seattle Public Schools</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>There are 11,014 fewer student this year than in 2017-18, according to BPS statistics.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a>; <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Mary Skipper — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>2 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> partially false &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-partially-false"><td>3</td><td>The district's enrollment has declined approximately 21 percent in the last decade.</td><td><strong>partially false</strong> &middot; central claim</td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></td></tr>
+<tr class="verdict-true"><td>9</td><td>The main driver is a national decline in birth rates ... immigrant students are no longer filling the void.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a>; <a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; This year's official enrollment figure was 44,846 students in all grades, which was a decline of 1,978 from last year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>44,846 / -1,978 (headline: nearly 2,000)</dd>
+<dt>Independent evidence</dt><dd>46,824 (Nov 2025, per Jan 2026 report) minus 44,846 = 1,978. DESE release itself not retrievable; checked on the paper's own prior figure. Globe July 2026 corroborates a 3,000 two-year drop.<ul class="claim-sources"><li><a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></li><li><a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Web searches run</dt><dd>Boston Public Schools October 2026 enrollment 44,846</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; That follows a decline of 1,769 students in 2025-26.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Jan 2026 report: 46,824, down about 1,700<ul class="claim-sources"><li><a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#3 &middot; <strong>partially false</strong> &mdash; The district's enrollment has declined approximately 21 percent in the last decade.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Mary Skipper — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>NCES 53,640 (2016) to 46,094 (2024) = -14.1% <code>edu.ccd_districts</code></dd>
+<dt>Independent evidence</dt><dd>about 9,000 fewer than a decade ago (WBUR)<ul class="claim-sources"><li><a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The quote says about 21% (roughly 12,000 students); WBUR citing state data says just over 9,000 fewer than a decade ago, and NCES shows 14%.</dd>
+<dt>Windows tested</dt><dd>2016 to 2024 NCES: -14.1%; 2014 to 2024 NCES: -15.1%</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, enrollment FROM edu.ccd_districts WHERE leaid='2502790'</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#4 &middot; <strong>unsupported</strong> &mdash; There are 11,014 fewer student this year than in 2017-18, according to BPS statistics.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></li><li><a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Implies about 55,860 in 2017-18; NCES shows 51,433 for 2018 and WBUR says about 9,000 fewer in a decade, so it conflicts with the federal series (counting basis unknown). No BPS page loaded with this statistic.</dd>
+<dt>No page loaded because</dt><dd>Tried Globe (Jul 2026), WBUR and Dorchester Reporter pages; none gave a 2017-18 total; BPS/DESE pages not retrievable.</dd>
+<dt>Warehouse searched for</dt><dd>Boston Public Schools enrollment by year</dd>
+<dt>Web searches run</dt><dd>BPS enrollment 2017-18 total; Boston Public Schools enrollment decline decade</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; This year's enrollment dipped below 45,000 students for the first time</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NCES 2023: 45,742; BPS Nov 2025: 46,824<ul class="claim-sources"><li><a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></li><li><a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The article says first time below 45,000; the Globe (July 2026) already reported 'just over 44,000' per state data and a Feb 2026 recap reportedly cited 44,416, so the basis is ambiguous.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-false"><summary>#6 &middot; <strong>false</strong> &mdash; Seattle (Washington) Public Schools data shows prior to the pandemic they had around 53,000 students, slightly lower than BPS at the time.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2019: Seattle 55,986 vs Boston 50,480 <code>edu.ccd_districts</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://nces.ed.gov/ccd/">NCES CCD</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The article says Seattle was slightly lower than BPS; NCES shows Seattle larger (55,986 vs 50,480 in 2019).</dd>
+<dt>Windows tested</dt><dd>2019 NCES: Seattle 55,986 &gt; Boston 50,480; 2020 NCES: Seattle 53,973 &gt; Boston 48,112</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT leaid, year, enrollment FROM edu.ccd_districts WHERE leaid IN ('2502790','5307710')</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#7 &middot; <strong>mostly false</strong> &mdash; Seattle's enrollment has also declined, they are still at approximately 51,000 students</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>48,957<ul class="claim-sources"><li><a href="https://www.seattleschools.org/about/">Seattle Public Schools</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The article says about 51,000; Seattle's site says 48,957 as of Aug 2026 (NCES 2024: 50,773).</dd>
+<dt>Windows tested</dt><dd>Aug 2026 district site: 48,957; NCES 2024: 50,773</dd>
+<dt>Web searches run</dt><dd>Seattle Public Schools enrollment 2025-26 total students</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; BPS is seeking to close schools to arrive at 95 school facilities by 2030. If the most recent closures are approved by the Committee, they will have 97 facilities</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Companion Nov 5 article: 'approximately 95' buildings by 2030, 97 if approved; WBUR corroborates.<ul class="claim-sources"><li><a href="https://www.dotnews.com/2026/11/05/bps-to-close-charlestown-high-move-binca-to-fields-corner/">Dorchester Reporter Nov 5</a></li><li><a href="https://www.wbur.org/news/2026/11/03/city-boston-close-schools-enrollment-charlestown-egleston-ebee">WBUR</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; The main driver is a national decline in birth rates ... immigrant students are no longer filling the void.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Mary Skipper — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Jan 2026 report and Globe July 2026: low birthrates plus immigration crackdown; more than half the two-year decline is non-native English speakers. Causal share is the district's own attribution.<ul class="claim-sources"><li><a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></li><li><a href="https://www.dotnews.com/2026/01/08/bps-sees-more-enrollment-loss-budget-challenges-ahead/">Dorchester Reporter Jan 2026</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#10 &middot; <strong>unsupported</strong> &mdash; Last year's numbers showed Boston's public charter schools at around 11,000 students in all grades, and the METCO program has seen approximately 10 percent enrollment growth in recent years.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bostonglobe.com/2026/07/20/metro/boston-public-schools-immigrant-enrollment-drop/">Boston Globe</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>No page retrieved carrying either figure; the catalog has no METCO data.</dd>
+<dt>No page loaded because</dt><dd>Searches and fetched pages (Globe, WBUR, Dorchester Reporter) carried neither figure.</dd>
+<dt>Warehouse searched for</dt><dd>Boston charter school enrollment METCO</dd>
+<dt>Web searches run</dt><dd>Boston charter school enrollment 2025; METCO enrollment growth</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>4.2 percent</strong> &mdash; derived from 1,978/46,824; covered by claim 1</li><li><strong>420 students, 5 percent, 1,000, 7 percent, 3,000, 5,000, 9 percent, 2022-23 to 2024-25</strong> &mdash; grade-band, five-year and period figures, unverified against any retrieved primary source</li><li><strong>Nov. 4, Oct. 1</strong> &mdash; dates</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Verify against primary sources</strong>: The Oct 1 2026 DESE release and Nov 4 committee deck were not retrievable; 44,846 was checked via arithmetic against the paper's Jan 2026 report (46,824).</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 24 rows — 2617 ms</summary><pre><code>SELECT leaid, lea_name, &quot;year&quot;, enrollment FROM edu.ccd_districts WHERE leaid IN ('2502790','5307710') AND &quot;year&quot;&gt;=2013 ORDER BY leaid, &quot;year&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
