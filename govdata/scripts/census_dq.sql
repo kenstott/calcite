@@ -579,18 +579,18 @@ FROM (
 );
 
 -- acs1_nativity: each year with data carries exactly one national row, and no duplicate
--- (year, geography, name) keys
+-- (year, geography, geo_name) keys
 INSERT INTO dq_results
 SELECT
   'census', 'acs1_nativity', 'pk_duplication',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
   CAST(bad AS VARCHAR), '0',
-  'duplicate (year, geography, name) keys plus years whose national row count != 1'
+  'duplicate (year, geography, geo_name) keys plus years whose national row count != 1'
 FROM (
   SELECT
     (SELECT COUNT(*) FROM (
-       SELECT year, geography, name FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)
-       GROUP BY year, geography, name HAVING COUNT(*) > 1))
+       SELECT year, geography, geo_name FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)
+       GROUP BY year, geography, geo_name HAVING COUNT(*) > 1))
     + (SELECT COUNT(*) FROM (
        SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)
        WHERE geography = 'us' GROUP BY year HAVING COUNT(*) != 1)) AS bad

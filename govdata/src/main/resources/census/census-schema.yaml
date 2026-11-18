@@ -5234,9 +5234,9 @@ partitionedTables:
       sample rather than the 5-year rolling window of acs_nativity, it is the table for
       year-over-year change in the foreign-born population: the national foreign_born row moved
       from 50.23M in 2024 to 50.41M in 2025 (+174k). Estimates carry wider margins of error
-      than the 5-year table; the national 2005-2008 rows have a published MOE of 0, and 2009
-      onward the Census returns a negative sentinel for the total_population MOE, which is
-      normalized to null. native_born and foreign_born are derived sums (B05001 has no single
+      than the 5-year table. total_population carries no margin of error column: Census
+      publishes none for the B05001 controlled total (0 for 2005-2008, a sentinel from 2009 on).
+      native_born and foreign_born are derived sums (B05001 has no single
       variable for either): native_born = born_in_us + born_in_pr_island_areas +
       born_abroad_american_parents (002+003+004), foreign_born = naturalized_citizen +
       not_a_citizen (005+006). Identity native_born + foreign_born = total_population is
@@ -5258,11 +5258,6 @@ partitionedTables:
         nullable: true
         expression: 'TRY_CAST(src."B05001_001E" AS BIGINT)'
         comment: Total population
-      - name: total_population_moe
-        type: bigint
-        nullable: true
-        expression: 'CASE WHEN TRY_CAST(src."B05001_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_001M" AS BIGINT) END'
-        comment: 90% CI margin of error for total_population (Census variable B05001_001M; negative sentinels normalized to null)
       - name: native_born
         type: long
         nullable: true
@@ -5336,7 +5331,7 @@ partitionedTables:
         comment: 90% CI margin of error for not_a_citizen (Census variable B05001_006M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=NAME,B05001_001E,B05001_001M,B05001_002E,B05001_002M,B05001_003E,B05001_003M,B05001_004E,B05001_004M,B05001_005E,B05001_005M,B05001_006E,B05001_006M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=NAME,B05001_001E,B05001_002E,B05001_002M,B05001_003E,B05001_003M,B05001_004E,B05001_004M,B05001_005E,B05001_005M,B05001_006E,B05001_006M&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
