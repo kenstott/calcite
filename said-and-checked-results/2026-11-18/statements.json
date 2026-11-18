@@ -4715,10 +4715,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Senate confirmed Domenico to the Tenth Circuit on Nov. 16 (roll call 263, 51-46) and St. John to the Fifth Circuit on Nov. 17 (roll call 265, 52-46). AskAmerica's nominations data show the Nov. 16 confirmation and the Nov. 17 vote pending.",
+   "evidence": [
+    {
+     "label": "officials.nominations (judicial nominations, 119th Congress, since Oct. 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/officials/#nominations-table",
+     "askamerica": true,
+     "sql": "SELECT latest_action_date, substr(description,1,110) AS d, latest_action_text FROM officials.nominations WHERE congress=119 AND (description ILIKE '%Circuit Judge%' OR description ILIKE '%District Judge%' OR description ILIKE '%Court of International Trade%' OR description ILIKE '%Court of Federal Claims%') AND latest_action_date >= '2026-10-01' ORDER BY latest_action_date DESC FETCH FIRST 40 ROWS ONLY"
+    },
+    {
+     "label": "Senate roll call votes, 119th Congress, 2nd session",
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_119_2.htm"
+    }
+   ],
+   "check_run": "q239/askamerica/2026-11-18"
   },
   {
    "id": 119,
@@ -4811,10 +4822,10 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
+   "result": "unsupported",
+   "finding": "No published count of judicial nominees confirmed by unanimous consent from 1789 to 2016 was found. Searched: AskAmerica's judge and nomination tables (no vote-method data before 2017; nominations cover recent Congresses only) and one web search, which returned Supreme Court figures only. Senate historical records and academic studies were not searched further.",
    "evidence": [],
-   "check_run": null
+   "check_run": "q239/askamerica/2026-11-18"
   },
   {
    "id": 122,
@@ -4843,10 +4854,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "AskAmerica's nominations data record all 58 Article III judge confirmations in the 119th Congress through Nov. 16 as recorded yea-nay votes, none by voice vote or unanimous consent, and the Senate's roll-call list shows the Nov. 17 confirmation as a recorded vote too. The cause attributed to Democrats was not assessed.",
+   "evidence": [
+    {
+     "label": "officials.nominations (119th Congress judicial confirmations by action type)",
+     "url": "https://askamerica.ai/catalog/schemas/officials/#nominations-table",
+     "askamerica": true,
+     "sql": "SELECT substr(latest_action_text,1,40) AS t, min(latest_action_date) mn, max(latest_action_date) mx, count(*) n FROM officials.nominations WHERE congress=119 AND (description ILIKE '%Circuit Judge%' OR description ILIKE '%District Judge%' OR description ILIKE '%Court of International Trade%' OR description ILIKE '%Court of Federal Claims%') AND latest_action_text ILIKE '%onfirmed%' GROUP BY substr(latest_action_text,1,40) ORDER BY n DESC"
+    },
+    {
+     "label": "Senate roll call votes, 119th Congress, 2nd session",
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_119_2.htm"
+    }
+   ],
+   "check_run": "q239/askamerica/2026-11-18"
   },
   {
    "id": 123,
@@ -4875,10 +4897,17 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "AskAmerica's nominations data count 58 circuit, district and trade-court confirmations through Nov. 17, 2026, against 82 at the same point of Trump's first term (Nov. 18, 2018) and 83 of Biden's (Nov. 18, 2022). The rows behind these counts could not be read directly, and 'pace' could also mean speed per nomination, so the claim is not settled here.",
+   "evidence": [
+    {
+     "label": "officials.nominations (judges confirmed by the same point in the 115th, 117th and 119th Congresses)",
+     "url": "https://askamerica.ai/catalog/schemas/officials/#nominations-table",
+     "askamerica": true,
+     "sql": "SELECT 'T1' AS term, count(*) n FROM officials.nominations WHERE congress IN (115) AND (description ILIKE '%Circuit Judge%' OR description ILIKE '%District Judge%' OR description ILIKE '%Court of International Trade%') AND latest_action_text ILIKE 'Confirmed%' AND latest_action_date <= '2018-11-18' UNION ALL SELECT 'T1_115_total', count(*) FROM officials.nominations WHERE congress=115 AND (description ILIKE '%Circuit Judge%' OR description ILIKE '%District Judge%' OR description ILIKE '%Court of International Trade%') AND latest_action_text ILIKE 'Confirmed%' UNION ALL SELECT 'Biden', count(*) FROM officials.nominations WHERE congress IN (117) AND (description ILIKE '%Circuit Judge%' OR description ILIKE '%District Judge%' OR description ILIKE '%Court of International Trade%') AND latest_action_text ILIKE 'Confirmed%' AND latest_action_date <= '2022-11-18' UNION ALL SELECT 'T2', count(*) FROM officials.nominations WHERE congress=119 AND (description ILIKE '%Circuit Judge%' OR description ILIKE '%District Judge%' OR description ILIKE '%Court of International Trade%') AND latest_action_text ILIKE 'Confirmed%' AND latest_action_date <= '2026-11-17'"
+    }
+   ],
+   "check_run": "q239/askamerica/2026-11-18"
   },
   {
    "id": 124,
@@ -4907,10 +4936,23 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "In AskAmerica's Federal Judicial Center data, Trump appointees outnumber every other recent president's among active judges (279 against Obama's 211). Counting judges on senior status as serving, Obama leads 291 to 280. The statement does not say which reading it means.",
+   "evidence": [
+    {
+     "label": "officials.federal_judges (sitting judges by appointing president, FJC directory)",
+     "url": "https://askamerica.ai/catalog/schemas/officials/#federal_judges-table",
+     "askamerica": true,
+     "sql": "SELECT appointing_president_1, COUNT(*) AS n_sitting, SUM(CASE WHEN senior_status_date_1 IS NULL OR senior_status_date_1='' THEN 1 ELSE 0 END) AS n_active, MAX(commission_date_1) AS last_commission FROM officials.federal_judges WHERE (termination_date_1 IS NULL OR termination_date_1='') AND (appointing_president_1 LIKE '%Trump%' OR appointing_president_1 LIKE '%Biden%' OR appointing_president_1 LIKE '%Obama%' OR appointing_president_1 LIKE '%Bush%' OR appointing_president_1 LIKE '%Clinton%') GROUP BY appointing_president_1 ORDER BY n_sitting DESC"
+    },
+    {
+     "label": "officials.federal_judges (judges sitting on a second appointment, by appointing president)",
+     "url": "https://askamerica.ai/catalog/schemas/officials/#federal_judges-table",
+     "askamerica": true,
+     "sql": "SELECT appointing_president_2 AS p, COUNT(*) AS n, SUM(CASE WHEN senior_status_date_2 IS NULL OR senior_status_date_2='' THEN 1 ELSE 0 END) AS n_active FROM officials.federal_judges WHERE (termination_date_2 IS NULL OR termination_date_2='') AND appointing_president_2 IN ('Donald J. Trump','Barack Obama','Joseph R. Biden','George W. Bush') AND termination_date_1 IS NOT NULL AND termination_date_1<>'' AND (court_name_3 IS NULL OR court_name_3='') GROUP BY appointing_president_2"
+    }
+   ],
+   "check_run": "q240/askamerica/2026-11-18"
   },
   {
    "id": 125,
@@ -4971,10 +5013,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The introduced text of S. 5653 adds Federal Power Act section 228, which bars allocating any 'incremental cost' of serving a data-center load of 20 megawatts or more to other customers. Incremental cost is defined to include generation, transmission and distribution costs, which matches the grid-upgrade part. No '100 percent' or 'full existing tariff' wording was found, and a provision letting states set different rates for covered loads was not fully read.",
+   "evidence": [
+    {
+     "label": "S. 5653, introduced text",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/xml/BILLS-119s5653is.xml"
+    }
+   ],
+   "check_run": "q241/askamerica/2026-11-18"
   },
   {
    "id": 127,
@@ -5005,10 +5052,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The introduced text amends the Clean Water Act (Section 401 and permit terms), the Endangered Species Act (Section 7 consultation timelines, state assumption of consultation, listing determinations) and NEPA (comment periods). Whether those changes 'compromise' environmental protections is a legal and policy reading the text does not decide.",
+   "evidence": [
+    {
+     "label": "S. 5653, introduced text",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/xml/BILLS-119s5653is.xml"
+    }
+   ],
+   "check_run": "q241/askamerica/2026-11-18"
   },
   {
    "id": 128,
@@ -5037,10 +5089,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Oil and gas companies' support is documented: API-compiled statements from ExxonMobil, bp, Chevron and others back the bill. No published positions were found for renewables, hydropower, geothermal or mining trade groups, so whether all of them backed it was not established.",
+   "evidence": [
+    {
+     "label": "World Oil, oil and gas leaders back the bill (Oct. 22, 2026)",
+     "url": "https://www.worldoil.com/news/2026/10/22/oil-and-gas-leaders-back-bipartisan-american-affordability-and-jobs-act/"
+    }
+   ],
+   "check_run": "q241/askamerica/2026-11-18"
   },
   {
    "id": 129,
@@ -5069,10 +5126,17 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "AskAmerica's USGS data show China's 2024-2025 mine output of copper, zinc and lithium well above U.S. output, but the table holds only those two years, so no trend of the U.S. 'losing' its mining sector can be shown. No source was found on Chinese project approval times, and 'overnight' is a loose term.",
+   "evidence": [
+    {
+     "label": "econ.usgs_mineral_commodity_stats (U.S. and China copper, zinc and lithium production, 2024-2025)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#usgs_mineral_commodity_stats-table",
+     "askamerica": true,
+     "sql": "SELECT commodity, country, statistic, data_year, value_num, unit FROM econ.usgs_mineral_commodity_stats WHERE statistic = 'Production' AND data_year IN (2024,2025) AND country IN ('United States','China') AND commodity IN ('Copper','Zinc','Lithium') ORDER BY commodity, country, data_year"
+    }
+   ],
+   "check_run": "q241/askamerica/2026-11-18"
   },
   {
    "id": 130,
@@ -5101,10 +5165,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The FAA's Nov. 5, 2026 release reports 69% of copper wiring replaced, electronic flight strips in 26 towers and 226 IP voice switches, consistent with the statement. No FAA figure for 'nearly 470 radios' was found; GAO reports radio-site work at 17% of 1,581 planned sites (about 269) as of May 2026, so the radio figure is neither confirmed nor ruled out.",
+   "evidence": [
+    {
+     "label": "FAA newsroom release, Nov. 5, 2026",
+     "url": "https://www.faa.gov/newsroom/trumps-transportation-secretary-sean-p-duffy-begins-retiring-decades-old-floppy-disks-air"
+    },
+    {
+     "label": "GAO-26-107992",
+     "url": "https://files.gao.gov/reports/GAO-26-107992/index.html?pubDate=20260922"
+    }
+   ],
+   "check_run": "q242/askamerica/2026-11-18"
   },
   {
    "id": 131,
@@ -5133,10 +5206,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Modern Skies Act's introduced text appropriates $10 billion, $10.1 billion and $10 billion in three sections, about $30.1 billion in total, and GAO-26-107992 confirms Public Law 119-21 provided $12.5 billion for air traffic control modernization.",
+   "evidence": [
+    {
+     "label": "Modern Skies Act bill text",
+     "url": "https://www.schmitt.senate.gov/wp-content/uploads/2026/09/LAN26545.pdf"
+    },
+    {
+     "label": "GAO-26-107992",
+     "url": "https://files.gao.gov/reports/GAO-26-107992/index.html?pubDate=20260922"
+    }
+   ],
+   "check_run": "q242/askamerica/2026-11-18"
   },
   {
    "id": 132,
@@ -5165,10 +5247,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "GAO-26-107992 (September 2026) calls the current air traffic control systems 'aging and unreliable' and 'severely outdated, underperforming, and unsustainable'. GAO-25-108162 reports the FAA rated 51 of 138 systems unsustainable and 54 potentially unsustainable.",
+   "evidence": [
+    {
+     "label": "GAO-26-107992",
+     "url": "https://files.gao.gov/reports/GAO-26-107992/index.html?pubDate=20260922"
+    },
+    {
+     "label": "GAO-25-108162",
+     "url": "https://files.gao.gov/reports/GAO-25-108162/index.html?pubDate=20251217"
+    }
+   ],
+   "check_run": "q242/askamerica/2026-11-18"
   },
   {
    "id": 133,
@@ -5199,10 +5290,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Section 3(a) of H.R. 5254 (Senate-reported text) lets the Interior Secretary enter a one-time agreement of up to five years with the Gateway Arch Park Foundation 'to host private events at the Park'; AskAmerica's CRS bill summary matches. The text says 'host' and does not mention managing or marketing events, so whether it covers those is a reading.",
+   "evidence": [
+    {
+     "label": "law.bill_summaries (H.R. 5254, 119th Congress, CRS summary)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_summaries-table",
+     "askamerica": true,
+     "sql": "SELECT summary_text FROM law.bill_summaries WHERE congress=119 AND bill_type='hr' AND bill_number=5254"
+    },
+    {
+     "label": "H.R. 5254, text as reported in the Senate",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr5254rs/xml/BILLS-119hr5254rs.xml"
+    }
+   ],
+   "check_run": "q243/askamerica/2026-11-18"
   },
   {
    "id": 134,
