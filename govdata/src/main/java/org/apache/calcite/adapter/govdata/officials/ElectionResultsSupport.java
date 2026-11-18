@@ -44,11 +44,13 @@ final class ElectionResultsSupport {
   /** Senate party labels (upper case) that are the Democratic Party. */
   private static final Set<String> SENATE_DEMOCRATIC = new HashSet<String>(Arrays.asList(
       "DEMOCRAT", "DEMOCRATIC", "DEMOCRATIC-FARMER-LABOR", "DEMOCRATIC-NONPARTISAN LEAGUE",
-      "DEMOCRATIC-NPL", "DEMOCRATIC/WORKING FAMILIES", "DEMOCRAT (NOT IDENTIFIED ON BALLOT)"));
+      "DEMOCRATIC-NPL", "DEMOCRATIC/WORKING FAMILIES", "DEMOCRAT (NOT IDENTIFIED ON BALLOT)",
+      "DFL", "DEMOCRATIC PARTY NOMINEES", "WORKING FAMILIES / DEMOCRAT"));
 
   /** Senate party labels (upper case) that are the Republican Party. */
   private static final Set<String> SENATE_REPUBLICAN = new HashSet<String>(Arrays.asList(
-      "REPUBLICAN", "GOP", "REPUBLICAN/CONSERVATIVE", "REPUBLICAN (NOT IDENTIFIED ON BALLOT)"));
+      "REPUBLICAN", "GOP", "REPUBLICAN/CONSERVATIVE", "REPUBLICAN (NOT IDENTIFIED ON BALLOT)",
+      "CONSTITUTION / REPUBLICAN"));
 
   /** Party labels (lower case) the House file publishes that are the Democratic Party. */
   private static final Set<String> HOUSE_DEMOCRATIC = new HashSet<String>(Arrays.asList(
@@ -196,16 +198,19 @@ final class ElectionResultsSupport {
     return sb.toString();
   }
 
-  /** The Lab's release date: yyyyMMdd (all but the 2024 Senate partial) or MM/dd/yy, to ISO. */
+  /** The Lab's release date: yyyyMMdd, yyyy-MM-dd (2024 presidential rows) or MM/dd/yy, to ISO. */
   static String versionDate(String v, String table, int line) throws IOException {
     if (v.matches("\\d{8}")) {
       return v.substring(0, 4) + "-" + v.substring(4, 6) + "-" + v.substring(6, 8);
+    }
+    if (v.matches("\\d{4}-\\d{2}-\\d{2}")) {
+      return v;
     }
     if (v.matches("\\d{2}/\\d{2}/\\d{2}")) {
       return "20" + v.substring(6, 8) + "-" + v.substring(0, 2) + "-" + v.substring(3, 5);
     }
     throw new IOException(table + " line " + line + ": version '" + v
-        + "' is neither yyyyMMdd nor MM/dd/yy");
+        + "' is not yyyyMMdd, yyyy-MM-dd or MM/dd/yy");
   }
 
   /** candidate, write_in_aggregate (write-ins lumped in one row) or residual (vote bucket). */

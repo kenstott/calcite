@@ -3,7 +3,7 @@
 -- Schema: officials
 -- Tables: members, nominations, federal_judges, committees, committee_membership,
 -- electoral_college_votes, presidential_election_results, house_election_results,
--- senate_election_results, federal_workforce_by_agency
+-- senate_election_results, presidential_state_returns, federal_workforce_by_agency
 -- All tables are Iceberg; reads via iceberg_scan.
 -- No `year` dimension anywhere in this schema — members/nominations partition by
 -- `congress` (bounded by GOVDATA_START_CONGRESS/GOVDATA_END_CONGRESS, default 117-119,
@@ -1518,3 +1518,126 @@ SELECT 'officials', 'governor_election_results', 'T8_known_values',
   CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
   n, 2, 'Kemp (GA 2018) and Palin (AK 2006) rows with the published votes and won = true'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) WHERE won AND ((year = 2018 AND state_postal = 'GA' AND candidate = 'KEMP, BRIAN P.' AND candidate_votes = 1978408 AND total_votes = 3939328) OR (year = 2006 AND state_postal = 'AK' AND candidate = 'PALIN, SARAH H.' AND candidate_votes = 114697 AND total_votes = 236938)));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: presidential_state_returns
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T2_row_count',
+  CASE WHEN n >= 4822 THEN 'pass' ELSE 'fail' END,
+  n, 4822, 'Row count at least the 1976-2024 release v10 (4822 rows)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value (source_release is one value by design; uncontested is false throughout the presidential file)
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'source_release', 'uncontested')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL year, state_fips or line_no rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE year IS NULL OR state_fips IS NULL OR line_no IS NULL);
+
+-- T6: pk_duplicates
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (year, state_fips, line_no) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) GROUP BY year, state_fips, line_no HAVING COUNT(*) > 1));
+
+-- T7: candidate_kind_values
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T7_candidate_kind_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'candidate_kind outside the five known values'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE candidate_kind NOT IN ('candidate', 'write_in_aggregate', 'residual', 'unlabeled'));
+
+-- T7: party_major_values
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T7_party_major_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'party_major outside D, R, OTHER'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE party_major IS NOT NULL AND party_major NOT IN ('D', 'R', 'OTHER'));
+
+-- T7: state_fips_format
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T7_state_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'state_fips not a 2-digit code'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE NOT regexp_matches(state_fips, '^[0-9]{2}$'));
+
+-- T7: votes_nonnegative
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T7_votes_nonnegative',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'candidate_votes below zero'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE candidate_votes < 0);
+
+-- T7: version_date_format
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T7_version_date_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'version_date not an ISO date'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE NOT regexp_matches(version_date, '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'));
+
+-- T7: elections_1976_2024
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T7_elections_1976_2024',
+  CASE WHEN n = 13 THEN 'pass' ELSE 'fail' END,
+  n, 13, 'Distinct election years 1976 to 2024 (every fourth year)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT DISTINCT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE year BETWEEN 1976 AND 2024 AND MOD(year, 4) = 0));
+
+-- T7: states_per_election
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T7_states_per_election',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Elections with other than 51 states (50 plus DC)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) GROUP BY year HAVING COUNT(DISTINCT state_fips) <> 51));
+
+-- T8: known_values
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_state_returns', 'T8_known_values',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END,
+  n, 4, 'Carter AL 1976 659,170; Trump MI 2016 2,279,543; Biden GA 2020 2,473,633; Trump PA 2024 3,543,308 (votes as published by the Lab)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE (year = 1976 AND state_postal = 'AL' AND candidate = 'CARTER, JIMMY' AND candidate_votes = 659170) OR (year = 2016 AND state_postal = 'MI' AND candidate = 'TRUMP, DONALD J.' AND candidate_votes = 2279543) OR (year = 2020 AND state_postal = 'GA' AND candidate = 'BIDEN, JOSEPH R. JR' AND candidate_votes = 2473633) OR (year = 2024 AND state_postal = 'PA' AND candidate = 'TRUMP, DONALD J.' AND candidate_votes = 3543308));
