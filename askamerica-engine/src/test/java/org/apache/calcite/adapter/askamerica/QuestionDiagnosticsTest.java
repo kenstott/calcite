@@ -420,6 +420,17 @@ class QuestionDiagnosticsTest {
         "a signed year-over-year percentage is not a bounded proportion");
   }
 
+  @Test void aTrusteesRatioOverOneHundredAndSignedBalanceAreNotBroken() {
+    ArrayNode arr = rows("[{\"max_trust_fund_ratio_pct\":153,\"actuarial_balance_pct_payroll\":-4.55},"
+        + "{\"max_trust_fund_ratio_pct\":857,\"actuarial_balance_pct_payroll\":0.13},"
+        + "{\"max_trust_fund_ratio_pct\":151,\"actuarial_balance_pct_payroll\":-4.42}]");
+    ObjectNode env = QuestionDiagnostics.forQuery(null,
+        "SELECT * FROM econ.social_security_trustees_projections WHERE report_year>=2025",
+        arr, 500);
+    assertFalse(hasType(env, "broken_field"),
+        "a ratio can exceed 100 and a balance is signed; neither is a bounded proportion");
+  }
+
   @Test void anAlmostEntirelyNullColumnIsFlaggedAsUnusable() {
     ArrayNode arr = MAPPER.createArrayNode();
     for (int i = 0; i < 30; i++) {

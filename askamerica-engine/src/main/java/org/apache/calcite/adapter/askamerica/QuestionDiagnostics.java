@@ -1324,10 +1324,14 @@ final class QuestionDiagnostics {
             + "or robust_regression with cluster_col."));
     }
 
-    /** Name tokens marking a percentage that is a signed change, not a bounded proportion. */
+    /**
+     * Name tokens marking a percentage that is signed or unbounded above, not a 0-100
+     * proportion: a change, or a ratio/balance quantity (a trust fund ratio is reserves as a
+     * percent of annual cost and routinely exceeds 100; an actuarial balance is signed).
+     */
     private static final String[] SIGNED_CHANGE_TOKENS = {
         "change", "growth", "delta", "diff", "chg", "trend", "yoy", "qoq", "mom", "gain", "loss",
-        "swing", "shift", "net", "rise", "decline"
+        "swing", "shift", "net", "rise", "decline", "ratio", "balance", "deficit", "surplus"
     };
 
     private static boolean isSignedChange(String lowerName) {
