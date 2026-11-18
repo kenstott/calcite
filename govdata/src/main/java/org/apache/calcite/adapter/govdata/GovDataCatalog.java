@@ -24,7 +24,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Locale;
@@ -45,6 +47,9 @@ public final class GovDataCatalog {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(GovDataCatalog.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  /** The seed's schema listing, one {@code schema.table.column:type} line per column. */
+  private static final String SEED_SCHEMA_RESOURCE = "/duckdb/seed/govdata-seed.schema";
 
   private GovDataCatalog() {
   }
@@ -103,6 +108,69 @@ public final class GovDataCatalog {
       out.add(sc);
     }
     return out;
+  }
+
+  /**
+   * The catalog restricted to what the release's seed declares: a table or view is listed
+   * only when the seed shipped in this jar has it, so every listed name is queryable by the
+   * engine that serves this release. The YAMLs on a branch can run ahead of the seed (a table
+   * added after the seed was last rebuilt); those entries are left out until the seed carries
+   * them. Schemas left with no entry are dropped.
+   */
+  public static ArrayNode buildServed(Collection<String> schemas) {
+    Set<String> served = seedTables();
+    ArrayNode out = MAPPER.createArrayNode();
+    for (JsonNode sc : build(schemas)) {
+      String schema = sc.path("schema").asText();
+      ArrayNode kept = MAPPER.createArrayNode();
+      for (JsonNode t : sc.path("tables")) {
+        if (served.contains(schema + "." + t.path("name").asText())) {
+          kept.add(t);
+        }
+      }
+      if (kept.size() > 0) {
+        ((ObjectNode) sc).set("tables", kept);
+        out.add(sc);
+      }
+    }
+    return out;
+  }
+
+  /** {@code schema.table} for every table and view in the seed's schema listing. */
+  static Set<String> seedTables() {
+    try (InputStream is = GovDataCatalog.class.getResourceAsStream(SEED_SCHEMA_RESOURCE)) {
+      if (is == null) {
+        throw new IllegalStateException(
+            "Seed schema listing " + SEED_SCHEMA_RESOURCE + " is not in the jar");
+      }
+      String text = new String(readAll(is), StandardCharsets.UTF_8);
+      Set<String> names = new HashSet<>();
+      for (String raw : text.split("\n")) {
+        String line = raw.trim();
+        if (line.isEmpty()) {
+          continue;
+        }
+        int colon = line.lastIndexOf(':');
+        String col = colon < 0 ? line : line.substring(0, colon);
+        int lastDot = col.lastIndexOf('.');
+        if (lastDot > 0) {
+          names.add(col.substring(0, lastDot));
+        }
+      }
+      return names;
+    } catch (IOException e) {
+      throw new IllegalStateException("Failed to read " + SEED_SCHEMA_RESOURCE, e);
+    }
+  }
+
+  private static byte[] readAll(InputStream is) throws IOException {
+    java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+    byte[] chunk = new byte[8192];
+    int n;
+    while ((n = is.read(chunk)) > 0) {
+      buf.write(chunk, 0, n);
+    }
+    return buf.toByteArray();
   }
 
   private static JsonNode read(String path) {

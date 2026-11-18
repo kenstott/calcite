@@ -54,8 +54,9 @@ final class Catalog {
                 if (r == null) {
                     JsonNode built = null;
                     try {
-                        // Read the catalog straight from the driver's baked-in schema YAMLs.
-                        built = GovDataCatalog.build(schemaList());
+                        // The driver's baked-in schema YAMLs, limited to the tables and views
+                        // the release's seed carries, so only names the engine can serve show.
+                        built = GovDataCatalog.buildServed(schemaList());
                     } catch (Throwable ignored) {
                         // fall through to empty catalog
                     }
