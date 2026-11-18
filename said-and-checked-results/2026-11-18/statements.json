@@ -1963,10 +1963,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The President's alternative pay plan (House Document 119-189, Aug. 26, 2026) says 2027 base and locality pay for civilian federal employees 'will not change from the 2026 rates'. The same letter gives law enforcement personnel a separate 3.8% raise, and Congress can still legislate a different raise.",
+   "evidence": [
+    {
+     "label": "House Document 119-189, Alternative Plan for Pay Adjustments",
+     "url": "https://www.govinfo.gov/content/pkg/CDOC-119hdoc189/html/CDOC-119hdoc189.htm"
+    }
+   ],
+   "check_run": "q214/askamerica/2026-11-18"
   },
   {
    "id": 50,
@@ -2027,10 +2032,25 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "Fox Weather and Fox 5, citing FlightAware, report more than 9,100 flights cancelled on Friday, Nov. 13. AskAmerica's FAA advisory data record the nationwide ground stop that day but hold no flight counts for it. The count was read as reported, not from FlightAware or FAA records.",
+   "evidence": [
+    {
+     "label": "transport.faa_atcscc_advisories (nationwide ground stop advisories, Nov. 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/transport/#faa_atcscc_advisories-table",
+     "askamerica": true,
+     "sql": "SELECT advisory_date, advisory_number, facility, advisory_type, subject, sent_time_utc FROM transport.faa_atcscc_advisories WHERE advisory_date >= DATE '2026-11-01' AND (subject LIKE '%NATIONWIDE%' OR advisory_type='OUTAGE') ORDER BY sent_time_utc"
+    },
+    {
+     "label": "Fox Weather, flights cancelled after the ground stop",
+     "url": "https://www.foxweather.com/weather-news/flights-canceled-delayed-us-ground-stop-november-2026"
+    },
+    {
+     "label": "Fox 5 NY, ground stop aftermath",
+     "url": "https://www.fox5ny.com/news/faa-ground-stop-aftermath-cancels-thousands-saturday-flights-what-know"
+    }
+   ],
+   "check_run": "q215/askamerica/2026-11-18"
   },
   {
    "id": 52,
@@ -2059,10 +2079,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Duffy did call for $50 billion at the Nov. 13 briefing. He attributed the outage to legacy equipment and a contractor, and on Meet the Press said 'I can't blame Republicans or Democrats, because it's all of them'. Whether that counts as blaming Congress depends on how it is read. Duffy's words are as reported by Fox 4 and Wichita Liberty.",
+   "evidence": [
+    {
+     "label": "Fox 4, Trump urges air traffic control funding",
+     "url": "https://www.fox4news.com/news/trump-urges-desperately-needed-air-traffic-control-funding-after-nationwide-ground-stop"
+    },
+    {
+     "label": "Wichita Liberty, briefing breakdown",
+     "url": "https://www.wichitaliberty.org/?p=41408"
+    }
+   ],
+   "check_run": "q215/askamerica/2026-11-18"
   },
   {
    "id": 53,
@@ -2091,10 +2120,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "GAO-26-107992 states that P.L. 119-21 appropriated $12.5 billion for FAA air traffic control modernization; AOPA's breakdown lists $4.75 billion of it for telecommunications equipment. The statute text was not read directly.",
+   "evidence": [
+    {
+     "label": "GAO-26-107992",
+     "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+    },
+    {
+     "label": "AOPA, where the $12.5 billion is going",
+     "url": "https://aopa.org/news-and-media/all-news/2025/july/10/where-is-the-12-5-billion-for-atc-modernization-going"
+    }
+   ],
+   "check_run": "q215/askamerica/2026-11-18"
   },
   {
    "id": 54,
@@ -2123,10 +2161,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "No published outlay figure for the $12.5 billion was found. GAO reports $1.8 billion obligated (20% of the $9 billion systems money) as of March 2026, which counts commitments, not spending. AskAmerica's USAspending data show FY2026 gross outlays of $1.416 billion for the FAA Facilities and Equipment account as a whole, which mixes in other funds.",
+   "evidence": [
+    {
+     "label": "fiscal.usaspending_account_balances (FAA Facilities and Equipment, 069-1308, FY2026)",
+     "url": "https://askamerica.ai/catalog/schemas/fiscal/#usaspending_account_balances-table",
+     "askamerica": true,
+     "sql": "SELECT * FROM fiscal.usaspending_account_balances WHERE federal_account_symbol = '069-1308' ORDER BY fiscal_period DESC"
+    },
+    {
+     "label": "GAO-26-107992",
+     "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+    }
+   ],
+   "check_run": "q215/askamerica/2026-11-18"
   },
   {
    "id": 55,
@@ -2157,10 +2206,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The FAA's Nov. 15 Q&A attributes the Nov. 13 ground stop to a flood of connection attempts that destabilized legacy equipment, tied to router deployment work at El Dorado, Arkansas. It says the root cause is still under investigation. It does not call the failure a configuration issue or a hardware failure. AskAmerica's advisory data record the nationwide ground stop but carry no cause.",
+   "evidence": [
+    {
+     "label": "transport.faa_atcscc_advisories (Nov. 13, 2026 nationwide ground stop)",
+     "url": "https://askamerica.ai/catalog/schemas/transport/#faa_atcscc_advisories-table",
+     "askamerica": true,
+     "sql": "SELECT advisory_date, advisory_number, facility, subject, advisory_type FROM transport.faa_atcscc_advisories WHERE advisory_date='2026-11-13' AND (advisory_type IN ('GROUND_STOP','OUTAGE') AND (subject ILIKE '%NATIONWIDE%' OR advisory_type='OUTAGE')) ORDER BY advisory_number FETCH FIRST 30 ROWS ONLY"
+    },
+    {
+     "label": "FAA, Nationwide Ground Stop Q&A",
+     "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+    }
+   ],
+   "check_run": "q216/askamerica/2026-11-18"
   },
   {
    "id": 56,
@@ -2255,10 +2315,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "News reports describe four Blair County derailments from February to October 2026: February (about 65 cars, no hazmat release), March, August, and Oct. 23 in Altoona, the last including cars carrying hazardous materials. That matches the statement, but no FRA accident record could be read to confirm it.",
+   "evidence": [
+    {
+     "label": "Altoona Mirror, Feb. 7, 2026 derailment",
+     "url": "https://www.altoonamirror.com/news/local-news/2026/02/norfolksouthern-horseshoecurve-train-derails/"
+    },
+    {
+     "label": "Tri-State Alert, four derailments since February",
+     "url": "https://www.tristatealert.com/how-could-four-trains-have-derailed-in-blair-county-since-february"
+    }
+   ],
+   "check_run": "q217/askamerica/2026-11-18"
   },
   {
    "id": 59,
@@ -2357,10 +2426,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The introduced text of S. 5653 amends NEPA (Title I), the Clean Water Act (Title II) and the Endangered Species Act (Title III; for example, it shortens Section 7 consultation from 90 to 60 days). AskAmerica's bill data show the bill introduced and referred to committee. Whether those changes 'undermine' the laws is a legal and policy reading, and a manager's amendment is planned.",
+   "evidence": [
+    {
+     "label": "law.bills (S. 5653, 119th Congress: title, introduction and latest action)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT congress, bill_type, bill_number, title, introduced_date, latest_action_text FROM law.bills WHERE congress=119 AND bill_type='s' AND bill_number=5653"
+    },
+    {
+     "label": "S. 5653, introduced text",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+    }
+   ],
+   "check_run": "q218/askamerica/2026-11-18"
   },
   {
    "id": 62,
@@ -2395,10 +2475,21 @@
      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm"
     }
    ],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The introduced text removes National Historic Preservation Act section 306108 consultation for reissued general permits and some covered activities, and limits NEPA suits over actions on tribal trust resources. It also lets tribes grant rights-of-way without Interior approval of each grant, adds a path to Clean Water Act Section 401 authority and funds Tribal Historic Preservation Officers. The net effect on tribal sovereignty turns on legal reading.",
+   "evidence": [
+    {
+     "label": "law.bills (S. 5653, 119th Congress: title, introduction and latest action)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT congress, bill_type, bill_number, title, introduced_date, latest_action_text FROM law.bills WHERE congress=119 AND bill_type='s' AND bill_number=5653"
+    },
+    {
+     "label": "S. 5653, introduced text",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+    }
+   ],
+   "check_run": "q218/askamerica/2026-11-18"
   },
   {
    "id": 63,
@@ -2427,10 +2518,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Published estimates put the pre-1800 population at 30 to 60 million, which fits 'tens of millions', but give the low point variously as 325 (1884), 541 (U.S., 1889), about 300 (1900) or about 1,000. 'Approximately 1,000' fits some counts and not others. Figures are as compiled by Wikipedia; no primary count was read.",
+   "evidence": [
+    {
+     "label": "American bison (Wikipedia)",
+     "url": "https://en.wikipedia.org/wiki/American_bison"
+    }
+   ],
+   "check_run": "q219/askamerica/2026-11-18"
   },
   {
    "id": 64,
@@ -2459,10 +2555,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "Population estimates of 400,000 to 500,000 (2010 and 2017 figures, including ranch herds) exceed 200,000, as compiled by Wikipedia; the National Park Service and Interior pages did not load, so no primary count was read.",
+   "evidence": [
+    {
+     "label": "American bison (Wikipedia)",
+     "url": "https://en.wikipedia.org/wiki/American_bison"
+    }
+   ],
+   "check_run": "q219/askamerica/2026-11-18"
   },
   {
    "id": 65,
@@ -2491,10 +2592,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The text of H.R. 7954 printed in the Congressional Record has no authorization of appropriations and no dollar amount; section 4(b) directs the Secretary to award grants and contracts to tribes without naming existing programs. AskAmerica's bill data show it placed on the Union Calendar on Oct. 29, 2026. No CBO estimate for this version was found, so the no-new-spending half cannot be checked.",
+   "evidence": [
+    {
+     "label": "law.bills (H.R. 7954, 119th Congress, latest action)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT bill_type, bill_number, title, latest_action_text, latest_action_date FROM law.bills WHERE congress=119 AND bill_type='hr' AND bill_number=7954"
+    },
+    {
+     "label": "Congressional Record, Nov. 17, 2026, H.R. 7954 text and debate",
+     "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6236-8.htm"
+    }
+   ],
+   "check_run": "q220/askamerica/2026-11-18"
   },
   {
    "id": 66,
@@ -2525,10 +2637,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Southern Ute Indian Tribe's Bison Program page says the Tribe has managed a bison herd 'since the early 1980s', more than four decades.",
+   "evidence": [
+    {
+     "label": "Southern Ute Indian Tribe, Bison Program",
+     "url": "https://www.southernute-nsn.gov/wrmweb/bison/"
+    },
+    {
+     "label": "KUNC, Southern Ute bison herd at capacity (2023)",
+     "url": "https://www.kunc.org/news/2023-09-10/southern-ute-tribes-bison-herd-at-maximum-capacity-due-to-environmental-restrictions"
+    }
+   ],
+   "check_run": "q220/askamerica/2026-11-18"
   },
   {
    "id": 67,
@@ -2559,10 +2680,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Fish and Wildlife Service's 1998 rule (63 FR 10550) says double-crested cormorants gained federal protection through the 1972 amendment to the U.S.-Mexico migratory bird convention. It says the population bottomed in the mid-1970s and then grew about 6.1% a year (breeding, 1966-94) and 7.3% a year (wintering, 1959-88).",
+   "evidence": [
+    {
+     "label": "Federal Register, 63 FR 10550 (March 4, 1998)",
+     "url": "https://www.govinfo.gov/content/pkg/FR-1998-03-04/html/98-5485.htm"
+    }
+   ],
+   "check_run": "q219/askamerica/2026-11-18"
   },
   {
    "id": 68,
@@ -2593,10 +2719,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "contradicted",
+   "finding": "The Fish and Wildlife Service's 2003 Federal Register rule, read in the check, says double-crested cormorants 'have been protected under the MBTA since 1972', through the 1972 amendment to the 1936 U.S.-Mexico convention; that is 54 years, not over 100. The rule could not be read directly by the editor, so the result is held at contradicted rather than false.",
+   "evidence": [
+    {
+     "label": "Federal Register, Oct. 8, 2003, double-crested cormorant final rule",
+     "url": "https://www.govinfo.gov/content/pkg/FR-2003-10-08/pdf/03-25500.pdf"
+    }
+   ],
+   "check_run": "q221/askamerica/2026-11-18"
   },
   {
    "id": 69,
@@ -2625,10 +2756,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "EPA states the Great Lakes hold about 21% of the world's surface fresh water.",
+   "evidence": [
+    {
+     "label": "EPA, Great Lakes facts and figures",
+     "url": "https://www.epa.gov/greatlakes/great-lakes-facts-and-figures"
+    }
+   ],
+   "check_run": "q222/askamerica/2026-11-18"
   },
   {
    "id": 70,
@@ -2657,10 +2793,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "A Great Lakes Fishery Commission study puts recreational fishing's economic output at $5.1 billion (reported by Michigan Public), matching the dollar figure. The commission's factsheet reportedly counts about 35,800 recreational and nearly 3,000 commercial jobs, about 39,000 in all, short of 75,000; that factsheet could not be read directly, so the jobs figure is not settled here.",
+   "evidence": [
+    {
+     "label": "Michigan Public, Great Lakes recreational fishing worth $5.1 billion",
+     "url": "https://www.michiganpublic.org/environment-climate-change/2025-01-16/report-great-lakes-recreational-fishing-worth-billions-to-economy-but-not-as-much-as-often-cited"
+    },
+    {
+     "label": "Great Lakes Fishery Commission valuation factsheet",
+     "url": "https://fr.glfc.org/pubs/factsheets/Great-Lakes-Valuation-factsheet.pdf"
+    }
+   ],
+   "check_run": "q222/askamerica/2026-11-18"
   },
   {
    "id": 71,
@@ -2689,10 +2834,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "USGS's 1999 survey puts 68% of North American nesting double-crested cormorants in the Interior region, which spans Ontario and several U.S. states and is not a Great Lakes share. No survey found reports the Great Lakes' share of the U.S. breeding population.",
+   "evidence": [
+    {
+     "label": "USGS, Nesting populations of double-crested cormorants in the U.S. and Canada (1999)",
+     "url": "https://www.usgs.gov/publications/nesting-populations-double-crested-cormorants-united-states-and-canada"
+    },
+    {
+     "label": "USFWS cormorant monitoring recommendations (March 2022)",
+     "url": "https://www.fws.gov/sites/default/files/documents/recommendations-implementing-monitoring-strategy-double-crested-cormorant-march-2022.pdf"
+    }
+   ],
+   "check_run": "q222/askamerica/2026-11-18"
   },
   {
    "id": 72,
@@ -2721,10 +2875,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "USGS reported 22% annual growth in Ontario and the Great Lakes states in the early 1990s, about a doubling every 3.5 years. But the 2022 Fish and Wildlife Service report says the Great Lakes population 'may be stable or declining' and that regional monitoring stopped after 2018, so current rapid growth is not shown.",
+   "evidence": [
+    {
+     "label": "USGS, Nesting populations of double-crested cormorants in the U.S. and Canada (1999)",
+     "url": "https://www.usgs.gov/publications/nesting-populations-double-crested-cormorants-united-states-and-canada"
+    },
+    {
+     "label": "USFWS cormorant monitoring recommendations (March 2022)",
+     "url": "https://www.fws.gov/sites/default/files/documents/recommendations-implementing-monitoring-strategy-double-crested-cormorant-march-2022.pdf"
+    }
+   ],
+   "check_run": "q222/askamerica/2026-11-18"
   },
   {
    "id": 73,
@@ -2755,10 +2918,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The Capitan Grande Reservation covered 15,753 acres, which matches 'over 15,000 acres', and the El Capitan Reservoir flooded its core in 1931 (as compiled by Wikipedia). A summary of a UC Irvine article cites purchase acts of 1919 and 1932, so the year the sale began is not confirmed.",
+   "evidence": [
+    {
+     "label": "Capitan Grande Reservation (Wikipedia)",
+     "url": "https://en.wikipedia.org/wiki/Capitan_Grande_Reservation"
+    }
+   ],
+   "check_run": "q219/askamerica/2026-11-18"
   },
   {
    "id": 74,
@@ -3155,10 +3323,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The Encyclopedia of Arkansas gives the forest's boundary as laid out in October 1933 and says it was 'established in 1934', with the deed conveyed Aug. 2, 1934. No official Forest Service establishment date was read, so 1933 fits one reading and not the other.",
+   "evidence": [
+    {
+     "label": "Encyclopedia of Arkansas, Crossett Experimental Forest",
+     "url": "https://encyclopediaofarkansas.net/entries/Crossett-Experimental-Forest-CEF-4317"
+    }
+   ],
+   "check_run": "q221/askamerica/2026-11-18"
   },
   {
    "id": 86,
@@ -3315,10 +3488,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "USGS says 'The Infrastructure Investment Jobs Act invests $320 million in the USGS Earth Mapping Resource Initiative (Earth MRI)'. The five-year schedule was seen only in search summaries, and the statement's second half, about mapping new regions, was not checked.",
+   "evidence": [
+    {
+     "label": "USGS, Earth MRI and the Infrastructure Investment and Jobs Act",
+     "url": "https://www.usgs.gov/special-topics/infrastructure-investment-jobs-act/science/earth-mri"
+    }
+   ],
+   "check_run": "q221/askamerica/2026-11-18"
   },
   {
    "id": 91,
@@ -3414,10 +3592,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The National Park Service's African American Civil Rights Network members page (last updated Jan. 16, 2025) lists sites in 29 states plus the District of Columbia. The program's authorization lapsed Jan. 8, 2025, so this is the last published list; whether every site is open to visitors was not checked.",
+   "evidence": [
+    {
+     "label": "National Park Service, African American Civil Rights Network members",
+     "url": "https://www.nps.gov/subjects/civilrights/network-members.htm"
+    }
+   ],
+   "check_run": "q221/askamerica/2026-11-18"
   },
   {
    "id": 94,
