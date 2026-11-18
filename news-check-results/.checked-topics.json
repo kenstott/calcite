@@ -1495,5 +1495,145 @@
       "everyman": 3
     },
     "note": "resume run; all 19 claims reproduced from ag.nass_* tables"
+  },
+  {
+    "topic_slug": "farmpolicynews-china-non-soy-farm-purchases-7-2b-lowest-since-2019",
+    "headline": "China unlikely to fulfill $17 billion US ag purchase pledge this year",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q1/askamerica/2026-11-18",
+    "pinocchios": 0,
+    "source_url": "https://www.morningagclips.com/china-unlikely-to-fulfill-17-billion-us-ag-purchase-pledge-this-year/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "askamerica misread partial marketing-year soybean total; shape fixed on resume"
+  },
+  {
+    "topic_slug": "newamerican-cis-foreign-born-acs-174k-growth",
+    "headline": "Census Bureau: U.S. Foreign-born Population Stagnated or Declined in 2025-26",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q2/askamerica/2026-11-18",
+    "pinocchios": 1,
+    "source_url": "https://thenewamerican.com/us/immigration/census-bureau-u-s-foreign-born-population-stagnated-or-declined-in-2025-26/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "ACS 1-year nativity gap filed #1320"
+  },
+  {
+    "topic_slug": "fox17-nashville-crime-down-17-percent-oconnell",
+    "headline": "Nashville mayor says crime is down 17% this year as more residents report feeling safe",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q3/askamerica/2026-11-18",
+    "pinocchios": 0,
+    "source_url": "https://fox17.com/news/local/nashville-mayor-says-crime-is-down-17-this-year-as-more-residents-report-feeling-safe",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "FBI Return A agency counts via crime.cde_reta"
+  },
+  {
+    "topic_slug": "oilprice-us-lng-flows-record-21-8-bcf",
+    "headline": "US LNG Flows Hit Record High as Global Gas Supply Crisis Deepens",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q4/askamerica/2026-11-18",
+    "pinocchios": 0,
+    "source_url": "https://oilprice.com/Latest-Energy-News/World-News/US-LNG-Flows-Hit-Record-High-as-Global-Gas-Supply-Crisis-Deepens.html",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "no gas export series in warehouse; filed #1321"
+  },
+  {
+    "topic_slug": "publicradiotulsa-chqpr-61-percent-oklahoma-rural-hospitals-at-risk",
+    "headline": "National report findings show 61% of Oklahoma rural hospitals at risk of closing",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q5/askamerica/2026-11-18",
+    "pinocchios": 0,
+    "source_url": "https://www.publicradiotulsa.org/local-regional/2026-11-16/national-reports-findings-show-61-of-oklahomas-rural-hospitals-at-risk-of-closing",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "CMS cost reports directional; expert found REH conversions"
+  },
+  {
+    "topic_slug": "hechinger-ap-enrollment-down-1-4m-teachers-up",
+    "headline": "School districts with fewer students are delaying painful budget decisions",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q6/askamerica/2026-11-18",
+    "pinocchios": 0,
+    "source_url": "https://abcnews.com/US/wireStory/school-districts-fewer-students-delaying-painful-budget-decisions-138238549",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "CCD reproduced 1.45M / 25.7% / +1.25%; subject quotes added on resume; filed #1322"
+  },
+  {
+    "topic_slug": "gazette-colorado-springs-utilities-snowpack-22-percent-warmest-winter",
+    "headline": "Guest opinion: 2026 historic drought and the value of being prepared",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q7/askamerica/2026-11-18",
+    "pinocchios": 2,
+    "source_url": "https://gazette.com/2026/11/17/guest-opinion-2026-historic-drought-and-the-value-of-being-prepared",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "note": "SEVERITY: first askamerica run (0 Pinocchios) passed the total-water-use overstatement; McpServer compound-claim rule added, rerun graded it mostly false (2 Pinocchios, published); SNOTEL gap #1323"
+  },
+  {
+    "topic_slug": "grist-food-water-watch-nitrate-120-million",
+    "headline": "Petition asks EPA to cut nitrate drinking-water limit to 1 mg/L",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q8/askamerica/2026-11-18",
+    "pinocchios": 1,
+    "source_url": "https://yahoo.com/news/us/articles/nitrates-drinking-water-public-health-091500537.html",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "only 2.9M at >=10 mg/L per petition table; occurrence-data gap #1325"
+  },
+  {
+    "topic_slug": "benzinga-kobeissi-social-security-deficit-221b",
+    "headline": "Social Security deteriorating rapidly, says market commentator as fund deficit hit record $221 billion in FY2026",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q9/askamerica/2026-11-18",
+    "pinocchios": 1,
+    "source_url": "https://www.benzinga.com/news/financing/26/11/63279024/social-security-deteriorating-rapidly-says-market-commentator-as-fund-deficit-hit-record-221-billion-in-fiscal-year-2026",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "OASI-only framing; trust-fund ops gap #1328; broken_field false positive #1327"
+  },
+  {
+    "topic_slug": "agoptimus-lean-hog-record-fund-net-short-cot",
+    "headline": "Grain & Livestock COT Report, November 17, 2026",
+    "checked_date": "2026-11-18",
+    "run_subpath": "q10/askamerica/2026-11-18",
+    "pinocchios": 1,
+    "source_url": "https://agoptimus.com/grain-livestock-cot-report-november-17-2026/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "hog record confirmed; COT combined series gap #1329"
   }
 ]

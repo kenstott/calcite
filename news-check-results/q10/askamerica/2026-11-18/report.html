@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Ag Optimus article's claims about COT fund positioning, lean hogs and grain and cattle prices are balanced and mostly accurate; 1 claim could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Ag Optimus article's claims about COT fund positioning, lean hogs and grain and cattle prices are balanced and mostly accurate; 1 claim could not be confirmed.</h1>
+<p class="subtitle">CFTC Disaggregated COT (futures-only warehouse table; futures-and-options combined via CFTC Socrata), USDA NASS crop progress. Checked 2026-11-18.</p>
+<p class="under-review"><span>Article under review</span><a href="https://agoptimus.com/grain-livestock-cot-report-november-17-2026/">https://agoptimus.com/grain-livestock-cot-report-november-17-2026/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Lean hog managed-money net position (CFTC combined)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Hogs MM net</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="72" y1="276" x2="390" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="64" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-60,000</text>
+      <line class="grid" x1="72" y1="239.33" x2="390" y2="239.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="64" y="243.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-50,000</text>
+      <line class="grid" x1="72" y1="202.67" x2="390" y2="202.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="64" y="206.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-40,000</text>
+      <line class="grid" x1="72" y1="166" x2="390" y2="166" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="64" y="170" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-30,000</text>
+      <line class="grid" x1="72" y1="129.33" x2="390" y2="129.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="64" y="133.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-20,000</text>
+      <line class="grid" x1="72" y1="92.67" x2="390" y2="92.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="64" y="96.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-10,000</text>
+      <line class="grid" x1="72" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="64" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="72" y1="56" x2="72" y2="276" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="72" y1="276" x2="390" y2="276" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-oct-27" class="tick" x="125" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Oct 27</text>
+      <text id="p1-xtick-nov-3" class="tick" x="231" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Nov 3</text>
+      <text id="p1-xtick-nov-10" class="tick" x="337" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Nov 10</text>
+    </g>
+    <g id="p1-series-net" class="series">
+      <g class="hover">
+        <title>Oct 27 — Net: -47,109</title>
+        <rect id="p1-mark-net-oct-27" class="bar" x="91.08" y="56" width="66.84" height="172.73" fill="#2563eb"/>
+        <rect class="hit" x="91.08" y="56" width="66.84" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Nov 3 — Net: -50,492</title>
+        <rect id="p1-mark-net-nov-3" class="bar" x="197.08" y="56" width="66.84" height="185.14" fill="#2563eb"/>
+        <rect class="hit" x="197.08" y="56" width="66.84" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Nov 10 — Net: -51,084</title>
+        <rect id="p1-mark-net-nov-10" class="bar" x="303.08" y="56" width="66.84" height="187.31" fill="#2563eb"/>
+        <rect class="hit" x="303.08" y="56" width="66.84" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:61444/a/be33e8f7f8627d8045b01b0d3504e73a.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: <strong>1 Pinocchio</strong>, driven by basis-related differences in some 'lowest since' dates and a large untested remainder, not by any contradicted figure. The central claim, a record fund net short in lean hogs of 51,084 contracts, matches CFTC's own futures-and-options-combined data exactly (79,486 long less 130,570 short on Nov. 10; 50,492 the week before; open interest 481,857). The warehouse holds the futures-only report, whose hog net short (62,236) is also the largest in 2006-2026. Corn, soybean, cattle, feeder and wheat directions agree. USDA harvest figures match. Prices, exports, cash bids, storage costs, screwworm and summit timing were not verified.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 85/100 — mostly honest</strong> &middot; <strong>Bias -17/100 — no consistent lean</strong></p><p>6 claims graded, 0 not gradable, 4 fell short. In this article only.</p></div>
+<p><strong>2</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>1</strong> unsupported &middot; <strong>6</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Managed money is net short 51,084, the largest Managed Money net short in the Futures-and-Options Combined series, which begins in June 2006.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://publicreporting.cftc.gov/resource/kh3c-gbw2.json">CFTC Socrata</a></td></tr><tr class="verdict-unsupported"><td>6</td><td>CME settlement prices, spreads, export sales, cash bids, storage costs, K-State and Iowa State benchmarks, screwworm cases and summit timing as stated throughout the piece.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://reports.agoptimus.com/ethanol">Ag Optimus ethanol</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Soybean managed money cut another 28,736 contracts to a net long of 104,063, the lowest net long since Aug. 11, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>Corn managed money went from a net short of 22,900 to 62,311, a move of 39,411 contracts, the largest fund net short since June 23, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Live cattle managed money cut 16,812 contracts to a net long of 34,880, the lowest since Apr. 30, 2024; feeder cattle cut 2,716 to 8,586, the lowest since Sept. 29; wheat funds covered 7,359 to a net short of 81,367 and commercials net long 9,832 the most since Jan. 27, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-true"><td>2</td><td>Harvest was 81 percent done on Nov. 8 and 88 percent on Nov. 15. Iowa moved from 72 percent to 84 percent.</td><td><strong>true</strong></td><td>Checked against: <code>ag.nass_crop_progress</code>; <a href="https://www.nass.usda.gov/">NASS</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-unsupported"><td>6</td><td>CME settlement prices, spreads, export sales, cash bids, storage costs, K-State and Iowa State benchmarks, screwworm cases and summit timing as stated throughout the piece.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://reports.agoptimus.com/ethanol">Ag Optimus ethanol</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Live cattle managed money cut 16,812 contracts to a net long of 34,880, the lowest since Apr. 30, 2024; feeder cattle cut 2,716 to 8,586, the lowest since Sept. 29; wheat funds covered 7,359 to a net short of 81,367 and commercials net long 9,832 the most since Jan. 27, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>Corn managed money went from a net short of 22,900 to 62,311, a move of 39,411 contracts, the largest fund net short since June 23, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Soybean managed money cut another 28,736 contracts to a net long of 104,063, the lowest net long since Aug. 11, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-true"><td>2</td><td>Harvest was 81 percent done on Nov. 8 and 88 percent on Nov. 15. Iowa moved from 72 percent to 84 percent.</td><td><strong>true</strong></td><td>Checked against: <code>ag.nass_crop_progress</code>; <a href="https://www.nass.usda.gov/">NASS</a></td></tr><tr class="verdict-true"><td>1</td><td>Managed money is net short 51,084, the largest Managed Money net short in the Futures-and-Options Combined series, which begins in June 2006.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://publicreporting.cftc.gov/resource/kh3c-gbw2.json">CFTC Socrata</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>6</td><td>CME settlement prices, spreads, export sales, cash bids, storage costs, K-State and Iowa State benchmarks, screwworm cases and summit timing as stated throughout the piece.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://reports.agoptimus.com/ethanol">Ag Optimus ethanol</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>Corn managed money went from a net short of 22,900 to 62,311, a move of 39,411 contracts, the largest fund net short since June 23, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-true"><td>2</td><td>Harvest was 81 percent done on Nov. 8 and 88 percent on Nov. 15. Iowa moved from 72 percent to 84 percent.</td><td><strong>true</strong></td><td>Checked against: <code>ag.nass_crop_progress</code>; <a href="https://www.nass.usda.gov/">NASS</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Live cattle managed money cut 16,812 contracts to a net long of 34,880, the lowest since Apr. 30, 2024; feeder cattle cut 2,716 to 8,586, the lowest since Sept. 29; wheat funds covered 7,359 to a net short of 81,367 and commercials net long 9,832 the most since Jan. 27, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-true"><td>1</td><td>Managed money is net short 51,084, the largest Managed Money net short in the Futures-and-Options Combined series, which begins in June 2006.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://publicreporting.cftc.gov/resource/kh3c-gbw2.json">CFTC Socrata</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Soybean managed money cut another 28,736 contracts to a net long of 104,063, the lowest net long since Aug. 11, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>3</td><td>Soybean managed money cut another 28,736 contracts to a net long of 104,063, the lowest net long since Aug. 11, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>Corn managed money went from a net short of 22,900 to 62,311, a move of 39,411 contracts, the largest fund net short since June 23, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Live cattle managed money cut 16,812 contracts to a net long of 34,880, the lowest since Apr. 30, 2024; feeder cattle cut 2,716 to 8,586, the lowest since Sept. 29; wheat funds covered 7,359 to a net short of 81,367 and commercials net long 9,832 the most since Jan. 27, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-true"><td>2</td><td>Harvest was 81 percent done on Nov. 8 and 88 percent on Nov. 15. Iowa moved from 72 percent to 84 percent.</td><td><strong>true</strong></td><td>Checked against: <code>ag.nass_crop_progress</code>; <a href="https://www.nass.usda.gov/">NASS</a></td></tr><tr class="verdict-true"><td>1</td><td>Managed money is net short 51,084, the largest Managed Money net short in the Futures-and-Options Combined series, which begins in June 2006.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://publicreporting.cftc.gov/resource/kh3c-gbw2.json">CFTC Socrata</a></td></tr><tr class="verdict-unsupported"><td>6</td><td>CME settlement prices, spreads, export sales, cash bids, storage costs, K-State and Iowa State benchmarks, screwworm cases and summit timing as stated throughout the piece.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://reports.agoptimus.com/ethanol">Ag Optimus ethanol</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-unsupported"><td>6</td><td>CME settlement prices, spreads, export sales, cash bids, storage costs, K-State and Iowa State benchmarks, screwworm cases and summit timing as stated throughout the piece.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://reports.agoptimus.com/ethanol">Ag Optimus ethanol</a></td></tr><tr class="verdict-true"><td>2</td><td>Harvest was 81 percent done on Nov. 8 and 88 percent on Nov. 15. Iowa moved from 72 percent to 84 percent.</td><td><strong>true</strong></td><td>Checked against: <code>ag.nass_crop_progress</code>; <a href="https://www.nass.usda.gov/">NASS</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Soybean managed money cut another 28,736 contracts to a net long of 104,063, the lowest net long since Aug. 11, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>Corn managed money went from a net short of 22,900 to 62,311, a move of 39,411 contracts, the largest fund net short since June 23, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Live cattle managed money cut 16,812 contracts to a net long of 34,880, the lowest since Apr. 30, 2024; feeder cattle cut 2,716 to 8,586, the lowest since Sept. 29; wheat funds covered 7,359 to a net short of 81,367 and commercials net long 9,832 the most since Jan. 27, 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></td></tr><tr class="verdict-true"><td>1</td><td>Managed money is net short 51,084, the largest Managed Money net short in the Futures-and-Options Combined series, which begins in June 2006.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>cftc.cot_disaggregated_futures</code>; <a href="https://publicreporting.cftc.gov/resource/kh3c-gbw2.json">CFTC Socrata</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Managed money is net short 51,084, the largest Managed Money net short in the Futures-and-Options Combined series, which begins in June 2006.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>-51,084; prior record 50,492; open interest 481,857; 5,976; 3,383; 20,278</dd>
+<dt>Warehouse says</dt><dd>futures-only -62,236, largest 2006-2026 <code>cftc.cot_disaggregated_futures</code></dd>
+<dt>Independent evidence</dt><dd>CFTC combined: 79,486-130,570 = -51,084; Nov 3 = -50,492<ul class="claim-sources"><li><a href="https://publicreporting.cftc.gov/resource/kh3c-gbw2.json">CFTC Socrata</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>CFTC COT managed money lean hogs net position</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT report_date, money_manager_long_all - money_manager_short_all FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='054642' ORDER BY 2</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Harvest was 81 percent done on Nov. 8 and 88 percent on Nov. 15. Iowa moved from 72 percent to 84 percent.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>81, 88, 72, 84</dd>
+<dt>Warehouse says</dt><dd>US 81, 88; IA 72, 84 <code>ag.nass_crop_progress</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.nass.usda.gov/">NASS</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT week_ending, state_alpha, value FROM ag.nass_crop_progress WHERE commodity_desc='CORN' AND unit_desc='PCT HARVESTED'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#3 &middot; <strong>mostly true</strong> &mdash; Soybean managed money cut another 28,736 contracts to a net long of 104,063, the lowest net long since Aug. 11, 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>28,736; 104,063; 266,031; 161,968; 60.9 percent; 1,164,112; 250,428; 23,756; 206,936; 30,555; 1,367,303; 242,017; 8,411; 185,400; 21,536; 1,133,516; 206,524; 35,493; 132,799; 52,601; 1,132,599; 182,074; 24,450</dd>
+<dt>Warehouse says</dt><dd>futures-only net 117,586; last as low Aug 11 <code>cftc.cot_disaggregated_futures</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Level differs by report basis (futures-only 117,586) but the Aug. 11 date and direction match.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT MAX(report_date) FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='005602' AND report_date&lt;DATE '2026-11-10' AND money_manager_long_all-money_manager_short_all&lt;=117586</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; Corn managed money went from a net short of 22,900 to 62,311, a move of 39,411 contracts, the largest fund net short since June 23, 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>62,311; 22,900; 39,411; 426,842; 489,153; 390,939; 2,648,908; 475,947; 77,293; 146,257; 84,620; 2,539,295; 413,858; 62,089; 55,943; 90,314; 2,494,153; 355,227; 58,631; 78,843; 2,576,752; 336,178; 19,049</dd>
+<dt>Warehouse says</dt><dd>futures-only -22,628 vs +8,795 <code>cftc.cot_disaggregated_futures</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></li></ul></dd>
+<dt>Errs</dt><dd>against their own case</dd>
+<dt>Inaccuracy</dt><dd>Futures-only warehouse gives last-as-short June 30; the basis differs. Subhead 'doubled' understates a 2.7x increase.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT report_date, money_manager_long_all-money_manager_short_all FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='002602' AND report_date&gt;=DATE '2026-10-20'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; Live cattle managed money cut 16,812 contracts to a net long of 34,880, the lowest since Apr. 30, 2024; feeder cattle cut 2,716 to 8,586, the lowest since Sept. 29; wheat funds covered 7,359 to a net short of 81,367 and commercials net long 9,832 the most since Jan. 27, 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>16,812; 34,880; 2,716; 8,586; 7,359; 81,367; 9,832; 408,771; 90,431; 677,572; 25,700; 18,448; 51,134; 111,360; 4,804; 51,143; 7,494; 901; 10,444; 28,079; 998; 41,133; 21,469; 6,610; 47,109; 50,492; 22,030; 19,138; 2,892; 411,868; 445,750; 477,103; 18,096; 637,923; 7,539; 18,161; 74,859; 23,725; 628,869; 5,525; 13,064; 88,726; 13,867; 657,727; 4,307; 91,199; 2,395; 390,002; 116,193; 4,833; 56,017; 4,874; 396,473; 102,520; 13,673; 51,692; 4,325; 416,598; 85,167; 17,353; 31,026; 32.5 percent; 24 percent; 9,650; 2,156; 96,639; 13,353; 2,909; 92,775; 1,592; 7,199; 2,451; 11,302; 2,051; 92,133; 6,180; 1,019</dd>
+<dt>Warehouse says</dt><dd>futures-only cattle 33,196, feeders 10,020, wheat -81,050 <code>cftc.cot_disaggregated_futures</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Warehouse futures-only dates differ (Jan. 30, 2024; Oct. 13; Feb. 10) due to report basis; direction agrees.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT report_date, cftc_contract_market_code, money_manager_long_all-money_manager_short_all FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code IN ('057642','061641','001602') AND report_date&gt;=DATE '2026-10-20'</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#6 &middot; <strong>unsupported</strong> &mdash; CME settlement prices, spreads, export sales, cash bids, storage costs, K-State and Iowa State benchmarks, screwworm cases and summit timing as stated throughout the piece.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>$8.675, 307,400, $4.08, $4.75, $12.63, 689,200, 134,000, 120,000, 691,670, 182,800, 350,000, 650,000, $6.60, $7.60, $215, $3, $335, $338, $2, 46,710, 69,555, $218, 1,640, $357.59, $4.15, $3.93, $113.00, $105, $120, $5.09, $231, $236, $338.78, $4.86, $337.82, $15, $3.43, $19.49, $4.72, $1.925, $2.675, $58.78, $57.73, $67.30, $69.55, $1.10, $1.69, $71.24, $9.34, $3.33, $2.38, $5.93, $28.75, 865,503, 130,000, 391,515, $17, 44,148</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://reports.agoptimus.com/ethanol">Ag Optimus ethanol</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>No warehouse table carries CME settlements and primary sources were not retrieved in this run, so they are neither confirmed nor contradicted. Ag Optimus linked report pages were fetched and hold no such figures.</dd>
+<dt>No page loaded because</dt><dd>CME, USDA AMS, K-State and Iowa State pages were not attempted in this run.</dd>
+<dt>Warehouse searched for</dt><dd>CME futures settlement prices corn soybeans cattle hogs</dd>
+<dt>Web searches run</dt><dd>CME futures settlement prices corn soybeans cattle hogs</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>Remaining price, spread and bullet figures</strong> &mdash; Not individually verified; see ungraded clause.</li></ul>
+</section>
+<section>
+<h2>What was checked</h2>
+<ul><li>Hogs record: true.</li><li>Corn flip to net short: consistent (warehouse last as short June 30; basis differs).</li><li>Soybeans lowest net long since Aug. 11: true.</li><li>Cattle, feeder and wheat 'since' dates: directionally supported; futures-only dates are Jan. 30, 2024, Oct. 13 and Feb. 10, a basis difference not resolved.</li><li>Corn harvest 81% and 88%, Iowa 72% and 84%: true.</li><li>The publisher's COT portal shows the same six net positions; not independent. Its other linked pages carry no figures the article relies on.</li></ul><p>Framing: 'doubled their short' understates the corn move (22,900 to 62,311 is 2.7 times). The piece separates Tuesday positioning from Friday prices and labels opinion.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>CME settlements, exports, cash bids, K-State/Iowa State, screwworm, NOPA, summit</strong>: No warehouse table; primary sources were not fetched. Left ungraded, not graded false.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>4 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 24 rows — 981 ms</summary><pre><code>SELECT report_date, cftc_contract_market_code c, open_interest_all oi, money_manager_long_all - money_manager_short_all mm_net, producer_merchant_long_all - producer_merchant_short_all pm_net FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code IN ('002602','005602','001602','057642','061641','054642') AND report_date &gt;= DATE '2026-10-20' ORDER BY c, report_date</code></pre></details>
+<details class="sqltoggle"><summary>query — 6 rows — 733 ms</summary><pre><code>SELECT report_date, money_manager_long_all - money_manager_short_all mm_net, open_interest_all FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='054642' ORDER BY mm_net ASC FETCH FIRST 6 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 6 rows — 3010 ms</summary><pre><code>SELECT 'corn_mm_short_ge' k, MAX(report_date) d FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='002602' AND report_date&lt;DATE '2026-11-10' AND money_manager_long_all-money_manager_short_all &lt;= -22628
+UNION ALL SELECT 'soy_mm_net_le', MAX(report_date) FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='005602' AND report_date&lt;DATE '2026-11-10' AND money_manager_long_all-money_manager_short_all &lt;= 117586
+UNION ALL SELECT 'cattle_mm_net_le', MAX(report_date) FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='057642' AND report_date&lt;DATE '2026-11-10' AND money_manager_long_all-money_manager_short_all &lt;= 33196
+UNION ALL SELECT 'feeder_mm_le', MAX(report_date) FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='061641' AND report_date&lt;DATE '2026-11-10' AND money_manager_long_all-money_manager_short_all &lt;= 10020
+UNION ALL SELECT 'wheat_pm_ge', MAX(report_date) FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='001602' AND report_date&lt;DATE '2026-11-10' AND producer_merchant_long_all-producer_merchant_short_all &gt;= -3981
+UNION ALL SELECT 'corn_peak', MAX(report_date) FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='002602' AND report_date&gt;=DATE '2026-08-01' AND money_manager_long_all-money_manager_short_all &gt;= 400000</code></pre></details>
+<details class="sqltoggle"><summary>query — 6 rows — 596 ms</summary><pre><code>SELECT week_ending, commodity_desc, state_alpha, unit_desc, value FROM ag.nass_crop_progress WHERE week_ending &gt;= DATE '2026-11-01' AND state_alpha IN ('US','IA') AND ((commodity_desc='CORN' AND unit_desc='PCT HARVESTED') OR (commodity_desc='WHEAT' AND class_desc='WINTER' AND unit_desc IN ('PCT PLANTED','PCT EMERGED'))) ORDER BY commodity_desc, unit_desc, state_alpha, week_ending</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://agoptimus.com/grain-livestock-cot-report-november-17-2026/">Ag Optimus article</a></li>
+<li><a href="https://reports.agoptimus.com/cot-report">Ag Optimus COT portal</a></li>
+<li><a href="https://reports.agoptimus.com/ethanol">Ag Optimus ethanol</a></li>
+<li><a href="https://reports.agoptimus.com/livestock-slaughter">Ag Optimus slaughter</a></li>
+<li><a href="https://reports.agoptimus.com/cattle-on-feed">Ag Optimus cattle on feed</a></li>
+<li><a href="https://publicreporting.cftc.gov/resource/kh3c-gbw2.json">CFTC Socrata combined disaggregated</a></li>
+<li><a href="https://publicreporting.cftc.gov/resource/72hh-3qpy.json">cftc.cot_disaggregated_futures</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT report_date, money_manager_long_all - money_manager_short_all FROM cftc.cot_disaggregated_futures WHERE cftc_contract_market_code='054642' ORDER BY 2</code></pre></details></li>
+<li><a href="https://www.nass.usda.gov/">ag.nass_crop_progress</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT week_ending, state_alpha, value FROM ag.nass_crop_progress WHERE commodity_desc='CORN' AND unit_desc='PCT HARVESTED'</code></pre></details></li>
+</ol>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

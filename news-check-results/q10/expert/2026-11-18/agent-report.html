@@ -1,0 +1,28 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fact check: Ag Optimus COT report, Nov 17 2026</title></head><body style="font-family:sans-serif;max-width:900px;margin:auto">
+<h1>Fact check: Ag Optimus grain/livestock COT report (Nov 17, 2026)</h1>
+<img src="agent-dashboard.png" style="width:100%" alt="dashboard">
+<h2>Verdict: accurate (0 Pinocchios); every checked position figure matches CFTC data</h2>
+<p>All six managed-money net positions as of Nov 10, 2026 match the CFTC combined (futures plus options) disaggregated report to the contract. The lean hog net short of 51,084 is the largest in the series, which begins June 2006. Overall rating: <strong>0 Pinocchios</strong>.</p>
+<ul>
+<li>Hogs -51,084 (79,486 long, 130,570 short); the lowest of 1,066 weekly observations.</li>
+<li>Corn -62,311; soybeans +104,063 (lowest since Aug 11, 2026, when it was 101,362); live cattle +34,880 with a net cut of 16,812 (the largest weekly cut since at least Aug 4); feeder cattle +8,586; SRW wheat -81,367 with a net buy of 7,359.</li>
+<li>Five of six markets cut net position (wheat the exception): confirmed.</li>
+<li>Minor imprecision: corn "added 39,411 contracts of short". Short rose 42,439 and longs rose 3,027; the net change is 39,412. The article's number is the net change (off by one), described as added short.</li>
+<li>Not checkable here: that all six markets settled higher for the week ended Nov 13 and that feeder cattle rose $8.675 after the snapshot. I found no accessible settlement data for that week.</li>
+<li>Context worth noting: the figures use the combined report. The futures-only report gives different numbers (hogs -62,236, corn -22,628), so the "record" depends on which report is used. Positioning is as of Nov 10, not Nov 13.</li>
+</ul>
+<h2>Claim table</h2>
+<table border="1" cellpadding="4"><tr><th>Claim</th><th>CFTC value</th><th>Result</th></tr>
+<tr><td>Hogs net short 51,084, largest since June 2006</td><td>-51,084, series low</td><td>True</td></tr>
+<tr><td>Corn net short 62,311</td><td>-62,311</td><td>True</td></tr>
+<tr><td>Corn added 39,411 short</td><td>short +42,439; net -39,412</td><td>Mostly true</td></tr>
+<tr><td>Soybeans 104,063, lowest since Aug 11</td><td>104,063; Aug 11 101,362</td><td>True</td></tr>
+<tr><td>Live cattle 34,880, cut 16,812</td><td>same</td><td>True</td></tr>
+<tr><td>Feeder cattle 8,586</td><td>8,586</td><td>True</td></tr>
+<tr><td>Wheat net short 81,367, bought 7,359</td><td>same</td><td>True</td></tr>
+<tr><td>All six settled higher; feeder +$8.675</td><td>not found</td><td>Not checkable here</td></tr></table>
+<p>Confidence: high for positioning figures (primary source, exact match); no confidence on price claims.</p>
+<h2>Sources</h2><ul><li>CFTC Public Reporting API, Disaggregated Futures and Options Combined: https://publicreporting.cftc.gov/resource/kh3c-gbw2.json</li>
+<li>CFTC Disaggregated Futures Only: https://publicreporting.cftc.gov/resource/72hh-3qpy.json</li>
+<li>Article: https://agoptimus.com/grain-livestock-cot-report-november-17-2026/ (read via a summarizing fetch tool, so quotes were not verbatim; no attributed quotes were identified).</li></ul>
+</body></html>
