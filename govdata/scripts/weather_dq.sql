@@ -1065,3 +1065,91 @@ INSERT INTO dq_results
 SELECT 'weather', 'tropical_cyclone_best_track', 'known_value_ace_2004', CASE WHEN ace BETWEEN 220 AND 235 THEN 'pass' ELSE 'fail' END, CAST(ROUND(ace, 1) AS VARCHAR), '220-235', 'Atlantic 2004 season ACE (NOAA ~227)'
 FROM (SELECT SUM(max_wind_kt * max_wind_kt / 10000.0) AS ace FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) WHERE basin = 'atlantic' AND season = 2004 AND status IN ('TS', 'HU', 'SS') AND max_wind_kt >= 34 AND obs_time_utc IN ('0000', '0600', '1200', '1800'));
 
+
+-- ============================================================
+-- NRCS SNOTEL (snotel_stations)
+-- ============================================================
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_stations', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_stations', 'row_count', CASE WHEN n >= 900 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '900', 'rows in DQ bucket'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true));
+
+SELECT 'snotel_stations' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true) LIMIT 1;
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_stations', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+-- Excluded: type is a partition column.
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_stations', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_stations', 'pk_nulls', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with a NULL primary-key column (station_id)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true) WHERE station_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_stations', 'pk_duplicates', CASE WHEN dups > 0 THEN 'fail' ELSE 'pass' END, CAST(dups AS VARCHAR), '0', 'duplicate (station_id)'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT station_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true) GROUP BY station_id HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_stations', 'value_ranges', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with lat outside 17-72, lon outside -180..-100 or elevation outside 0-15000 ft'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true)
+      WHERE latitude NOT BETWEEN 17 AND 72 OR longitude NOT BETWEEN -180 AND -100 OR elevation_ft NOT BETWEEN 0 AND 15000);
+
+-- ============================================================
+-- NRCS SNOTEL (snotel_daily)
+-- ============================================================
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'row_count', CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1000', 'rows in DQ bucket'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true));
+
+SELECT 'snotel_daily' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true) LIMIT 1;
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+-- Excluded: type is a partition column; state_abbr and year are constant when the DQ sample is one state-year.
+-- snwd_in / wteq_pct_median are not constant in real data.
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'state_abbr', 'year');
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'pk_nulls', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with a NULL primary-key column (station_id, date)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true) WHERE station_id IS NULL OR date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'pk_duplicates', CASE WHEN dups > 0 THEN 'fail' ELSE 'pass' END, CAST(dups AS VARCHAR), '0', 'duplicate (station_id, date)'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT station_id, date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true) GROUP BY station_id, date HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'value_ranges', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with wteq_in outside 0-400, snwd_in outside 0-700 or prec_accum_in outside 0-300 inches'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true)
+      WHERE wteq_in NOT BETWEEN 0 AND 400 OR snwd_in NOT BETWEEN 0 AND 700 OR prec_accum_in NOT BETWEEN 0 AND 300);
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'pct_median_consistent', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows where wteq_pct_median disagrees with 100*wteq_in/wteq_median_in'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true)
+      WHERE wteq_median_in > 0 AND ABS(wteq_pct_median - 100.0 * wteq_in / wteq_median_in) > 0.1);
+
+INSERT INTO dq_results
+SELECT 'weather', 'snotel_daily', 'station_fk', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'station_id values missing from snotel_stations'
+FROM (SELECT COUNT(DISTINCT d.station_id) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_daily', allow_moved_paths=true) d
+      LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/snotel_stations', allow_moved_paths=true) s ON d.station_id = s.station_id
+      WHERE s.station_id IS NULL);
