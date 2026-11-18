@@ -169,7 +169,19 @@ ENDJSON
 
 case "$MODE" in
 
-  historical)
+  historical|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+    # A bare year (2026) or range (2024-2026) narrows the backfill's start to that year, so a
+    # year-scoped slot from run-pool.sh / force-reprocess.sh is accepted. NvdPublishedWindow
+    # history always runs from startYear through the daily tip and has no end bound, so the
+    # end year must be the current year: an earlier end would rewrite years past it.
+    if [ "$MODE" != "historical" ]; then
+      _slot_end="${MODE#*-}"
+      if [ "$_slot_end" -ne "$(date +%Y)" ]; then
+        echo "Cannot run mode $MODE: cyber_vuln history has no end bound and always runs through the current year ($(date +%Y)); use an end year of $(date +%Y)." >&2
+        exit 1
+      fi
+      export GOVDATA_START_YEAR="${MODE%-*}"
+    fi
     # Backfill: only the NVD publish-dated tables have a year axis. vulnerabilities /
     # vulnerability_cwes / vulnerability_cpes window over pub year/quarter (GOVDATA_START_YEAR-bounded),
     # so a historical run genuinely backfills them. Everything else in cyber is a current-snapshot
@@ -198,7 +210,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Unknown mode: $MODE. Valid modes: daily, historical" >&2
+    echo "Unknown mode: $MODE. Valid modes: daily, historical, a year (2026), or a range ending in the current year (2024-2026)" >&2
     exit 1
     ;;
 esac

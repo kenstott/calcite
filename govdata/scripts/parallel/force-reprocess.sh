@@ -330,6 +330,8 @@ RUN_POOL="$SCRIPT_DIR/run-pool.sh"
 # failed period). Record it instead of letting `set -e` abort here, so the validation below can
 # name the failed tables/periods and refuse to say "confirmed reprocessed".
 POOL_RC=0
+HIST_RC=-1   # -1 = slot not run
+DAILY_RC=-1
 RUN_START_MARK="$(mktemp)"
 
 # ── One remediation run per (target bucket, schema, years) ──
@@ -372,7 +374,9 @@ if ! $SKIP_HISTORICAL; then
       if $DRY_RUN; then
         echo "  [DRY RUN] Would run: $RUN_POOL ${SLOTS[*]}"
       else
-        bash "$RUN_POOL" "${SLOTS[@]}" || POOL_RC=$?
+        HIST_RC=0
+        bash "$RUN_POOL" "${SLOTS[@]}" || HIST_RC=$?
+        [[ "$HIST_RC" -eq 0 ]] || POOL_RC=$HIST_RC
       fi
       ;;
     *)
@@ -381,7 +385,9 @@ if ! $SKIP_HISTORICAL; then
       if $DRY_RUN; then
         echo "  [DRY RUN] Would run: $RUN_POOL $SLOT"
       else
-        bash "$RUN_POOL" "$SLOT" || POOL_RC=$?
+        HIST_RC=0
+        bash "$RUN_POOL" "$SLOT" || HIST_RC=$?
+        [[ "$HIST_RC" -eq 0 ]] || POOL_RC=$HIST_RC
       fi
       ;;
   esac
@@ -394,7 +400,9 @@ if ! $SKIP_DAILY; then
   if $DRY_RUN; then
     echo "  [DRY RUN] Would run: $RUN_POOL $SLOT"
   else
-    bash "$RUN_POOL" "$SLOT" || POOL_RC=$?
+    DAILY_RC=0
+    bash "$RUN_POOL" "$SLOT" || DAILY_RC=$?
+    [[ "$DAILY_RC" -eq 0 ]] || POOL_RC=$DAILY_RC
   fi
   echo ""
 fi
@@ -411,8 +419,16 @@ if $DRY_RUN; then
 fi
 
 ERRORS=0
+echo "Slot outcomes:"
+if [[ "$HIST_RC" -ge 0 ]]; then
+  echo "  historical (${START_YEAR}-${END_YEAR}): $([[ "$HIST_RC" -eq 0 ]] && echo OK || echo "FAILED (pool exit $HIST_RC)")"
+fi
+if [[ "$DAILY_RC" -ge 0 ]]; then
+  echo "  daily: $([[ "$DAILY_RC" -eq 0 ]] && echo OK || echo "FAILED (pool exit $DAILY_RC)")"
+fi
+_FAILED_LINES=""
 if [[ "$POOL_RC" -ne 0 ]]; then
-  echo "ERROR: the pool exited $POOL_RC — at least one worker failed, so this reprocess is NOT complete."
+  echo "ERROR: a slot failed (pool exit $POOL_RC), so this reprocess is NOT complete."
   echo "       Failed tables/periods reported by EtlRunner during this run (ETL_FAILED lines):"
   _failed_lines=$(find "$SCRIPT_DIR/runs" -name 'etl_*.log' -newer "$RUN_START_MARK" -print0 2>/dev/null \
     | xargs -0 grep -h 'ETL_FAILED:' 2>/dev/null | sort -u || true)
@@ -421,6 +437,7 @@ if [[ "$POOL_RC" -ne 0 ]]; then
   else
     echo "         (none found under $SCRIPT_DIR/runs — see the worker logs and launch.log)"
   fi
+  _FAILED_LINES="$_failed_lines"
   ERRORS=$((ERRORS+1))
 fi
 rm -f "$RUN_START_MARK"
@@ -428,8 +445,12 @@ for tbl in "${TABLE_ARR[@]}"; do
   after=$(pg_tracker_exec "SELECT COALESCE(MAX(as_of),0) FROM \"${PG_NS}\".pipeline_tracker WHERE table_name = '${tbl}' AND phase = 'incremental' AND state = 'complete';" 2>/dev/null | tr -d '[:space:]')
   after="${after:-0}"
   before="${BEFORE_AS_OF[$tbl]:-0}"
-  if [[ "$POOL_RC" -ne 0 ]]; then
-    echo "  NOT CONFIRMED: ${tbl} — as_of ${before} -> ${after}, but the pool failed (a committed period advances as_of even when other periods failed)"
+  # A table is judged by its own as_of and its own ETL_FAILED lines, not by the pool-level exit:
+  # a failed slot is reported above and fails the run, but does not unconfirm a table another slot
+  # reprocessed cleanly.
+  if [[ -n "$_FAILED_LINES" ]] && grep -qw -- "$tbl" <<< "$_FAILED_LINES"; then
+    echo "  NOT CONFIRMED: ${tbl} — as_of ${before} -> ${after}, but EtlRunner reported failed periods for it (ETL_FAILED above)"
+    ERRORS=$((ERRORS+1))
   elif [[ "$after" -gt "$before" ]]; then
     echo "  OK: ${tbl} — as_of advanced ($before -> $after)"
   else
@@ -442,7 +463,7 @@ for tbl in "${TABLE_ARR[@]}"; do
 done
 echo ""
 if [[ $ERRORS -gt 0 ]]; then
-  echo "Completed with $ERRORS table(s) NOT confirmed reprocessed."
+  echo "Completed with $ERRORS problem(s): see the slot outcomes and per-table lines above."
   exit 1
 fi
 echo "All ${#TABLE_ARR[@]} table(s) confirmed reprocessed."
