@@ -1278,6 +1278,63 @@ SELECT 'transport', 'rail_service_performance', 'T8_expected_values',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_service_performance', allow_moved_paths := true)
   WHERE railroad_mark NOT IN ('BNSF', 'CN', 'CP', 'CPKC', 'CSXT', 'KCS', 'NS', 'UP'));
 
+-- TABLE: rail_equipment_accidents (FRA Form 54, Socrata aqxq-n5hy; partition cols: type, year)
+-- The source repeats incident_number (pre-1981 and amended reports), so there is no PK and no
+-- duplicate-key test; T6/T7 below check the identifying columns instead.
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'rail_equipment_accidents', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_equipment_accidents', 'T2_row_count',
+  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END, n, 2000,
+  'Expected >=2000 rows (about 2,500 reports per recent year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_equipment_accidents', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_equipment_accidents', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'rail_equipment_accidents', 'T6_id_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL railroad_code/incident_number/accident_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true)
+  WHERE railroad_code IS NULL OR incident_number IS NULL OR accident_date IS NULL);
+
+-- T7: accident_date year must equal the year partition (catches a wrong year filter).
+INSERT INTO dq_results
+SELECT 'transport', 'rail_equipment_accidents', 'T7_date_matches_year',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows whose accident_date year differs from the year partition'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true) WHERE YEAR(accident_date) <> year);
+
+-- T8: accident_type_code limited to FRA codes 01-13; every row decodes to a label.
+INSERT INTO dq_results
+SELECT 'transport', 'rail_equipment_accidents', 'T8_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with a NULL accident_type (code outside 01-13) or county_fips not 5 digits'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true)
+  WHERE accident_type IS NULL OR (county_fips IS NOT NULL AND LENGTH(county_fips) <> 5));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: class1_rail_county_adjacency (BTS NTAD ArcGIS; partition col: type)
 -- ─────────────────────────────────────────────────────────────
