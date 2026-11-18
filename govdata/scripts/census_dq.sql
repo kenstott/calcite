@@ -88,6 +88,7 @@ FROM (
   UNION ALL SELECT 'cbp_establishments',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs1_population',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',         allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs1_income',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',             allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'acs1_nativity',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity',             allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'economic_census',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',         allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'sahie_insurance',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance',         allow_moved_paths := true) LIMIT 1) t)
@@ -162,6 +163,7 @@ FROM (
   UNION ALL SELECT 'cbp_establishments',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments',      allow_moved_paths := true)), 8500
   UNION ALL SELECT 'acs1_population',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',         allow_moved_paths := true)), 250
   UNION ALL SELECT 'acs1_income',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',             allow_moved_paths := true)), 250
+  UNION ALL SELECT 'acs1_nativity',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity',             allow_moved_paths := true)), 250
   UNION ALL SELECT 'economic_census',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',         allow_moved_paths := true)), 5000
   UNION ALL SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true)), 9000
   -- sahie: 3 yrs × (51 states + ~3143 counties) = ~9582 max; threshold 80% of max
@@ -222,6 +224,7 @@ SELECT 'pep_population'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'cbp_establishments'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs1_population'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',        allow_moved_paths := true) LIMIT 1;
 SELECT 'acs1_income'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',            allow_moved_paths := true) LIMIT 1;
+SELECT 'acs1_nativity'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity',            allow_moved_paths := true) LIMIT 1;
 SELECT 'economic_census'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',        allow_moved_paths := true) LIMIT 1;
 SELECT 'saipe_poverty'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',          allow_moved_paths := true) LIMIT 1;
 SELECT 'sahie_insurance'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance',        allow_moved_paths := true) LIMIT 1;
@@ -284,6 +287,7 @@ INSERT INTO dq_results SELECT 'census', 'pep_population', 'all_null_cols', 'warn
 INSERT INTO dq_results SELECT 'census', 'cbp_establishments', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs1_population', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs1_income', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'acs1_nativity', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'economic_census', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'saipe_poverty', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'sahie_insurance', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance', allow_moved_paths := true)) WHERE null_percentage = 100.0;
@@ -343,6 +347,7 @@ INSERT INTO dq_results SELECT 'census', 'pep_population', 'all_same_value', 'war
 INSERT INTO dq_results SELECT 'census', 'cbp_establishments', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs1_population', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs1_income', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+INSERT INTO dq_results SELECT 'census', 'acs1_nativity', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'economic_census', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'saipe_poverty', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'sahie_insurance', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
@@ -557,6 +562,54 @@ FROM (
     AND not_a_citizen IS NOT NULL AND total_population IS NOT NULL
     AND born_in_us + born_in_pr_island_areas + born_abroad_american_parents
         + naturalized_citizen + not_a_citizen != total_population
+);
+
+-- acs1_nativity: component identity (002+003+004+005+006 = 001) on every row
+INSERT INTO dq_results
+SELECT
+  'census', 'acs1_nativity', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where native_born + foreign_born != total_population'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)
+  WHERE native_born IS NOT NULL AND foreign_born IS NOT NULL AND total_population IS NOT NULL
+    AND native_born + foreign_born != total_population
+);
+
+-- acs1_nativity: each year with data carries exactly one national row, and no duplicate
+-- (year, geography, name) keys
+INSERT INTO dq_results
+SELECT
+  'census', 'acs1_nativity', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (year, geography, name) keys plus years whose national row count != 1'
+FROM (
+  SELECT
+    (SELECT COUNT(*) FROM (
+       SELECT year, geography, name FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)
+       GROUP BY year, geography, name HAVING COUNT(*) > 1))
+    + (SELECT COUNT(*) FROM (
+       SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)
+       WHERE geography = 'us' GROUP BY year HAVING COUNT(*) != 1)) AS bad
+);
+
+-- acs1_nativity: Census-published national foreign-born count for 2025 (27,178,573 naturalized +
+-- 23,230,747 non-citizen, api.census.gov/data/2025/acs/acs1, verified 2026-11-18) and 2024
+-- (25,837,975 + 24,396,883) — the +174k year-over-year change is the headline this table serves
+INSERT INTO dq_results
+SELECT
+  'census', 'acs1_nativity', 'expected_values',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '2',
+  'national rows for 2024 (50234858) and 2025 (50409320) with the published foreign_born value'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity', allow_moved_paths := true)
+  WHERE geography = 'us'
+    AND ((year = 2024 AND foreign_born = 50234858) OR (year = 2025 AND foreign_born = 50409320))
 );
 
 -- pep_population: population estimates must be >= 0

@@ -77,6 +77,7 @@ table above; `—` = none.
 | cbp_establishments | year | — | T2 period |
 | acs1_population | year | — | T2 period |
 | acs1_income | year | — | T2 period |
+| acs1_nativity | year | — | T2 period |
 | economic_census | year | — | T2 period |
 | saipe_poverty | year | — | T2 period |
 | sahie_insurance | year | — | T2 period |
