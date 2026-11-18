@@ -285,6 +285,28 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
+  # SNOTEL: states with NRCS SNOTEL stations (AWDB /stations?stationTriplets=*:*:SNTL).
+  snotel_state_abbrs: &snotel_state_abbrs
+    - 'AK'
+    - 'AZ'
+    - 'CA'
+    - 'CO'
+    - 'ID'
+    - 'MT'
+    - 'NM'
+    - 'NV'
+    - 'OR'
+    - 'SD'
+    - 'UT'
+    - 'WA'
+    - 'WY'
+
+  # SNOTEL daily record reaches back to about 1980 (earliest stations began Oct 1979).
+  snotel_year_range: &snotel_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1980}"
+    end: "${GOVDATA_END_YEAR:current}"
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -2255,6 +2277,226 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # SNOTEL STATIONS - NRCS SNOTEL station metadata (no auth)
+  # ---------------------------------------------------------------------------
+  - name: snotel_stations
+    freshness:
+      type: hash
+    pattern: "type=snotel_station/*.parquet"
+    partitions: *type_only_partitions
+    comment: >
+      USDA NRCS SNOTEL (SNOwpack TELemetry) automated mountain snow stations: one row per
+      station, active and discontinued, from the National Water and Climate Center AWDB REST
+      API (wcc.sc.egov.usda.gov/awdbRestApi, keyless, public domain). Covers 13 states (AK,
+      AZ, CA, CO, ID, MT, NM, NV, OR, SD, UT, WA, WY). station_id is the NRCS triplet
+      '<code>:<state>:SNTL' (e.g. '713:CO:SNTL' Red Mountain Pass). Carries elevation in feet,
+      coordinates, county, and the 12-digit HUC the station sits in plus its HUC8 and HUC6
+      prefixes (basin and sub-basin keys for rolling stations up to NRCS basin-index reports).
+      end_date is null for a station still reporting. Snow courses and SCAN soil-climate
+      stations are not included. snotel_daily joins on station_id.
+
+    dimensions:
+      type:
+        - snotel_station
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "NRCS station triplet '<code>:<state>:SNTL' (e.g., '713:CO:SNTL')"
+      - name: station_code
+        type: string
+        nullable: false
+        comment: "NRCS numeric station code (e.g., '713')"
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: "2-letter state abbreviation (joins geo.state_ref)"
+      - name: station_name
+        type: string
+        nullable: false
+        comment: "Station name (e.g., 'Red Mountain Pass')"
+      - name: county_name
+        type: string
+        nullable: true
+        comment: "County name as published by NRCS"
+      - name: shef_id
+        type: string
+        nullable: true
+        comment: "NWS SHEF location identifier"
+      - name: huc12
+        type: string
+        nullable: true
+        comment: "12-digit hydrologic unit (HUC12) containing the station"
+      - name: huc8
+        type: string
+        nullable: true
+        comment: "HUC8 sub-basin: first 8 digits of huc12"
+      - name: huc6
+        type: string
+        nullable: true
+        comment: "HUC6 basin: first 6 digits of huc12 (e.g., '140801' San Juan)"
+      - name: elevation_ft
+        type: double
+        nullable: true
+        comment: "Station elevation, feet"
+      - name: latitude
+        type: double
+        nullable: false
+        comment: "Latitude, decimal degrees"
+      - name: longitude
+        type: double
+        nullable: false
+        comment: "Longitude, decimal degrees (negative west)"
+      - name: begin_date
+        type: string
+        nullable: true
+        comment: "First date of record (YYYY-MM-DD)"
+      - name: end_date
+        type: string
+        nullable: true
+        comment: "Last date of record (YYYY-MM-DD); null while the station is still reporting"
+
+    source:
+      type: http
+      url: "https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/stations?stationTriplets=*:*:SNTL&activeOnly=false"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.SnotelTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=snotel_station/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: snotel_stations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # SNOTEL DAILY - snow water equivalent, snow depth, precipitation, with 1991-2020 medians
+  # ---------------------------------------------------------------------------
+  - name: snotel_daily
+    pattern: "type=snotel_daily/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Daily SNOTEL readings per NRCS snow station from the National Water and Climate Center
+      AWDB REST API (keyless, public domain): snow water equivalent (wteq_in, inches of water
+      in the snowpack), snow depth (snwd_in, inches) and water-year-to-date accumulated
+      precipitation (prec_accum_in, inches). For WTEQ and PREC the API also returns the
+      official 1991-2020 daily median for that station and calendar day (wteq_median_in,
+      prec_accum_median_in); wteq_pct_median is 100 * wteq_in / wteq_median_in, the
+      'percent of median' behind snowpack headlines such as '22% of normal'. wteq_pct_median is
+      null where the median is 0 or absent (e.g. summer, new stations). Snow depth has no
+      published median. Record starts at each station's begin_date (roughly 1980 for the
+      early stations, with SNWD from the mid-1990s). Values are the validated or provisional
+      value as served; provisional recent days can be revised. One row per station per day;
+      a station's missing element on a day is null. This table is station-level: for a basin
+      roll-up use snotel_basin_daily. Join snotel_stations on station_id for name, elevation,
+      HUC and coordinates; join geo.state_ref on state_abbr.
+
+    dimensions:
+      type:
+        - snotel_daily
+      year: *snotel_year_range
+      state_abbr: *snotel_state_abbrs
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "NRCS station triplet (joins snotel_stations.station_id)"
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: "2-letter state abbreviation of the station"
+      - name: date
+        type: string
+        nullable: false
+        comment: "Observation date (YYYY-MM-DD)"
+      - <<: *year_column
+      - name: wteq_in
+        type: double
+        nullable: true
+        comment: "Snow water equivalent, inches"
+      - name: wteq_median_in
+        type: double
+        nullable: true
+        comment: "1991-2020 median snow water equivalent for this station and calendar day, inches"
+      - name: wteq_pct_median
+        type: double
+        nullable: true
+        comment: "wteq_in as a percent of wteq_median_in (1 decimal); null when the median is 0 or absent"
+      - name: snwd_in
+        type: double
+        nullable: true
+        comment: "Snow depth, inches"
+      - name: prec_accum_in
+        type: double
+        nullable: true
+        comment: "Water-year-to-date accumulated precipitation (from Oct 1), inches"
+      - name: prec_accum_median_in
+        type: double
+        nullable: true
+        comment: "1991-2020 median accumulated precipitation for this station and calendar day, inches"
+
+    source:
+      type: http
+      url: "https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1/data?stationTriplets=*:{state_abbr}:SNTL&elements=WTEQ,SNWD,PREC&duration=DAILY&beginDate={year}-01-01&endDate={year}-12-31&centralTendencyType=MEDIAN"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.SnotelTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=snotel_daily/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: snotel_daily
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -2328,6 +2570,39 @@ tables:
       sea-level anomaly or river-flood setup at that gauge; values near 0 are normal. Both
       measures are meters above MLLW. One row per station per UTC day present in both
       tables. Join coops_stations on station_id for state_fips and coordinates.
+
+  # ---------------------------------------------------------------------------
+  # SNOTEL BASIN DAILY - HUC6 basin snowpack as percent of median
+  # ---------------------------------------------------------------------------
+  - name: snotel_basin_daily
+    type: view
+    sql: >
+      SELECT
+        s.state_abbr,
+        s.huc6,
+        d.date,
+        d.year,
+        COUNT(*) AS station_count,
+        SUM(d.wteq_in) AS wteq_in_sum,
+        SUM(d.wteq_median_in) AS wteq_median_in_sum,
+        100.0 * SUM(d.wteq_in) / NULLIF(SUM(d.wteq_median_in), 0) AS basin_pct_median,
+        AVG(d.wteq_in) AS wteq_in_avg
+      FROM weather.snotel_daily d
+      JOIN weather.snotel_stations s
+        ON d.station_id = s.station_id
+      WHERE d.wteq_in IS NOT NULL
+        AND d.wteq_median_in IS NOT NULL
+        AND s.huc6 IS NOT NULL
+      GROUP BY s.state_abbr, s.huc6, d.date, d.year
+    comment: >
+      Basin-level snowpack from snotel_daily joined to snotel_stations: one row per state, HUC6
+      basin and date, over stations that report both snow water equivalent and its 1991-2020
+      median that day. basin_pct_median is the ratio of sums, 100 * SUM(wteq) / SUM(median), the
+      same index-site method NRCS uses for basin 'percent of median' (it weights high-snow
+      stations more than a mean of station percentages would). It is derived from station data
+      here, so it can differ slightly from NRCS's published basin index, which uses a curated
+      station set. A HUC6 spanning several states yields one row per state. Filter on
+      date = 'YYYY-04-01' for the April 1 snowpack figure cited in water-supply outlooks.
 
   # ---------------------------------------------------------------------------
   # TROPICAL CYCLONE SEASON SUMMARY - ACE and storm counts per basin and season
@@ -2512,4 +2787,23 @@ constraints:
         targetColumns: [county_fips]
       - columns: [station_id]
         targetTable: ghcnd_stations_with_county
+        targetColumns: [station_id]
+
+  snotel_stations:
+    primaryKey: [station_id]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  snotel_daily:
+    primaryKey: [station_id, date]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+      - columns: [station_id]
+        targetTable: snotel_stations
         targetColumns: [station_id]
