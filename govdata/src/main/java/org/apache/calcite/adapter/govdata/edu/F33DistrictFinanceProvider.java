@@ -173,6 +173,10 @@ public class F33DistrictFinanceProvider implements DataProvider {
     putDouble(row, "current_expenditure_thousand", col(headers, values, "TCURSPND"));
     putDouble(row, "instruction_expenditure_thousand", col(headers, values, "TCURINST"));
     putDouble(row, "support_services_expenditure_thousand", col(headers, values, "TCURSSVC"));
+    putDouble(row, "total_salaries_wages_thousand", col(headers, values, "TSALWAGE"));
+    putDouble(row, "employee_benefits_thousand", col(headers, values, "TEMPBENE"));
+    putDouble(row, "instruction_salaries_thousand", col(headers, values, "TCURISAL"));
+    putDouble(row, "instruction_employee_benefits_thousand", col(headers, values, "TCURIBEN"));
     putDouble(row, "capital_outlay_expenditure_thousand", col(headers, values, "TCAPOUT"));
     putDouble(row, "interest_on_debt_thousand", col(headers, values, "TINTRST"));
     putDouble(row, "long_term_debt_outstanding_thousand", col(headers, values, "DEBTOUT"));
@@ -180,6 +184,8 @@ public class F33DistrictFinanceProvider implements DataProvider {
     putDouble(row, "per_pupil_current_expenditure", col(headers, values, "PPCSTOT"));
     putDouble(row, "per_pupil_instruction_expenditure", col(headers, values, "PPITOTAL"));
     putDouble(row, "per_pupil_support_services_expenditure", col(headers, values, "PPSTOTAL"));
+    putDouble(row, "per_pupil_salaries_wages", col(headers, values, "PPSALWG"));
+    putDouble(row, "per_pupil_employee_benefits", col(headers, values, "PPEMPBEN"));
 
     return row;
   }
