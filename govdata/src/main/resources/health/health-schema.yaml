@@ -8262,6 +8262,271 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: life_table_national
+    # Reports are immutable once published; the directory listing carries no ETag/Last-Modified, so
+    # a content hash of it detects a newly added workbook.
+    freshness:
+      type: hash
+    pattern: "type=life_table_national/report=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: report
+          type: VARCHAR
+    comment: >
+      NCHS United States life tables (NVSR "United States Life Tables, <year>") - the complete
+      period life table for every single age 0-100, by sex (total, male, female) and population
+      group (Total population, Hispanic, American Indian and Alaska Native non-Hispanic, Asian
+      non-Hispanic, Black non-Hispanic, White non-Hispanic - the race and Hispanic-origin tables the
+      report publishes for the year). The reason this exists: **life_expectancy_years at age 0 is
+      e0 (life expectancy at birth) and at age 65 is e65**, the longevity inputs for pension, long-term-care
+      and annuity reserving, and for health-disparity comparisons across groups - no other
+      table in this warehouse carries life expectancy at any age above 0 (health.who_gho_indicators
+      has WHO country-level e0 only). qx, lx, dx, person_years_lived and person_years_remaining
+      are the standard qx/lx/dx/Lx/Tx life-table columns. One row per data_year, sex,
+      population_group and age.
+
+      **Coverage**: data years 2010-2024 where NCHS publishes spreadsheet versions (one NVSR report
+      per year, listed in the report dimension). Not included: 2000-2009 (2000-2005 are .xls/PDF
+      only, 2006-2009 are intercensal-method tables in a different file family) and the
+      2009-2011 three-year table (69-08). 2020-2021 are the COVID-affected years and show the drop.
+      Race/Hispanic-origin tables are present only in the years NCHS published them; filter on
+      population_group = 'Total population' for the all-population series. A new report is added
+      to the report dimension when NCHS publishes it.
+    dimensions:
+      type:
+        - life_table_national
+      report:
+        type: list
+        values:
+        - "63_07"
+        - "64_11"
+        - "65_08"
+        - "66_03"
+        - "66_04"
+        - "67_07"
+        - "68_04"
+        - "68_07"
+        - "69-12"
+        - "70-19"
+        - "71-01"
+        - "72-12"
+        - "74-02"
+        - "74-06"
+        - "75-05"
+
+    columns:
+      - name: population_group
+        type: string
+        nullable: false
+        comment: "Population group of the table: Total population, Hispanic, or the race/non-Hispanic group (text as in the NCHS table title, e.g. 'Black, non-Hispanic')"
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: "Calendar year the life table describes (the year in the NVSR table title)"
+      - name: sex
+        type: string
+        nullable: false
+        comment: "total, male or female"
+      - name: age
+        type: integer
+        nullable: false
+        comment: "Exact age x in years (0-100). life_expectancy_years at age 65 is the e65 actuaries quote; age 0 is e0, life expectancy at birth"
+      - name: age_open_ended
+        type: boolean
+        nullable: false
+        comment: "True only on the final row (age 100): NCHS publishes it as '100 and older', so its qx is 1 and its ex is the mean remaining years of everyone alive at 100"
+      - name: qx
+        type: double
+        nullable: false
+        comment: "Probability of dying between exact ages x and x+1"
+      - name: lx
+        type: double
+        nullable: false
+        comment: "Number surviving to exact age x out of a 100,000-birth synthetic cohort"
+      - name: dx
+        type: double
+        nullable: false
+        comment: "Number dying between exact ages x and x+1 in that cohort"
+      - name: person_years_lived
+        type: double
+        nullable: false
+        comment: "Lx: person-years lived between ages x and x+1"
+      - name: person_years_remaining
+        type: double
+        nullable: false
+        comment: "Tx: total person-years lived above age x"
+      - name: life_expectancy_years
+        type: double
+        nullable: false
+        comment: "ex: expectation of life at age x, in years - the headline column"
+      - name: report
+        type: string
+        nullable: false
+        comment: "NVSR report directory on ftp.cdc.gov this table came from (e.g. 74-12); also the partition dimension"
+
+    source:
+      type: http
+      url: "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/NVSR/{report}/"
+      method: GET
+      response:
+        format: TEXT   # the response is the report's directory listing; NchsLifeTableTransformer downloads each workbook
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.NchsLifeTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=life_table_national/report=*/"
+      partition:
+        columns: [type, report]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: life_table_national
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [report]
+        incrementalKeys: [report]
+        overwritePartitions: true
+
+  - name: life_table_state
+    # Reports are immutable once published; the directory listing carries no ETag/Last-Modified, so
+    # a content hash of it detects a newly added workbook.
+    freshness:
+      type: hash
+    pattern: "type=life_table_state/report=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: report
+          type: VARCHAR
+    comment: >
+      NCHS U.S. State Life Tables (NVSR "U.S. State Life Tables, <year>") - the complete period life
+      table for every single age 0-100 for each of the 50 states and DC, by sex (total, male,
+      female). **life_expectancy_years at age 0 is e0 and at age 65 is e65 by state**, the input
+      for long-term-care reserving by state, geographic mortality comparison and "how long do
+      people live in X" questions. qx, lx, dx, person_years_lived and person_years_remaining are the
+      standard life-table columns. One row per data_year, state, sex and age. state_fips joins
+      geo.state_ref.
+
+      **Coverage**: data years 2018-2022 (NCHS published state life tables for those years; 2018
+      is NVSR 70-01, 2019 70-18, 2020 71-02, 2021 73-07, 2022 74-12). 1999-2001 state tables are
+      a different file family and not included. NCHS's per-state standard-error workbooks are not
+      loaded. A new report is added to the report dimension when NCHS publishes it.
+    dimensions:
+      type:
+        - life_table_state
+      report:
+        type: list
+        values:
+        - "70-01"
+        - "70-18"
+        - "71-02"
+        - "73-07"
+        - "74-12"
+
+    columns:
+      - name: state_name
+        type: string
+        nullable: false
+        comment: "State name as in the NCHS table title (50 states and District of Columbia)"
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: "2-digit state FIPS (FK to geo.state_ref)"
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: "Calendar year the life table describes (the year in the NVSR table title)"
+      - name: sex
+        type: string
+        nullable: false
+        comment: "total, male or female"
+      - name: age
+        type: integer
+        nullable: false
+        comment: "Exact age x in years (0-100). life_expectancy_years at age 65 is the e65 actuaries quote; age 0 is e0, life expectancy at birth"
+      - name: age_open_ended
+        type: boolean
+        nullable: false
+        comment: "True only on the final row (age 100): NCHS publishes it as '100 and older', so its qx is 1 and its ex is the mean remaining years of everyone alive at 100"
+      - name: qx
+        type: double
+        nullable: false
+        comment: "Probability of dying between exact ages x and x+1"
+      - name: lx
+        type: double
+        nullable: false
+        comment: "Number surviving to exact age x out of a 100,000-birth synthetic cohort"
+      - name: dx
+        type: double
+        nullable: false
+        comment: "Number dying between exact ages x and x+1 in that cohort"
+      - name: person_years_lived
+        type: double
+        nullable: false
+        comment: "Lx: person-years lived between ages x and x+1"
+      - name: person_years_remaining
+        type: double
+        nullable: false
+        comment: "Tx: total person-years lived above age x"
+      - name: life_expectancy_years
+        type: double
+        nullable: false
+        comment: "ex: expectation of life at age x, in years - the headline column"
+      - name: report
+        type: string
+        nullable: false
+        comment: "NVSR report directory on ftp.cdc.gov this table came from (e.g. 74-12); also the partition dimension"
+
+    source:
+      type: http
+      url: "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/NVSR/{report}/"
+      method: GET
+      response:
+        format: TEXT   # the response is the report's directory listing; NchsLifeTableTransformer downloads each workbook
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.NchsLifeTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=life_table_state/report=*/"
+      partition:
+        columns: [type, report]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: life_table_state
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [report]
+        incrementalKeys: [report]
+        overwritePartitions: true
+
   - name: aca_qhp_county_premiums
     # One static workbook per plan year, published Aug-Oct of the prior calendar year;
     # Last-Modified gates re-fetch/re-materialize when CMS reposts a corrected file.

@@ -3717,6 +3717,144 @@ FROM (SELECT COUNT(*) AS d FROM (
         SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true)
         GROUP BY "group", subgroup, year_of_death, month_of_death HAVING COUNT(*) > 1));
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: life_table_national (new 18 Nov 2026, kenstott/govdata-ops#1331)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true));
+
+-- T2: every loaded (report, sex[, group/state]) table is a full 101-age life table
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T2_row_count',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Tables not holding exactly 101 age rows (0..100)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT report, data_year, sex, population_group, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true) GROUP BY report, data_year, sex, population_group HAVING COUNT(*) <> 101));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true))
+        WHERE null_percentage = 100.0));
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL in a key or measure column'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true)
+      WHERE data_year IS NULL OR sex IS NULL OR age IS NULL OR life_expectancy_years IS NULL
+         OR qx IS NULL OR lx IS NULL OR population_group IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (population_group, data_year, sex, age) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT population_group, data_year, sex, age, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true)
+  GROUP BY population_group, data_year, sex, age HAVING COUNT(*) > 1));
+
+-- T7: radix and range - lx starts at 100000, qx in [0,1], ex decreasing never negative, e0 plausible
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T7_life_table_invariants',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Rows with lx(0) <> 100000, qx outside [0,1], ex <= 0, or e0 outside 55-90'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true)
+      WHERE (age = 0 AND (ABS(lx - 100000) > 0.5 OR life_expectancy_years NOT BETWEEN 55 AND 90))
+         OR qx < 0 OR qx > 1 OR life_expectancy_years <= 0);
+
+-- T7: e65 is below e0 and above 10 for every table (a swapped column would break this)
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T7_e65_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Tables whose e65 is outside 8-30 years or not below e0'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT report, data_year, sex, population_group, MAX(CASE WHEN age = 0 THEN life_expectancy_years END) AS e0,
+         MAX(CASE WHEN age = 65 THEN life_expectancy_years END) AS e65
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true) GROUP BY report, data_year, sex, population_group)
+  WHERE e65 NOT BETWEEN 8 AND 30 OR e65 >= e0);
+
+-- T7: the headline series exists for every loaded data year (total population, both sexes)
+INSERT INTO dq_results
+SELECT 'health', 'life_table_national', 'T7_total_population_each_year',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Loaded reports missing the total-population total/male/female tables'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT report, COUNT(DISTINCT sex) AS sexes FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_national', allow_moved_paths := true)
+  WHERE population_group = 'Total population' GROUP BY report HAVING COUNT(DISTINCT sex) <> 3));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: life_table_state (new 18 Nov 2026, kenstott/govdata-ops#1331)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true));
+
+-- T2: every loaded (report, sex[, group/state]) table is a full 101-age life table
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T2_row_count',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Tables not holding exactly 101 age rows (0..100)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT report, data_year, sex, state_fips, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true) GROUP BY report, data_year, sex, state_fips HAVING COUNT(*) <> 101));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true))
+        WHERE null_percentage = 100.0));
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL in a key or measure column'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true)
+      WHERE data_year IS NULL OR sex IS NULL OR age IS NULL OR life_expectancy_years IS NULL
+         OR qx IS NULL OR lx IS NULL OR state_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (state_fips, data_year, sex, age) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT state_fips, data_year, sex, age, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true)
+  GROUP BY state_fips, data_year, sex, age HAVING COUNT(*) > 1));
+
+-- T7: radix and range - lx starts at 100000, qx in [0,1], ex decreasing never negative, e0 plausible
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T7_life_table_invariants',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Rows with lx(0) <> 100000, qx outside [0,1], ex <= 0, or e0 outside 55-90'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true)
+      WHERE (age = 0 AND (ABS(lx - 100000) > 0.5 OR life_expectancy_years NOT BETWEEN 55 AND 90))
+         OR qx < 0 OR qx > 1 OR life_expectancy_years <= 0);
+
+-- T7: e65 is below e0 and above 10 for every table (a swapped column would break this)
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T7_e65_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Tables whose e65 is outside 8-30 years or not below e0'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT report, data_year, sex, state_fips, MAX(CASE WHEN age = 0 THEN life_expectancy_years END) AS e0,
+         MAX(CASE WHEN age = 65 THEN life_expectancy_years END) AS e65
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true) GROUP BY report, data_year, sex, state_fips)
+  WHERE e65 NOT BETWEEN 8 AND 30 OR e65 >= e0);
+
+-- T7: 51 jurisdictions x 3 sexes per loaded report
+INSERT INTO dq_results
+SELECT 'health', 'life_table_state', 'T7_51_jurisdictions',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Loaded reports not holding 51 jurisdictions x 3 sexes'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT report, COUNT(DISTINCT state_fips) AS j, COUNT(DISTINCT sex) AS sx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true)
+  GROUP BY report HAVING COUNT(DISTINCT state_fips) <> 51 OR COUNT(DISTINCT sex) <> 3));
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

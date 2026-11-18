@@ -165,6 +165,8 @@ YEAR_MODE_GROUPS=(
   # every group above, and its (state x year) dimension cross-product (50 states x ~21 years)
   # is worth isolating for failure/rate-limit reasons the way CDC WONDER is above.
   "health-ssa|ssa_oasdi_county"
+  # NCHS life tables (ftp.cdc.gov NVSR workbooks): one request per published report.
+  "health-nchs-life|life_table_national,life_table_state"
   # CMS ACA marketplace files (QHP landscape workbooks, OEP county zips) — own group since it is a
   # distinct source from every group above and the workbooks are 55-115 MB each.
   "health-aca|aca_qhp_county_premiums,aca_rate_review_products,aca_oep_county_plan_selections"
