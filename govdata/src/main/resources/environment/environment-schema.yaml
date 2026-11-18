@@ -582,6 +582,203 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # EPA SIX-YEAR REVIEW 4 — compliance-monitoring sample results (snapshot, nitrate)
+  # ---------------------------------------------------------------------------
+  - name: drinking_water_sample_results
+    freshness:
+      type: last_modified
+    pattern: "type=drinking_water_sample_results/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Drinking-water compliance-monitoring sample results from EPA Six-Year Review 4
+      (SYR4, samples collected January 2012 through December 2019) — one row per
+      nitrate sample (contaminant code 1040) at a sampling point of a public water
+      system, with the measured concentration (result_value/result_unit), detect flag,
+      laboratory detection limit and sample date. Holds concentrations below the MCL,
+      which drinking_water_violations does not: use it for "people served water above
+      X" or "systems with a detection" questions (sum population_served over distinct
+      pwsid). Non-detects carry no result_value or result_unit (detected = false);
+      detected results are reported in UG/L; the nitrate MCL is 10 mg/L as N
+      (10000 UG/L). Keyless bulk file from the EPA SYR4 data page (zip
+      SYR4_PhaseChem_4, file SUMMARY_ANALYTE_NITRATE.txt), a one-time historical
+      release — not refreshed annually. Hybrid-nitrate rows (a derived series) are
+      excluded. Other SYR4 contaminants (arsenic, lead, mercury, etc.) are in sibling
+      zips on the same page and are not loaded yet. Snapshot; pwsid joins
+      drinking_water and drinking_water_violations.
+
+    dimensions:
+      type:
+        - drinking_water_sample_results
+
+    columns:
+      - name: pwsid
+        type: string
+        nullable: true
+        expression: 'src."PWSID"'
+        comment: Public Water System id (FK to drinking_water.pwsid)
+      - name: system_name
+        type: string
+        nullable: true
+        expression: 'src."SYSTEM_NAME"'
+        comment: Water system name as reported in the Six-Year Review dataset
+      - name: system_type
+        type: string
+        nullable: true
+        expression: 'src."SYSTEM_TYPE"'
+        comment: System type (C community, NTNC non-transient non-community, TNC transient non-community)
+      - name: state_code
+        type: string
+        nullable: true
+        expression: 'src."STATE_CODE"'
+        comment: Two-letter state or territory code
+      - name: primacy_code
+        type: string
+        nullable: true
+        expression: 'src."PRIMACY_CODE"'
+        comment: Primacy agency code (state, territory, tribe or EPA region)
+      - name: population_served
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."ADJUSTED_TOTAL_POPULATION_SERVED" AS BIGINT)'
+        comment: EPA-adjusted total population served by the system (retail plus consecutive-system population); sum over distinct pwsid for people served
+      - name: retail_population_served
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."RETAIL_POPULATION_SERVED" AS BIGINT)'
+        comment: Retail population served directly by the system
+      - name: source_water_type
+        type: string
+        nullable: true
+        expression: 'src."SOURCE_WATER_TYPE"'
+        comment: Source water type (GW groundwater, SW surface water, GU groundwater under influence)
+      - name: water_facility_id
+        type: string
+        nullable: true
+        expression: 'src."WATER_FACILITY_ID"'
+        comment: State-assigned water facility id within the system
+      - name: water_facility_type
+        type: string
+        nullable: true
+        expression: 'src."WATER_FACILITY_TYPE"'
+        comment: Facility type code (e.g. TP treatment plant, DS distribution system)
+      - name: sampling_point_id
+        type: string
+        nullable: true
+        expression: 'src."SAMPLING_POINT_ID"'
+        comment: Sampling point id within the facility
+      - name: sampling_point_type
+        type: string
+        nullable: true
+        expression: 'src."SAMPLING_POINT_TYPE"'
+        comment: Sampling point type code (e.g. EP entry point, DS distribution)
+      - name: sample_type_code
+        type: string
+        nullable: true
+        expression: 'src."SAMPLE_TYPE_CODE"'
+        comment: Sample type code (e.g. RT routine)
+      - name: sample_id
+        type: string
+        nullable: true
+        expression: 'src."SAMPLE_ID"'
+        comment: State/laboratory sample id; blank in about half of rows in the source, so it is not a key
+      - name: six_year_id
+        type: string
+        nullable: true
+        expression: 'src."SIX_YEAR_ID"'
+        comment: Row id assigned by EPA in the Six-Year Review dataset; with pwsid, water_facility_id, sampling_point_id and sample_date it uniquely identifies a result row
+      - name: contaminant_code
+        type: string
+        nullable: true
+        expression: 'src."ANALYTE_CODE"'
+        comment: SDWIS contaminant code (nitrate is 1040)
+      - name: contaminant_name
+        type: string
+        nullable: true
+        expression: 'src."ANALYTE_NAME"'
+        comment: Contaminant (analyte) name
+      - name: sample_date
+        type: date
+        nullable: true
+        expression: 'CAST(strptime(src."SAMPLE_COLLECTION_DATE", ''%d-%b-%y'') AS DATE)'
+        comment: Sample collection date
+      - name: year
+        type: integer
+        nullable: true
+        expression: 'EXTRACT(year FROM strptime(src."SAMPLE_COLLECTION_DATE", ''%d-%b-%y''))'
+        comment: Calendar year of sample collection
+      - name: detected
+        type: boolean
+        nullable: true
+        expression: 'CAST(src."DETECT" AS INTEGER) = 1'
+        comment: True when the contaminant was detected in the sample (value at or above the reporting limit)
+      - name: result_value
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."VALUE" AS DOUBLE)'
+        comment: Reported concentration in result_unit; null for non-detects reported without a value. Nitrate MCL is 10 mg/L as N = 10000 UG/L
+      - name: result_unit
+        type: string
+        nullable: true
+        expression: 'src."UNIT"'
+        comment: Unit of result_value (e.g. UG/L, MG/L)
+      - name: detection_limit_value
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."DETECTION_LIMIT_VALUE" AS DOUBLE)'
+        comment: Laboratory detection or reporting limit
+      - name: detection_limit_unit
+        type: string
+        nullable: true
+        expression: 'src."DETECTION_LIMIT_UNIT"'
+        comment: Unit of detection_limit_value
+      - name: detection_limit_code
+        type: string
+        nullable: true
+        expression: 'src."DETECTION_LIMIT_CODE"'
+        comment: Detection limit type code (e.g. MRL minimum reporting level)
+      - name: laboratory_assigned_id
+        type: string
+        nullable: true
+        expression: 'src."LABORATORY_ASSIGNED_ID"'
+        comment: Laboratory sample identifier
+
+    source:
+      type: http
+      url: "https://www.epa.gov/system/files/other-files/2024-03/_syr4_phasechem_4-hybrid-nitrate-to-nitrate.zip"
+      method: GET
+      extractPattern: "SUMMARY_ANALYTE_NITRATE.txt"
+      response:
+        format: csv
+        hasHeader: true
+        delimiter: "\t"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=drinking_water_sample_results/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: drinking_water_sample_results
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # EPA TRI — per-year Basic Data File CSV (delta by year)
   # ---------------------------------------------------------------------------
   - name: tri_releases
@@ -2900,6 +3097,12 @@ constraints:
 
   drinking_water_violations:
     primaryKey: [pwsid, violation_id]
+    foreignKeys:
+      - columns: [pwsid]
+        targetTable: drinking_water
+        targetColumns: [pwsid]
+
+  drinking_water_sample_results:
     foreignKeys:
       - columns: [pwsid]
         targetTable: drinking_water

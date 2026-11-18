@@ -473,6 +473,53 @@ SELECT 'environment', 'drinking_water_violations', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_violations', allow_moved_paths := true) WHERE pwsid IS NULL);
 
 -- ------------------------------------------------------------
+-- TABLE: drinking_water_sample_results (partition cols: type)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T2_row_count',
+  CASE WHEN n >= 1000000 THEN 'pass' ELSE 'fail' END, n, 1000000, 'Expected >=1M nitrate sample rows (SYR4 file has 1.40M)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+-- contaminant_code / contaminant_name are expected constants: the table loads the nitrate file only.
+-- result_unit is UG/L for every detected result (non-detects have no unit), so it is constant by design.
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'contaminant_code', 'contaminant_name', 'result_unit')));
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL pwsid / six_year_id / sample_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true) WHERE pwsid IS NULL OR six_year_id IS NULL OR sample_date IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with negative result_value or sample year outside 2012-2019'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true) WHERE result_value < 0 OR year < 2012 OR year > 2019);
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T7_nitrate_magnitude',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Detected samples above the 10 mg/L (10000 UG/L) nitrate MCL (EPA SYR4 reports exceedances)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true) WHERE detected AND result_unit = 'UG/L' AND result_value > 10000);
+INSERT INTO dq_results
+SELECT 'environment', 'drinking_water_sample_results', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (pwsid, water_facility_id, sampling_point_id, sample_date, six_year_id) rows beyond the first'
+FROM (SELECT COALESCE(SUM(c - 1), 0) AS n FROM (SELECT COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true) GROUP BY pwsid, water_facility_id, sampling_point_id, sample_date, six_year_id HAVING COUNT(*) > 1));
+
+-- ------------------------------------------------------------
 -- TABLE: superfund_sites (partition cols: type)
 -- ------------------------------------------------------------
 INSERT INTO dq_results
