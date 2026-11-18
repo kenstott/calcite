@@ -170,6 +170,17 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     descending: true
 
+  # FRA Form 54 rail equipment accident/incident data: the Socrata source (aqxq-n5hy) holds
+  # every report from 1975 to the current month (verified 2026-11-18: 225,558 rows, 1975-2026).
+  # Reports post monthly with no year-end lag, so dataLag 0 requests the open year.
+  fra_accident_year_range: &fra_accident_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 1975
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+    descending: true
+
   # Full 12-month cadence: one fetch per (year, month) = one overwrite partition.
   all_months: &all_months
     type: list
@@ -5055,6 +5066,280 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # FRA RAIL EQUIPMENT ACCIDENTS — Form 54 source data, Socrata aqxq-n5hy (delta by year)
+  # ---------------------------------------------------------------------------
+  - name: rail_equipment_accidents
+    # Form 54 reports post monthly and railroads amend earlier months, so the open year and the
+    # prior year are re-fetched each run.
+    lookbackPeriods: 2
+    # Freshness gate: Socrata SODA JSON has no meaningful Last-Modified; hash the response body
+    # post-fetch to skip the materialize/commit when unchanged.
+    freshness:
+      type: hash
+    pattern: "type=rail_equipment_accidents/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FRA Railroad Equipment Accident/Incident reports (Form 6180.54), one row per
+      reported accident from 1975 to the latest monthly posting: derailments, collisions,
+      fires, obstructions and crossing events, with county FIPS, date, accident type (type 01 is a
+      derailment), cars in the train, cars damaged or derailed, hazmat cars in the train,
+      persons evacuated, equipment and track damage dollars, primary and contributing
+      cause codes, killed and injured counts and narrative. Filter accident_type_code = '01' for
+      derailments; hazmat_cars is cars carrying hazardous material in the train, not a
+      release count. Only reports above FRA's reporting threshold appear (the dollar
+      threshold has been raised over the years, so counts are not comparable across
+      decades). Latitude/longitude are populated only for later years. The source repeats
+      incident_number for pre-1981 reports and amended reports, so the table has no primary
+      key; duplicates are rows as published. Source:
+      data.transportation.gov/resource/aqxq-n5hy.json (safetydata.fra.dot.gov).
+
+    dimensions:
+      type:
+        - rail_equipment_accidents
+      year: *fra_accident_year_range
+
+    columns:
+      - name: railroad_code
+        type: string
+        nullable: true
+        expression: 'src."railroad"'
+        comment: "Reporting railroad alpha code (e.g. NS, UP, BNSF)"
+      - name: incident_number
+        type: string
+        nullable: true
+        expression: 'src."incdtno"'
+        comment: "Railroad-assigned report number. NOT unique: pre-1981 reports reuse numbers and amended reports repeat them, so it is not a primary key"
+      - name: accident_date
+        type: date
+        nullable: true
+        expression: 'TRY_CAST(src."year4" || ''-'' || src."month" || ''-'' || src."day" AS DATE)'
+        comment: "Date of the accident/incident"
+      - name: accident_month
+        type: string
+        nullable: true
+        expression: 'src."month"'
+        comment: "Month of the accident, 01-12"
+      - name: accident_hour
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."timehr" AS INTEGER)'
+        comment: "Hour of the accident (12-hour clock; see accident_ampm)"
+      - name: accident_minute
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."timemin" AS INTEGER)'
+        comment: "Minute of the accident"
+      - name: accident_ampm
+        type: string
+        nullable: true
+        expression: 'src."ampm"'
+        comment: "AM or PM for accident_hour"
+      - name: accident_type_code
+        type: string
+        nullable: true
+        expression: 'src."type"'
+        comment: "FRA accident type code: 01 derailment, 02 head-on collision, 03 rear-end collision, 04 side collision, 05 raking collision, 06 broken train collision, 07 highway-rail crossing, 08 RR grade crossing, 09 obstruction, 10 explosion-detonation, 11 fire/violent rupture, 12 other impacts, 13 other"
+      - name: accident_type
+        type: string
+        nullable: true
+        expression: 'CASE src."type" WHEN ''01'' THEN ''Derailment'' WHEN ''02'' THEN ''Head-on collision'' WHEN ''03'' THEN ''Rear-end collision'' WHEN ''04'' THEN ''Side collision'' WHEN ''05'' THEN ''Raking collision'' WHEN ''06'' THEN ''Broken train collision'' WHEN ''07'' THEN ''Hwy-rail crossing'' WHEN ''08'' THEN ''RR grade crossing'' WHEN ''09'' THEN ''Obstruction'' WHEN ''10'' THEN ''Explosion-detonation'' WHEN ''11'' THEN ''Fire/violent rupture'' WHEN ''12'' THEN ''Other impacts'' WHEN ''13'' THEN ''Other (describe in narrative)'' END'
+        comment: "Accident type label decoded from accident_type_code (NULL for an unlisted code)"
+      - name: cars_in_train
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."cars" AS DOUBLE)::INTEGER'
+        comment: "Cars in the train (the accident-report field CARS)"
+      - name: cars_damaged
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."carsdmg" AS DOUBLE)::INTEGER'
+        comment: "Cars damaged or derailed"
+      - name: hazmat_cars
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."carshzd" AS DOUBLE)::INTEGER'
+        comment: "Cars carrying hazardous material in the train"
+      - name: persons_evacuated
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."evacuate" AS DOUBLE)::INTEGER'
+        comment: "Persons evacuated"
+      - name: state_fips
+        type: string
+        nullable: true
+        expression: 'src."state"'
+        comment: "State FIPS code (FK to geo.state_ref)"
+      - name: county_fips
+        type: string
+        nullable: true
+        expression: 'CASE WHEN src."stcnty" IS NOT NULL THEN src."state" || src."cntycd" END'
+        comment: "5-digit county FIPS code (state + county, FK to geo.counties); NULL when the report carries no county"
+      - name: county_name
+        type: string
+        nullable: true
+        expression: 'src."county"'
+        comment: "County name as reported"
+      - name: station
+        type: string
+        nullable: true
+        expression: 'src."station"'
+        comment: "Nearest station / place name"
+      - name: subdivision
+        type: string
+        nullable: true
+        expression: 'src."subdiv"'
+        comment: "Railroad subdivision"
+      - name: milepost
+        type: string
+        nullable: true
+        expression: 'src."milepost"'
+        comment: "Milepost of the accident"
+      - name: latitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."latitude" AS DOUBLE)'
+        comment: "Accident latitude (populated in later years)"
+      - name: longitude
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."longitud" AS DOUBLE)'
+        comment: "Accident longitude (populated in later years)"
+      - name: temperature_f
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."temp" AS DOUBLE)::INTEGER'
+        comment: "Temperature in degrees F"
+      - name: weather_code
+        type: string
+        nullable: true
+        expression: 'src."weather"'
+        comment: "Weather condition code"
+      - name: track_type_code
+        type: string
+        nullable: true
+        expression: 'src."typtrk"'
+        comment: "Track type code"
+      - name: track_class
+        type: string
+        nullable: true
+        expression: 'src."trkclas"'
+        comment: "FRA track class"
+      - name: train_speed_mph
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."trnspd" AS DOUBLE)::INTEGER'
+        comment: "Train speed at the accident, mph"
+      - name: gross_tonnage
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."tons" AS DOUBLE)'
+        comment: "Gross tonnage of the train"
+      - name: equipment_damage_usd
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."eqpdmg" AS DOUBLE)'
+        comment: "Reportable damage to rolling equipment, dollars"
+      - name: track_damage_usd
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."trkdmg" AS DOUBLE)'
+        comment: "Reportable damage to track and structures, dollars"
+      - name: total_damage_usd
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."accdmg" AS DOUBLE)'
+        comment: "Total accident damage, dollars"
+      - name: primary_cause_code
+        type: string
+        nullable: true
+        expression: 'src."cause"'
+        comment: "FRA primary cause code"
+      - name: contributing_cause_code
+        type: string
+        nullable: true
+        expression: 'src."cause2"'
+        comment: "FRA contributing cause code"
+      - name: total_killed
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."totkld" AS DOUBLE)::INTEGER'
+        comment: "Total persons killed"
+      - name: total_injured
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."totinj" AS DOUBLE)::INTEGER'
+        comment: "Total persons injured"
+      - name: rr_employees_killed
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."rrempkld" AS DOUBLE)::INTEGER'
+        comment: "Railroad employees killed"
+      - name: rr_employees_injured
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."rrempinj" AS DOUBLE)::INTEGER'
+        comment: "Railroad employees injured"
+      - name: passengers_killed
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."passkld" AS DOUBLE)::INTEGER'
+        comment: "Passengers killed"
+      - name: passengers_injured
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."passinj" AS DOUBLE)::INTEGER'
+        comment: "Passengers injured"
+      - name: others_killed
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."otherkld" AS DOUBLE)::INTEGER'
+        comment: "Other persons killed"
+      - name: others_injured
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."otherinj" AS DOUBLE)::INTEGER'
+        comment: "Other persons injured"
+      - name: narrative
+        type: string
+        nullable: true
+        expression: 'NULLIF(concat_ws('' '', src."narr1", src."narr2", src."narr3", src."narr4", src."narr5", src."narr6", src."narr7", src."narr8", src."narr9", src."narr10", src."narr11", src."narr12", src."narr13", src."narr14", src."narr15"), '''')'
+        comment: "Free-text accident narrative (narr1-narr15 joined)"
+
+    source:
+      type: http
+      # One fetch per year; the busiest year (1978) is 13,729 rows, under Socrata's 50000 cap.
+      # year4 is a text column, so the literal is quoted (%27).
+      url: "https://data.transportation.gov/resource/aqxq-n5hy.json?$where=year4%3D%27{year}%27&$limit=50000&$order=imo,incdtno"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rail_equipment_accidents/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: rail_equipment_accidents
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # CLASS I RAIL COUNTY ADJACENCY — BTS NTAD ArcGIS FeatureServer (snapshot,
   # server-side county x railroad aggregation)
   # ---------------------------------------------------------------------------
@@ -5479,6 +5764,17 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+
+  rail_equipment_accidents:
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
 
   rail_service_performance:
     primaryKey: [railroad_mark, measure_name_analytics, sub_measure, report_period_start_date]
