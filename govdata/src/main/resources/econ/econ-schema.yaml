@@ -5012,6 +5012,139 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: social_security_trust_fund_operations
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=social_security_trust_fund_operations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Actual Social Security trust fund operations by calendar year, one row per fund and year: OASI
+      (1937 to the latest year), DI and the combined OASDI (1957 on). Carries income by source
+      (payroll taxes, taxation of benefits, general fund transfers, interest), cost by item
+      (benefits, administration, Railroad Retirement transfer), the net change in reserves and
+      reserves at year end, in millions of dollars, from the SSA Office of the Chief Actuary
+      tables 4A1, 4A2 and 4A3. Use it for what the funds actually took in and paid out and how large
+      the reserves are (OASDI reserves ended 2024 at 2,721,466 and 2025 at 2,561,306 million, a
+      2025 drawdown of 160,160 million); the Trustees' projections of when reserves run out are
+      in social_security_trustees_projections. Calendar years only: SSA's fiscal-year (October to
+      September) and monthly operations are not in this table, so a fiscal-year deficit cannot be
+      read from it. The latest year appears once SSA publishes it, after the year ends. ssa.gov
+      refuses non-browser clients, so the pages are read through a headed browser session.
+      Source: https://www.ssa.gov/oact/STATS/table4a3.html (and table4a1, table4a2).
+
+    dimensions:
+      type:
+        - social_security_trust_fund_operations
+
+    columns:
+      - name: fund
+        type: string
+        nullable: true
+        comment: >
+          Trust fund: OASI (Old-Age and Survivors Insurance, from 1937), DI (Disability Insurance, from 1957) or OASDI (the two combined, from 1957); PK with calendar_year. Summing OASI and DI reproduces OASDI.
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: >
+          Calendar year January to December of the fund's operations; PK with fund. SSA also reports fiscal-year and monthly operations, which are not in this table.
+      - name: total_income
+        type: long
+        nullable: true
+        comment: >
+          Total income in millions of US dollars: net payroll tax contributions + income from taxation of benefits + general fund transfers + net interest (OASDI 2025: 1,449,306).
+      - name: payroll_tax_income
+        type: long
+        nullable: true
+        comment: >
+          Net payroll tax contributions (FICA and SECA) in millions of dollars (OASDI 2025: 1,322,618).
+      - name: benefit_taxation_income
+        type: long
+        nullable: true
+        comment: >
+          Income from income taxation of Social Security benefits, credited to the funds, in millions of dollars (OASDI 2025: 57,764); null before the taxation began (1984).
+      - name: general_fund_transfers
+        type: long
+        nullable: true
+        comment: >
+          Reimbursements from the Treasury General Fund in millions of dollars (military wage credits, payroll tax holidays and similar; OASDI 2024: 244). Null where SSA prints no figure, and where it prints (c) meaning under $500,000.
+      - name: interest_income
+        type: long
+        nullable: true
+        comment: >
+          Net interest on the funds' Treasury securities in millions of dollars, including small gifts (OASDI 2025: 68,924).
+      - name: total_cost
+        type: long
+        nullable: true
+        comment: >
+          Total cost in millions of dollars: benefit payments + administrative expenses + transfers to the Railroad Retirement program (OASDI 2025: 1,609,466).
+      - name: benefit_payments
+        type: long
+        nullable: true
+        comment: >
+          Benefit payments in millions of dollars, including vocational rehabilitation payments from 1966 and net of reimbursed unnegotiated checks (OASDI 2025: 1,596,519).
+      - name: admin_expenses
+        type: long
+        nullable: true
+        comment: >
+          Administrative expenses in millions of dollars (OASDI 2025: 6,952).
+      - name: railroad_transfers
+        type: long
+        nullable: true
+        comment: >
+          Transfers to the Railroad Retirement program (financial interchange) in millions of dollars (OASDI 2025: 5,995); null before it began and where SSA prints (c) meaning under $500,000.
+      - name: net_change
+        type: long
+        nullable: true
+        comment: >
+          Net change in reserves during the calendar year in millions of dollars: total_income minus total_cost, except 1982 and 1985-86 when OASI borrowed from or repaid the Hospital Insurance fund (OASDI 2025: -160,160; 2024: -66,997).
+      - name: assets_end
+        type: long
+        nullable: true
+        comment: >
+          Reserves at end of the calendar year in millions of dollars, invested in Federal Government securities (OASDI end of 2024: 2,721,466; end of 2025: 2,561,306).
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads the three table pages
+      # through the shared headed browser session (see social_security_cola).
+      url: "https://www.ssa.gov/oact/STATS/table4a3.html"
+      method: GET
+      parameters:
+        ssaBrowserScript: "${SSA_BROWSER_SCRIPT:}"
+        ssaNodeCommand: "${SSA_NODE_COMMAND:node}"
+        ssaChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        ssaRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        ssaEntryPageUrl: "https://www.ssa.gov/oact/cola/Benefits.html"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.SocialSecurityTrustFundOperationsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=social_security_trust_fund_operations/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   - name: medicare_part_b_premiums
     dataset_type: snapshot
     freshness:
