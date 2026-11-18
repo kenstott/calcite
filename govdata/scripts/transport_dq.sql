@@ -1311,7 +1311,9 @@ SELECT 'transport', 'rail_equipment_accidents', 'T5_all_same_value',
 FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
   FROM (SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+    -- passengers_killed: 39 non-zero reports 1975-2026 but none since 2024, and the DQ run
+    -- materialises only the lookback window, so it is a real constant there.
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'passengers_killed')));
 
 INSERT INTO dq_results
 SELECT 'transport', 'rail_equipment_accidents', 'T6_id_nulls',
@@ -1327,13 +1329,14 @@ SELECT 'transport', 'rail_equipment_accidents', 'T7_date_matches_year',
   'Rows whose accident_date year differs from the year partition'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true) WHERE YEAR(accident_date) <> year);
 
--- T8: accident_type_code limited to FRA codes 01-13; every row decodes to a label.
+-- T8: accident_type_code limited to FRA codes 01-13; every row that has a code decodes to a label.
+-- The source has a report with no type at all (2025-05 U25052230), so a NULL code is not a failure.
 INSERT INTO dq_results
 SELECT 'transport', 'rail_equipment_accidents', 'T8_expected_values',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
-  'Rows with a NULL accident_type (code outside 01-13) or county_fips not 5 digits'
+  'Rows with a code outside 01-13 (NULL label) or county_fips not 5 digits'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/rail_equipment_accidents', allow_moved_paths := true)
-  WHERE accident_type IS NULL OR (county_fips IS NOT NULL AND LENGTH(county_fips) <> 5));
+  WHERE (accident_type_code IS NOT NULL AND accident_type IS NULL) OR (county_fips IS NOT NULL AND LENGTH(county_fips) <> 5));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: class1_rail_county_adjacency (BTS NTAD ArcGIS; partition col: type)
