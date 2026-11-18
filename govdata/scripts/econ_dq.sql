@@ -1738,6 +1738,76 @@ FROM (SELECT COUNT(*) AS bad FROM (
   HAVING SUM(fytd_expense_amt) NOT BETWEEN 1e11 AND 3e12));
 
 -- ============================================================================
+-- social_security_trust_fund_monthly (Treasury MTS Table 6-D, OASI + DI, new 18 Nov 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trust_fund_monthly', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_monthly', allow_moved_paths := true) LIMIT 1));
+
+-- 2 funds x 12 months per full year; DQ scope covers the 3 most recent years, so >= 60
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trust_fund_monthly', 'row_count',
+  CASE WHEN n >= 60 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '60',
+  CASE WHEN n >= 60 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trust_fund_monthly', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_monthly', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trust_fund_monthly', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_monthly', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trust_fund_monthly', 'pk_duplicates',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (record_date, classification_desc) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT record_date, classification_desc
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_monthly', allow_moved_paths := true)
+  GROUP BY record_date, classification_desc HAVING COUNT(*) > 1));
+
+-- Treasury MTS 6-D, FY2025 (2025-09-30), confirmed live 2026-11-18: OASI fytd net -181,397,304,000
+-- and closing balance 2,400,807,809,000. Checked only when that month is in the DQ scope.
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trust_fund_monthly', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'OASI 2025-09-30 fytd net change or closing balance differs from the published Treasury figure'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT 1
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_monthly', allow_moved_paths := true)
+  WHERE record_date = DATE '2025-09-30'
+    AND classification_desc = 'Federal Old-Age and Survivors Insurance Trust Fund'
+    AND (ABS(fytd_net_txn_amt - (-181397304000)) > 1000
+         OR ABS(close_month_acct_bal_amt - 2400807809000) > 1000)));
+
+-- Both funds must be present at every month-end, and reserves must be positive
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trust_fund_monthly', 'fund_coverage',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'record_dates missing one of the two funds, or with a non-positive closing balance'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT record_date
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_monthly', allow_moved_paths := true)
+  GROUP BY record_date
+  HAVING COUNT(DISTINCT classification_desc) <> 2 OR MIN(close_month_acct_bal_amt) <= 0));
+
+-- ============================================================================
 -- ces_revision_vintages (BLS CES vintage-data product, new 6 Sep 2026)
 -- ============================================================================
 

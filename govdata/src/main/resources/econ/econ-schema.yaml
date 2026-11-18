@@ -5922,6 +5922,152 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- SOCIAL SECURITY TRUST FUND MONTHLY BALANCES (TREASURY MTS TABLE 6-D) ---
+  - name: social_security_trust_fund_monthly
+    pattern: "type=social_security_trust_fund_monthly/year=*/social_security_trust_fund_monthly.parquet"
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    partitions: *standard_partitions
+    comment: >
+      Social Security trust fund net transactions and reserves by month, from the Treasury
+      Monthly Treasury Statement Table 6-D (Schedule D, trust fund balances; Fiscal Data
+      v1/accounting/mts/mts_table_6d, keyless). One row per (record_date, fund) for the Old-Age
+      and Survivors Insurance (OASI) and Disability Insurance (DI) funds; there is no combined
+      OASDI row, so add the two funds yourself. current_month_net_txn_amt is the month's net
+      change in the fund (income including interest credited, less benefits and administrative
+      cost), fytd_net_txn_amt the fiscal-year-to-date net change, and close_month_acct_bal_amt
+      the fund's investments held at month-end, i.e. the reserves, in dollars. For a fiscal-year
+      figure take the record_date of September (record_fiscal_year = that year): its
+      fytd_net_txn_amt is the full-fiscal-year net change and its close_month_acct_bal_amt the
+      year-end reserves; prior_fytd_net_txn_amt is Treasury's own prior-year comparison.
+      Confirmed live 2026-11-18: FY2025 (2025-09-30) OASI net change -181.4B, DI +37.6B,
+      combined -143.8B; OASI reserves 2.401T, DI 0.215T. This is Treasury's cash-basis
+      account view and differs slightly from SSA Office of the Chief Actuary calendar-year
+      operations (econ.social_security_trust_fund_operations) and from the Trustees' accrual
+      projections; check which basis a claim quotes. Coverage starts at the first month
+      Treasury published this table (2015-03-31). The year partition is CALENDAR year of
+      record_date; the fiscal year runs Oct-Sep, so October-December rows carry the next
+      fiscal year in record_fiscal_year.
+
+    dimensions:
+      type:
+        - social_security_trust_fund_monthly
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2015}"
+        minYear: 2015  # earliest year the source has data (observed 2026-11-18: first record 2015-03-31)
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+        releaseMonth: 1  # Current year has partial-year data all year; no full-year release gate
+
+    columns:
+      - name: record_date
+        type: date
+        nullable: true
+        comment: Month-end date of this record (YYYY-MM-DD)
+      - name: classification_desc
+        type: string
+        nullable: true
+        comment: >
+          Fund, verbatim from Treasury: "Federal Old-Age and Survivors Insurance Trust Fund" or
+          "Federal Disability Insurance Trust Fund".
+      - name: current_month_net_txn_amt
+        type: double
+        nullable: true
+        comment: Net change in the fund during this month, in dollars (negative = reserves drew down).
+      - name: fytd_net_txn_amt
+        type: double
+        nullable: true
+        comment: >
+          Fiscal-year-to-date net change through record_date, in dollars. At the September
+          record_date this is the full fiscal-year net change (the fiscal-year surplus or deficit).
+      - name: prior_fytd_net_txn_amt
+        type: double
+        nullable: true
+        comment: The same fiscal-year-to-date point in the PRIOR fiscal year, in dollars (Treasury's own comparison column).
+      - name: begin_year_acct_bal_amt
+        type: double
+        nullable: true
+        comment: Fund balance (investments held) at the start of the fiscal year, in dollars.
+      - name: begin_month_acct_bal_amt
+        type: double
+        nullable: true
+        comment: Fund balance at the start of this month, in dollars.
+      - name: close_month_acct_bal_amt
+        type: double
+        nullable: true
+        comment: Fund balance (reserves) at the end of this month, in dollars.
+      - name: record_fiscal_year
+        type: integer
+        nullable: true
+        comment: Federal fiscal year of this record (Oct-Sep; October-December dates carry the following year)
+      - name: record_fiscal_quarter
+        type: integer
+        nullable: true
+        comment: Federal fiscal quarter (1-4) of this record
+
+    download:
+      enabled: true
+      method: GET
+      baseUrl: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_6d"
+      authentication:
+        type: none
+      queryParams:
+        filter:
+          type: expression
+          value: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31,classification_desc:in:(Federal Old-Age and Survivors Insurance Trust Fund,Federal Disability Insurance Trust Fund)"
+        sort:
+          type: constant
+          value: "-record_date"
+        page[size]:
+          type: constant
+          value: "1000"
+      cachePattern: "type=social_security_trust_fund_monthly/year=*/mts_table_6d.json"
+
+    # A calendar-year filter returns both funds for every published month in one call (24 rows
+    # per full year, under the 1000 page size; confirmed live 2026-11-18).
+    source:
+      type: http
+      url: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_6d"
+      method: GET
+      parameters:
+        filter: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31,classification_desc:in:(Federal Old-Age and Survivors Insurance Trust Fund,Federal Disability Insurance Trust Fund)"
+        sort: "-record_date"
+        page[size]: "1000"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=social_security_trust_fund_monthly/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- GROSS INTEREST EXPENSE ON THE PUBLIC DEBT (TREASURY FISCAL DATA) ---
   - name: treasury_interest_expense
     pattern: "type=treasury_interest_expense/year=*/treasury_interest_expense.parquet"
