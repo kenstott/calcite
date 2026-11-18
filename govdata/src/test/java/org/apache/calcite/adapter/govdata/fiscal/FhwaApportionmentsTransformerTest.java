@@ -89,6 +89,7 @@ class FhwaApportionmentsTransformerTest {
         + tr("N4510.867", "4/8/22", "Revised Apportionment of Fiscal Year (FY) 2022 Highway Infrastructure Program Funds for the Bridge Formula Program Pursuant to the Infrastructure Investment and Jobs Act")
         + tr("N4510.880", "10/2/23", "Apportionment of Federal-Aid Highway Program Funds for Fiscal Year 2024")
         + tr("N4510.853", "3/4/21", "Revised Apportionment of Federal-Aid Highway Program Funds For Fiscal Year (FY) 2021")
+        + tr("N4510.907", "10/1/25", "Apportionment of Fiscal Year 2026 Highway Infrastructure Program Funds for the Bridge Formula Program Pursuant to the Infrastructure Investment and Jobs Act")
         + tr("N4510.881", "10/2/23", "Sequestration of Highway Funds for the Fiscal Year (FY) 2024")
         + tr("N4510.916", "10/1/26", "Apportionment of Federal-Aid Highway Program Funds for the Period Beginning on October 1, 2026, and Ending on December 11, 2026")
         + "</table>";
@@ -96,9 +97,10 @@ class FhwaApportionmentsTransformerTest {
     Map<Integer, Integer> bfp = new TreeMap<Integer, Integer>();
     FhwaApportionmentsTransformer.discoverNotices(index, main, bfp);
     assertEquals(2, main.size());
+    assertEquals(907, bfp.get(2026).intValue());
     assertEquals(858, main.get(2022).intValue());
     assertEquals(880, main.get(2024).intValue());
-    assertEquals(1, bfp.size());
+    assertEquals(2, bfp.size());
     assertEquals(867, bfp.get(2022).intValue());
   }
 }

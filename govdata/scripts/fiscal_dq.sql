@@ -2068,6 +2068,39 @@ FROM (SELECT SUM(act_assets) / SUM(act_liabilities) AS r FROM iceberg_scan('s3:/
   WHERE state_abbr = 'IL' AND year = 2023 AND act_assets IS NOT NULL AND act_liabilities IS NOT NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- fhwa_program_apportionments
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'fhwa_program_apportionments', 'T1_row_count',
+  CASE WHEN n >= 4000 THEN 'pass' ELSE 'fail' END, n, 4000,
+  'FY2022-26: 51 states x 9 programs + 52 x 2 BFP rows per year = 563 per year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fhwa_program_apportionments', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fhwa_program_apportionments', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null fiscal_year/program/state_abbr/amount'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fhwa_program_apportionments', allow_moved_paths := true)
+  WHERE fiscal_year IS NULL OR program IS NULL OR state_abbr IS NULL OR amount IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fhwa_program_apportionments', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (fiscal_year, program, state_abbr) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT fiscal_year, program, state_abbr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fhwa_program_apportionments', allow_moved_paths := true)
+  GROUP BY fiscal_year, program, state_abbr HAVING COUNT(*) > 1));
+
+-- Known values from the issue: Bridge Formula Program FY2022-26 five-year totals per state.
+INSERT INTO dq_results
+SELECT 'fiscal', 'fhwa_program_apportionments', 'T7_bfp_' || state_abbr || '_5yr_total',
+  CASE WHEN ABS(t - expected) <= 1000000 AND yrs = 5 THEN 'pass' ELSE 'fail' END, t, expected,
+  'Sum of BFP_MAIN+BFP_OFF_SYSTEM FY2022-26 (expect ' || expected || ' within 1M, 5 years)'
+FROM (SELECT a.state_abbr, SUM(a.amount) AS t, COUNT(DISTINCT a.fiscal_year) AS yrs, e.expected
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fhwa_program_apportionments', allow_moved_paths := true) a
+  JOIN (VALUES ('PA', 1767e6), ('NY', 2045e6), ('IL', 1486e6), ('MA', 1218e6), ('LA', 1095e6)) e(state_abbr, expected)
+    ON a.state_abbr = e.state_abbr
+  WHERE a.program IN ('BFP_MAIN', 'BFP_OFF_SYSTEM') AND a.fiscal_year BETWEEN 2022 AND 2026
+  GROUP BY a.state_abbr, e.expected);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

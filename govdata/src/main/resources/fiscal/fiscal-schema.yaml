@@ -7765,6 +7765,113 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # FHWA APPORTIONMENTS BY STATE x PROGRAM x FISCAL YEAR — FHWA notices N4510.xxx
+  # ---------------------------------------------------------------------------
+  - name: fhwa_program_apportionments
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=fhwa_program_apportionments/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Federal-aid highway apportionments to each state, DC and (Bridge Formula Program only)
+      Puerto Rico by program and fiscal year, FY2022 onward (the Infrastructure Investment and
+      Jobs Act years), one row per fiscal_year x program x state in whole US dollars. program is
+      NHPP (National Highway Performance), STBG (Surface Transportation Block Grant), HSIP
+      (Highway Safety Improvement), RHCP (Railway-Highway Crossings), CMAQ (Congestion Mitigation
+      and Air Quality), MPP (Metropolitan Planning), NHFP (National Highway Freight), CRP (Carbon
+      Reduction), PROTECT (resilience formula), BFP_MAIN (Bridge Formula Program, bridge main
+      amount) and BFP_OFF_SYSTEM (Bridge Formula Program off-system-bridge set-aside); the
+      Bridge Formula Program total for a state is BFP_MAIN + BFP_OFF_SYSTEM (for example
+      Pennsylvania 353.4 million a year, 1,767 million over FY2022-26). This is the funding
+      authorized to states each fiscal year, not obligations or outlays: for the award-level
+      Bridge Formula Program records USAspending itemizes see usaspending_bridge_awards (which
+      holds only a fraction of the apportioned dollars). Amounts are before set-asides,
+      penalties and sequestration. Notices not covered: National Electric Vehicle Infrastructure,
+      Appalachian Development Highway System, and appropriations-act programs. When FHWA revises
+      a year's notice the highest notice number is used (notice_number names it). The FHWA site
+      answers HTTP 403 to non-browser clients, so the notices are read through a headed browser
+      session. Source: https://highways.dot.gov/laws-regulations/directives/notices (public domain).
+
+    dimensions:
+      type:
+        - fhwa_program_apportionments
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September) the apportionment is for; PK.
+      - name: program
+        type: string
+        nullable: false
+        comment: >
+          Program code: NHPP, STBG, HSIP, RHCP, CMAQ, MPP, NHFP, CRP, PROTECT, BFP_MAIN,
+          BFP_OFF_SYSTEM; PK.
+      - name: program_name
+        type: string
+        nullable: false
+        comment: Full program name for the code
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state, DC or PR abbreviation (FK to geo.state_ref); PK.
+      - name: state_name
+        type: string
+        nullable: false
+        comment: State name as printed in the notice (DC appears as Dist. of Col.)
+      - name: amount
+        type: double
+        nullable: false
+        comment: Amount apportioned to the state for the program and fiscal year, whole US dollars
+      - name: notice_number
+        type: string
+        nullable: false
+        comment: FHWA notice the row was read from (e.g. N4510.892)
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads the notice pages
+      # through a headed browser session (highways.dot.gov answers HTTP 403 to non-browser
+      # clients). Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY).
+      url: "https://highways.dot.gov/laws-regulations/directives/notices"
+      method: GET
+      parameters:
+        browserScript: "${SSA_BROWSER_SCRIPT:}"
+        browserNodeCommand: "${SSA_NODE_COMMAND:node}"
+        browserChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        browserRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        browserEntryPageUrl: "https://highways.dot.gov/"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.FhwaApportionmentsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=fhwa_program_apportionments/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: fhwa_program_apportionments
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -7958,6 +8065,14 @@ constraints:
       # state_fips is null for jurisdiction_type FEDERAL/TERRITORY (Guam/Puerto
       # Rico/U.S. Virgin Islands are not in geo.state_ref); the FK only applies
       # to the STATE/DISTRICT rows where it is populated.
+
+  fhwa_program_apportionments:
+    primaryKey: [fiscal_year, program, state_abbr]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   usaspending_assistance:
     primaryKey: [year, assistance_transaction_unique_key]

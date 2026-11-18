@@ -55,7 +55,7 @@ public class FhwaApportionmentsTransformer implements StreamingResponseTransform
       "^(?:Revised )?Apportionment of Federal-Aid Highway Program Funds for Fiscal Year"
           + " (?:\\(FY\\) )?(\\d{4})$", Pattern.CASE_INSENSITIVE);
   private static final Pattern BFP_TITLE = Pattern.compile(
-      "^(?:Revised )?Apportionment of Fiscal Year \\(FY\\) (\\d{4}) Highway Infrastructure Program"
+      "^(?:Revised )?Apportionment of Fiscal Year (?:\\(FY\\) )?(\\d{4}) Highway Infrastructure Program"
           + " Funds for the Bridge Formula Program\\b.*", Pattern.CASE_INSENSITIVE);
   private static final Pattern TABLE = Pattern.compile("<table.*?</table>", Pattern.DOTALL);
   private static final Pattern TR = Pattern.compile("<tr.*?</tr>", Pattern.DOTALL);
@@ -353,7 +353,7 @@ public class FhwaApportionmentsTransformer implements StreamingResponseTransform
         .replace("&#39;", "'").replaceAll("\\s+", " ").trim();
   }
 
-private static Map<String, String> buildStateAbbrMap() {
+  private static Map<String, String> buildStateAbbrMap() {
     Map<String, String> m = new HashMap<String, String>();
     m.put("Alabama", "AL");
     m.put("Alaska", "AK");
@@ -364,6 +364,7 @@ private static Map<String, String> buildStateAbbrMap() {
     m.put("Connecticut", "CT");
     m.put("Delaware", "DE");
     m.put("District of Columbia", "DC");
+    m.put("Dist. of Col.", "DC");
     m.put("Florida", "FL");
     m.put("Georgia", "GA");
     m.put("Hawaii", "HI");
@@ -408,4 +409,5 @@ private static Map<String, String> buildStateAbbrMap() {
     m.put("Wyoming", "WY");
     m.put("Puerto Rico", "PR");
     return m;
-  }}
+  }
+}
