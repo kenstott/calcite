@@ -1294,6 +1294,27 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
 );
 
+-- f33_district_finance payroll columns (Z32/Z34): never negative, and the enrollment-weighted
+-- national payroll share of current spending sits in a plausible band (published F-33 national
+-- figures put salaries+benefits at roughly 80% of current spending).
+INSERT INTO dq_results
+SELECT 'edu', 'f33_district_finance', 'payroll_value_ranges',
+  CASE WHEN neg > 0 OR share IS NULL OR share < 0.6 OR share > 0.95 THEN 'fail' ELSE 'pass' END,
+  CAST(neg AS VARCHAR) || ' negative; national payroll share ' || COALESCE(CAST(ROUND(share, 3) AS VARCHAR), 'NULL'),
+  '0 negative; share 0.6-0.95', NULL
+FROM (
+  SELECT
+    SUM(CASE WHEN total_salaries_wages_thousand < 0 OR employee_benefits_thousand < 0
+               OR instruction_salaries_thousand < 0 OR instruction_employee_benefits_thousand < 0
+               OR per_pupil_salaries_wages < 0 OR per_pupil_employee_benefits < 0
+        THEN 1 ELSE 0 END) AS neg,
+    SUM(total_salaries_wages_thousand + employee_benefits_thousand)
+      / NULLIF(SUM(CASE WHEN total_salaries_wages_thousand IS NOT NULL
+                          AND employee_benefits_thousand IS NOT NULL
+                   THEN current_expenditure_thousand END), 0) AS share
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
+);
+
 -- district_el_enrollment: counts are never negative (the CRDC's negative non-reported codes are
 -- dropped), EL never exceeds total enrollment, and reporting schools never exceed schools.
 INSERT INTO dq_results

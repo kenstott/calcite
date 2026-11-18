@@ -3076,6 +3076,29 @@ partitionedTables:
         type: double
         nullable: true
         comment: Current spending for support services, in thousands of dollars, source column TCURSSVC
+      - name: total_salaries_wages_thousand
+        type: double
+        nullable: true
+        comment: >
+          Total salaries and wages (F-33 object code Z32) across all functions, in thousands of
+          dollars, source column TSALWAGE. Payroll share of operating spending =
+          (total_salaries_wages_thousand + employee_benefits_thousand) / current_expenditure_thousand.
+          Rows for years loaded before this column existed are null until reprocessed.
+      - name: employee_benefits_thousand
+        type: double
+        nullable: true
+        comment: >
+          Total employee benefit payments (F-33 object code Z34) across all functions, in thousands
+          of dollars, source column TEMPBENE. Same null-until-reprocessed caveat as
+          total_salaries_wages_thousand.
+      - name: instruction_salaries_thousand
+        type: double
+        nullable: true
+        comment: Salaries and wages paid for instruction (F-33 E13), in thousands of dollars, source column TCURISAL
+      - name: instruction_employee_benefits_thousand
+        type: double
+        nullable: true
+        comment: Employee benefits paid for instruction (F-33 J13), in thousands of dollars, source column TCURIBEN
       - name: capital_outlay_expenditure_thousand
         type: double
         nullable: true
@@ -3102,6 +3125,14 @@ partitionedTables:
         type: double
         nullable: true
         comment: Per-pupil current spending for support services, in whole dollars, source column PPSTOTAL
+      - name: per_pupil_salaries_wages
+        type: double
+        nullable: true
+        comment: Per-pupil salaries and wages, in whole dollars — the source's own figure (PPSALWG), not computed here
+      - name: per_pupil_employee_benefits
+        type: double
+        nullable: true
+        comment: Per-pupil employee benefits, in whole dollars — the source's own figure (PPEMPBEN), not computed here
 
     source:
       type: http
