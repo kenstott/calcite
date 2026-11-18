@@ -1588,7 +1588,7 @@ partitionedTables:
       total. Fusion tickets (New York 1976-2020, Connecticut, Oregon and others): a candidate on
       several party lines has a row per line, so a candidate's state vote is the SUM over rows;
       the view presidential_state_winners does that. Quirks kept as published: write-ins lumped in
-      rows with candidate null (write_in_aggregate) or named 'WRITE-IN'; the three Maryland 2020
+      rows with candidate null (write_in_aggregate) or named 'WRITE-IN'; lines with a party label but no candidate name and writein False (unnamed_party_line); the three Maryland 2020
       rows the Lab left with writein blank carry writein null (two named write-ins and one
       unnamed aggregate, candidate_kind unlabeled for the unnamed row); total_votes is the
       state's published total and is NOT always the sum of the rows (2024 District of Columbia
@@ -1633,7 +1633,7 @@ partitionedTables:
       - name: candidate_kind
         type: string
         nullable: false
-        comment: "'candidate' a named candidate, 'write_in_aggregate' write-ins lumped together (candidate null or WRITE-IN), 'residual' a vote bucket, 'unlabeled' the one 2020 Maryland row with neither a candidate nor a writein flag"
+        comment: "'candidate' a named candidate, 'write_in_aggregate' write-ins lumped together (candidate null or WRITE-IN), 'residual' a vote bucket, 'unnamed_party_line' a party or ballot label (INDEPENDENT, OTHER, ...) with no candidate name and writein False, 'unlabeled' the one 2020 Maryland row with neither a candidate nor a writein flag"
       - name: party_published
         type: string
         nullable: true

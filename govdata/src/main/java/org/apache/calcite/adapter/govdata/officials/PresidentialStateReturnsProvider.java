@@ -202,10 +202,14 @@ public class PresidentialStateReturnsProvider implements CachingDataProvider {
       lineNo.put(key, Integer.valueOf(next));
       m.put("line_no", Integer.valueOf(next));
       m.put("candidate", candidate);
-      m.put("candidate_kind", candidate == null && writein == null ? "unlabeled"
+      String party = ElectionResultsSupport.optional(f, idx, "party_detailed", null);
+      // A party or ballot label with no candidate name and writein False is a published vote
+      // line for an unnamed candidate (e.g. Arkansas 1976 INDEPENDENT); kept, not guessed.
+      boolean unnamedPartyLine = candidate == null && party != null && Boolean.FALSE.equals(writein);
+      m.put("candidate_kind", unnamedPartyLine ? "unnamed_party_line"
+          : candidate == null && writein == null ? "unlabeled"
           : ElectionResultsSupport.candidateKind(candidate, writein != null && writein.booleanValue(),
               TABLE, line));
-      String party = ElectionResultsSupport.optional(f, idx, "party_detailed", null);
       m.put("party_published", party);
       m.put("party_major", ElectionResultsSupport.majorForSenate(party, simplified, TABLE, line));
       m.put("writein", writein);

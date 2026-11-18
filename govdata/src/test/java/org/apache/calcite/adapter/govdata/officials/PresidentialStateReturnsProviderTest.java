@@ -53,6 +53,15 @@ class PresidentialStateReturnsProviderTest {
     assertNull(rows.get(2).get("writein"));
   }
 
+  @Test void unnamedPartyLineIsKeptAndNoPartyNoCandidateFails() throws Exception {
+    List<Map<String, Object>> rows = parse(
+        "1976,ARKANSAS,AR,5,71,42.0,US PRESIDENT,,INDEPENDENT,False,639,767535,20210113,,OTHER\n");
+    assertEquals("unnamed_party_line", rows.get(0).get("candidate_kind"));
+    assertNull(rows.get(0).get("candidate"));
+    assertThrows(IOException.class, () -> parse(
+        "1976,ARKANSAS,AR,5,71,42.0,US PRESIDENT,,,False,639,767535,20210113,,OTHER\n"));
+  }
+
   @Test void nonPresidentOfficeFails() {
     assertThrows(IOException.class, () -> parse(
         "1976,ALABAMA,AL,1,63,41.0,US SENATE,X,DEMOCRAT,False,1,2,20210113,,DEMOCRAT\n"));

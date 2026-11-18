@@ -1590,8 +1590,8 @@ FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_B
 INSERT INTO dq_results
 SELECT 'officials', 'presidential_state_returns', 'T7_candidate_kind_values',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'candidate_kind outside the five known values'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE candidate_kind NOT IN ('candidate', 'write_in_aggregate', 'residual', 'unlabeled'));
+  n, 0, 'candidate_kind outside the five known values (candidate, write_in_aggregate, residual, unnamed_party_line, unlabeled)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE candidate_kind NOT IN ('candidate', 'write_in_aggregate', 'residual', 'unnamed_party_line', 'unlabeled'));
 
 -- T7: party_major_values
 INSERT INTO dq_results
