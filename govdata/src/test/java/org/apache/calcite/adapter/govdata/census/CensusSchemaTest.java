@@ -94,6 +94,7 @@ public class CensusSchemaTest {
       // ACS 1-year estimates
       "acs1_population",
       "acs1_income",
+      "acs1_nativity",
       // Decennial Census
       "decennial_population",
       "decennial_housing",
@@ -521,7 +522,7 @@ public class CensusSchemaTest {
           "acs_veterans", "acs_migration", "acs_occupation", "acs_industry", "acs_internet",
           "acs_nativity", "acs_marital_status", "acs_household_type", "acs_housing_tenure",
           "acs_income_distribution", "acs_race_ethnicity", "acs_age",
-          "acs1_population", "acs1_income",
+          "acs1_population", "acs1_income", "acs1_nativity",
           "decennial_population", "decennial_housing",
           "economic_census", "cbp_establishments", "pep_population",
           "saipe_poverty", "sahie_insurance", "bds_dynamics", "abs_characteristics",

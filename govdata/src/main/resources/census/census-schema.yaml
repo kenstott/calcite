@@ -5220,6 +5220,151 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # ACS 1-YEAR NATIVITY - Current-year nativity and citizenship (B05001)
+  # ---------------------------------------------------------------------------
+  - name: acs1_nativity
+    pattern: "type=acs1/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Population counts by nativity and citizenship (native born, foreign born, naturalized
+      citizen, not a citizen) from the ACS 1-Year survey (table B05001), state level plus one
+      national row per year (geography = 'us', name = 'United States', null state column),
+      2005 onward with 2020 absent (ACS 1-Year was not fielded that year). Being a single-year
+      sample rather than the 5-year rolling window of acs_nativity, it is the table for
+      year-over-year change in the foreign-born population: the national foreign_born row moved
+      from 50.23M in 2024 to 50.41M in 2025 (+174k). Estimates carry wider margins of error
+      than the 5-year table; the national 2005-2008 rows have a published MOE of 0, and 2009
+      onward the Census returns a negative sentinel for the total_population MOE, which is
+      normalized to null. native_born and foreign_born are derived sums (B05001 has no single
+      variable for either): native_born = born_in_us + born_in_pr_island_areas +
+      born_abroad_american_parents (002+003+004), foreign_born = naturalized_citizen +
+      not_a_citizen (005+006). Identity native_born + foreign_born = total_population is
+      DQ-asserted.
+
+    dimensions:
+      type:
+        - acs1
+      year: *acs1_year_range
+      geography:
+        - state
+        - us
+
+    columns:
+      - *name_column
+      - *state_column
+      - name: total_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_001E" AS BIGINT)'
+        comment: Total population
+      - name: total_population_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for total_population (Census variable B05001_001M; negative sentinels normalized to null)
+      - name: native_born
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_002E" AS BIGINT) + TRY_CAST(src."B05001_003E" AS BIGINT) + TRY_CAST(src."B05001_004E" AS BIGINT)'
+        comment: Native born (born in the US, plus Puerto Rico/island areas, plus abroad of American parents — sum of its three real components rather than a residual)
+      - name: native_born_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_002M" AS BIGINT) < 0 OR TRY_CAST(src."B05001_003M" AS BIGINT) < 0 OR TRY_CAST(src."B05001_004M" AS BIGINT) < 0 THEN NULL ELSE CAST(ROUND(SQRT(POWER(TRY_CAST(src."B05001_002M" AS DOUBLE), 2) + POWER(TRY_CAST(src."B05001_003M" AS DOUBLE), 2) + POWER(TRY_CAST(src."B05001_004M" AS DOUBLE), 2))) AS BIGINT) END'
+        comment: 90% CI margin of error for native_born, aggregated per Census MOE-of-a-sum convention (sqrt of sum of squared component MOEs — B05001_002M/003M/004M; negative sentinels on any component normalize the whole value to null)
+      - name: born_in_us
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_002E" AS BIGINT)'
+        comment: Born in the United States (Census variable B05001_002E) — the largest component of native_born, exposed directly rather than only summed
+      - name: born_in_us_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for born_in_us (Census variable B05001_002M; negative sentinels normalized to null)
+      - name: born_in_pr_island_areas
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_003E" AS BIGINT)'
+        comment: Born in Puerto Rico or a US island area (Census variable B05001_003E) — analytically live on its own, not just a native_born component
+      - name: born_in_pr_island_areas_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for born_in_pr_island_areas (Census variable B05001_003M; negative sentinels normalized to null)
+      - name: born_abroad_american_parents
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_004E" AS BIGINT)'
+        comment: Born abroad of American parent(s) (Census variable B05001_004E)
+      - name: born_abroad_american_parents_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for born_abroad_american_parents (Census variable B05001_004M; negative sentinels normalized to null)
+      - name: foreign_born
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_005E" AS BIGINT) + TRY_CAST(src."B05001_006E" AS BIGINT)'
+        comment: Foreign born (naturalized citizens plus non-citizens; there is no single Census variable for this concept)
+      - name: foreign_born_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_005M" AS BIGINT) < 0 OR TRY_CAST(src."B05001_006M" AS BIGINT) < 0 THEN NULL ELSE CAST(ROUND(SQRT(POWER(TRY_CAST(src."B05001_005M" AS DOUBLE), 2) + POWER(TRY_CAST(src."B05001_006M" AS DOUBLE), 2))) AS BIGINT) END'
+        comment: 90% CI margin of error for foreign_born, aggregated per Census MOE-of-a-sum convention (sqrt of sum of squared component MOEs — B05001_005M/006M; negative sentinels on either component normalize the whole value to null)
+      - name: naturalized_citizen
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_005E" AS BIGINT)'
+        comment: Naturalized US citizen
+      - name: naturalized_citizen_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_005M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_005M" AS BIGINT) END'
+        comment: 90% CI margin of error for naturalized_citizen (Census variable B05001_005M; negative sentinels normalized to null)
+      - name: not_a_citizen
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05001_006E" AS BIGINT)'
+        comment: Not a US citizen
+
+      - name: not_a_citizen_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05001_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B05001_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for not_a_citizen (Census variable B05001_006M; negative sentinels normalized to null)
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=NAME,B05001_001E,B05001_001M,B05001_002E,B05001_002M,B05001_003E,B05001_003M,B05001_004E,B05001_004M,B05001_005E,B05001_005M,B05001_006E,B05001_006M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs1/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs1_nativity
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # ECONOMIC CENSUS
 # Comprehensive business statistics (every 5 years)
