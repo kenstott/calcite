@@ -536,6 +536,18 @@ wait_for_sec_workers() {
   done
 }
 
+# raw_cache_rclone_path <cache-dir> <relative-path>
+# Maps the resolved raw-cache dir (GOVDATA_CACHE_DIR, s3://<bucket>/...) to the rclone path on the
+# MinIO remote the run reads it from. Never r2: -- remediation is MinIO-only and R2 is updated by
+# sync-to-r2 separately. Fails when the cache dir is not an s3:// URI.
+raw_cache_rclone_path() {
+  local cache_dir=$1 rel=$2
+  case "$cache_dir" in
+    s3://*) printf '%s:%s/%s' "${GOVDATA_MINIO_REMOTE:-minio}" "${cache_dir#s3://}" "$rel" ;;
+    *) echo "raw cache dir '$cache_dir' is not an s3:// URI; cannot map it to the MinIO remote" >&2; return 1 ;;
+  esac
+}
+
 # r2_rclone <timeout-seconds> <rclone args...>
 # Every rclone call against the R2 mirror or MinIO in the sync scripts goes through this: an
 # outer `timeout` plus rclone's own --timeout/--contimeout and bounded retries, so a stalled
