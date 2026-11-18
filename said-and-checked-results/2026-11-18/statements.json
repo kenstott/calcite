@@ -2957,10 +2957,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "Section 2(g) of H.R. 8483, as printed in the Congressional Record, says nothing in the Act shall be construed to 'alter, or require the alteration of, any existing water rights or service agreements'.",
+   "evidence": [
+    {
+     "label": "Congressional Record, Nov. 17, 2026, H.R. 8483 text",
+     "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm"
+    }
+   ],
+   "check_run": "q223/askamerica/2026-11-18"
   },
   {
    "id": 75,
@@ -3022,13 +3027,23 @@
    "test": "True if the land to be transferred is 847 acres managed by BLM and produces no revenue. False if the acreage or manager differs. Cannot be determined if no record of the parcel is found. 'Not insignificant' maintenance cost is not assessed.",
    "premise": null,
    "counter_statements": [],
-   "counter_documents": [],
+   "counter_documents": [
+    {
+     "label": "H.R. 8483, sec. 2 (Parcel 1: 164 acres BLM; Parcels 2 and 3: 683 acres Forest Service)",
+     "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm"
+    }
+   ],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "contradicted",
+   "finding": "The text of H.R. 8483 in the Congressional Record divides the approximately 847 acres into about 164 acres of Bureau of Land Management land ('Parcel 1') and about 683 acres of Forest Service land ('Parcels 2 and 3'), so BLM does not manage all 847 acres. The total acreage matches. The record gives no revenue or maintenance-cost figures, so 'earns no money' was not tested.",
+   "evidence": [
+    {
+     "label": "Congressional Record, Nov. 17, 2026, H.R. 8483 text and debate",
+     "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6240.htm"
+    }
+   ],
+   "check_run": "q224/askamerica/2026-11-18"
   },
   {
    "id": 77,
@@ -3059,10 +3074,23 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Judge Leon and a D.C. Circuit panel found the White House ballroom likely unlawful without congressional authorization. The Supreme Court stayed that injunction 5-4 on standing grounds without deciding legality, and a certiorari petition is pending. Suits over the planned arch are undecided. No final ruling or GAO finding was found. Court holdings are as reported by NPR and SCOTUSblog.",
+   "evidence": [
+    {
+     "label": "NPR, judge halts ballroom construction (March 31, 2026)",
+     "url": "https://npr.org/2026/03/31/nx-s1-5768446/judge-rules-white-house-ballroom-construction-must-halt-until-congress-oks-it"
+    },
+    {
+     "label": "SCOTUSblog, ballroom case returns to the Supreme Court (Nov. 10, 2026)",
+     "url": "https://www.scotusblog.com/2026/11/trump-administration-brings-white-house-ballroom-battle-back-to-supreme-court/"
+    },
+    {
+     "label": "NPR, arch litigation (Nov. 5, 2026)",
+     "url": "https://www.npr.org/2026/11/05/nx-s1-6027301/trump-arch-federal-approval-judge-construction"
+    }
+   ],
+   "check_run": "q225/askamerica/2026-11-18"
   },
   {
    "id": 78,
@@ -3093,10 +3121,25 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "Public Law 117-328, the Consolidated Appropriations Act, 2023 (enacted December 2022), Div. DD, sec. 709, provides that the Thomas Paine Memorial Association 'may establish a commemorative work on Federal land' in D.C. and its environs. AskAmerica's bill data show the standalone bill, H.R. 6720, stopped on the Union Calendar, so the authority came through the omnibus. The private-funding point rests on the commemorative works law the section invokes and the committee report.",
+   "evidence": [
+    {
+     "label": "law.bills (Thomas Paine memorial bills, 117th-118th Congresses)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT congress, bill_type, bill_number, title, law_number, latest_action_text FROM law.bills WHERE congress IN (117,118) AND (title ILIKE '%Paine%' OR title ILIKE '%commemorative work%') FETCH FIRST 30 ROWS ONLY"
+    },
+    {
+     "label": "Public Law 117-328 text",
+     "url": "https://www.govinfo.gov/content/pkg/PLAW-117publ328/html/PLAW-117publ328.htm"
+    },
+    {
+     "label": "House Report 117-680",
+     "url": "https://www.govinfo.gov/content/pkg/CRPT-117hrpt680/html/CRPT-117hrpt680.htm"
+    }
+   ],
+   "check_run": "q223/askamerica/2026-11-18"
   },
   {
    "id": 79,
@@ -3125,10 +3168,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "Common Sense was published Jan. 10, 1776; the Declaration was adopted July 4 and the engrossed copy signed Aug. 2, 1776 (National Archives), about six to seven months later.",
+   "evidence": [
+    {
+     "label": "National Archives, Declaration of Independence history",
+     "url": "https://www.archives.gov/founding-docs/declaration-history"
+    },
+    {
+     "label": "History.com, Thomas Paine",
+     "url": "https://www.history.com/topics/american-revolution/thomas-paine"
+    }
+   ],
+   "check_run": "q223/askamerica/2026-11-18"
   },
   {
    "id": 80,
@@ -3157,10 +3209,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The University of Wisconsin's Center for the Study of the American Constitution and an AP report both put Paine's arrival in Philadelphia in 1774 (Nov. 30, 1774), and no source read conflicts.",
+   "evidence": [
+    {
+     "label": "UW-Madison CSAC, Thomas Paine and American independence",
+     "url": "https://csac.history.wisc.edu/2025/05/28/the-times-that-tried-mens-souls-thomas-paine-and-american-independence/"
+    },
+    {
+     "label": "AP via WTOP, supporters press for a D.C. Paine memorial",
+     "url": "https://wtop.com/national/2026/01/supporters-press-for-a-dc-memorial-to-thomas-paine-whose-writings-helped-fuel-the-revolutionary-war/"
+    }
+   ],
+   "check_run": "q226/askamerica/2026-11-18"
   },
   {
    "id": 81,
@@ -3189,10 +3250,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Sources describe Common Sense as a sensation (the Thomas Paine Society cites over 500,000 copies) but note that historians dispute the copy counts, and none ranks it against the Bible.",
+   "evidence": [
+    {
+     "label": "Thomas Paine Society, Common Sense",
+     "url": "https://www.thomaspainesociety.org/common-sense"
+    },
+    {
+     "label": "AP via WTOP",
+     "url": "https://wtop.com/national/2026/01/supporters-press-for-a-dc-memorial-to-thomas-paine-whose-writings-helped-fuel-the-revolutionary-war/"
+    }
+   ],
+   "check_run": "q226/askamerica/2026-11-18"
   },
   {
    "id": 82,
@@ -3221,10 +3291,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "No record was found of Common Sense being read to troops at Valley Forge. The commonly told story is that Paine's The American Crisis was read before the Delaware crossing in December 1776, and a Journal of the American Revolution article says even that story lacks documentary evidence. No primary Washington papers were read.",
+   "evidence": [
+    {
+     "label": "Journal of the American Revolution, The American Crisis before crossing the Delaware",
+     "url": "https://allthingsliberty.com/2015/02/american-crisis-before-crossing-the-delaware/"
+    },
+    {
+     "label": "Journal of the American Revolution, Washington and Paine",
+     "url": "https://allthingsliberty.com/2025/03/george-washington-and-thomas-paine-friendship-in-a-revolutionary-age/"
+    }
+   ],
+   "check_run": "q226/askamerica/2026-11-18"
   },
   {
    "id": 83,
@@ -3255,10 +3334,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The AP reported in January 2026 that the National Capital Memorial Advisory Commission recommended Area I placement in September 2024 and that the Interior Secretary must endorse it before it goes to Congress. No record was found showing whether it has since been transmitted.",
+   "evidence": [
+    {
+     "label": "AP via WTOP",
+     "url": "https://wtop.com/national/2026/01/supporters-press-for-a-dc-memorial-to-thomas-paine-whose-writings-helped-fuel-the-revolutionary-war/"
+    },
+    {
+     "label": "Thomas Paine Memorial Association",
+     "url": "https://thomaspaine.org/?p=7978"
+    }
+   ],
+   "check_run": "q226/askamerica/2026-11-18"
   },
   {
    "id": 84,
@@ -3289,10 +3377,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "A Forest Service research paper (Guldin, 2009) gives the 1934 donation that created the Crossett Experimental Forest as 1,680 acres, within 0.3% of the figure stated.",
+   "evidence": [
+    {
+     "label": "USDA Forest Service Treesearch 33681",
+     "url": "https://research.fs.usda.gov/treesearch/33681"
+    }
+   ],
+   "check_run": "q223/askamerica/2026-11-18"
   },
   {
    "id": 85,
@@ -3392,10 +3485,29 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "In 2023 the U.S. was the largest importer of wood and wood articles (HS 44, $24 billion vs. China's $18 billion) and of paper and paperboard (HS 48, $19.1 billion vs. Germany's $14.6 billion), per TrendEconomy's compilation of customs data. China leads only in pulp and waste paper (HS 47). AskAmerica's trade data show 2024 U.S. imports of $22.9 billion (HS 44), $4.55 billion (HS 47) and $19.4 billion (HS 48).",
+   "evidence": [
+    {
+     "label": "econ.trade_imports (U.S. imports, HS 44/47/48, 2024)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#trade_imports-table",
+     "askamerica": true,
+     "sql": "SELECT \"year\", hs2, SUM(value_usd) AS usd FROM econ.trade_imports WHERE geo_level = 'country' AND hs2 IN ('44','47','48') AND \"year\" = '2024' GROUP BY \"year\", hs2 ORDER BY hs2"
+    },
+    {
+     "label": "TrendEconomy, HS 44 world imports",
+     "url": "https://trendeconomy.com/data/commodity_h2/44"
+    },
+    {
+     "label": "TrendEconomy, HS 48 world imports",
+     "url": "https://trendeconomy.com/data/commodity_h2/48"
+    },
+    {
+     "label": "TrendEconomy, HS 47 world imports",
+     "url": "https://trendeconomy.com/data/commodity_h2/47"
+    }
+   ],
+   "check_run": "q227/askamerica/2026-11-18"
   },
   {
    "id": 88,
@@ -3424,10 +3536,17 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "AskAmerica's wildfire perimeter data show 2.2 million to 8.6 million acres burned a year in 2020-2025 and 8.3 million so far in 2026, across 4,000 to 8,000 mapped fires a year. No count of sawmill or paper mill closures was found, and 'all across the country' is a loose quantifier.",
+   "evidence": [
+    {
+     "label": "disasters.wildfire_perimeters (wildfire acres by year, 2020-2026)",
+     "url": "https://askamerica.ai/catalog/schemas/disasters/#wildfire_perimeters-table",
+     "askamerica": true,
+     "sql": "SELECT fire_year, COUNT(*) AS n, SUM(COALESCE(gis_acres, incident_size_acres)) AS acres FROM disasters.wildfire_perimeters WHERE incident_type_category = 'WF' AND fire_year >= 2020 GROUP BY fire_year ORDER BY fire_year"
+    }
+   ],
+   "check_run": "q227/askamerica/2026-11-18"
   },
   {
    "id": 89,
@@ -3456,10 +3575,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "USGS's Earth MRI progress page reports magnetic-radiometric survey coverage of the U.S. rising from 7% before the program to 26% in FY2025, about 3.7 times the starting level. That is near, but on USGS's rounded figures just short of, quadrupling.",
+   "evidence": [
+    {
+     "label": "USGS, Earth MRI progress",
+     "url": "https://www.usgs.gov/special-topics/earth-mri/science/earth-mri-progress"
+    }
+   ],
+   "check_run": "q227/askamerica/2026-11-18"
   },
   {
    "id": 90,
@@ -3525,10 +3649,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "AskAmerica's USGS mineral data put China at 270,000 of 390,000 metric tons of world rare-earth mine production in 2025 (69%) and 71% in 2024, matching 'about 70%'. No official source for the 90% processing or 93% magnet shares could be read; IEA figures seen only in search summaries are about 85-91% and 94%.",
+   "evidence": [
+    {
+     "label": "econ.usgs_mineral_commodity_stats (rare-earth mine production by country, 2024-2025)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#usgs_mineral_commodity_stats-table",
+     "askamerica": true,
+     "sql": "SELECT country, statistic, statistic_detail, data_year, value_num, unit FROM econ.usgs_mineral_commodity_stats WHERE commodity ILIKE '%rare earth%' AND statistic ILIKE '%production%' AND data_year IN (2024,2025) ORDER BY data_year, value_num DESC"
+    },
+    {
+     "label": "USGS Mineral Commodity Summaries 2026, rare earths",
+     "url": "https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf"
+    }
+   ],
+   "check_run": "q228/askamerica/2026-11-18"
   },
   {
    "id": 92,
@@ -3560,10 +3695,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The National Park Service says the African American Civil Rights Network's authorization expired Jan. 8, 2025, and its pages publish no total site count, so 'over 200' was neither confirmed nor ruled out.",
+   "evidence": [
+    {
+     "label": "National Park Service, African American Civil Rights Network",
+     "url": "https://www.nps.gov/subjects/civilrights/african-american-civil-rights-network.htm"
+    },
+    {
+     "label": "National Park Service, network members",
+     "url": "https://www.nps.gov/subjects/civilrights/network-members.htm"
+    }
+   ],
+   "check_run": "q227/askamerica/2026-11-18"
   },
   {
    "id": 93,
@@ -3663,10 +3807,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The South Carolina African American Heritage Commission gives Sarah Mae Flemming's bus incident as June 22, 1954, and her birth date as June 28, 1933, six days before her 21st birthday. That is about 17 to 18 months before Rosa Parks's Dec. 1, 1955 arrest.",
+   "evidence": [
+    {
+     "label": "South Carolina African American Heritage Commission, Sarah Mae Flemming",
+     "url": "https://scafricanamerican.com/honorees/sarah-mae-flemming/"
+    }
+   ],
+   "check_run": "q229/askamerica/2026-11-18"
   },
   {
    "id": 96,
@@ -3697,10 +3846,10 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
+   "result": "unsettled",
+   "finding": "No source was found that ranks South Carolina's industries in a way that settles 'primary industries' or that names heritage tourism as tourism's fastest-growing segment; the warehouse has no tourism tables, and the state tourism agency's research pages were not read.",
    "evidence": [],
-   "check_run": null
+   "check_run": "q229/askamerica/2026-11-18"
   },
   {
    "id": 97,
@@ -3731,10 +3880,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The 1976 federal recognition and the 11 bands match the tribe's site and Wikipedia's account. The tribe's site describes 'the 100 Mile Square' as its ancestral territory, and Wikipedia lists its trust land (six rancherias and the XL Ranch) at about 9,500 acres. No primary record of current reservation area was read, so the 100-square-mile figure is not settled.",
+   "evidence": [
+    {
+     "label": "Pit River Tribe, Ancestral Territory",
+     "url": "https://pitrivertribe.gov/?p=727"
+    },
+    {
+     "label": "Pit River Tribe (Wikipedia)",
+     "url": "https://en.wikipedia.org/wiki/Pit_River_Tribe"
+    }
+   ],
+   "check_run": "q230/askamerica/2026-11-18"
   },
   {
    "id": 98,
@@ -3765,10 +3923,17 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "AskAmerica's bill-action data show H.R. 2400 passed the House under suspension of the rules, as amended, by voice vote on Dec. 15, 2025, and 'Passed Senate with an amendment by Unanimous Consent' on Sept. 30, 2026.",
+   "evidence": [
+    {
+     "label": "law.bill_actions (H.R. 2400, 119th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+     "askamerica": true,
+     "sql": "SELECT action_seq, action_date, source_system, action_type, text FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number=2400 ORDER BY action_seq"
+    }
+   ],
+   "check_run": "q230/askamerica/2026-11-18"
   },
   {
    "id": 99,
@@ -3865,10 +4030,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The text of H.R. 9785 printed in the Congressional Record caps the federal share at 'not exceed 50 percent of the cost of the feasibility study', and at $10 million per study.",
+   "evidence": [
+    {
+     "label": "Congressional Record, Nov. 17, 2026, H.R. 9785 text",
+     "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-17/html/CREC-2026-11-17-pt1-PgH6248.htm"
+    }
+   ],
+   "check_run": "q230/askamerica/2026-11-18"
   },
   {
    "id": 102,
