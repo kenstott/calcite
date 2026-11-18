@@ -1384,7 +1384,7 @@ public class HttpSource implements DataSource {
       Map<String, Object> body) throws IOException {
     failFastIfKnown404(urlString);
     SharedHttpClient.Request request = new SharedHttpClient.Request(config.getMethod().name(),
-        urlString).setReadTimeoutMs(120000);
+        urlString).setReadTimeoutMs(config.getRateLimit().getReadTimeoutMs());
     applyHeadersAndAuth(request, variables);
 
     // Send body
@@ -1647,7 +1647,7 @@ public class HttpSource implements DataSource {
       String rawCachePath, Map<String, Object> bodyOverride) throws IOException {
     failFastIfKnown404(urlString);
     SharedHttpClient.Request request = new SharedHttpClient.Request(config.getMethod().name(),
-        urlString).setReadTimeoutMs(120000);
+        urlString).setReadTimeoutMs(config.getRateLimit().getReadTimeoutMs());
     {
       // Log headers being used for debugging
       if (LOGGER.isDebugEnabled()) {
