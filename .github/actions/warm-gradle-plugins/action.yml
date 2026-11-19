@@ -1,0 +1,26 @@
+name: 'Warm Gradle plugins'
+description: >
+  Resolves the buildSrc plugins and the wrapper distribution with retries, so that a short outage of Maven
+  Central, the Gradle Plugin Portal or services.gradle.org does not fail the build step that follows.
+runs:
+  using: composite
+  steps:
+  - name: 'Resolve buildSrc plugins (retry)'
+    shell: bash
+    run: |
+      # Gradle's own repository retry covers transient I/O errors, but a plugin lookup that gets a
+      # not-found answer from every repository fails at once (about 22 s) and is not retried (#1350).
+      # Run the resolution here, with a growing pause, and fail loudly only when every attempt failed.
+      attempts=6
+      for attempt in $(seq 1 "$attempts"); do
+        if ./gradlew --no-daemon --console=plain -q -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 help; then
+          echo "Gradle plugins resolved on attempt $attempt"
+          exit 0
+        fi
+        echo "::warning::Gradle plugin resolution failed on attempt $attempt of $attempts"
+        if [ "$attempt" -lt "$attempts" ]; then
+          sleep $((attempt * 20))
+        fi
+      done
+      echo "::error::Gradle plugin resolution failed on all $attempts attempts"
+      exit 1
