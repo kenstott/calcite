@@ -1181,3 +1181,73 @@ FROM (
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+-- ============================================================================
+-- patent_operations_monthly (USPTO Patents Data Visualization Center workbook;
+-- partitioned by type only, full history replaced each run)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_operations_monthly', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true);
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_operations_monthly', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 3000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 3000, 'Oct 2008 onward is 190+ months x 20+ national measures'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_operations_monthly', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_operations_monthly', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- type is a single-value partition column by design
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_operations_monthly', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'month, measure or tech_center IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true)
+WHERE month IS NULL OR measure IS NULL OR tech_center IS NULL;
+
+INSERT INTO dq_results
+SELECT 'patents', 'patent_operations_monthly', 'T8_pk_duplication',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (month, measure, tech_center) rows'
+FROM (
+  SELECT month, measure, tech_center
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true)
+  GROUP BY month, measure, tech_center HAVING COUNT(*) > 1
+);
+
+-- T7: spot-check against the workbook as read on 2026-11-19 (Sep 2025 unexamined UPR inventory
+-- 788,229 and traditional total pendency 26.3 months)
+INSERT INTO dq_results
+SELECT 'patents', 'patent_operations_monthly', 'T7_expected_values',
+  CASE WHEN COUNT(*) = 2 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 2, 'Sep 2025 upr_unexamined_inventory=788229 and traditional_total_pendency=26.3'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_operations_monthly', allow_moved_paths := true)
+WHERE month = DATE '2025-09-01' AND tech_center = 'all'
+  AND ((measure = 'upr_unexamined_inventory' AND value = 788229)
+    OR (measure = 'traditional_total_pendency' AND ABS(value - 26.3) < 0.05));
