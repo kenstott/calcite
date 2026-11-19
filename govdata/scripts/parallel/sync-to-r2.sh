@@ -252,19 +252,41 @@ _is_always_synced() {
   return 1
 }
 
-# _probe_iceberg <schema> <dir> → 0 when <schema>/<dir>/metadata/ holds a *.metadata.json, 1 when it does not
-# (no such prefix, or no metadata file in it), 75 when the probe failed or timed out. One prefix listing of
-# metadata/, never a listing of the folder itself, so a legacy folder with millions of children costs one probe.
-_probe_iceberg() {
+# _probe_iceberg_live <schema> <dir> → 0 when <schema>/<dir>/metadata/ holds a *.metadata.json, 1 when it does
+# not (no such prefix, or no metadata file in it), 75 when the probe failed or timed out. One flat prefix
+# listing of metadata/ filtered server-side-key to *.metadata.json, never a listing of the folder itself, so a
+# legacy folder with millions of children costs one probe and a table with thousands of manifests prints only
+# its metadata.json names.
+_probe_iceberg_live() {
   local out rc=0
-  out=$(timeout --kill-after=10 "$LIST_MAX" rclone lsf --timeout "$LIST_MAX" --files-only \
-    "${MINIO_REMOTE}:${BUCKETS[0]}/$1/$2/metadata/" 2>/dev/null) || rc=$?
+  out=$(timeout --kill-after=10 "$LIST_MAX" rclone lsf --timeout "$LIST_MAX" --files-only --max-depth 1 \
+    --include '*.metadata.json' "${MINIO_REMOTE}:${BUCKETS[0]}/$1/$2/metadata/" 2>/dev/null) || rc=$?
   if [ "$rc" -eq 3 ]; then return 1; fi   # rclone: directory not found
   if [ "$rc" -ne 0 ]; then
     log_error "sync-to-r2: [$1/$2] Iceberg probe failed or exceeded ${LIST_MAX} (rc=$rc)"
     return 75
   fi
   grep -q '\.metadata\.json$' <<< "$out"
+}
+
+# _probe_iceberg <schema> <dir> → _probe_iceberg_live, cached per folder in STATE_DIR/.iceberg-<schema>-<dir>
+# for PROBE_TTL seconds (the file holds "yes" or "no"; its mtime is the age). A folder that is new, or whose
+# entry has expired, is probed again. A failed probe (75) is never written to the cache.
+PROBE_TTL="${GOVDATA_R2_SYNC_PROBE_TTL:-21600}"
+_probe_iceberg() {
+  local f="$STATE_DIR/.iceberg-$1-$2" rc=0 age
+  if [ -f "$f" ]; then
+    age=$(( $(date +%s) - $(stat -c %Y "$f") ))
+    if [ "$age" -lt "$PROBE_TTL" ]; then
+      case "$(cat "$f")" in yes) return 0 ;; no) return 1 ;; esac
+    fi
+  fi
+  _probe_iceberg_live "$1" "$2" || rc=$?
+  case "$rc" in
+    0) $DRY_RUN || echo yes > "$f" ;;
+    1) $DRY_RUN || echo no > "$f" ;;
+  esac
+  return "$rc"
 }
 
 # _classify_schema <schema> → records in _SKIP_SCHEMA/_SKIP_DIRS the top-level folders of <schema> that are not
@@ -436,7 +458,7 @@ _ukey() { echo "${1//\//__}"; }
 # EVERY unit has data through slice_end, which keeps the pointer-last invariant intact.
 # Returns 0 if every unit reached slice_end; 124 if no unit made progress; 1 if some did.
 _copy_split_schema() {
-  local s=$1 floor=$2 slice_end=$3 now=$4 u cur lo src dst extra rc
+  local s=$1 floor=$2 slice_end=$3 now=$4 u cur lo src dst extra rc rootex=()
   local started copied=0 failed=0 skipped=0 paused=0 remaining=0 units=() reg
   started=$(date +%s)
   local deadline=$(( started + $(_secs "$SLICE_MAX") ))
@@ -466,6 +488,10 @@ _copy_split_schema() {
     fi
   done <<< "$(sed 's#/*$##' <<< "$lst")"
   [ -n "$skipped_dirs" ] && log_info "sync-to-r2: [$s] not copying excluded directories:$skipped_dirs"
+  # The schema-root unit copies the files directly under the schema, so it carries the same exclude flags as
+  # the whole-tree copy: skipped plain root files (and excluded folders) are named in the log and not copied.
+  _set_exclude_args "$s"
+  [ "$s" = "$_SKIP_SCHEMA" ] && [ "${#_SKIP_DIRS[@]}" -gt 0 ] && log_info "sync-to-r2: [$s] root unit excludes non-Iceberg entries:${_SKIP_DIRS[*]/#/ }"
   units+=("_root")
   mapfile -t units < <(for u in "${units[@]}"; do
     printf '%s\t%s\n' "$(stat -c %Y "$STATE_DIR/.unit-try-$s-$(_ukey "$u")" 2>/dev/null || echo 0)" "$u"
@@ -491,15 +517,15 @@ _copy_split_schema() {
     fi
     $DRY_RUN || touch "$STATE_DIR/.unit-try-$s-$k"
     lo=$(( cur - BUFFER )); [ "$lo" -lt 0 ] && lo=0
-    src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$u"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$u"; extra=""
+    src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$u"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$u"; extra=""; rootex=()
     if [ "$u" = "_root" ]; then
-      src="${MINIO_REMOTE}:${BUCKETS[0]}/$s"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s"; extra="--max-depth 1"
+      src="${MINIO_REMOTE}:${BUCKETS[0]}/$s"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s"; extra="--max-depth 1"; rootex=(${_EXARGS[@]+"${_EXARGS[@]}"})
     elif [ "${u##*/}" = "_root" ]; then   # the files directly in a second-level directory
       base="${u%/_root}"
       src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$base"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$base"; extra="--max-depth 1"
     fi
     timeout --kill-after=60 "$UNIT_MAX" rclone copy "$src" "$dst" --exclude "version-hint.text" \
-      --min-age "${min_age}s" --max-age "$(( now - lo ))s" $_uflags $extra 2>&1 | while IFS= read -r line; do
+      --min-age "${min_age}s" --max-age "$(( now - lo ))s" $_uflags $extra ${rootex[@]+"${rootex[@]}"} 2>&1 | while IFS= read -r line; do
       log_info "sync-to-r2: [$s/$u] $line"
     done
     rc=${PIPESTATUS[0]}
