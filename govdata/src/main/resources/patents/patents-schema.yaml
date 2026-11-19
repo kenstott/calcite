@@ -1612,6 +1612,106 @@ partitionedTables:
         batchPartitionColumns: [year]
         incrementalKeys: [year]
 
+  # ---------------------------------------------------------------------------
+  # PATENT_OPERATIONS_MONTHLY - USPTO Patents Data Visualization Center (backlog, pendency, staffing)
+  # ---------------------------------------------------------------------------
+  - name: patent_operations_monthly
+    timeColumn: month
+    # Snapshot table: the workbook always holds the full history (October 2008 onward), so every
+    # run replaces the table; freshness is the hash of the dashboard page that links it.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=patent_operations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      USPTO patent examination operations by month, October 2008 onward, from the USPTO Patents
+      Data Visualization Center workbook (uspto.gov/dashboard/patents, dashboardspreadsheet.xlsx,
+      sheet "Historical Data"). Long format: one row per month + measure + tech_center, value in
+      the unit named by the unit column (count, months, ratio, actions_per_disposal). Backlog:
+      upr_unexamined_inventory (utility, plant and reissue applications awaiting a first action),
+      rce_unexamined_inventory and design_unexamined_inventory. Pendency in months:
+      traditional_first_action_pendency, traditional_total_pendency, total_pendency_including_rces,
+      forward_looking_first_action_pendency, rce_pendency, continuation_pendency,
+      divisional_pendency, rce_filing_to_next_action_pendency. Workforce: examiner_staff,
+      examiner_hires and examiner_attritions (monthly counts), examiner_attrition_rate_12mo (ratio,
+      12-month average; the source stopped tracking it for some months and those months have no
+      row). Filings, allowances, final_rejections, restrictions, disposals, production_units and
+      first_actions_on_merits carry the suffix _fytd where the source reports them cumulatively
+      from October 1 of the fiscal year (they reset each October, so do not sum across months).
+      tech_center is 'all' for the national figure, or a technology center number (1600, 1700,
+      2100, 2400, 2600, 2800, 3600, 3700, plus 4100 for staff) for the tc_* measures
+      (tc_traditional_first_action_pendency, tc_traditional_total_pendency,
+      tc_total_pendency_including_rces, tc_examiner_staff). UPR means utility + plant + reissue.
+      The workbook is revised in place (the latest month and the prior September can change), so
+      each run replaces the whole table. Annual examiner figures in the USPTO Performance and
+      Accountability Report are not loaded; the monthly staff, hires and attritions series covers
+      them. Months with no published value have no row (future months of the current fiscal year
+      are blank in the source).
+
+    dimensions:
+      type:
+        - patent_operations
+
+    columns:
+      - name: month
+        type: date
+        nullable: false
+        comment: First day of the reporting month
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September) the month falls in
+      - name: measure
+        type: string
+        nullable: false
+        comment: Measure key, e.g. upr_unexamined_inventory, traditional_total_pendency, examiner_staff
+      - name: tech_center
+        type: string
+        nullable: false
+        comment: "'all' for the national figure, otherwise the 4-digit technology center number"
+      - name: unit
+        type: string
+        nullable: false
+        comment: "count, months, ratio (0-1) or actions_per_disposal"
+      - name: value
+        type: double
+        nullable: false
+        comment: Measure value in the unit given by the unit column
+
+    source:
+      type: http
+      url: "https://www.uspto.gov/dashboard/patents/"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.UsptoPatentOperationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_operations/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        <<: *patents_iceberg_common
+        tableName: patent_operations_monthly
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1619,6 +1719,8 @@ partitionedTables:
 constraints:
   patent_grants:
     primaryKey: [patent_id]
+  patent_operations_monthly:
+    primaryKey: [month, measure, tech_center]
   # NOTE: The patent_id -> patent_grants foreign keys on the six full-dump snapshot tables
   # below (patent_assignees, patent_inventors, patent_cpc_classes, patent_abstracts,
   # patent_applications, patent_figures) are INFORMATIONAL only. Each snapshot lands the entire
