@@ -353,7 +353,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 166131
-      checkedAt: "2026-11-18T01:23:57Z"
+      checkedAt: "2026-11-19T01:43:34Z"
     partitions: *standard_partitions
     comment: >
       IRS Statistics of Income individual income tax statistics aggregated by
@@ -1253,7 +1253,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 328864
-      checkedAt: "2026-11-18T01:23:59Z"
+      checkedAt: "2026-11-19T01:43:36Z"
     partitions: *standard_partitions
     comment: >
       IRS SOI individual income tax statistics at county grain x AGI size class x
@@ -2163,7 +2163,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 392
-      checkedAt: "2026-11-18T01:24:01Z"
+      checkedAt: "2026-11-19T01:43:37Z"
     partitions: *standard_partitions
     comment: >
       IRS SOI Table 1-5, "Gross Collections, by Type of Tax and State" — one row per
@@ -2326,7 +2326,7 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 954222
-      checkedAt: "2026-11-18T01:24:03Z"
+      checkedAt: "2026-11-19T01:43:39Z"
     partitions: *standard_partitions
     comment: >
       IRS SOI county-to-county migration derived from year-over-year address
@@ -2579,7 +2579,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 4244920
-      checkedAt: "2026-11-18T01:24:05Z"
+      checkedAt: "2026-11-19T01:43:41Z"
     partitions: *standard_partitions
     comment: >
       Nonprofit/tax-exempt financials from IRS Form 990 e-file XML — one row per
@@ -2744,7 +2744,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 981
-      checkedAt: "2026-11-18T01:24:07Z"
+      checkedAt: "2026-11-19T01:43:43Z"
     partitions: *standard_partitions
     comment: >
       Federal obligations summarized by awarding agency x fiscal year, from the
@@ -2823,7 +2823,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 21061
-      checkedAt: "2026-11-18T01:24:08Z"
+      checkedAt: "2026-11-19T01:43:45Z"
     partitions: *standard_partitions
     comment: >
       Budget authority, obligations incurred and gross outlays by federal account (Treasury
@@ -2991,7 +2991,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 952
-      checkedAt: "2026-11-18T01:24:10Z"
+      checkedAt: "2026-11-19T01:43:47Z"
     partitions: *standard_partitions
     comment: >
       Federal spending summarized by place-of-performance state x fiscal year — the
@@ -3118,7 +3118,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 54953
-      checkedAt: "2026-11-18T01:24:12Z"
+      checkedAt: "2026-11-19T01:43:49Z"
     partitions: *standard_partitions
     comment: >
       Federal spending summarized by place-of-performance county x fiscal year — the
@@ -3231,7 +3231,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 7497
-      checkedAt: "2026-11-18T01:24:14Z"
+      checkedAt: "2026-11-19T01:43:51Z"
     partitions: *standard_partitions
     comment: >
       Federal spending summarized by place-of-performance congressional district x
@@ -3380,7 +3380,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 396709
-      checkedAt: "2026-11-18T01:24:16Z"
+      checkedAt: "2026-11-19T01:43:53Z"
     partitions: *standard_partitions
     comment: >
       Top 100 recipients by obligated dollar amount for each place-of-performance
@@ -3525,7 +3525,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 392564
-      checkedAt: "2026-11-18T01:24:18Z"
+      checkedAt: "2026-11-19T01:43:54Z"
     partitions: *standard_partitions
     comment: >
       Top 100 procurement-contract recipients by obligated dollar amount for each
@@ -3675,7 +3675,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2479
-      checkedAt: "2026-11-18T01:24:20Z"
+      checkedAt: "2026-11-19T01:43:56Z"
     partitions: *standard_partitions
     comment: >
       Social Security and Medicare spending by place-of-performance state x fiscal
@@ -4438,7 +4438,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 4800271
-      checkedAt: "2026-11-18T01:24:22Z"
+      checkedAt: "2026-11-19T01:43:58Z"
     partitions: *standard_partitions
     comment: >
       FCC Connect America Fund Phase II (CAF-II) subsidized broadband buildout —
@@ -4599,7 +4599,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 1052596
-      checkedAt: "2026-11-18T01:24:25Z"
+      checkedAt: "2026-11-19T01:44:00Z"
     partitions: *standard_partitions
     comment: >
       Federal Universal Service Fund high-cost-program disbursements at
@@ -4741,7 +4741,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 269019
-      checkedAt: "2026-11-18T01:24:27Z"
+      checkedAt: "2026-11-19T01:44:02Z"
     partitions: *standard_partitions
     comment: >
       SSA OASDI and SSI beneficiary counts and total benefit dollars by county x
@@ -4856,7 +4856,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 51533
-      checkedAt: "2026-11-18T01:24:29Z"
+      checkedAt: "2026-11-19T01:44:03Z"
     partitions: *standard_partitions
     comment: >
       County-level Social Security and SSI recipiency and dollars DERIVED from the
@@ -5008,7 +5008,7 @@ partitionedTables:
       distinctYears: 38
       contiguous: true
       rowCount: 26076
-      checkedAt: "2026-11-18T01:24:31Z"
+      checkedAt: "2026-11-19T01:44:05Z"
     partitions: *standard_partitions
     comment: >
       SNAP (Supplemental Nutrition Assistance Program) persons/households participating
@@ -5132,7 +5132,7 @@ partitionedTables:
       distinctYears: 5
       contiguous: true
       rowCount: 265
-      checkedAt: "2026-11-18T01:24:33Z"
+      checkedAt: "2026-11-19T01:44:06Z"
     partitions: *standard_partitions
     comment: >
       SNAP participants by age group (children under 5, 5-17, adults 18-59, 60+) by state x
@@ -5394,7 +5394,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 701256
-      checkedAt: "2026-11-18T01:24:35Z"
+      checkedAt: "2026-11-19T01:44:07Z"
     partitions: *standard_partitions
     comment: >
       Federal budget authority and outlays for every budget account, one row per account line
@@ -5562,7 +5562,7 @@ partitionedTables:
       contiguous: false
       years: [2023, 2024, 2026]
       rowCount: 318227
-      checkedAt: "2026-11-18T01:24:36Z"
+      checkedAt: "2026-11-19T01:44:08Z"
     partitions: *standard_partitions
     comment: >
       OMB-approved apportionments (SF-132 schedules) for every federal budget account, one
@@ -5739,7 +5739,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 10881346
-      checkedAt: "2026-11-18T01:24:39Z"
+      checkedAt: "2026-11-19T01:44:10Z"
     partitions: *standard_partitions
     comment: >
       State & local government finance from Census's annual "Individual Unit
@@ -5887,7 +5887,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 510
-      checkedAt: "2026-11-18T01:24:41Z"
+      checkedAt: "2026-11-19T01:44:12Z"
     partitions: *standard_partitions
     comment: >
       Census Bureau Annual Survey of State Government Tax Collections (STC),
@@ -5997,7 +5997,7 @@ partitionedTables:
       contiguous: false
       years: [1968, 1970, 1972, 1976, 1979, 1980, 1981, 1988, 1991, 1992, 1994, 1996, 1997, 1998, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
       rowCount: 2145
-      checkedAt: "2026-11-18T01:24:43Z"
+      checkedAt: "2026-11-19T01:44:14Z"
     partitions: *standard_partitions
     dataset_type: snapshot
     comment: >
@@ -6142,7 +6142,7 @@ partitionedTables:
       distinctYears: 20
       contiguous: true
       rowCount: 129393664
-      checkedAt: "2026-11-18T01:24:47Z"
+      checkedAt: "2026-11-19T01:44:18Z"
     partitions: *standard_partitions
     dqRowLimit: 200000
     comment: >
@@ -6457,7 +6457,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 5492319
-      checkedAt: "2026-11-18T01:24:49Z"
+      checkedAt: "2026-11-19T01:44:20Z"
     partitions: *standard_partitions
     dqRowLimit: 200000
     comment: >
@@ -7269,7 +7269,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 723457
-      checkedAt: "2026-11-18T01:24:51Z"
+      checkedAt: "2026-11-19T01:44:21Z"
     partitions: *standard_partitions
     dqRowLimit: 200000
     comment: >
@@ -7469,7 +7469,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 9392323
-      checkedAt: "2026-11-18T01:24:53Z"
+      checkedAt: "2026-11-19T01:44:23Z"
     partitions: *standard_partitions
     dqRowLimit: 200000
     comment: >
@@ -7633,7 +7633,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 253
-      checkedAt: "2026-11-18T01:24:55Z"
+      checkedAt: "2026-11-19T01:44:25Z"
     partitions: *standard_partitions
     comment: >
       State and local government defined-benefit pension plans, one row per plan
