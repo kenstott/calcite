@@ -563,6 +563,38 @@ def _peer_closed(sock) -> bool:
         return True
 
 
+class _CursorRowsResult(BVQueryResult):  # REQ-2255
+    """A FETCH's rows, under the columns of the cursor's query, tagged ``FETCH n``."""
+
+    row_tag_prefix = "FETCH"
+
+    def __init__(self, source: "CalciteQueryResult", rows: list):
+        super().__init__()
+        self._source = source
+        self._rows = rows
+
+    def has_results(self) -> bool:
+        return True
+
+    def column_count(self) -> int:
+        return self._source.column_count()
+
+    def column(self, index: int) -> Tuple[str, BVType]:
+        return self._source.column(index)
+
+    def column_typmod(self, index: int) -> int:
+        return self._source.column_typmod(index)
+
+    def rows(self) -> Iterator[list]:
+        return iter(self._rows)
+
+    def status(self) -> str:
+        return "FETCH"
+
+    def close(self) -> None:
+        """The rows are this result's own; the cursor keeps the engine stream."""
+
+
 class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def __init__(self) -> None:
         super().__init__()
@@ -578,6 +610,8 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         # (PGW-022). Portal suspension does not come through here: buenavista
         # replays the cached result without re-executing.
         self._open_result: CalciteQueryResult | None = None
+        #: name -> DECLAREd cursor (REQ-2255, cursors.py); each holds its query's stream.
+        self._cursors: dict = {}
         #: Weak reference to the connection's BVContext, bound at startup so
         #: DISCARD ALL can drop this session's prepared statements and portals
         #: (PGW-052). Weak on purpose: the context already owns the session, and a
@@ -617,9 +651,57 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
 
     def close(self):
         self._release_open_result()
+        self._close_cursors()
         backend = _current_backend()
         if backend is not None:
             backend.discard_session(self.key)
+
+    def _close_cursors(self) -> None:
+        cursors, self._cursors = list(self._cursors.values()), {}
+        for cs in cursors:
+            cs.close()
+
+    def _cursor_command(self, stmt: str) -> "BVQueryResult | None":
+        """DECLARE / FETCH / MOVE / CLOSE (REQ-2255, cursors.py), or None for any other
+        statement."""
+        from pgwire_calcite import cursors
+
+        m = cursors.DECLARE_RE.match(stmt)
+        if m is not None:
+            name = cursors.normalize_name(m.group("name"))
+            if name in self._cursors:
+                raise cursors.DuplicateCursor(name)
+            result = self.execute_sql(m.group("sql"))
+            # The cursor owns the stream from here: the next statement must not release it.
+            if self._open_result is result:
+                self._open_result = None
+            scroll = (m.group("scroll") or "").upper().replace(" ", "")
+            self._cursors[name] = cursors.CursorState(
+                name=name, result=result, source=result.rows(), scrollable=scroll == "SCROLL"
+            )
+            return CalciteQueryResult(TrinoResult(), stmt, status="DECLARE CURSOR")
+        for keyword, pattern in (("FETCH", cursors.FETCH_RE), ("MOVE", cursors.MOVE_RE)):
+            if pattern.match(stmt):
+                direction, name, count = cursors.parse_navigation(stmt, keyword)
+                cs = self._cursors.get(name)
+                if cs is None:
+                    raise cursors.UnknownCursor(name)
+                rows = cursors.move(cs, direction, count)
+                if keyword == "MOVE":
+                    return CalciteQueryResult(TrinoResult(), stmt, status=f"MOVE {len(rows)}")
+                return _CursorRowsResult(cs.result, rows)
+        m = cursors.CLOSE_RE.match(stmt)
+        if m is not None:
+            if m.group("name").upper() == "ALL":
+                self._close_cursors()
+            else:
+                name = cursors.normalize_name(m.group("name"))
+                cs = self._cursors.pop(name, None)
+                if cs is None:
+                    raise cursors.UnknownCursor(name)
+                cs.close()
+            return CalciteQueryResult(TrinoResult(), stmt, status="CLOSE CURSOR")
+        return None
 
     def _release_open_result(self) -> None:
         result, self._open_result = self._open_result, None
@@ -697,6 +779,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             if m.group(1).upper() == "ALL":
                 self._reset_settings()
                 self._forget_prepared()
+                self._close_cursors()
                 backend = _current_backend()
                 if backend is not None:
                     backend.discard_session(self.key)
@@ -735,6 +818,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         # Session / transaction commands: accepted and acknowledged, no real
         # transaction isolation (PGW-004). Empty result -> command tag from SQL.
         self._release_open_result()
+
+        cursor_result = self._cursor_command(stripped)
+        if cursor_result is not None:
+            return cursor_result  # type: ignore[return-value]
 
         if _TXN_TAG_RE.match(stripped):
             self._track_transaction(stripped)
@@ -1602,6 +1689,12 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         ba = bytearray(payload)
         if ba[0] == ord("P"):
             portal = ba[1 : len(ba) - 1].decode("utf-8")
+            # A DECLAREd cursor is also a portal of that name (PostgreSQL); psycopg describes
+            # its server-side cursor this way before it FETCHes (REQ-2255).
+            cursor = getattr(ctx.session, "_cursors", {}).get(portal)
+            if portal not in ctx.portals and cursor is not None:
+                self.send_row_description(cursor.result)
+                return
             stmt_name = ctx.portals.get(portal, (None,))[0] if portal in ctx.portals else None
             portal_sql = ctx.stmts.get(stmt_name, ("",))[0] if stmt_name is not None else ""
             if stmt_name is not None and not portal_sql.strip():
