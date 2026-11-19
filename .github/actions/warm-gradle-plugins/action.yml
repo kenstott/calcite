@@ -45,9 +45,18 @@ runs:
       # Run the resolution here, with a growing pause, and fail loudly only when every attempt failed.
       # Each attempt is capped at 4 minutes: a runner that cannot reach the hosts keeps failing, so the
       # step gives up in about 13 minutes and a job-level rerun lands on a different runner.
+      # macOS runners have no GNU timeout: use timeout, else gtimeout, else run each attempt uncapped.
+      if command -v timeout >/dev/null 2>&1; then
+        cap=(timeout 240)
+      elif command -v gtimeout >/dev/null 2>&1; then
+        cap=(gtimeout 240)
+      else
+        cap=()
+      fi
+      echo "Per-attempt cap: ${cap[*]:-none (no timeout or gtimeout on PATH)}"
       attempts=3
       for attempt in $(seq 1 "$attempts"); do
-        if timeout 240 ./gradlew --no-daemon --console=plain -q -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 help; then
+        if "${cap[@]}" ./gradlew --no-daemon --console=plain -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 help; then
           echo "Gradle plugins resolved on attempt $attempt"
           exit 0
         fi
