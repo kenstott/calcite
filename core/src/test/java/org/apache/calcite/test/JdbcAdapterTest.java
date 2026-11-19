@@ -21,7 +21,15 @@ import org.apache.calcite.adapter.java.ReflectiveSchema;
 import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.config.Lex;
 import org.apache.calcite.plan.RelOptPlanner;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.runtime.Hook;
+import org.apache.calcite.sql.SqlDialect;
+import org.apache.calcite.sql.SqlDialectFactory;
+import org.apache.calcite.sql.SqlDialects;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.dialect.HsqldbSqlDialect;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.test.CalciteAssert.AssertThat;
 import org.apache.calcite.test.CalciteAssert.DatabaseInstance;
 import org.apache.calcite.test.schemata.foodmart.FoodmartSchema;
@@ -33,10 +41,12 @@ import org.hsqldb.jdbcDriver;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -1549,6 +1559,147 @@ class JdbcAdapterTest {
             || CalciteAssert.DB == DatabaseInstance.POSTGRESQL)
         .planHasSql(jdbcSql)
         .returnsCount(4);
+  }
+
+  /** Returns a model with the SCOTT schema whose JDBC dialect comes from
+   * the given {@link SqlDialectFactory} class. */
+  private static String scottModel(Class<? extends SqlDialectFactory> factory) {
+    return JdbcTest.SCOTT_MODEL.replace("jdbcSchema: ",
+        "sqlDialectFactory: '" + factory.getName() + "',\n       jdbcSchema: ");
+  }
+
+  /** A scalar call the dialect does not support stays in Calcite; the
+   * source is sent only what it can run (REQ-2256). */
+  @Test void testUnsupportedFunctionStaysInCalcite() {
+    CalciteAssert.model(scottModel(NoUpperDialectFactory.class))
+        .query("select upper(ename) as u from scott.emp where empno = 7369")
+        .explainContains("PLAN=EnumerableCalc(expr#0..7=[{inputs}], "
+            + "expr#8=[UPPER($t1)], U=[$t8])\n"
+            + "  JdbcToEnumerableConverter\n"
+            + "    JdbcFilter(condition=[=(CAST($0):INTEGER NOT NULL, 7369)])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("U=SMITH\n");
+  }
+
+  /** The same query is pushed whole to a dialect that supports the call. */
+  @Test void testSupportedFunctionIsPushed() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .query("select upper(ename) as u from scott.emp where empno = 7369")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(U=[UPPER($1)])\n"
+            + "    JdbcFilter(condition=[=(CAST($0):INTEGER NOT NULL, 7369)])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("U=SMITH\n");
+  }
+
+  /** An aggregate function the dialect does not support stays in Calcite. */
+  @Test void testUnsupportedAggregateFunctionStaysInCalcite() {
+    CalciteAssert.model(scottModel(NoMaxDialectFactory.class))
+        .query("select deptno, max(sal) as m from scott.emp group by deptno")
+        .explainContains("EnumerableAggregate(group=[{7}], M=[MAX($5)])\n"
+            + "  JdbcToEnumerableConverter\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("DEPTNO=10; M=5000.00",
+            "DEPTNO=20; M=3000.00",
+            "DEPTNO=30; M=2850.00");
+  }
+
+  /** A text range comparison is not pushed to a source whose collation
+   * may differ from Calcite's; a text equality is (REQ-2256). */
+  @Test void testTextRangeNotPushedWhenCollationDiffers() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select ename from scott.emp where ename >= 'TURNER'")
+        .explainContains("PLAN=EnumerableCalc(expr#0..7=[{inputs}], "
+            + "expr#8=['TURNER':VARCHAR(10)], expr#9=[>=($t1, $t8)], ENAME=[$t1], "
+            + "$condition=[$t9])\n"
+            + "  JdbcToEnumerableConverter\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("ENAME=TURNER", "ENAME=WARD");
+  }
+
+  @Test void testTextEqualityPushedWhenOnlyEqualityIsSafe() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select ename from scott.emp where ename = 'WARD'")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1])\n"
+            + "    JdbcFilter(condition=[=($1, 'WARD')])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=WARD\n");
+  }
+
+  /** No text comparison at all is pushed where even equality may differ
+   * (a case-insensitive collation, for example). */
+  @Test void testTextEqualityNotPushedWhenNoComparisonIsSafe() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select ename from scott.emp where ename = 'WARD'")
+        .explainContains("PLAN=EnumerableCalc(expr#0..7=[{inputs}], "
+            + "expr#8=['WARD':VARCHAR(10)], expr#9=[=($t1, $t8)], ENAME=[$t1], "
+            + "$condition=[$t9])\n"
+            + "  JdbcToEnumerableConverter\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=WARD\n");
+  }
+
+  /** HSQLDB dialect that does not support UPPER. */
+  public static class NoUpperDialectFactory implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public boolean supportsFunction(SqlOperator operator,
+            RelDataType type, List<RelDataType> paramTypes) {
+          return operator != SqlStdOperatorTable.UPPER
+              && super.supportsFunction(operator, type, paramTypes);
+        }
+      };
+    }
+  }
+
+  /** HSQLDB dialect that does not support the MAX aggregate. */
+  public static class NoMaxDialectFactory implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public boolean supportsAggregateFunction(SqlKind kind) {
+          return kind != SqlKind.MAX && super.supportsAggregateFunction(kind);
+        }
+      };
+    }
+  }
+
+  /** HSQLDB dialect whose text collation is taken to agree with Calcite's
+   * on equality only. */
+  public static class TextEqualityOnlyDialectFactory
+      implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public TextComparisonPushdown getTextComparisonPushdown() {
+          return TextComparisonPushdown.EQUALITY;
+        }
+      };
+    }
+  }
+
+  /** HSQLDB dialect whose text collation is taken to differ from Calcite's
+   * even on equality. */
+  public static class NoTextComparisonDialectFactory
+      implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public TextComparisonPushdown getTextComparisonPushdown() {
+          return TextComparisonPushdown.NONE;
+        }
+      };
+    }
   }
 
   /** Acquires a lock, and releases it when closed. */

@@ -226,4 +226,11 @@ public class HiveSqlDialect extends SqlDialect {
     LOGGER.debug("SINGLE_VALUE rewritten into [{}]", caseExpr);
     return caseExpr;
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Hive compares STRING values by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

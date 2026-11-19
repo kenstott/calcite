@@ -142,4 +142,11 @@ public class HsqldbSqlDialect extends SqlDialect {
           + unit);
     }
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>HSQLDB's default collation, SQL_TEXT, compares by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

@@ -39,4 +39,11 @@ public class CalciteSqlDialect extends SqlDialect {
   public CalciteSqlDialect(Context context) {
     super(context);
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Calcite compares character values by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

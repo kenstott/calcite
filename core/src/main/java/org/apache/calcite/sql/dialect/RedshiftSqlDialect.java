@@ -159,4 +159,12 @@ public class RedshiftSqlDialect extends SqlDialect {
       super.unparseCall(writer, call, leftPrec, rightPrec);
     }
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Redshift equates character values as Calcite does but orders
+   * them by its own collation. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.EQUALITY;
+  }
 }

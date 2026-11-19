@@ -212,4 +212,11 @@ public class SparkSqlDialect extends SqlDialect {
     return caseExpr;
   }
 
+  /** {@inheritDoc}
+   *
+   * <p>Spark compares STRING values by code point unless a collation is
+   * set. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

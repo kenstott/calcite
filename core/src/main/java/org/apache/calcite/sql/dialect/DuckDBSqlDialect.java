@@ -297,4 +297,11 @@ public class DuckDBSqlDialect extends PostgresqlSqlDialect {
     writer.endList(frame);
   }
 
+  /** {@inheritDoc}
+   *
+   * <p>DuckDB compares VARCHAR values by code point unless a collation
+   * is set. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

@@ -78,4 +78,10 @@ public class SqliteSqlDialect extends SqlDialect {
     }
   }
 
+  /** {@inheritDoc}
+   *
+   * <p>SQLite's default collation, BINARY, compares by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

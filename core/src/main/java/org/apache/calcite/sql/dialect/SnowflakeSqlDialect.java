@@ -115,4 +115,12 @@ public class SnowflakeSqlDialect extends SqlDialect {
   @Override public boolean supportsApproxCountDistinct() {
     return true;
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Snowflake compares VARCHAR values by code point unless a
+   * collation is set. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

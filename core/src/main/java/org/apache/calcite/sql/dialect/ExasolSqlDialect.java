@@ -168,4 +168,12 @@ public class ExasolSqlDialect extends SqlDialect {
     // Same as PostgreSQL implementation
     PostgresqlSqlDialect.DEFAULT.unparseCall(writer, call, leftPrec, rightPrec);
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Exasol equates character values as Calcite does; its ordering
+   * of non-ASCII characters is not documented to be by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.EQUALITY;
+  }
 }

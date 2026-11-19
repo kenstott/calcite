@@ -56,6 +56,7 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexOver;
 import org.apache.calcite.rex.RexProgram;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.rex.RexVisitorImpl;
@@ -63,10 +64,12 @@ import org.apache.calcite.schema.ModifiableTable;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.Sarg;
 import org.apache.calcite.util.Util;
 import org.apache.calcite.util.trace.CalciteTrace;
 
@@ -310,6 +313,9 @@ public class JdbcRules {
       if (convertInputTraits && !canJoinOnCondition(join.getCondition())) {
         return null;
       }
+      if (!canPush(join.getCondition(), ((JdbcConvention) out).dialect)) {
+        return null;
+      }
       try {
         return new JdbcJoin(
             join.getCluster(),
@@ -495,7 +501,7 @@ public class JdbcRules {
           .withConversion(Project.class, project ->
                   (out.dialect.supportsWindowFunctions()
                       || !project.containsOver())
-                      && !userDefinedFunctionInProject(project),
+                      && canPush(project.getProjects(), out.dialect),
               Convention.NONE, out, "JdbcProjectRule")
           .withRuleFactory(JdbcProjectRule::new)
           .toRule(JdbcProjectRule.class);
@@ -504,17 +510,6 @@ public class JdbcRules {
     /** Called from the Config. */
     protected JdbcProjectRule(Config config) {
       super(config);
-    }
-
-    private static boolean userDefinedFunctionInProject(Project project) {
-      CheckingUserDefinedFunctionVisitor visitor = new CheckingUserDefinedFunctionVisitor();
-      for (RexNode node : project.getProjects()) {
-        node.accept(visitor);
-        if (visitor.containsUserDefinedFunction()) {
-          return true;
-        }
-      }
-      return false;
     }
 
     @Override public boolean matches(RelOptRuleCall call) {
@@ -585,7 +580,8 @@ public class JdbcRules {
     /** Creates a JdbcFilterRule. */
     public static JdbcFilterRule create(JdbcConvention out) {
       return Config.INSTANCE
-          .withConversion(Filter.class, r -> !userDefinedFunctionInFilter(r),
+          .withConversion(Filter.class,
+              r -> canPush(r.getCondition(), out.dialect),
               Convention.NONE, out, "JdbcFilterRule")
           .withRuleFactory(JdbcFilterRule::new)
           .toRule(JdbcFilterRule.class);
@@ -594,12 +590,6 @@ public class JdbcRules {
     /** Called from the Config. */
     protected JdbcFilterRule(Config config) {
       super(config);
-    }
-
-    private static boolean userDefinedFunctionInFilter(Filter filter) {
-      CheckingUserDefinedFunctionVisitor visitor = new CheckingUserDefinedFunctionVisitor();
-      filter.getCondition().accept(visitor);
-      return visitor.containsUserDefinedFunction();
     }
 
     @Override public @Nullable RelNode convert(RelNode rel) {
@@ -1101,30 +1091,107 @@ public class JdbcRules {
     }
   }
 
-  /** Visitor that checks whether part of a projection is a user-defined
-   * function (UDF). */
-  private static class CheckingUserDefinedFunctionVisitor
-      extends RexVisitorImpl<Void> {
-
-    private boolean containsUsedDefinedFunction = false;
-
-    CheckingUserDefinedFunctionVisitor() {
-      super(true);
+  /** Returns whether a source with the given dialect can run every call in
+   * the given expressions. */
+  private static boolean canPush(List<? extends RexNode> nodes,
+      SqlDialect dialect) {
+    for (RexNode node : nodes) {
+      if (!canPush(node, dialect)) {
+        return false;
+      }
     }
+    return true;
+  }
 
-    public boolean containsUserDefinedFunction() {
-      return containsUsedDefinedFunction;
+  /** Returns whether a source with the given dialect can run every call in
+   * the given expression, with the result Calcite would compute.
+   *
+   * <p>A call cannot be pushed if it is a user-defined function, if the
+   * dialect does not support it ({@link SqlDialect#supportsFunction}), or if
+   * it compares character values in a way the dialect's collation may
+   * answer differently ({@link SqlDialect#getTextComparisonPushdown}). */
+  static boolean canPush(RexNode node, SqlDialect dialect) {
+    final PushableCallChecker checker = new PushableCallChecker(dialect);
+    node.accept(checker);
+    return checker.pushable;
+  }
+
+  /** Visitor that checks whether a source can run every call in an
+   * expression; see {@link #canPush(RexNode, SqlDialect)}. */
+  private static class PushableCallChecker extends RexVisitorImpl<Void> {
+    private final SqlDialect dialect;
+    private boolean pushable = true;
+
+    PushableCallChecker(SqlDialect dialect) {
+      super(true);
+      this.dialect = dialect;
     }
 
     @Override public Void visitCall(RexCall call) {
-      SqlOperator operator = call.getOperator();
-      if (operator instanceof SqlFunction
-          && ((SqlFunction) operator).getFunctionType().isUserDefined()) {
-        containsUsedDefinedFunction |= true;
+      // The operator of a windowed aggregate is governed by
+      // SqlDialect.supportsWindowFunctions in JdbcProjectRule; its operands
+      // and window are still checked.
+      if (pushable && !(call instanceof RexOver) && !canPushCall(call)) {
+        pushable = false;
       }
       return super.visitCall(call);
     }
 
-  }
+    private boolean canPushCall(RexCall call) {
+      final SqlOperator operator = call.getOperator();
+      if (operator instanceof SqlFunction
+          && ((SqlFunction) operator).getFunctionType().isUserDefined()) {
+        return false;
+      }
+      final List<RelDataType> operandTypes =
+          RexUtil.types(call.getOperands());
+      return dialect.supportsFunction(operator, call.getType(), operandTypes)
+          && canPushTextComparison(call);
+    }
 
+    /** Returns whether a call, if it compares character values, compares
+     * them in a way the dialect's collation answers as Calcite does. */
+    private boolean canPushTextComparison(RexCall call) {
+      final SqlDialect.TextComparisonPushdown level =
+          dialect.getTextComparisonPushdown();
+      if (level == SqlDialect.TextComparisonPushdown.ALL
+          || !hasCharacterOperand(call)) {
+        return true;
+      }
+      switch (call.getKind()) {
+      case EQUALS:
+      case NOT_EQUALS:
+      case IS_DISTINCT_FROM:
+      case IS_NOT_DISTINCT_FROM:
+      case IN:
+      case NOT_IN:
+      case LIKE:
+      case SIMILAR:
+        return level == SqlDialect.TextComparisonPushdown.EQUALITY;
+      case SEARCH:
+        final Sarg<?> sarg =
+            requireNonNull(((RexLiteral) call.getOperands().get(1))
+                .getValueAs(Sarg.class), "sarg");
+        return level == SqlDialect.TextComparisonPushdown.EQUALITY
+            && (sarg.isPoints() || sarg.isComplementedPoints());
+      case LESS_THAN:
+      case LESS_THAN_OR_EQUAL:
+      case GREATER_THAN:
+      case GREATER_THAN_OR_EQUAL:
+      case BETWEEN:
+        return false;
+      default:
+        return true;
+      }
+    }
+
+    private static boolean hasCharacterOperand(RexCall call) {
+      for (RexNode operand : call.getOperands()) {
+        if (SqlTypeUtil.inCharFamily(operand.getType())) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
 }

@@ -222,4 +222,12 @@ public class OracleSqlDialect extends SqlDialect {
     }
     super.unparseOffsetFetch(writer, offset, fetch);
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Oracle's default NLS_COMP=BINARY equates character values as
+   * Calcite does; NLS_SORT may order them linguistically. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.EQUALITY;
+  }
 }

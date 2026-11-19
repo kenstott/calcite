@@ -314,4 +314,11 @@ public class PrestoSqlDialect extends SqlDialect {
         new SqlBasicCall(new SqlArrayValueConstructor(), keys, pos),
         new SqlBasicCall(new SqlArrayValueConstructor(), values, pos)), pos);
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Presto and Trino compare VARCHAR values by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

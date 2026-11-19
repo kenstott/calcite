@@ -326,4 +326,13 @@ public class PostgresqlSqlDialect extends SqlDialect {
       }
     }
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>PostgreSQL's default collations are deterministic, so they equate
+   * character values as Calcite does, but a locale collation (en_US.UTF-8, for
+   * example) orders them differently. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.EQUALITY;
+  }
 }

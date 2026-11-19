@@ -62,4 +62,12 @@ public class VerticaSqlDialect extends SqlDialect {
       @Nullable SqlNode fetch) {
     unparseFetchUsingLimit(writer, offset, fetch);
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Vertica's default locale, en_US@collation=binary, compares by code
+   * point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

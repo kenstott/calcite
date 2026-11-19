@@ -256,4 +256,10 @@ public class FireboltSqlDialect extends SqlDialect {
     }
   }
 
+  /** {@inheritDoc}
+   *
+   * <p>Firebolt compares TEXT values by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

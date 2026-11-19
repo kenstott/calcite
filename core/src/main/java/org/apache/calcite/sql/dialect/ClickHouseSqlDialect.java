@@ -392,4 +392,12 @@ public class ClickHouseSqlDialect extends SqlDialect {
     call.operand(0).unparse(writer, 0, 0);
     writer.endList(frame);
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>ClickHouse compares String values byte by byte, which for UTF-8
+   * is code point order. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

@@ -114,6 +114,7 @@ public class SqlDialectFactoryImpl implements SqlDialectFactory {
     case "PHOENIX":
       return new PhoenixSqlDialect(c);
     case "TRINO":
+      return new TrinoSqlDialect(c);
     case "PRESTO":
     case "AWS.ATHENA":
       return new PrestoSqlDialect(c);

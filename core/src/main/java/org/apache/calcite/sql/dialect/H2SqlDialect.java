@@ -45,4 +45,12 @@ public class H2SqlDialect extends SqlDialect {
   @Override public boolean supportsJoinType(JoinRelType joinType) {
     return joinType != JoinRelType.FULL;
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>H2 compares character values by code point unless a database
+   * collation is set. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

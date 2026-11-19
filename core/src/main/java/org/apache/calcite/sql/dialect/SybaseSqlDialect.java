@@ -22,8 +22,6 @@ import org.apache.calcite.sql.SqlWriter;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import static java.util.Objects.requireNonNull;
-
 /**
  * A <code>SqlDialect</code> implementation for the Sybase database.
  */
@@ -41,8 +39,14 @@ public class SybaseSqlDialect extends SqlDialect {
   @Override public void unparseOffsetFetch(SqlWriter writer, @Nullable SqlNode offset,
       @Nullable SqlNode fetch) {
     writer.keyword("rows limit");
-    requireNonNull(fetch, "fetch");
-    fetch.unparse(writer, -1, -1);
+    if (fetch != null) {
+      fetch.unparse(writer, -1, -1);
+    } else {
+      // The ROWS LIMIT clause takes its count before OFFSET; an OFFSET with
+      // no FETCH asks for every remaining row, so the count is the largest
+      // row count the server accepts (REQ-2256).
+      writer.literal(Integer.toString(Integer.MAX_VALUE));
+    }
 
     if (offset != null) {
       writer.keyword("offset");

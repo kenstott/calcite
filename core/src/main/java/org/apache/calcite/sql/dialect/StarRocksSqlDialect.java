@@ -240,4 +240,11 @@ public class StarRocksSqlDialect extends MysqlSqlDialect {
     }
   }
 
+  /** {@inheritDoc}
+   *
+   * <p>StarRocks and Doris compare strings byte by byte, which for UTF-8
+   * is code point order, unlike MySQL. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

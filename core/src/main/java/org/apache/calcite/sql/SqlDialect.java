@@ -141,6 +141,14 @@ public class SqlDialect {
           .add(SqlStdOperatorTable.SQRT)
           .add(SqlStdOperatorTable.SUBSTRING)
           .add(SqlStdOperatorTable.TAN)
+          .add(SqlStdOperatorTable.UPPER)
+          .add(SqlStdOperatorTable.LOWER)
+          .add(SqlStdOperatorTable.EXP)
+          .add(SqlStdOperatorTable.CURRENT_DATE)
+          .add(SqlStdOperatorTable.CURRENT_TIME)
+          .add(SqlStdOperatorTable.CURRENT_TIMESTAMP)
+          .add(SqlStdOperatorTable.LOCALTIME)
+          .add(SqlStdOperatorTable.LOCALTIMESTAMP)
           .build();
 
 
@@ -851,10 +859,41 @@ public class SqlDialect {
     case CHECKED_TIMES:
     case CHECKED_MINUS:
     case CHECKED_DIVIDE:
+    // Standard SQL predicates and operators that the planner introduces or
+    // that RelToSqlConverter renders in standard form (SEARCH is expanded to
+    // comparisons, IN and BETWEEN).
+    case SEARCH:
+    case IS_TRUE:
+    case IS_NOT_TRUE:
+    case IS_FALSE:
+    case IS_NOT_FALSE:
+    case IS_DISTINCT_FROM:
+    case IS_NOT_DISTINCT_FROM:
+    case LIKE:
+    case NULLIF:
+    case MINUS_PREFIX:
+    case PLUS_PREFIX:
+    case EXTRACT:
+    case TRIM:
+    case POSITION:
       return true;
     default:
       return BUILT_IN_OPERATORS_LIST.contains(operator);
     }
+  }
+
+  /** Returns which comparisons of character values (CHAR, VARCHAR) the JDBC
+   * adapter may push to this database.
+   *
+   * <p>Calcite compares character values by code point, with no case or
+   * accent folding. A database whose collation may order or equate them
+   * differently returns a narrower level, and the JDBC adapter evaluates the
+   * comparisons it may not push in Calcite instead.
+   *
+   * <p>The default is {@link TextComparisonPushdown#NONE}: nothing is known
+   * about an unrecognized database's collation. */
+  public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.NONE;
   }
 
   public CalendarPolicy getCalendarPolicy() {
@@ -1414,6 +1453,22 @@ public class SqlDialect {
 
   /** Whether this JDBC driver needs you to pass a Calendar object to methods
    * such as {@link ResultSet#getTimestamp(int, java.util.Calendar)}. */
+  /** Which comparisons of character values the JDBC adapter may push to a
+   * database; see {@link #getTextComparisonPushdown()}. */
+  public enum TextComparisonPushdown {
+    /** The database compares character values as Calcite does: equality,
+     * ranges and LIKE are pushed. */
+    ALL,
+    /** The database equates character values as Calcite does but may order
+     * them differently (a locale collation): equality, inequality, IN and
+     * LIKE are pushed, ranges are not. */
+    EQUALITY,
+    /** The database may equate character values differently (a
+     * case-insensitive collation, for example): no comparison of character
+     * values is pushed. */
+    NONE
+  }
+
   public enum CalendarPolicy {
     NONE,
     NULL,

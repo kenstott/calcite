@@ -93,4 +93,11 @@ public class Db2SqlDialect extends SqlDialect {
         RelDataTypeSystem.DEFAULT);
   }
 
+  /** {@inheritDoc}
+   *
+   * <p>Db2 equates character values as Calcite does but its database
+   * collation may order them differently. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.EQUALITY;
+  }
 }

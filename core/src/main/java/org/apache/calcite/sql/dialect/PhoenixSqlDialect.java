@@ -108,4 +108,12 @@ public class PhoenixSqlDialect extends SqlDialect {
 
     return super.getCastSpec(type);
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Phoenix compares VARCHAR values byte by byte, which for UTF-8 is
+   * code point order. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

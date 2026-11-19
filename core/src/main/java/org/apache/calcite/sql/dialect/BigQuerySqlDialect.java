@@ -367,4 +367,11 @@ public class BigQuerySqlDialect extends SqlDialect {
   private static final SqlSetOperator INTERSECT_DISTINCT =
       new SqlSetOperator("INTERSECT DISTINCT", SqlKind.INTERSECT, 18, false);
 
+  /** {@inheritDoc}
+   *
+   * <p>BigQuery compares STRING values by code point unless a column
+   * collation is set. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

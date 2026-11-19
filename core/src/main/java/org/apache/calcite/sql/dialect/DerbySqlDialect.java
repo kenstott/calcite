@@ -48,4 +48,11 @@ public class DerbySqlDialect extends SqlDialect {
       super.unparseCall(writer, call, leftPrec, rightPrec);
     }
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Derby's default collation, UCS_BASIC, compares by code point. */
+  @Override public TextComparisonPushdown getTextComparisonPushdown() {
+    return TextComparisonPushdown.ALL;
+  }
 }

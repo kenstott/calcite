@@ -5702,6 +5702,16 @@ class RelToSqlConverterTest {
         .withMssql().ok(expected);
   }
 
+  /** OFFSET without FETCH renders for Sybase instead of failing on the
+   * missing fetch (REQ-2256). */
+  @Test void testOffsetWithoutFetchSybase() {
+    final String query = "SELECT * FROM \"employee\" OFFSET 2";
+    final String expectedSybase = "SELECT *\n"
+        + "FROM foodmart.employee ROWS LIMIT 2147483647 OFFSET 2";
+    sql(query)
+        .withSybase().ok(expectedSybase);
+  }
+
   @Test void testFetchOffset() {
     final String query = "SELECT * FROM \"employee\" LIMIT 1 OFFSET 1";
     final String expectedMssql = "SELECT *\n"
