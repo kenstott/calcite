@@ -28,10 +28,11 @@ TAG = "engine-v" + VERSION
 ENGINE = ["askamerica-engine", "govdata", "trino-calcite-base", "trino-calcite", "trino-cloudops",
           "trino-file", "trino-salesforce", "trino-servicenow", "trino-sharepoint", "trino-splunk"]
 SIH = ["sih-govdata", "sih-splunk", "sih-sharepoint", "sih-aperio", "sih-cloudops"]
-# REQ-294: the supported platforms, and the pgwire connectors as of VERSION.
+# REQ-294: the supported platforms, and the pgwire connectors as of VERSION; from 0.129.0
+# (REQ-2254) each platform's runtime takes the place of its pgwire-shared bundle.
 VARIANTS = ["linux-x86_64", "linux-aarch64", "macos-arm64", "windows-x86_64"]
 CONNECTORS = ["file", "sharepoint", "splunk", "salesforce", "servicenow", "jira", "cloudops", "govdata"]
-PGWIRE = ["pgwire-%s-%s" % (c, v) for v in VARIANTS for c in ["shared"] + CONNECTORS]
+PGWIRE = ["pgwire-%s-%s" % (c, v) for v in VARIANTS for c in ["calcite-runtime"] + CONNECTORS]
 
 FAKE_GH = r'''#!/usr/bin/env bash
 d="$FAKE_DIR"
@@ -72,8 +73,15 @@ class CentralBundlesTest(unittest.TestCase):
     def test_engine_set_names_every_connector_on_every_platform(self):
         names = set(self.lister(TAG).stdout.split())
         for variant in VARIANTS:
-            for connector in ["shared"] + CONNECTORS:
+            for connector in ["calcite-runtime"] + CONNECTORS:
                 self.assertIn(bundle("pgwire-%s-%s" % (connector, variant)), names)
+            self.assertNotIn(bundle("pgwire-shared-%s" % variant), names)
+
+    def test_engine_set_before_the_packs_names_the_shared_bundles(self):
+        names = set(self.lister("engine-v0.128.7").stdout.split())
+        for variant in VARIANTS:
+            for connector in ["shared"] + CONNECTORS:
+                self.assertIn(bundle("pgwire-%s-%s" % (connector, variant), "0.128.7"), names)
 
     def test_engine_set_before_the_pgwire_central_bundles(self):
         r = self.lister("engine-v0.127.1")
