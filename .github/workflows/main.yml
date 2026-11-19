@@ -621,7 +621,9 @@ jobs:
       working-directory: ./druid-dataset
       run: ./index.sh 30s
     - name: 'Warm Gradle plugins'
-      uses: ./.github/actions/warm-gradle-plugins
+      uses: ./calcite/.github/actions/warm-gradle-plugins
+      with:
+        working-directory: ./calcite
     - uses: burrunan/gradle-cache-action@v1
       name: 'Run Druid tests'
       timeout-minutes: 10
