@@ -1451,8 +1451,6 @@ public class SqlDialect {
   }
 
 
-  /** Whether this JDBC driver needs you to pass a Calendar object to methods
-   * such as {@link ResultSet#getTimestamp(int, java.util.Calendar)}. */
   /** Which comparisons of character values the JDBC adapter may push to a
    * database; see {@link #getTextComparisonPushdown()}. */
   public enum TextComparisonPushdown {
@@ -1469,6 +1467,8 @@ public class SqlDialect {
     NONE
   }
 
+  /** Whether this JDBC driver needs you to pass a Calendar object to methods
+   * such as {@link ResultSet#getTimestamp(int, java.util.Calendar)}. */
   public enum CalendarPolicy {
     NONE,
     NULL,
