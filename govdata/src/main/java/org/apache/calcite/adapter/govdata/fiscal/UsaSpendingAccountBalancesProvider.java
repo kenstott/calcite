@@ -48,7 +48,9 @@ import java.util.zip.ZipInputStream;
  * {@code submission_types=[account_balances]}). One request returns one reporting period; a
  * period that has not been published yet returns a header-only file and contributes no rows.
  * Amounts are cumulative from the start of the fiscal year through the period. Fiscal years
- * 2017-2019 were reported quarterly (periods 3, 6, 9, 12); later years monthly (2-12).
+ * 2017-2019 were reported quarterly (periods 3, 6, 9, 12); later years monthly (2-12), with
+ * some agencies still reporting quarterly. A period's file also holds each agency's latest
+ * earlier submission; only rows submitted for the requested period itself are kept.
  */
 public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
 
@@ -265,7 +267,10 @@ public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
         if (cells.isEmpty()) {
           continue;
         }
-        out.add(toRow(cells, idx, fy, period, e.getName()));
+        Map<String, Object> row = toRow(cells, idx, fy, period, e.getName());
+        if (row != null) {
+          out.add(row);
+        }
       }
     }
     if (!sawCsv) {
@@ -304,9 +309,15 @@ public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
     }
     int n = Integer.parseInt(m.group(3));
     int reported = "Q".equals(m.group(2)) ? n * 3 : n;
-    if (Integer.parseInt(m.group(1)) != fy || reported != period) {
+    if (Integer.parseInt(m.group(1)) != fy || reported > period) {
       throw new IOException("usaspending_account_balances: requested FY" + fy + " period "
           + period + " but the file holds " + submission);
+    }
+    if (reported < period) {
+      // A period's file carries each agency's latest submission up to that period, so an
+      // agency that reports quarterly appears with its earlier quarter; that row belongs to
+      // the file of its own period.
+      return null;
     }
     row.put("fiscal_period", reported);
     return row;
