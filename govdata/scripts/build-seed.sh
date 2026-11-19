@@ -36,6 +36,9 @@
 #           govdata/src/main/resources/duckdb/seed/govdata-seed.schema
 #   (the .schema listing is written by the same Gradle task; an installed catalog is compared
 #   with the seed by it, so the three are committed together)
+#   govdata/src/main/resources/duckdb/seed/govdata-seed.unreadable is written too: the declared
+#   tables the seed could not read, with the reason. Up to 5% of the declared base tables (and never
+#   a whole schema) may be unreadable; beyond that the build fails. Commit it with the others.
 #
 # Exit codes: 0 seed built, 1/2 error, 10 seed not needed (only with --if-needed or --check).
 #
@@ -141,7 +144,8 @@ echo "Warehouse:             $GOVDATA_PARQUET_DIR"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 
-VERIFY_ARGS=(--no-probes --no-dup --read-all-tables --publish-schema-cache)
+UNREADABLE_LIST="$STAGING/unreadable.tsv"
+VERIFY_ARGS=(--no-probes --no-dup --read-all-tables --publish-schema-cache --unreadable-out "$UNREADABLE_LIST")
 if [[ -n "$SOURCE" ]]; then
     VERIFY_ARGS+=(--source "$SOURCE")
     echo "WARNING: --source given; the resulting seed is PARTIAL (missing schemas cold-start normally)."
@@ -277,6 +281,17 @@ if [[ -n "$SEED_VERSION" ]]; then
     GRADLE_ARGS+=("-PseedVersion=$SEED_VERSION")
 fi
 (cd "$REPO_ROOT" && ./gradlew "${GRADLE_ARGS[@]}")
+
+# The declared base tables this seed could not read (never materialized, read as no columns, or
+# other) are recorded beside the seed, one "schema.table<TAB>reason" per line, and echoed here. The
+# file is written even when empty so a later seed never inherits a stale list.
+SEED_DIR="$GOVDATA_HOME/src/main/resources/duckdb/seed"
+if [[ ! -f "$UNREADABLE_LIST" ]]; then
+    echo "ERROR: generation did not write the unreadable-table list $UNREADABLE_LIST" >&2
+    exit 1
+fi
+cp "$UNREADABLE_LIST" "$SEED_DIR/govdata-seed.unreadable"
+echo "=== build-seed: $(wc -l < "$UNREADABLE_LIST") declared tables NOT in this seed (kept out of search until a later seed); each is listed above as UNREADABLE ==="
 
 if [[ "$KEEP" == false ]]; then
     rm -rf "$STAGING"

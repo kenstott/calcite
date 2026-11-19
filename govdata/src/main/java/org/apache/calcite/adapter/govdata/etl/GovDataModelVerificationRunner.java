@@ -15,6 +15,9 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
@@ -130,6 +133,8 @@ public final class GovDataModelVerificationRunner {
     // Read every declared base table's columns, so the schema cache holds all of them (seed
     // generation); a table that cannot be read fails the run.
     boolean readAllTables = false;
+    // Where the declared base tables that could not be read are written (seed generation).
+    String unreadableOut = null;
   }
 
   /** A table/view defined in a schema YAML, with its category and (for views) dependencies. */
@@ -390,7 +395,7 @@ public final class GovDataModelVerificationRunner {
       int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()
           || !globbing.isEmpty()) ? 1 : 0;
 
-      if (cfg.readAllTables && !readAllDeclaredTables(conn)) {
+      if (cfg.readAllTables && !readAllDeclaredTables(conn, cfg.unreadableOut)) {
         exit = 1;
       }
 
@@ -429,56 +434,115 @@ public final class GovDataModelVerificationRunner {
   }
 
   /**
+   * Largest share of the declared base tables that may be unreadable for a seed to still be
+   * published. Above it the run fails: that many unreadable tables means the warehouse or the
+   * connection is broken, not that a few tables have no data yet.
+   */
+  static final double MAX_UNREADABLE_FRACTION = 0.05;
+
+  /**
    * Reads the columns of every base table the schema YAMLs declare, which is what puts a table's
    * schema into the Iceberg schema cache. The mount only reads the tables something resolves, so
-   * without this a cache created from scratch holds a fraction of them. A table that cannot be
-   * read is listed and fails the run.
+   * without this a cache created from scratch holds a fraction of them.
    *
-   * @return true when every declared base table was read
+   * <p>A table that cannot be read is listed by name and reason, and written to
+   * {@code unreadableOut} when given. The run still passes while the unreadable set is within
+   * {@link #MAX_UNREADABLE_FRACTION} of the declared base tables and leaves no schema entirely
+   * unreadable; the seed then carries the readable tables and the listed ones stay out of it.
+   * A table that was read but carries no row count still fails the run.
+   *
+   * @return true when the run may proceed to publish the seed
    */
-  private static boolean readAllDeclaredTables(Connection conn) throws Exception {
+  private static boolean readAllDeclaredTables(Connection conn, String unreadableOut)
+      throws Exception {
     Map<String, Defined> declared = classifyDefined(new LinkedHashSet<String>(SCHEMA_YAML.keySet()));
     DatabaseMetaData md = conn.getMetaData();
-    List<String> failed = new ArrayList<String>();
-    List<String> baseTables = new ArrayList<String>();
-    int read = 0;
+    Map<String, String> unreadable = new LinkedHashMap<String, String>();
+    Map<String, Integer> perSchema = new LinkedHashMap<String, Integer>();
+    Map<String, Integer> perSchemaUnreadable = new LinkedHashMap<String, Integer>();
+    List<String> readTables = new ArrayList<String>();
+    int baseCount = 0;
     for (Defined d : declared.values()) {
       if (!BASE.equals(d.category)) {
         continue;
       }
-      baseTables.add(d.schema + "/" + d.table);
+      baseCount++;
+      increment(perSchema, d.schema);
       int columns = 0;
+      String name = d.schema + "." + d.table;
       try (ResultSet rs = md.getColumns(null, d.schema, d.table, "%")) {
         while (rs.next()) {
           columns++;
         }
       } catch (SQLException e) {
-        failed.add(d.schema + "." + d.table + ": " + e.getMessage());
+        unreadable.put(name, "other: " + e.getMessage());
+        increment(perSchemaUnreadable, d.schema);
         continue;
       }
       if (columns == 0) {
-        failed.add(d.schema + "." + d.table + ": no columns");
+        unreadable.put(name, "read as no columns");
+        increment(perSchemaUnreadable, d.schema);
       } else {
-        read++;
+        readTables.add(d.schema + "/" + d.table);
       }
     }
-    System.out.println("  read-all-tables      : " + read + " declared base tables read, "
-        + failed.size() + " failed; schema cache holds "
+    int bound = (int) Math.floor(baseCount * MAX_UNREADABLE_FRACTION);
+    System.out.println("  read-all-tables      : " + readTables.size() + " declared base tables read, "
+        + unreadable.size() + " unreadable (bound " + bound + " = "
+        + (int) (MAX_UNREADABLE_FRACTION * 100) + "% of " + baseCount + "); schema cache holds "
         + org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.size() + " tables");
-    for (String f : failed) {
-      System.out.println("    FAILED " + f);
+    for (Map.Entry<String, String> e : unreadable.entrySet()) {
+      System.out.println("    UNREADABLE " + e.getKey() + ": " + e.getValue());
     }
-    // Every declared table must also carry its row count (snapshot-summary total-records): a
-    // runtime that finds none has to ask the object store, which the shipped cache exists to
-    // prevent. No silent skips.
+    if (unreadableOut != null) {
+      StringBuilder sb = new StringBuilder();
+      for (Map.Entry<String, String> e : unreadable.entrySet()) {
+        sb.append(e.getKey()).append('\t').append(e.getValue()).append('\n');
+      }
+      Files.write(Paths.get(unreadableOut), sb.toString().getBytes(StandardCharsets.UTF_8));
+    }
+    List<String> breaches =
+        unreadableBreaches(baseCount, unreadable.size(), perSchema, perSchemaUnreadable);
+    for (String b : breaches) {
+      System.out.println("    FAILED " + b);
+    }
+    boolean ok = breaches.isEmpty();
+    // Every readable declared table must also carry its row count (snapshot-summary
+    // total-records): a runtime that finds none has to ask the object store, which the shipped
+    // cache exists to prevent. No silent skips.
     List<String> incomplete =
-        org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.incompleteTables(baseTables);
-    System.out.println("  schema-cache stats   : " + (baseTables.size() - incomplete.size()) + " of "
-        + baseTables.size() + " declared base tables carry a row count");
+        org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.incompleteTables(readTables);
+    System.out.println("  schema-cache stats   : " + (readTables.size() - incomplete.size()) + " of "
+        + readTables.size() + " readable base tables carry a row count");
     for (String f : incomplete) {
       System.out.println("    INCOMPLETE " + f);
     }
-    return failed.isEmpty() && incomplete.isEmpty();
+    return ok && incomplete.isEmpty();
+  }
+
+  /**
+   * Why an unreadable set is too large to publish a seed over: more than
+   * {@link #MAX_UNREADABLE_FRACTION} of the declared base tables, or every declared base table of
+   * one schema. Empty when the seed may be published.
+   */
+  static List<String> unreadableBreaches(int baseCount, int unreadableCount,
+      Map<String, Integer> perSchema, Map<String, Integer> perSchemaUnreadable) {
+    List<String> breaches = new ArrayList<String>();
+    int bound = (int) Math.floor(baseCount * MAX_UNREADABLE_FRACTION);
+    if (unreadableCount > bound) {
+      breaches.add("unreadable set " + unreadableCount + " exceeds the bound " + bound);
+    }
+    for (Map.Entry<String, Integer> e : perSchemaUnreadable.entrySet()) {
+      if (e.getValue().equals(perSchema.get(e.getKey()))) {
+        breaches.add("every declared base table of schema " + e.getKey() + " is unreadable");
+      }
+    }
+    return breaches;
+  }
+
+  private static void increment(Map<String, Integer> counts, String key) {
+    Integer n = counts.get(key);
+    counts.put(key, n == null ? 1 : n + 1);
   }
 
   private static List<TableResult> probeTables(Connection conn, Config cfg) throws Exception {
@@ -1069,6 +1133,8 @@ public final class GovDataModelVerificationRunner {
         cfg.publishSchemaCache = true;
       } else if ("--read-all-tables".equals(a)) {
         cfg.readAllTables = true;
+      } else if ("--unreadable-out".equals(a)) {
+        cfg.unreadableOut = args[++i];
       } else if ("--dup-threshold".equals(a)) {
         cfg.dupThreshold = Integer.parseInt(args[++i]);
       } else if ("--expected".equals(a)) {
