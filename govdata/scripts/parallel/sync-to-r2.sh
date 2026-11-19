@@ -65,21 +65,57 @@ load_env
 # instance's (newer) target version. A non-blocking lock makes that race impossible
 # instead of relying on operators to never run two copies.
 _LOCK_FILE="${HOME}/.r2-sync-state/.sync-to-r2.lock"
+_LOCK_OWNER_FILE="${_LOCK_FILE}.owner"
+# Exit status of a pass that found the lock held; the caller must not read it as a completed pass.
+LOCK_HELD_RC=75
 mkdir -p "$(dirname "$_LOCK_FILE")"
-exec 200>"$_LOCK_FILE"
-if ! flock -n 200; then
-  log_error "sync-to-r2: another instance already holds the lock — exiting"
-  exit 0
+# The lock is held by a dedicated holder process, never by a descriptor of this shell: a descriptor
+# held here is inherited by every rclone/sed/timeout child, and an orphaned child then keeps the lock
+# after this pass is gone. The holder exits once this pass does (it polls the pass's pid), so its
+# lifetime is the pass's, and its own sleeps run with the lock descriptor closed.
+coproc _LOCK_HOLDER {
+  _owner_pid=$$
+  exec 9>"$_LOCK_FILE"
+  if flock -n 9; then
+    echo "$_owner_pid" > "$_LOCK_OWNER_FILE"
+    echo acquired
+    while kill -0 "$_owner_pid" 2>/dev/null; do sleep 2 9>&-; done
+  else
+    echo held
+  fi
+}
+read -r _lock_state <&"${_LOCK_HOLDER[0]}"
+if [ "$_lock_state" != "acquired" ]; then
+  _holder_pid=$(cat "$_LOCK_OWNER_FILE" 2>/dev/null || true)
+  log_error "sync-to-r2: another instance already holds the lock (pid ${_holder_pid:-unknown}) — skipping this pass"
+  exit "$LOCK_HELD_RC"
 fi
 
+# Stop every descendant of this pass, not only direct children: an rclone listing or copy runs under
+# timeout/sed/pipelines, so a signal to direct children alone leaves the grandchildren running.
+_descendants() {
+  local c
+  for c in $(pgrep -P "$1" 2>/dev/null); do
+    [ "$c" = "${_LOCK_HOLDER_PID:-}" ] && continue
+    _descendants "$c"
+    echo "$c"
+  done
+}
+_stop_descendants() {
+  local pids
+  pids=$(_descendants $$)
+  [ -n "$pids" ] && kill -TERM $pids 2>/dev/null
+  return 0
+}
 # Carry a signal through to the in-flight rclone. Without this the shell exits on TERM
 # while its foreground rclone keeps running as an orphan, so a copy to R2 continues
 # after the scheduler that owns it is gone.
 _term_children() {
-  pkill -TERM -P $$ 2>/dev/null || true
+  _stop_descendants
   exit 143
 }
 trap _term_children TERM INT
+trap _stop_descendants EXIT
 
 # R2 destination is built from the PROD_* creds in .env.prod (no .env.preprod, no rclone.conf).
 configure_r2_remote

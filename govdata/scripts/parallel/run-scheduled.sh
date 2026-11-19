@@ -594,8 +594,12 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
       # Full sync output goes to R2_LOG (pool_status.py tails it). The start/complete/FAILED
       # markers match the watcher's "R2 sync complete|FAILED" detection so it can tell active
       # from idle. errors.log gets only failures — at this cadence per-pass INFO would spam it.
-      if "${BG_IO[@]}" "$SCRIPT_DIR/sync-to-r2.sh" >> "$R2_LOG" 2>&1; then
+      "${BG_IO[@]}" "$SCRIPT_DIR/sync-to-r2.sh" >> "$R2_LOG" 2>&1
+      _sync_rc=$?
+      if [ "$_sync_rc" -eq 0 ]; then
         echo "[$(ts)] R2 sync complete" >> "$R2_LOG"
+      elif [ "$_sync_rc" -eq 75 ]; then
+        echo "[$(ts)] R2 sync skipped: another instance holds the lock" >> "$R2_LOG"
       else
         echo "[$(ts)] R2 sync FAILED (will retry next cycle)" >> "$R2_LOG"
         log_error "WARNING: R2 sync failed (will retry next cycle)"
