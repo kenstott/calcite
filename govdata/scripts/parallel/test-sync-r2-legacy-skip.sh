@@ -29,10 +29,10 @@ ok "sec/year=2020 is excluded"                     '_is_excluded sec year=2020'
 ok "sec/filing_metadata is not excluded"           '! _is_excluded sec filing_metadata'
 ok "vectorized_chunk_codes is not excluded"        '! _is_excluded sec vectorized_chunk_codes'
 ok "type=*_bulk is not excluded by default"        '! _is_excluded econ type=qcew_bulk'
-ok "vectorized_chunk_codes has no exclude flag"    '[[ "$(_exclude_flags sec)" != *vectorized_chunk_codes* ]]'
+ok "vectorized_chunk_codes has no exclude flag"    '_set_exclude_args sec; [[ "${_EXARGS[*]}" != *vectorized_chunk_codes* ]]'
 ok "a new file in vectorized_chunk_codes is listed" 'mkdir -p "$T/sec/vectorized_chunk_codes" && : > "$T/sec/vectorized_chunk_codes/new.parquet" && _lsf --files-only "minio:b/sec/vectorized_chunk_codes" | grep -q new.parquet'
-ok "exclude flags for sec name year=*"             '[[ "$(_exclude_flags sec)" == *"--exclude /year=*/**"* ]]'
-ok "exclude flags for another schema omit year=*"  '[[ "$(_exclude_flags econ)" != *"year=*"* ]]'
+ok "exclude flags for sec name year=*"             '_set_exclude_args sec; [ "${_EXARGS[*]}" = "--exclude /year=*/**" ]'
+ok "exclude flags for another schema omit year=*"  '_set_exclude_args econ; [ "${#_EXARGS[@]}" -eq 0 ]'
 ok "no listing inside an excluded folder"          'grep -q "/year=2020\$" "$STUB_LOG" && false || true'
 
 start=$(date +%s)
@@ -40,4 +40,8 @@ LIST_MAX=2s STUB_HANG=1 _lsf --dirs-only "minio:b/sec" >/dev/null 2>"$T/err"; rc
 el=$(( $(date +%s) - start ))
 ok "a hung listing is cut at its deadline"         '[ "$rc" -ne 0 ] && [ "$el" -lt 10 ]'
 ok "an expired listing is logged"                  'grep -q "listing failed or exceeded" "$T/err"'
+# An override pattern without a leading slash is never expanded against the host filesystem.
+mkdir -p "$T/cwd/tmpfoo" "$T/cwd/other"; ( cd "$T/cwd" &&
+  LEGACY_EXCLUDE='sec/year=* */tmp*' && _set_exclude_args sec && [ "${_EXARGS[*]}" = "--exclude /year=*/** --exclude /tmp*/**" ] && \
+  _is_excluded sec tmpfoo ) && echo "ok   override globs are not pathname-expanded" || { echo "FAIL override globs are not pathname-expanded"; fail=1; }
 exit $fail
