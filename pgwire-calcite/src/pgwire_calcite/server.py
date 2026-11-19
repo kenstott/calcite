@@ -143,6 +143,42 @@ _SET_STMT_RE = re.compile(
     r"^\s*SET\s+(?:SESSION\s+|LOCAL\s+)?([A-Za-z_][A-Za-z0-9_.]*)\s*(?:=|\bTO\b)\s*(.+?)\s*;?\s*$",
     re.IGNORECASE,
 )
+_SET_TIME_ZONE_RE = re.compile(
+    r"^\s*SET\s+(?:SESSION\s+|LOCAL\s+)?TIME\s+ZONE\s+(.+?)\s*;?\s*$", re.IGNORECASE
+)
+#: The settings PostgreSQL reports to the client in ParameterStatus when they change
+#: (GUC_REPORT), by the name it reports them under (REQ-2255).
+_REPORTED_SETTINGS = {
+    "application_name": "application_name",
+    "client_encoding": "client_encoding",
+    "datestyle": "DateStyle",
+    "intervalstyle": "IntervalStyle",
+    "timezone": "TimeZone",
+    "standard_conforming_strings": "standard_conforming_strings",
+    "is_superuser": "is_superuser",
+    "session_authorization": "session_authorization",
+    "default_transaction_read_only": "default_transaction_read_only",
+    "integer_datetimes": "integer_datetimes",
+    "in_hot_standby": "in_hot_standby",
+    "server_encoding": "server_encoding",
+    "server_version": "server_version",
+}
+_UTC_OFFSET_RE = re.compile(r"^[+-]?\d{1,2}(?::\d{2}(?::\d{2})?)?$")
+
+
+def _checked_time_zone(value: str) -> str:
+    """A TimeZone value PostgreSQL accepts: an IANA zone name, UTC, or a numeric UTC offset;
+    anything else is 22023, as PostgreSQL refuses it (REQ-2255). The zone is reported and
+    answered; Calcite keeps computing in its connection's zone (REQ-2255, amended)."""
+    from dateutil import tz
+
+    if _UTC_OFFSET_RE.match(value) or tz.gettz(value) is not None:
+        return value
+    from pgwire_calcite.backend import PgProtocolError
+
+    raise PgProtocolError("22023", f'invalid value for parameter "TimeZone": "{value}"')
+
+
 _RESET_STMT_RE = re.compile(r"^\s*RESET\s+(ALL|[A-Za-z_][A-Za-z0-9_.]*)\s*;?\s*$", re.IGNORECASE)
 _DISCARD_STMT_RE = re.compile(
     r"^\s*DISCARD\s+(ALL|PLANS|SEQUENCES|TEMP|TEMPORARY)\s*;?\s*$", re.IGNORECASE
@@ -612,6 +648,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         self._open_result: CalciteQueryResult | None = None
         #: name -> DECLAREd cursor (REQ-2255, cursors.py); each holds its query's stream.
         self._cursors: dict = {}
+        #: (name, value) of each reported setting this statement changed, sent to the client
+        #: as ParameterStatus ahead of its CommandComplete (REQ-2255).
+        self.parameter_reports: list = []
         #: Weak reference to the connection's BVContext, bound at startup so
         #: DISCARD ALL can drop this session's prepared statements and portals
         #: (PGW-052). Weak on purpose: the context already owns the session, and a
@@ -652,6 +691,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def close(self):
         self._release_open_result()
         self._close_cursors()
+        from pgwire_calcite import advisory_locks
+
+        advisory_locks.LOCKS.end_session(self)
         backend = _current_backend()
         if backend is not None:
             backend.discard_session(self.key)
@@ -746,20 +788,42 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         ctx.portals.clear()
         ctx.result_cache.clear()
 
+    def _report(self, name: str) -> None:
+        """Queue a reported setting's new value for ParameterStatus (REQ-2255)."""
+        reported = _REPORTED_SETTINGS.get(name)
+        if reported is None:
+            return
+        from pgwire_calcite import catalog as _catalog
+
+        _catalog.publish_session_settings(self.settings)
+        self.parameter_reports.append((reported, _catalog.setting_value(name)))
+
     def apply_session_command(self, sql: str) -> None:
         """Apply SET/RESET/DISCARD/DEALLOCATE to this session's own state.
 
         Transaction verbs (BEGIN/COMMIT/...) reach here too and are acknowledged
         without state, matching the existing no-isolation behaviour (PGW-004).
         """
+        m = _SET_TIME_ZONE_RE.match(sql)
+        if m is not None:
+            value = m.group(1).strip().strip("'\"")
+            if value.upper() in ("LOCAL", "DEFAULT"):
+                self.settings.pop("timezone", None)
+            else:
+                self.settings["timezone"] = _checked_time_zone(value)
+            self._report("timezone")
+            return
         m = _SET_STMT_RE.match(sql)
         if m is not None:
             name, value = m.group(1).lower(), m.group(2)
             if name == "statement_timeout":
                 self.statement_timeout_ms = _parse_statement_timeout(value)
                 self.settings[name] = _format_statement_timeout(self.statement_timeout_ms)
+            elif name == "timezone":
+                self.settings[name] = _checked_time_zone(value.strip().strip("'\""))
             else:
                 self.settings[name] = value.strip().strip("'\"")
+            self._report(name)
             return
 
         m = _RESET_STMT_RE.match(sql)
@@ -769,6 +833,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             else:
                 name = m.group(1).lower()
                 self.settings.pop(name, None)
+                self._report(name)
                 if name == "statement_timeout":
                     self.statement_timeout_ms = self._default_statement_timeout_ms()
                     self.settings[name] = _format_statement_timeout(self.statement_timeout_ms)
@@ -824,6 +889,22 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         cursor_result = self._cursor_command(stripped)
         if cursor_result is not None:
             return cursor_result  # type: ignore[return-value]
+
+        from pgwire_calcite import advisory_locks
+
+        advisory = advisory_locks.answer(
+            stripped,
+            self,
+            in_transaction=self._in_transaction,
+            timeout_ms=self.statement_timeout_ms,
+            client_gone=self.client_gone,
+        )
+        if advisory is not None:
+            column, value = advisory
+            kind = "BOOLEAN" if isinstance(value, bool) else "VARCHAR"
+            return CalciteQueryResult(
+                TrinoResult(rows=[(value,)], column_names=[column], column_types=[kind]), stripped
+            )
 
         if _TXN_TAG_RE.match(stripped):
             self._track_transaction(stripped)
@@ -905,6 +986,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             # Already carries its SQLSTATE (57014 cancel/timeout) — send as-is.
             raise
         except Exception as exc:
+            if getattr(exc, "sqlstate", None):
+                # A statement refused by name (a construct with no Calcite form): a refusal,
+                # logged as one by send_error, never as an engine failure (REQ-2255).
+                raise
             log.warning("[PGWIRE] EXCEPTION sql=%r", stripped[:300], exc_info=True)
             raise RuntimeError(str(exc)) from exc
 
@@ -925,6 +1010,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         if not to_savepoint:
             self._in_transaction = False
             self._wrote_in_transaction = False
+            from pgwire_calcite import advisory_locks
+
+            advisory_locks.LOCKS.end_transaction(self)
         if wrote and _TXN_ROLLBACK_RE.match(sql):
             from pgwire_calcite.backend import PgProtocolError
 
@@ -1626,6 +1714,13 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         return super().send_data_rows(query_result, limit)
 
     def send_command_complete(self, tag: str) -> None:  # type: ignore[override]
+        ctx = getattr(self, "_ctx", None)
+        reports = getattr(getattr(ctx, "session", None), "parameter_reports", None)
+        if reports:
+            # A reported setting a statement changed reaches the client before its
+            # CommandComplete, as PostgreSQL sends it (REQ-2255).
+            self.send_parameter_status(dict(reports))
+            reports.clear()
         prefix = getattr(self, "_row_tag_prefix", None)
         self._row_tag_prefix = None
         if prefix is not None and tag.startswith("SELECT "):

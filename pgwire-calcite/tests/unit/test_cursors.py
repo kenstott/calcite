@@ -38,6 +38,7 @@ def client(calcite_backend):
         yield c
     finally:
         c.query("CLOSE ALL")
+        c.sock.close()
         srv.shutdown()
 
 

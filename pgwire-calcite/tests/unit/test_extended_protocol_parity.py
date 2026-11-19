@@ -207,6 +207,7 @@ def test_unknown_portal_and_statement_answer_with_sqlstates_and_the_connection_l
     assert [t for t, _ in _drain(c)] == ["3", "3", "Z"]
 
     assert c.query("SELECT 1")["error"] is None
+    c.sock.close()
 
 
 def test_a_failure_in_a_transaction_is_reported_until_it_ends(server):
@@ -220,6 +221,7 @@ def test_a_failure_in_a_transaction_is_reported_until_it_ends(server):
     assert _drain(c)[-1] == ("Z", b"E")
     c._send(b"Q", b"ROLLBACK\x00")
     assert _drain(c)[-1] == ("Z", b"I")
+    c.sock.close()
 
 
 # --------------------------------------------------------------------------- context
