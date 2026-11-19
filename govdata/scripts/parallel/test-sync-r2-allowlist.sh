@@ -37,6 +37,7 @@ sed -n '/^FULL_SCHEMAS=/,/^# ── Pointer pinning/p' "$S" | grep -v "^# ──
 log_error() { echo "$*" >&2; }
 log_info() { echo "$*" >> "$T/info"; }
 source "$T/helpers.sh"
+STATE_DIR="$T/state"; mkdir -p "$STATE_DIR"; DRY_RUN=false; PROBE_TTL=0   # cache off until the cache section
 
 _classify_schema econ 2>"$T/err"; rc=$?
 ok "classification succeeds"                           '[ "$rc" -eq 0 ]'
@@ -79,4 +80,18 @@ ok "the denylisted folder is not probed"               '! grep -q "/sec/year=202
 LEGACY_EXCLUDE='econ/gdp' _classify_schema econ 2>/dev/null
 ok "override excludes an Iceberg table"                'LEGACY_EXCLUDE="econ/gdp"; _is_excluded econ gdp'
 ok "override covers a table in a full-sync schema"     'LEGACY_EXCLUDE="ref/calendar"; _classify_schema ref 2>/dev/null; _is_excluded ref calendar'
+
+# probe cache: hit, expiry, failure not cached
+PROBE_TTL=3600; rm -f "$STATE_DIR"/.iceberg-*
+: > "$T/calls"; _probe_iceberg econ gdp; _probe_iceberg econ legacy; rc1=$?
+n1=$(wc -l < "$T/calls")
+_probe_iceberg econ gdp; a=$?; _probe_iceberg econ legacy; b=$?
+ok "a cached probe is not repeated"                    '[ "$(wc -l < "$T/calls")" -eq "$n1" ] && [ "$a" -eq 0 ] && [ "$b" -eq 1 ]'
+touch -d '2 hours ago' "$STATE_DIR/.iceberg-econ-gdp"
+_probe_iceberg econ gdp
+ok "an expired entry is probed again"                  '[ "$(wc -l < "$T/calls")" -eq $((n1 + 1)) ]'
+STUB_FAIL="/econ/nohint/metadata" _probe_iceberg econ nohint 2>/dev/null; rc=$?
+ok "a failed probe is rc 75 and is not cached"         '[ "$rc" -eq 75 ] && [ ! -e "$STATE_DIR/.iceberg-econ-nohint" ]'
+_probe_iceberg econ nohint
+ok "the next pass probes the folder again and caches"  '[ "$(cat "$STATE_DIR/.iceberg-econ-nohint")" = yes ]'
 exit $fail
