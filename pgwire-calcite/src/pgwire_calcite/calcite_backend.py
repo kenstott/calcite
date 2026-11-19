@@ -714,10 +714,13 @@ class CalciteBackend:
             # closed (client disconnect / LIMIT-few cancels the query).
             from pgwire_calcite import arrow_bridge
 
-            names, labels, batches = arrow_bridge.stream_query_batches(
+            names, labels, typmods, batches = arrow_bridge.stream_query_batches(
                 conn, lock, calcite_sql, self._batch_size, cancel_scope=scope
             )
-            return QueryResult(column_names=names, column_types=labels, row_batches=batches)
+            return QueryResult(
+                column_names=names, column_types=labels, column_typmods=typmods,
+                row_batches=batches,
+            )
         # Materialized path (direct/programmatic use, tests): typed JDBC row reads.
         scope.acquire(lock)
         try:
@@ -934,17 +937,23 @@ class CalciteBackend:
         names: List[str] = []
         type_names: List[str] = []
         jdbc_types: List[int] = []
+        typmods: List[int] = []
         for i in range(1, ncols + 1):
             names.append(normalize.pg_column_label(str(md.getColumnLabel(i))))
             type_names.append(str(md.getColumnTypeName(i)))
             jdbc_types.append(int(md.getColumnType(i)))
+            typmods.append(
+                normalize.pg_typmod(type_names[-1], str(md.getPrecision(i)), str(md.getScale(i)))
+            )
         duck_labels = [normalize.duckdb_label(t) for t in type_names]
 
         rows: List[tuple] = []
         while bool(rs.next()):
             row = tuple(self._coerce(rs, i, jdbc_types[i - 1]) for i in range(1, ncols + 1))
             rows.append(row)
-        return QueryResult(rows=rows, column_names=names, column_types=duck_labels)
+        return QueryResult(
+            rows=rows, column_names=names, column_types=duck_labels, column_typmods=typmods
+        )
 
     def _coerce(self, rs, i: int, jdbc_type: int):
         """Coerce one JDBC cell to a Python value using the column's java.sql.Types.

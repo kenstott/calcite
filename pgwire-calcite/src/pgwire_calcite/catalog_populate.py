@@ -221,6 +221,9 @@ def build_context_reporting_gaps(conn) -> tuple:
                         data_type=normalize.duckdb_label(type_name),
                         is_nullable=nullable,
                         comment=r.get("REMARKS") or None,
+                        typmod=normalize.pg_typmod(
+                            type_name, r.get("COLUMN_SIZE"), r.get("DECIMAL_DIGITS")
+                        ),
                     )
                 )
             column_types[tm.table_id] = cols
@@ -444,6 +447,7 @@ def serialize_catalog(ctx: CompilationContext, column_types) -> dict:
             "data_type": c.data_type,
             "is_nullable": c.is_nullable,
             "comment": c.comment,
+            "typmod": c.typmod,
         }
 
     return {
@@ -499,7 +503,8 @@ def deserialize_catalog(d: dict):
 # --- table's live Iceberg metadata via JDBC on every cold start) ------------------
 
 #: 2: TableMeta.table_type and CompilationContext.schema_comments, which information_schema reads.
-_CACHE_FORMAT_VERSION = 2
+#: 3: ColumnMeta.typmod (REQ-2255), which pg_attribute and information_schema.columns read.
+_CACHE_FORMAT_VERSION = 3
 
 #: Prefix of the one-line start-up progress markers this server logs, which the AskAmerica
 #: engine tail-parses to tell a caller what a start is doing (``STAGE <name> [key=value ...]``).

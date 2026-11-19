@@ -127,10 +127,10 @@ def test_format_type_matches_postgres_display_names(calcite_state):
         (1043, 54, "character varying(50)"),  # varchar(50): typmod = len + 4
         (1042, 14, "character(10)"),  # bpchar(10)
         (1700, 655366, "numeric(10,2)"),  # numeric(10,2): ((p << 16) | s) + 4
-        (1114, -1, "timestamp"),  # timestamp without precision
-        (1114, 3, "timestamp(3)"),
+        (1114, -1, "timestamp without time zone"),  # timestamp without precision
+        (1114, 3, "timestamp(3) without time zone"),
         (1184, 3, "timestamp(3) with time zone"),  # precision precedes the suffix
-        (1083, 6, "time(6)"),
+        (1083, 6, "time(6) without time zone"),
     ],
 )
 def test_format_type_typmod_rendering(calcite_state, typid, typmod, expected):

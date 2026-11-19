@@ -68,6 +68,8 @@ def rewrite_vector_ops(sql: str) -> str:
 class UnsupportedConstruct(ValueError):
     """A PG construct with no safe Calcite mapping. Rejected, never guessed."""
 
+    sqlstate = "0A000"  # feature_not_supported: a refusal, logged as one (REQ-2255)
+
 
 # EMBED('text') -- a single-quoted SQL string literal argument, '' escaping a literal
 # quote (standard SQL). Anything else (a column reference, a parameter, a function
@@ -206,8 +208,6 @@ def apply(tree: exp.Expression, json_enabled: bool = False) -> exp.Expression:
         if name in ("RegexpLike", "Glob"):
             # sqlglot may parse ~ into a regex node depending on version.
             _reject("POSIX regex match")
-        if isinstance(node, exp.Binary):
-            op = node.args.get("this")
         # Textual operator surfaces (version-dependent): check raw sql tokens.
     # Fallback textual scan for operator tokens sqlglot passes through opaquely.
     sql_text = tree.sql(dialect="postgres")

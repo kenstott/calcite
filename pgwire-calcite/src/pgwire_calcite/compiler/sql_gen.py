@@ -28,6 +28,9 @@ class ColumnMeta:
     data_type: str  # duckdb-style label (see normalize.duckdb_label)
     is_nullable: bool = True
     comment: Optional[str] = None  # column REMARKS -> pg_description / col_description
+    #: PostgreSQL's atttypmod (normalize.pg_typmod): numeric(p,s) and character lengths; -1 when
+    #: the source declared no size, as PostgreSQL itself reports an unconstrained column.
+    typmod: int = -1
 
 
 @dataclass

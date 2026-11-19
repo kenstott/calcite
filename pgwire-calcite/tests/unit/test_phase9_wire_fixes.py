@@ -371,9 +371,13 @@ def test_handle_post_auth_hook_is_overridable_and_runs_after_auth(echo_server, m
     original = CalciteHandler.handle_post_auth
 
     def _spy(self, ctx):
-        original(self, ctx)
+        # Recorded before the base hook sends ReadyForQuery: the client returns from startup
+        # the moment it reads that, so a record made after it raced the assertion below and
+        # lost on a busy runner (CI run 44608502212). The notice still precedes ReadyForQuery,
+        # where PostgreSQL may send one.
         seen.append("post_auth")
         self._send_pg_notice("connected")
+        original(self, ctx)
 
     monkeypatch.setattr(CalciteHandler, "handle_post_auth", _spy)
     host, port, _ = echo_server
