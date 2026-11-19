@@ -198,6 +198,7 @@ tasks.test {
         } else {
             excludeTags("integration")
         }
+        excludeTags("shippedClasspath")
     }
     // Tests spawn the shadow JAR as a subprocess — ensure it's built first
     dependsOn(tasks.shadowJar)
@@ -211,6 +212,28 @@ tasks.test {
         showStandardStreams = true
     }
 }
+
+// Runs the tests tagged "shippedClasspath" on the engine's own runtime classpath: the main
+// output (with the bundled shared resources) and the test classes, with :govdata and :file
+// removed. The ordinary test task has both on its classpath, which hides a resource the
+// shipped jar does not bundle.
+val shippedClasspathTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Tests that must pass with only the engine's own resources on the classpath"
+    val excluded = listOf(project(":govdata"), project(":file")).map { it.layout.buildDirectory.get().asFile.absolutePath }
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = files(sourceSets.test.get().output, sourceSets.main.get().runtimeClasspath).filter { f ->
+        excluded.none { f.absolutePath.startsWith(it) }
+    } + configurations.testRuntimeClasspath.get().filter { f ->
+        f.name.contains("junit") || f.name.contains("opentest4j") || f.name.contains("apiguardian")
+    }
+    useJUnitPlatform { includeTags("shippedClasspath") }
+    workingDir = projectDir
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
+}
+tasks.check { dependsOn(shippedClasspathTest) }
 
 // ─── Per-OS engine jars ────────────────────────────────────────────────────────
 // The shadow jar carries the native libraries of every platform (OpenBLAS for the stats library,
