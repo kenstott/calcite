@@ -107,6 +107,16 @@ column_templates:
       - *partition_type
       - *partition_basin
 
+  partition_element: &partition_element
+    name: element
+    type: VARCHAR
+
+  nclimdiv_partitions: &nclimdiv_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_element
+
   coops_datum_partitions: &coops_datum_partitions
     style: hive
     columnDefinitions:
@@ -2100,6 +2110,104 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
         tableName: noaa_global_temp_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: climate_area_monthly
+    # NCEI replaces each nClimDiv file monthly under a new build-dated name (resolver picks the
+    # current one); release_file is part of the combination identity, so a new build is an
+    # unprocessed combination and replaces its element partition. Not a snapshot table (see
+    # tropical_cyclone_best_track: snapshot + a custom dimension processes one partition only).
+    pattern: "type=nclimdiv/element=*/*.parquet"
+    partitions: *nclimdiv_partitions
+    comment: >
+      NOAA NCEI nClimDiv area-averaged monthly climate series from January 1895: one row per
+      (area, year, month, element) for the 50 states (area_type=state, codes 001-050), the nine
+      NCEI climate regions (area_type=region, 101-109, e.g. 102 East North Central, 105 West
+      North Central), the contiguous-US national series (area_type=national, 110) and the NWS
+      regions, river basins and agricultural belts (area_type=special, 111-465). element is
+      tmpc (average temperature, degrees F), tmax (average maximum), tmin (average minimum) or
+      pcpn (precipitation, inches). Values are area-weighted averages of 5 km gridded station
+      data, the official series behind NCEI Climate at a Glance "warmest/wettest on record"
+      statements; rank a month across years with RANK() OVER (PARTITION BY area_code, element,
+      month ORDER BY value DESC). Months not yet published are absent. Recent values are
+      revised monthly. Station-level data lives in ghcnd_daily and cdo_monthly_summaries.
+      Source: ncei.noaa.gov/pub/data/cirs/climdiv (statewide files), keyless, public domain.
+
+    dimensions:
+      type:
+        - nclimdiv
+      element:
+        type: list
+        values: ["tmpc", "tmax", "tmin", "pcpn"]
+      # custom: the current build-dated file for the element (see NclimdivReleaseDimensionResolver)
+      release_file:
+        type: custom
+
+    columns:
+      - name: element
+        type: string
+        nullable: false
+        comment: "Series: tmpc average temperature (deg F), tmax average maximum temperature (deg F), tmin average minimum temperature (deg F), pcpn precipitation (inches)"
+      - name: area_code
+        type: string
+        nullable: false
+        comment: "nClimDiv 3-digit area code: 001-050 states in alphabetical order (011 Illinois, 023 Missouri), 101-109 NCEI climate regions, 110 contiguous US, 111-465 NWS regions, river basins and crop belts"
+      - name: area_name
+        type: string
+        nullable: false
+        comment: State, region, basin or national series name for area_code
+      - name: area_type
+        type: string
+        nullable: false
+        comment: "state, region (NCEI climate region), national (contiguous 48 states) or special (NWS region, river basin, agricultural belt)"
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year, 1895 onward
+      - name: month
+        type: integer
+        nullable: false
+        comment: Calendar month (1-12)
+      - name: value
+        type: double
+        nullable: false
+        comment: "Area-averaged monthly value: degrees F for the temperature elements, inches for pcpn"
+
+    source:
+      type: http
+      url: "https://www.ncei.noaa.gov/pub/data/cirs/climdiv/{release_file}"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.NclimdivAreaTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.weather.NclimdivReleaseDimensionResolver"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=nclimdiv/element=*/"
+      partition:
+        columns: [type, element]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: climate_area_monthly
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
