@@ -202,7 +202,7 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
     return found;
   }
 
-  private static void download(String url, Map<String, String> headers, Path target)
+  static void download(String url, Map<String, String> headers, Path target)
       throws IOException {
     IOException last = null;
     for (int attempt = 0; attempt <= MAX_FETCH_RETRIES; attempt++) {
@@ -266,7 +266,7 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
   // ---------------------------------------------------------------------------------------
 
   /** Header-aware filter that turns matching sheet rows into output rows. */
-  static final class Collector {
+  static final class Collector implements OewsRowSink {
     private final int year;
     private final List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     private final Set<String> seen = new HashSet<String>();
@@ -283,7 +283,7 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
     }
 
     /** Receives one sheet row; cells are indexed by column, null where empty. */
-    void accept(List<String> cells) {
+    @Override public void accept(List<String> cells) {
       if (columns == null) {
         readHeader(cells);
         return;
@@ -419,7 +419,7 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
   // xlsx (POI SAX)
   // ---------------------------------------------------------------------------------------
 
-  static void readXlsx(File file, final Collector collector) throws IOException {
+  static void readXlsx(File file, final OewsRowSink collector) throws IOException {
     // Sheet XML compresses far below POI's default zip-bomb inflate ratio; the source is a
     // trusted federal publication.
     ZipSecureFile.setMinInflateRatio(0.0);
@@ -445,10 +445,10 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
   }
 
   private static final class RowHandler implements XSSFSheetXMLHandler.SheetContentsHandler {
-    private final Collector collector;
+    private final OewsRowSink collector;
     private List<String> current;
 
-    RowHandler(Collector collector) {
+    RowHandler(OewsRowSink collector) {
       this.collector = collector;
     }
 
@@ -474,7 +474,7 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
   // xls (POI HSSF events)
   // ---------------------------------------------------------------------------------------
 
-  static void readXls(File file, Collector collector) throws IOException {
+  static void readXls(File file, OewsRowSink collector) throws IOException {
     try (POIFSFileSystem fs = new POIFSFileSystem(file, true)) {
       HSSFRequest request = new HSSFRequest();
       request.addListenerForAllRecords(
@@ -484,12 +484,12 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
   }
 
   private static final class XlsListener implements HSSFListener {
-    private final Collector collector;
+    private final OewsRowSink collector;
     private SSTRecord sst;
     private int sheetIndex = -1;
     private List<String> current = new ArrayList<String>();
 
-    XlsListener(Collector collector) {
+    XlsListener(OewsRowSink collector) {
       this.collector = collector;
     }
 

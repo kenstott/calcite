@@ -2961,6 +2961,134 @@ partitionedTables:
         compactionMinFiles: 5
         overwritePartitions: true
 
+  # --- NATIONAL INDUSTRY-BY-OCCUPATION EMPLOYMENT MIX, ALL REFERENCE YEARS ---
+  - name: industry_occupation_employment_history
+    # BLS OEWS publishes each reference year (May of that year) as its own national industry
+    # workbook set at www.bls.gov/oes/special-requests/oesm{YY}in4.zip. The year dimension
+    # iterates publish years with dataLag 1, so {effective_year} is the OEWS reference year and
+    # the partition year; releaseMonth 4 holds the range back until BLS's April release.
+    # Reference years 2012-2013 ship as .xls, 2014 on as .xlsx; OewsIndustryWorkbookTransformer
+    # reads both. industry_occupation_employment (oe.data.1.AllData) only ever carries the
+    # newest year, so it cannot backfill.
+    pattern: "type=industry_occupation_employment_history/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      BLS Occupational Employment and Wage Statistics (OEWS) national employment headcount
+      by industry AND major occupation group, one partition per OEWS reference year (May of
+      that year) from 2012 through the newest published (not seasonally adjusted; OEWS is an
+      annual survey). This is the time-series companion of industry_occupation_employment,
+      which holds only the newest year: use this table for "has the occupation mix of
+      industry X shifted since 2019" questions. Industries are sector, 3-, 4-, 5- and 6-digit
+      NAICS (about 430 per year) crossed with the ~23 major SOC groups (2-digit group +
+      '0000', e.g. '150000' Computer and Mathematical Occupations). Detailed 6-digit SOC
+      occupations are not loaded. Same industry_code/occupation_code encoding as
+      industry_occupation_employment: sector codes follow the BLS flat-file form (11 is
+      '11--12', 31-33 is '31--34', 44-45 is '44--46', 48-49 is '48--50', 99 is '99-100').
+      Not included: the ownership-split industries (state/local/private schools and hospitals,
+      government ownership sectors, private-only cross-industry total) that
+      industry_occupation_employment carries for the newest year only, because the pre-2019
+      workbooks give that ownership as free text; and the cross-industry total. BLS revises
+      the NAICS vintage and SOC occupation structure between reference years (SOC 2010 to SOC
+      2018 at 2019, NAICS 2012/2017/2022 industry changes), so an industry_code or
+      occupation_code may exist in only some years and is NOT remapped: compare a code only
+      across the years that publish it and check the code exists in each. Match
+      industry_occupation_employment for the newest year (same values). One row per
+      (industry_code, occupation_code) per reference year; a cell BLS marks ** (suppressed)
+      has no row, not a zero. An industry BLS publishes at two NAICS levels is one row.
+
+    dimensions:
+      type:
+        - industry_occupation_employment_history
+      year:
+        type: yearRange
+        # OEWS reference year 2012 is published in 2013 (dataLag 1 maps publish year to
+        # reference year), so the first publish year is 2013.
+        start: "${GOVDATA_START_YEAR:2012}"
+        minYear: 2013
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1
+        releaseMonth: 4
+
+    # OewsIndustryWorkbookTransformer emits these columns directly (a StreamingResponseTransformer's
+    # rows are the final row shape), in the same shape industry_occupation_employment has.
+    columns:
+      - name: series
+        type: string
+        nullable: false
+        comment: >
+          BLS OEWS series identifier, 25 characters: OEUN0000000 (national, no area breakdown)
+          + industry_code(6) + occupation_code(6) + datatype_code(2, always 01 here). Unique
+          within a reference year; the same series repeats across years, so the key is
+          (series, year). Decode with industry_code/occupation_code below rather than re-parsing.
+      - name: year
+        type: integer
+        nullable: true
+        comment: OEWS reference year (the May survey reference period, not the publish year)
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: >
+          6-character OEWS industry code: the NAICS code of the industry as published for
+          that reference year (NAICS vintage varies by year), or for a sector the BLS flat-file
+          form with literal '-' (e.g. '51--52' for Sector 51 - Information, '31--34' for
+          Manufacturing). Decode with econ_reference.oe_industries where the code exists.
+      - name: occupation_code
+        type: string
+        nullable: true
+        comment: >
+          6-digit major SOC occupation group code (2-digit group + '0000') as published for
+          that reference year. Decode with econ_reference.oe_occupations.
+      - name: employment
+        type: double
+        nullable: true
+        comment: >
+          Total employment headcount for the occupation group within the industry, national
+          level (BLS OEWS tot_emp / datatype 01).
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: Always empty; the industry workbooks carry no per-cell footnote codes
+
+    source:
+      type: http
+      url: "https://www.bls.gov/oes/special-requests/oesm{year_short}in4.zip"
+      method: GET
+      headers:
+        # www.bls.gov 403s a fake-browser or blank User-Agent and throttles bursts; requires a
+        # self-identifying UA, paced by the transformer (same convention as download.bls.gov)
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      # No rawCache: block - a StreamingResponseTransformer opens its own connection and HttpSource
+      # returns before its rawCache path runs.
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.OewsIndustryWorkbookTransformer"
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=industry_occupation_employment_history/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
   # --- STATE WAGES ---
   - name: state_wages
     pattern: "type=state_wages/frequency=*/year=*/state_wages.parquet"
@@ -11808,6 +11936,19 @@ constraints:
         targetColumns:
           - industry_code
         comment: Links to OEWS industry reference for industry name lookups
+      - columns:
+          - occupation_code
+        targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
+        targetTable: oe_occupations
+        targetColumns:
+          - occupation_code
+        comment: Links to OEWS occupation reference for occupation name lookups
+
+  industry_occupation_employment_history:
+    primaryKey:
+      - series
+      - year
+    foreignKeys:
       - columns:
           - occupation_code
         targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
