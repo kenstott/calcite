@@ -176,19 +176,29 @@ BUFFER=120                                # overlap between slices so a file wri
 STATE_DIR="${HOME}/.r2-sync-state"
 mkdir -p "$STATE_DIR"
 
-# Legacy folders that are not Iceberg tables (no metadata/version-hint.text) and hold millions of small
-# per-accession directories. Listing one runs for an hour or more and saturates MinIO's metadata I/O, so no
-# listing or copy here ever enters them. Space-separated globs matched against "<schema>/<top-level dir>";
-# this is the single place the list lives. Override with GOVDATA_R2_SYNC_EXCLUDE. Only folders proven to be
-# unread legacy listings belong here: */vectorized_chunk_codes is read at query time and must keep syncing.
+# Only folders that are Iceberg tables are synced (see _classify_schema), plus every folder of the schemas in
+# FULL_SCHEMAS. A folder is an Iceberg table when its metadata/ holds at least one *.metadata.json; the
+# version-hint.text pointer is not the test, because tables that carry only metadata.json files exist on MinIO.
+# Schema ref is synced in full: it holds plain parquet folders read at query time (vectorized_chunk_codes).
+FULL_SCHEMAS="${GOVDATA_R2_SYNC_FULL_SCHEMAS:-ref}"
+# Explicit override on top of the allowlist: folders that are never entered even when they look like Iceberg
+# tables, or that live in a FULL_SCHEMAS schema. Space-separated globs matched against "<schema>/<top-level
+# dir>"; this is the single place the list lives. Override with GOVDATA_R2_SYNC_EXCLUDE.
 LEGACY_EXCLUDE="${GOVDATA_R2_SYNC_EXCLUDE:-sec/year=*}"
+# The schema whose non-Iceberg folders _classify_schema last recorded, and those folders' names. Set only
+# after a complete classification, so a failed one leaves nothing half-filtered.
+_SKIP_SCHEMA=""
+_SKIP_DIRS=()
 # Wall-clock cap on one directory listing. A listing that outlives it is logged and treated as empty/failed
 # by the caller's normal path; it never holds the pass.
 LIST_MAX="${GOVDATA_R2_SYNC_LIST_MAX:-120s}"
 
 # _is_excluded <schema> <dir> → 0 when <schema>/<dir> matches LEGACY_EXCLUDE.
 _is_excluded() {
-  local g globs
+  local g globs k
+  if [ "$1" = "$_SKIP_SCHEMA" ]; then
+    for k in ${_SKIP_DIRS[@]+"${_SKIP_DIRS[@]}"}; do [ "$k" = "$2" ] && return 0; done
+  fi
   read -ra globs <<< "$LEGACY_EXCLUDE"
   for g in "${globs[@]}"; do
     # shellcheck disable=SC2254
@@ -202,8 +212,11 @@ _is_excluded() {
 # pattern is never subject to pathname expansion against the host filesystem.
 _EXARGS=()
 _set_exclude_args() {
-  local g gs gd globs
+  local g gs gd globs k
   _EXARGS=()
+  if [ "$1" = "$_SKIP_SCHEMA" ]; then
+    for k in ${_SKIP_DIRS[@]+"${_SKIP_DIRS[@]}"}; do _EXARGS+=(--exclude "/$k/**"); done
+  fi
   read -ra globs <<< "$LEGACY_EXCLUDE"
   for g in "${globs[@]}"; do
     gs=${g%%/*}; gd=${g#*/}
@@ -221,6 +234,54 @@ _lsf() {
     log_error "sync-to-r2: listing failed or exceeded ${LIST_CAP:-$LIST_MAX} (rc=$rc): rclone lsf $*" >&2
     return "$rc"
   fi
+}
+
+# _probe_iceberg <schema> <dir> → 0 when <schema>/<dir>/metadata/ holds a *.metadata.json, 1 when it does not
+# (no such prefix, or no metadata file in it), 75 when the probe failed or timed out. One prefix listing of
+# metadata/, never a listing of the folder itself, so a legacy folder with millions of children costs one probe.
+_probe_iceberg() {
+  local out rc=0
+  out=$(timeout --kill-after=10 "$LIST_MAX" rclone lsf --timeout "$LIST_MAX" --files-only \
+    "${MINIO_REMOTE}:${BUCKETS[0]}/$1/$2/metadata/" 2>/dev/null) || rc=$?
+  if [ "$rc" -eq 3 ]; then return 1; fi   # rclone: directory not found
+  if [ "$rc" -ne 0 ]; then
+    log_error "sync-to-r2: [$1/$2] Iceberg probe failed or exceeded ${LIST_MAX} (rc=$rc)"
+    return 75
+  fi
+  grep -q '\.metadata\.json$' <<< "$out"
+}
+
+# _classify_schema <schema> → records in _SKIP_SCHEMA/_SKIP_DIRS the top-level folders of <schema> that are not
+# Iceberg tables, logs their names once, and returns 0. A schema in FULL_SCHEMAS skips nothing. Returns 75 when
+# a listing or probe failed: the caller holds the schema's sentinel, a failed probe never reads as "not Iceberg".
+# Folders matched by LEGACY_EXCLUDE are not probed; they are excluded either way.
+_classify_schema() {
+  local s=$1 lst d x names="" rc
+  local skip=()
+  _SKIP_SCHEMA=""; _SKIP_DIRS=()
+  for x in ${FULL_SCHEMAS//,/ }; do
+    if [ "$x" = "$s" ]; then
+      log_info "sync-to-r2: [$s] synced in full (GOVDATA_R2_SYNC_FULL_SCHEMAS), no Iceberg check"
+      return 0
+    fi
+  done
+  lst=$(_lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s") || {
+    log_error "sync-to-r2: [$s] directory listing failed — folders not classified"
+    return 75
+  }
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    _is_excluded "$s" "$d" && continue
+    rc=0; _probe_iceberg "$s" "$d" || rc=$?
+    case "$rc" in
+      0) ;;
+      1) skip+=("$d"); names="$names $d" ;;
+      *) return 75 ;;
+    esac
+  done <<< "$(sed 's#/*$##' <<< "$lst")"
+  _SKIP_SCHEMA=$s
+  if [ "${#skip[@]}" -gt 0 ]; then _SKIP_DIRS=("${skip[@]}"); fi
+  log_info "sync-to-r2: [$s] skipping non-Iceberg folders:${names:- (none)}"
 }
 
 # ── Pointer pinning ────────────────────────────────────────────────────────────
@@ -376,7 +437,7 @@ _copy_split_schema() {
       units+=("$d")
     fi
   done <<< "$(sed 's#/*$##' <<< "$lst")"
-  [ -n "$skipped_dirs" ] && log_info "sync-to-r2: [$s] skipping non-Iceberg directories (LEGACY_EXCLUDE):$skipped_dirs"
+  [ -n "$skipped_dirs" ] && log_info "sync-to-r2: [$s] not copying excluded directories:$skipped_dirs"
   units+=("_root")
   mapfile -t units < <(for u in "${units[@]}"; do
     printf '%s\t%s\n' "$(stat -c %Y "$STATE_DIR/.unit-try-$s-$(_ukey "$u")" 2>/dev/null || echo 0)" "$u"
@@ -532,6 +593,12 @@ log_info "sync-to-r2: ${#_schemas[@]} schema(s); slice=${SLICE}s, slice cap=${SL
 _fail=0
 for s in "${_schemas[@]}"; do
   _sf="$STATE_DIR/$s"
+  if ! _classify_schema "$s"; then
+    log_error "sync-to-r2: [$s] Iceberg classification failed — schema skipped this pass, sentinel held"
+    _SKIP_SCHEMA=""; _SKIP_DIRS=()
+    _fail=1
+    continue
+  fi
   _v=""
   [ -f "$_sf" ] && _v=$(cat "$_sf" 2>/dev/null)
   if ! [[ "$_v" =~ ^[0-9]+$ ]]; then

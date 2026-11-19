@@ -12,6 +12,8 @@ case "$1" in
   lsf)
     if [[ " $* " == *" -R "* ]]; then echo "2026-10-01 00:00:00"; exit 0; fi
     last="${@: -1}"
+    # every top-level directory is an Iceberg table: its metadata/ holds a metadata.json
+    if [[ "$last" == */metadata/ ]]; then echo v1.metadata.json; exit 0; fi
     if   [[ "$last" =~ ^[a-z0-9_]+:[A-Za-z0-9._-]+$ ]];              then printf 'bigone/\nfastone/\n'
     elif [[ "$last" =~ ^[a-z0-9_]+:[A-Za-z0-9._-]+/bigone$ ]];       then printf 'ok1/\nok2/\nstuck/\n'
     elif [[ "$last" =~ ^[a-z0-9_]+:[A-Za-z0-9._-]+/bigone/stuck$ ]]; then printf 'a/\nb/\n'
