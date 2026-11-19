@@ -317,6 +317,21 @@ def build_backend(kind: str, model: str | None, jdbc: dict | None = None, calcit
 
 
 def main(argv: list | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    # A runtime starting an adapter pack: `--pack <dir>` comes first (bin/pgwire-calcite-runtime
+    # passes it so); the pack supplies the model, its jars, its Python extras and its flags.
+    if argv[:1] == ["--pack"]:
+        from pgwire_calcite.packs import PackError, prepare
+
+        if len(argv) < 2:
+            print("--pack needs the pack directory", file=sys.stderr)
+            return 2
+        try:
+            argv = prepare(argv[1], list(argv[2:]))
+        except PackError as e:
+            print(str(e), file=sys.stderr)
+            return 2
     parser = argparse.ArgumentParser(prog="pgwire-calcite", description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5433)

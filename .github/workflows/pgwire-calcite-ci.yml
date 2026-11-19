@@ -36,6 +36,24 @@ jobs:
             | tr ':' '\n' | grep -v '^$' | paste -sd: - > pgwire-calcite/calcite-classpath.txt
           echo "classpath entries: $(tr ':' '\n' < pgwire-calcite/calcite-classpath.txt | wc -l)"
 
+      - name: Build the JDBC-adapter pack classpath (runtime/pack live test)
+        run: |
+          # A second adapter for tests/unit/test_runtime_packs_live.py: Calcite's JDBC adapter (in
+          # core) over HSQLDB's SCOTT database, with the server's Arrow bridge like every adapter.
+          # pgwPrintCp writes /tmp/pgw-file-cp.txt for whichever module runs it, so core's copy is
+          # read right after its own run.
+          ./gradlew :core:jar :core:pgwPrintCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
+          cp /tmp/pgw-file-cp.txt /tmp/pgw-core-cp.txt
+          ./gradlew pgwJdbcPackCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
+          { cat /tmp/pgw-core-cp.txt; echo; cat /tmp/pgw-arrow-cp.txt; echo; cat /tmp/pgw-jdbc-cp.txt; echo; \
+            ls "$PWD"/core/build/libs/calcite-core-*.jar | grep -v -E -- '-(tests|sources|javadoc)\.jar$'; } \
+            | tr ':' '\n' | grep -v '^$' | paste -sd: - > pgwire-calcite/jdbc-pack-classpath.txt
+          echo "jdbc pack classpath entries: $(tr ':' '\n' < pgwire-calcite/jdbc-pack-classpath.txt | wc -l)"
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 

@@ -10,7 +10,8 @@
 
 """The pgwire asset names an engine release must carry, one per line (REQ-294).
 
-  pgwire_release_names.py tarballs <version>   every pgwire-<name>-<version>-<variant>.tar.gz
+  pgwire_release_names.py tarballs <version>   every pgwire runtime and pack (before PACKS_SINCE:
+                                               bundle) tarball of the release
   pgwire_release_names.py central <version>    every pgwire Maven Central bundle zip
 
 The adapters come from pgwire-calcite/packaging/adapters.json and the platforms from
@@ -28,6 +29,9 @@ from pathlib import Path
 PACKAGING = Path(__file__).resolve().parents[2] / "pgwire-calcite" / "packaging"
 #: The first release whose pgwire-adapters run lays out and attaches the Maven Central bundles.
 CENTRAL_SINCE = "0.128.0"
+#: The first release that ships one pgwire-calcite runtime per platform and a pack per adapter
+#: (REQ-2254) instead of a self-contained bundle per adapter.
+PACKS_SINCE = "0.129.0"
 
 
 def _key(version: str) -> tuple[int, ...]:
@@ -47,7 +51,15 @@ def variants(version: str) -> list[str]:
 
 
 def tarballs(version: str) -> list[str]:
-    """The pgwire-calcite server and every adapter bundle, for every platform."""
+    """For every platform: the pgwire-calcite runtime and every adapter's pack (before
+    PACKS_SINCE: the pgwire-calcite server and every adapter's self-contained bundle)."""
+    if _key(version) >= _key(PACKS_SINCE):
+        return [
+            name
+            for variant in variants(version)
+            for name in [f"pgwire-calcite-runtime-{version}-{variant}.tar.gz",
+                         *(f"pgwire-{a}-pack-{version}-{variant}.tar.gz" for a in adapters(version))]
+        ]
     return [
         f"pgwire-{name}-{version}-{variant}.tar.gz"
         for name in ["calcite", *adapters(version)]
@@ -56,13 +68,15 @@ def tarballs(version: str) -> list[str]:
 
 
 def central(version: str) -> list[str]:
-    """Per platform: each adapter's Central bundle and the platform's pgwire-shared bundle."""
+    """Per platform: each adapter's Central bundle and the platform's runtime (before
+    PACKS_SINCE: its pgwire-shared bundle)."""
     if _key(version) < _key(CENTRAL_SINCE):
         return []
+    shared = "pgwire-calcite-runtime" if _key(version) >= _key(PACKS_SINCE) else "pgwire-shared"
     return [
         f"{artifact}-{variant}-{version}-central-bundle.zip"
         for variant in variants(version)
-        for artifact in ["pgwire-shared", *(f"pgwire-{name}" for name in adapters(version))]
+        for artifact in [shared, *(f"pgwire-{name}" for name in adapters(version))]
     ]
 
 

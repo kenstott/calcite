@@ -13,3 +13,4 @@ dist/
 *.whl
 classes/
 packaging/pgwire-launcher.jar
+jdbc-pack-classpath.txt

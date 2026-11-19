@@ -11,11 +11,11 @@ This is a **driver/CLI-server tool for technical users**, so the primary deliver
 is package managers + tarballs, which are **not Gatekeeper/SmartScreen quarantined**
 and therefore need **no OS code-signing** (PGW-030/031 revised):
 
-- **macOS / Linux — Homebrew tap:** `brew install kenstott/tap/pgwire-calcite`
-  (formula: `packaging/homebrew/pgwire-calcite.rb`). Brew-installed CLIs are not
+- **macOS / Linux — Homebrew tap:** `brew install kenstott/tap/pgwire-file`
+  (formula: `packaging/homebrew/pgwire-file.rb`). Brew-installed CLIs are not
   Gatekeeper-quarantined — no Apple Developer account / notarization required.
-- **Windows — Scoop bucket:** `scoop install pgwire-calcite`
-  (manifest: `packaging/scoop/pgwire-calcite.json`). Scoop needs no Authenticode
+- **Windows — Scoop bucket:** `scoop install pgwire-file`
+  (manifest: `packaging/scoop/pgwire-file.json`). Scoop needs no Authenticode
   signing and is not SmartScreen-quarantined.
 - **All — per-OS/arch tarball** GitHub release (`packaging/pack.sh`) + a one-line
   `curl | sh` install. Terminal installs aren't quarantined either.
@@ -30,11 +30,13 @@ you don't need those machines:
 
 - **`.github/workflows/pgwire-calcite-ci.yml`** — runs the full test suite (builds
   the Calcite classpath + UDF jar, installs, `pytest`).
-- **`.github/workflows/pgwire-calcite-release.yml`** — builds the Calcite jars once
-  (pure Java, cross-platform), then a **matrix** job per OS/arch stages a
-  standalone CPython (`uv python`, = python-build-standalone), installs the app +
-  deps into a bundled venv (airgap-ready), jlinks a minimal JRE, assembles the
-  bundle, tars + sha256s it, uploads artifacts, and attaches them to the release.
+- **`.github/workflows/pgwire-calcite-release.yml`** — builds every adapter's jars once
+  (pure Java, cross-platform) and keeps the ones they all hold, then a **matrix** job per
+  OS/arch stages a standalone CPython (`uv python`, = python-build-standalone), installs the
+  server into a venv (airgap-ready), jlinks a JRE, and packs the runtime.
+- **`.github/workflows/pgwire-adapters-release.yml`** — calls the runtime build, then builds
+  each adapter's pack against it, starts the file pack from the runtime on every platform, and
+  attaches the runtime and the packs to the release.
 
 The only step still gated on secrets is the **optional** signed DMG/MSI (Apple /
 Windows signing identities) — not needed for the package-manager / `curl|sh`
@@ -46,25 +48,45 @@ delivery above.
 > (`pack.sh`), Homebrew/Scoop manifests, and the **GitHub Actions** that build the
 > per-OS bundles. Needs credentials ONLY for optional signed DMG/MSI.
 
-## Layout of a shipped artifact (per OS/arch variant)
+## Layout: one runtime, one pack per adapter (REQ-2254)
+
+Each engine release ships, per OS/arch, one **runtime** and one **pack** per adapter. The runtime
+holds what every adapter needs; a pack holds what only its adapter needs and names the runtime
+version it requires. Each tarball holds its part of one tree, so extracting a runtime and a pack
+into the same directory installs them (`src/pgwire_calcite/packs.py` documents the layout):
 
 ```
-pgwire-calcite-<os>-<arch>/
-├── jre/                     # bundled JRE (OS-agnostic Java app, PGW-025)
-├── cpython/                 # python-build-standalone, pinned version/ABI (PGW-028)
-├── wheelhouse/              # locked platform wheels for THIS variant (PGW-027)
-├── jars/                    # Calcite deps/ (exploded, not a fat jar — see design note)
-│   └── arrow-jdbc-17.0.0.jar
-├── natives/                 # signed native libs (duckdb, pyarrow, arrow) (PGW-031)
-├── model/                   # Calcite model(s): file / govdata / … presets
-└── bin/pgwire-calcite       # launcher: provisions on first run, then serves
+<root>/
+├── runtimes/<version>/              pgwire-calcite-runtime-<version>-<os>-<arch>.tar.gz
+│   ├── runtime.json                 {"name": "pgwire-calcite-runtime", "version", "variant"}
+│   ├── jre/                         jlinked JRE (every JDK module)
+│   ├── python/ cpython/             python-build-standalone + a venv with pgwire_calcite (PGW-028)
+│   ├── jars/                        the jars every adapter's classpath holds (calcite-core, avatica, ...)
+│   ├── pgwire-launcher.jar          Java entry point (PGW-025)
+│   └── bin/pgwire-calcite-runtime   starts a pack: --pack <pack-dir> [server args]
+└── packs/<adapter>/<version>/       pgwire-<adapter>-pack-<version>-<os>-<arch>.tar.gz
+    ├── pack.json                    {"name", "version", "runtime": "<version>", "variant", "args"}
+    ├── jars/                        the adapter's jars the runtime does not hold
+    ├── model/model.json             the adapter's Calcite model (+ catalog cache, embedder model)
+    ├── site-packages/               optional: Python packages only this adapter uses (govdata)
+    └── bin/pgwire-<adapter>         finds runtimes/<runtime>; refuses to start, naming the
+                                     version, when it is not installed
 ```
 
-Per PGW-030 the preferred form is **per-OS installers (~150 MB each, own variant
-only)** over a universal ~600 MB–1 GB artifact; ~1 GB total is the accepted airgap
-tax. Jars ship **exploded** (a `jars/` dir), not a fat jar — see the fat-jar-vs-dir
-design note (operational: per-jar Calcite pinning, clean native signing, no
-shade/ServiceLoader fragility).
+The classpath is the runtime's `jars/` then the pack's `jars/`
+(`PGWIRE_CALCITE_CLASSPATH_DIRS`); a jar name in both is refused. The Python path is the runtime's
+venv plus the pack's `site-packages/`. Each source still runs in its own server process. A
+Python-only change ships as a new runtime; the packs are unchanged.
+
+`runtime_packs.py` lays both out (`common-jars`, `pack-jars`, `runtime`, `pack`, `pack-extras`);
+`pgwire-calcite-release.yml` builds the runtime and `pgwire-adapters-release.yml` calls it and builds
+the packs against it. `build-bundle.sh <adapter> <variant> <out-dir>` builds the same runtime and
+one pack from a checkout. The Homebrew formula (`homebrew/pgwire-file.rb`) and Scoop manifest
+(`scoop/pgwire-file.json`) install a runtime plus the file pack; another adapter's is the same with
+its pack's name.
+
+Jars ship **exploded** (a `jars/` dir), not a fat jar (operational: per-jar Calcite pinning, clean
+native signing, no shade/ServiceLoader fragility).
 
 ## Build steps
 

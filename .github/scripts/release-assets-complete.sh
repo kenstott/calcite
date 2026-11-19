@@ -44,12 +44,13 @@ plugins=(calcite cloudops file salesforce sharepoint splunk)
 for plugin in "${plugins[@]}"; do
   required+=("trino-${plugin}-plugin.zip")
 done
-# The pg-wire server bundles the engine and Provisa download and run, each with its checksum: the
-# pgwire-calcite server and every adapter in packaging/adapters.json, for every platform in
-# packaging/platforms.json (an entry from the release its "since" names on); and, from the release
-# that first builds them, the signed Maven Central bundles of every adapter and platform with their
-# pgwire-shared-<platform> bundles (REQ-294), each with its sha256. pgwire_release_names.py names
-# them, as it does for central-bundles.sh.
+# The pg-wire servers the engine and Provisa download and run, each with its checksum: the
+# pgwire-calcite runtime and every adapter's pack in packaging/adapters.json (before the release
+# that first ships packs: the pgwire-calcite server and every adapter's bundle), for every platform
+# in packaging/platforms.json (an entry from the release its "since" names on); and, from the
+# release that first builds them, the signed Maven Central bundles of every adapter and platform
+# with each platform's runtime (before packs: pgwire-shared-<platform>) bundle (REQ-294), each with
+# its sha256. pgwire_release_names.py names them, as it does for central-bundles.sh.
 names="$(dirname "$0")/pgwire_release_names.py"
 tarballs="$(python3 "$names" tarballs "$version")"
 central="$(python3 "$names" central "$version")"

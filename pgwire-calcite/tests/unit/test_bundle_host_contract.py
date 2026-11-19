@@ -17,8 +17,7 @@ import pytest
 
 from pgwire_calcite import calcite_backend, catalog_populate, classpath
 
-
-# --- classpath read from the jars directory ---------------------------------------------
+# --- classpath read from the jar directories -------------------------------------------
 
 
 def test_classpath_dir_lists_every_jar_sorted(tmp_path, monkeypatch):
@@ -27,8 +26,8 @@ def test_classpath_dir_lists_every_jar_sorted(tmp_path, monkeypatch):
     for name in ("b.jar", "a.jar", "notes.txt"):
         (jars / name).write_bytes(b"")
     monkeypatch.delenv("PGWIRE_CALCITE_CLASSPATH", raising=False)
-    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIR", str(jars))
-    monkeypatch.setattr(classpath, "_vendored_jars", lambda: [])
+    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIRS", str(jars))
+    monkeypatch.setattr(classpath, "_vendored_jars", list)
 
     assert classpath.resolve_classpath() == [str(jars / "a.jar"), str(jars / "b.jar")]
     assert sorted(os.listdir(jars)) == ["a.jar", "b.jar", "notes.txt"], "nothing was written"
@@ -36,16 +35,43 @@ def test_classpath_dir_lists_every_jar_sorted(tmp_path, monkeypatch):
 
 def test_classpath_dir_that_is_missing_is_an_error_by_name(tmp_path, monkeypatch):
     monkeypatch.delenv("PGWIRE_CALCITE_CLASSPATH", raising=False)
-    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIR", str(tmp_path / "absent"))
-    with pytest.raises(classpath.ClasspathError, match="PGWIRE_CALCITE_CLASSPATH_DIR"):
+    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIRS", str(tmp_path / "absent"))
+    with pytest.raises(classpath.ClasspathError, match="PGWIRE_CALCITE_CLASSPATH_DIRS"):
         classpath.resolve_classpath()
 
 
 def test_classpath_dir_without_jars_is_an_error(tmp_path, monkeypatch):
     monkeypatch.delenv("PGWIRE_CALCITE_CLASSPATH", raising=False)
-    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIR", str(tmp_path))
-    monkeypatch.setattr(classpath, "_vendored_jars", lambda: [])
+    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIRS", str(tmp_path))
+    monkeypatch.setattr(classpath, "_vendored_jars", list)
     with pytest.raises(classpath.ClasspathError, match="empty"):
+        classpath.resolve_classpath()
+
+
+def test_classpath_dirs_list_the_runtime_jars_then_the_pack_jars(tmp_path, monkeypatch):
+    runtime, pack = tmp_path / "runtime", tmp_path / "pack"
+    runtime.mkdir()
+    pack.mkdir()
+    (runtime / "calcite-core.jar").write_bytes(b"")
+    (runtime / "avatica.jar").write_bytes(b"")
+    (pack / "calcite-file.jar").write_bytes(b"")
+    monkeypatch.delenv("PGWIRE_CALCITE_CLASSPATH", raising=False)
+    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIRS", os.pathsep.join([str(runtime), str(pack)]))
+    monkeypatch.setattr(classpath, "_vendored_jars", list)
+
+    assert classpath.resolve_classpath() == [
+        str(runtime / "avatica.jar"), str(runtime / "calcite-core.jar"), str(pack / "calcite-file.jar")]
+
+
+def test_one_jar_in_two_classpath_dirs_is_an_error_naming_it(tmp_path, monkeypatch):
+    runtime, pack = tmp_path / "runtime", tmp_path / "pack"
+    runtime.mkdir()
+    pack.mkdir()
+    (runtime / "calcite-core.jar").write_bytes(b"")
+    (pack / "calcite-core.jar").write_bytes(b"")
+    monkeypatch.delenv("PGWIRE_CALCITE_CLASSPATH", raising=False)
+    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIRS", os.pathsep.join([str(runtime), str(pack)]))
+    with pytest.raises(classpath.ClasspathError, match="calcite-core.jar is in both"):
         classpath.resolve_classpath()
 
 

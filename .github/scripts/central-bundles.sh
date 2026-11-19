@@ -38,8 +38,9 @@ esac
 for artifact in "${artifacts[@]}"; do
   echo "${artifact}-${version}-central-bundle.zip"
 done
-# pgwire-adapters-release.yml's maven-bundles job: every pgwire connector and platform, and each
-# platform's pgwire-shared bundle (REQ-294), from the release that first builds them.
+# pgwire-adapters-release.yml's maven-bundles job: every pgwire adapter pack and platform, and each
+# platform's runtime (before packs: pgwire-shared) bundle (REQ-294), from the release that first
+# builds them.
 if [[ "$tag" == engine-v* ]]; then
   python3 "$(dirname "$0")/pgwire_release_names.py" central "$version"
 fi

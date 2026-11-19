@@ -40,3 +40,20 @@ rootProject {
     }
   }
 }
+
+// A second adapter for the runtime/pack live test (tests/unit/test_runtime_packs_live.py): Calcite's
+// JDBC adapter (in core) over HSQLDB's bundled SCOTT database. Its classpath is core's runtime
+// classpath plus the two HSQLDB jars, so it shares most of its jars with the file adapter and
+// owns the rest. Versions from gradle.properties.
+rootProject {
+  tasks.register("pgwJdbcPackCp") {
+    doLast {
+      def cfg = configurations.detachedConfiguration(
+        dependencies.create("org.hsqldb:hsqldb:" + project.property("hsqldb.version")),
+        dependencies.create("net.hydromatic:scott-data-hsqldb:" + project.property("scott-data-hsqldb.version")))
+      cfg.transitive = false
+      new File("/tmp/pgw-jdbc-cp.txt").text = cfg.asPath
+      println "WROTE /tmp/pgw-jdbc-cp.txt (" + cfg.files.size() + " entries)"
+    }
+  }
+}

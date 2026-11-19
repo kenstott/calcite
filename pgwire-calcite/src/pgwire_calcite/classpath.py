@@ -10,8 +10,9 @@
 """Resolve the Calcite JVM runtime classpath for the JPype backend.
 
 Phase 1 loads the classpath from (in order): an explicit list, the
-``PGWIRE_CALCITE_CLASSPATH`` env var (os.pathsep-separated), the directory named by
-``PGWIRE_CALCITE_CLASSPATH_DIR`` (every ``*.jar`` in it), or a file named by
+``PGWIRE_CALCITE_CLASSPATH`` env var (os.pathsep-separated), the jar directories named by
+``PGWIRE_CALCITE_CLASSPATH_DIRS`` (os.pathsep-separated; every ``*.jar`` in each, in order: a
+runtime's jars, then its pack's, see packs.py), or a file named by
 ``PGWIRE_CALCITE_CLASSPATH_FILE`` / the default ``.calcite-classpath.txt`` beside
 the project root. The file is produced from the Calcite build's runtime
 classpath (a Gradle init task; see scripts/print-calcite-classpath.gradle).
@@ -25,9 +26,9 @@ from __future__ import annotations
 
 import os
 import pathlib
-from typing import List, Optional
 
 _DEFAULT_FILE = "calcite-classpath.txt"
+CLASSPATH_DIRS_ENV = "PGWIRE_CALCITE_CLASSPATH_DIRS"
 
 
 def _project_root() -> pathlib.Path:
@@ -39,7 +40,7 @@ class ClasspathError(RuntimeError):
     """Raised when the Calcite classpath cannot be resolved. Never swallowed."""
 
 
-def _vendored_jars() -> List[str]:
+def _vendored_jars() -> list[str]:
     """Jars bundled with pgwire-calcite (e.g. arrow-jdbc, absent from the Calcite
     build). Always prepended so they are present for airgapped installs (Phase 6)."""
     jar_dir = _project_root() / "vendor" / "jars"
@@ -48,7 +49,26 @@ def _vendored_jars() -> List[str]:
     return [str(p) for p in sorted(jar_dir.glob("*.jar"))]
 
 
-def resolve_classpath(explicit: Optional[List[str]] = None) -> List[str]:
+def jars_in_dirs(dirs: list[str]) -> list[str]:
+    """Every ``*.jar`` in each directory, sorted within it, directories in the order given. One jar
+    name in two directories is refused: a pack never carries a jar its runtime already has."""
+    jars: list[str] = []
+    seen: dict = {}
+    for d in dirs:
+        jar_dir = pathlib.Path(d)
+        if not jar_dir.is_dir():
+            raise ClasspathError(f"{CLASSPATH_DIRS_ENV} names {d}, which is not a directory.")
+        for p in sorted(jar_dir.glob("*.jar")):
+            if p.name in seen:
+                raise ClasspathError(
+                    f"{p.name} is in both {seen[p.name]} and {jar_dir}; a jar belongs to one directory."
+                )
+            seen[p.name] = jar_dir
+            jars.append(str(p))
+    return jars
+
+
+def resolve_classpath(explicit: list[str] | None = None) -> list[str]:
     vendored = _vendored_jars()
     if explicit:
         return _validate(vendored + list(explicit), source="explicit argument")
@@ -57,17 +77,12 @@ def resolve_classpath(explicit: Optional[List[str]] = None) -> List[str]:
     if env:
         return _validate(vendored + env.split(os.pathsep), source="PGWIRE_CALCITE_CLASSPATH")
 
-    # A bundle names its jars directory: the classpath is read from the directory at start,
-    # so nothing is written into the install tree (it may be read-only).
-    dir_env = os.environ.get("PGWIRE_CALCITE_CLASSPATH_DIR")
-    if dir_env:
-        jar_dir = pathlib.Path(dir_env)
-        if not jar_dir.is_dir():
-            raise ClasspathError(
-                f"PGWIRE_CALCITE_CLASSPATH_DIR names {dir_env}, which is not a directory."
-            )
-        jars = [str(p) for p in sorted(jar_dir.glob("*.jar"))]
-        return _validate(vendored + jars, source=f"PGWIRE_CALCITE_CLASSPATH_DIR ({dir_env})")
+    # A runtime and its pack name their jar directories: the classpath is read from them at
+    # start, so nothing is written into the install tree (it may be read-only).
+    dirs_env = os.environ.get(CLASSPATH_DIRS_ENV)
+    if dirs_env:
+        return _validate(vendored + jars_in_dirs(dirs_env.split(os.pathsep)),
+                         source=f"{CLASSPATH_DIRS_ENV} ({dirs_env})")
 
     file_env = os.environ.get("PGWIRE_CALCITE_CLASSPATH_FILE")
     candidates = []
@@ -86,14 +101,14 @@ def resolve_classpath(explicit: Optional[List[str]] = None) -> List[str]:
 
     raise ClasspathError(
         "No Calcite classpath resolved. Set PGWIRE_CALCITE_CLASSPATH, or "
-        "PGWIRE_CALCITE_CLASSPATH_DIR, or "
+        f"{CLASSPATH_DIRS_ENV}, or "
         "PGWIRE_CALCITE_CLASSPATH_FILE, or place a classpath file at "
         f"{_project_root() / _DEFAULT_FILE}. Generate one with the Gradle init task "
         "in scripts/print-calcite-classpath.gradle."
     )
 
 
-def _validate(entries: List[str], source: str) -> List[str]:
+def _validate(entries: list[str], source: str) -> list[str]:
     missing = [e for e in entries if e and not pathlib.Path(e).exists()]
     if missing:
         raise ClasspathError(

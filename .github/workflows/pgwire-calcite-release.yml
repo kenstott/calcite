@@ -1,7 +1,9 @@
-# pgwire-calcite release — build airgapped per-OS/arch bundles on GitHub-hosted
-# runners (macOS + Windows + Linux) and attach the tarballs to the release.
-# No signing needed (package-manager / curl|sh delivery is not quarantined); a
-# signed DMG/MSI path can be added later behind repo secrets (PGW-030/031).
+# pgwire-calcite runtime release: one runtime per engine version and platform, shared by every
+# pgwire-<adapter> pack (pgwire-calcite/src/pgwire_calcite/packs.py has the layout). The runtime
+# holds CPython with the pgwire server installed, a jlinked JRE, the Java launcher and the jars
+# every adapter's classpath holds; pgwire-adapters-release.yml calls this workflow and builds each
+# adapter's pack against the runtime it produced. No signing needed for package-manager or
+# curl|sh delivery (PGW-030/031).
 name: pgwire-calcite release
 
 on:
@@ -10,29 +12,153 @@ on:
       version:
         description: "release version (e.g. 0.1.0)"
         required: true
-  release:
-    types: [created]
+      publish:
+        description: "sign, attest and attach the runtimes to engine-v<version> (false: build only)"
+        type: boolean
+        default: false
+      scope:
+        description: "which platforms to build (adapter jars are always every adapter's)"
+        type: choice
+        default: all
+        options:
+          - all
+          - linux-file-govdata
+          - windows-file
+          - linux-aarch64
+  # pgwire-adapters-release.yml builds the runtime this way, in its own run, so its packs are
+  # built against the runtime it attaches. There is no release trigger here: the adapters
+  # release (triggered on release) is the one run that builds a release's runtime.
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      publish:
+        type: boolean
+        required: true
+      scope:
+        type: string
+        required: true
 
-# One run per release at a time (queued, never cancelled). Two runs for one release (a manual
-# dispatch beside the automatic one, engine-v0.110.0; a tag pushed twice, engine-v0.110.1) uploaded
-# the same assets with --clobber concurrently, and each lost an upload to the other's delete
-# (HTTP 404). Queued, the second run re-uploads after the first instead of racing it; cancelling
-# could kill a half-finished upload.
+# Called from pgwire-adapters-release.yml, github.workflow is the caller's, so the caller's
+# concurrency group holds; dispatched alone, one run per version at a time (queued, never
+# cancelled: two runs uploading the same assets with --clobber lose uploads to each other).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.release.tag_name || format('engine-v{0}', inputs.version) }}
+  group: ${{ github.workflow }}-runtime-${{ inputs.version }}
   cancel-in-progress: false
 
-# The attach step updates the engine-v<version> release; on workflow_dispatch the default
-# GITHUB_TOKEN is read-only, so grant it explicitly.
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 env:
   PY_VERSION: "3.12"
+  PUBLISH: ${{ inputs.publish == true }}
 
 jobs:
-  # Calcite jars are pure Java -> build ONCE and share across all OS variants.
-  jars:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      jars: ${{ steps.plan.outputs.jars }}
+      os: ${{ steps.plan.outputs.os }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: pgwire-calcite/packaging
+      - id: plan
+        env:
+          SCOPE: ${{ inputs.scope }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          scope = os.environ["SCOPE"]
+          # Every adapter's jars, whatever the scope: the runtime's jars are those every adapter
+          # holds, so a runtime of one version is the same runtime in every run.
+          adapters = json.load(open("pgwire-calcite/packaging/adapters.json"))
+          platforms = [{"runner": p["runner"], "variant": p["variant"]}
+                       for p in json.load(open("pgwire-calcite/packaging/platforms.json"))]
+          if scope == "linux-file-govdata":
+              platforms = [p for p in platforms if p["variant"] == "linux-x86_64"]
+          elif scope == "windows-file":
+              platforms = [p for p in platforms if p["variant"] == "windows-x86_64"]
+          elif scope == "linux-aarch64":
+              platforms = [p for p in platforms if p["variant"] == "linux-aarch64"]
+          elif scope != "all":
+              raise SystemExit(f"unknown scope: {scope}")
+          print("jars=" + json.dumps([{"name": a["name"], "module": a["module"]} for a in adapters]))
+          print("os=" + json.dumps(platforms))
+          print("version=" + os.environ["VERSION"].removeprefix("engine-v"))
+          PY
+
+  # Per adapter: its module jar and its whole runtime classpath, plus the server's Arrow bridge and
+  # vendor jars. Built once per adapter, shared by every platform; pgwire-adapters-release.yml's
+  # packs read these artifacts from the same run.
+  adapter-jars:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: ${{ fromJSON(needs.plan.outputs.jars) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build adapter jars + resolve runtime classpath
+        run: |
+          ./gradlew :${{ matrix.adapter.module }}:jar :core:jar :linq4j:jar \
+            --no-daemon --console=plain -q
+          ./gradlew :${{ matrix.adapter.module }}:pgwPrintCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
+          ./gradlew pgwArrowCp \
+            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
+            --no-daemon --console=plain -q
+          mkdir -p out/jars
+          # every real .jar on the adapter's runtime classpath
+          for j in $(tr ':' '\n' < /tmp/pgw-file-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          # the pgwire server's own Arrow bridge jars: every adapter needs them, whether or not
+          # it pulls Arrow transitively (only parquet-backed `file` happens to)
+          for j in $(tr ':' '\n' < /tmp/pgw-arrow-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
+          # `unzip -l a.jar b.jar ...` lists only a.jar and treats the rest as member patterns,
+          # so the check has to visit each jar on its own.
+          for c in org.apache.arrow.memory.RootAllocator com.google.flatbuffers.Table org.duckdb.DuckDBDriver; do
+            found=0
+            for j in out/jars/*.jar; do
+              unzip -l "$j" 2>/dev/null | grep -q "$(echo $c | tr . /).class" && { found=1; break; }
+            done
+            [ "$found" = 1 ] || { echo "adapter jars are missing $c"; exit 1; }
+          done
+          # the adapter module's own output is a classes dir on the cp -> use its built jar
+          cp -n ${{ matrix.adapter.module }}/build/libs/*.jar out/jars/ 2>/dev/null || true
+          # The loops above merge two INDEPENDENTLY resolved classpaths; `cp -n` dedupes only by
+          # file name, so two versions of one artifact can both land here (2026-09-16: two
+          # jackson-core jars, a NoSuchMethodError on every pgwire-govdata start). Keep the
+          # highest version of each.
+          python3 pgwire-calcite/scripts/dedupe_jars.py out/jars
+      - name: Vendor jars and the vector/compat UDF jar
+        working-directory: pgwire-calcite
+        run: |
+          bash packaging/build-udf.sh
+          cp vendor/jars/*.jar ../out/jars/
+          # vendor/jars is a third, independent jar source: the same pass again
+          python3 scripts/dedupe_jars.py ../out/jars
+          echo "$(ls ../out/jars | wc -l) jars for ${{ matrix.adapter.name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-jars-${{ matrix.adapter.name }}
+          path: out
+
+  # The runtime's jars: those every adapter's jar set holds (same file name, so same artifact and
+  # version). Each pack then holds only the rest of its adapter's set.
+  runtime-jars:
+    needs: [plan, adapter-jars]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,52 +166,34 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Build module jars + resolve runtime classpath
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: adapter-jars-*
+          path: adapters
+      - name: Common jars + the Java launcher
         run: |
-          ./gradlew :file:jar :core:jar :linq4j:jar --no-daemon --console=plain -q
-          ./gradlew :file:pgwPrintCp \
-            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
-            --no-daemon --console=plain -q
-          ./gradlew pgwArrowCp \
-            --init-script pgwire-calcite/scripts/print-calcite-classpath.gradle \
-            --no-daemon --console=plain -q
-          mkdir -p out/jars
-          # copy every real .jar on the runtime classpath
-          for j in $(tr ':' '\n' < /tmp/pgw-file-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
-          # the pgwire server's Arrow bridge + the DuckDB JDBC driver (compileOnly in file/)
-          for j in $(tr ':' '\n' < /tmp/pgw-arrow-cp.txt | grep '\.jar$'); do cp -n "$j" out/jars/ || true; done
-          # the file module's own output is a classes dir on the cp -> use its built jar
-          cp -n file/build/libs/*.jar out/jars/ 2>/dev/null || true
-          echo "bundled $(ls out/jars | wc -l) jars"
-      - name: Build vector/compat UDF jar + Java launcher
-        working-directory: pgwire-calcite
-        run: |
-          bash packaging/build-udf.sh
-          bash packaging/build-launcher.sh
-      - run: |
-          cp pgwire-calcite/vendor/jars/*.jar out/jars/
+          set -euo pipefail
+          python3 pgwire-calcite/packaging/runtime_packs.py common-jars out/jars adapters/adapter-jars-*/jars
+          (cd pgwire-calcite && bash packaging/build-launcher.sh)
           cp pgwire-calcite/packaging/pgwire-launcher.jar out/
       - uses: actions/upload-artifact@v4
         with:
-          name: calcite-jars
+          name: runtime-jars
           path: out
 
-  bundle:
-    needs: jars
+  runtime:
+    needs: [plan, runtime-jars]
     strategy:
       fail-fast: false
       matrix:
-        # Every supported platform, as in pgwire-calcite/packaging/platforms.json (REQ-294;
-        # .github/scripts/test_release_platforms.py checks the two agree).
-        include:
-          - { os: ubuntu-latest, variant: linux-x86_64 }
-          - { os: ubuntu-24.04-arm, variant: linux-aarch64 }
-          - { os: macos-15, variant: macos-arm64 }
-          - { os: windows-latest, variant: windows-x86_64 }
-    runs-on: ${{ matrix.os }}
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
+    runs-on: ${{ matrix.os.runner }}
     defaults:
       run:
         shell: bash
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      RT: root/runtimes/${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -93,46 +201,42 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: astral-sh/setup-uv@v5
+      - name: Import GPG key
+        if: env.PUBLISH == 'true'
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
       - uses: actions/download-artifact@v4
         with:
-          name: calcite-jars
-          path: bundle    # -> bundle/jars/*.jar and bundle/pgwire-launcher.jar
+          name: runtime-jars
+          path: ${{ env.RT }}    # -> jars/*.jar and pgwire-launcher.jar
 
-      - name: Stage standalone CPython + install deps (airgap-ready venv)
-        working-directory: pgwire-calcite
+      - name: Stage standalone CPython + install the pgwire server (airgap-ready venv)
         run: |
-          # Install the interpreter INTO the bundle (not the runner's global
-          # uv-managed location) so the shipped tarball is self-contained: a
-          # `uv python install` outside the bundle leaves cpython/bin/python an
-          # absolute symlink to the runner's own path, which does not exist on
-          # any other machine.
-          uv python install --install-dir ../bundle/python "${PY_VERSION}"   # python-build-standalone
-          find ../bundle/python -maxdepth 1 -type l -delete   # drop uv's version-alias symlink (points outside the bundle; unused at runtime)
-          rm -rf ../bundle/python/.lock ../bundle/python/.temp ../bundle/python/.gitignore
+          set -euo pipefail
+          RTABS="$PWD/$RT"
+          cd pgwire-calcite
+          # The interpreter goes INTO the runtime, not uv's global location, so the tarball is
+          # self-contained: an interpreter outside it would leave cpython/bin/python an absolute
+          # symlink to this runner's path.
+          uv python install --install-dir "$RTABS/python" "${PY_VERSION}"
+          find "$RTABS/python" -maxdepth 1 -type l -delete   # uv's version alias points outside the runtime
+          rm -rf "$RTABS/python/.lock" "$RTABS/python/.temp" "$RTABS/python/.gitignore"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            # python-build-standalone on Windows ships python.exe at the distribution root
-            # (no bin/ and no python3.12-named binary), and a Windows venv has no symlink to
-            # rewrite: Scripts/python.exe is a redirector, not a link.
-            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name python.exe | head -1)"
+            # python-build-standalone on Windows ships python.exe at the distribution root (no bin/
+            # and no python3.12-named binary); a Windows venv has no symlink to rewrite.
+            PYBIN="$(find "$RTABS/python" -maxdepth 3 -type f -name python.exe | head -1)"
           else
-            PYBIN="$(find ../bundle/python -maxdepth 3 -type f -name "python${PY_VERSION}")"
+            PYBIN="$(find "$RTABS/python" -maxdepth 3 -type f -name "python${PY_VERSION}")"
           fi
-          test -n "$PYBIN" || { echo "bundled interpreter not found under ../bundle/python"; find ../bundle/python -maxdepth 3 | head -40; exit 1; }
-          uv venv --python "$PYBIN" ../bundle/cpython
-          # install the app + deps into the bundled venv (batteries included; no runtime net).
-          # --no-editable: vendor/buenavista is declared `editable = true` in
-          # [tool.uv.sources] (pyproject.toml) for local dev; ship a real install
-          # (an editable install points at this checkout's absolute path, which
-          # will not exist on the machine the bundle is extracted on).
-          uv pip install --python ../bundle/cpython --no-editable ./vendor/buenavista ".[oidc]"
-          # `uv venv` makes cpython/bin/python an ABSOLUTE symlink to $PYBIN.
-          # Rewrite it relative so the whole bundle (cpython/ + python/ together)
-          # is relocatable to any absolute path. pyvenv.cfg's `home` line stays
-          # build-machine-absolute but is harmless: CPython 3.11+'s getpath
-          # derives sys.prefix/home from bin/python's own realpath, not from a
-          # stale pyvenv.cfg home (verified locally by moving a built bundle to
-          # an unrelated path and importing buenavista/pgwire_calcite from it).
-          [[ "$RUNNER_OS" == "Windows" ]] || python3 - "$PYBIN" ../bundle/cpython/bin <<'PY'
+          test -n "$PYBIN" || { echo "runtime interpreter not found under $RTABS/python"; exit 1; }
+          uv venv --python "$PYBIN" "$RTABS/cpython"
+          # --no-editable: vendor/buenavista is an editable source for local development; ship a
+          # real install. Adapter-only Python packages (govdata's EMBED() embedder) go in that
+          # adapter's pack, not here.
+          uv pip install --python "$RTABS/cpython" --no-editable --override packaging/uv-overrides.txt ./vendor/buenavista ".[oidc]"
+          # `uv venv` makes cpython/bin/python an absolute symlink; make it relative so the runtime
+          # can be moved anywhere. CPython 3.11+ derives its prefix from the link's real path, so
+          # pyvenv.cfg's build-machine `home` line is harmless on POSIX.
+          [[ "$RUNNER_OS" == "Windows" ]] || python3 - "$PYBIN" "$RTABS/cpython/bin" <<'PY'
           import os, sys
           target = os.path.realpath(sys.argv[1])
           venv_bin = sys.argv[2]
@@ -143,59 +247,98 @@ jobs:
           print(f"bin/python -> {rel}")
           PY
 
-      - name: Minimal bundled JRE (jlink)
+      - name: Make Windows venv relocatable
+        if: runner.os == 'Windows'
         run: |
-          "$JAVA_HOME/bin/jlink" --add-modules java.base,java.sql,java.naming,java.management,jdk.unsupported \
-            --strip-debug --no-header-files --no-man-pages --compress=2 --output bundle/jre
+          # The venv's launcher stub (Scripts/python.exe) reads pyvenv.cfg's `home` at every
+          # start; uv wrote this runner's path there. bin/pgwire-calcite-runtime.bat replaces the
+          # placeholder with the install's own path at each launch. A pack build that runs this
+          # interpreter restores its own runner's path in its copy first.
+          sed -i 's|^home = .*$|home = __PGWIRE_PYTHON_HOME__|' "$RT/cpython/pyvenv.cfg"
+          cat "$RT/cpython/pyvenv.cfg"
 
-      - name: Stage model + launcher
-        working-directory: pgwire-calcite
+      - name: Bundled JRE (jlink)
         run: |
-          mkdir -p ../bundle/model ../bundle/bin
-          cp tests/fixtures/file-model.json ../bundle/model/ 2>/dev/null || true
-          # Entry is the Java launcher (PGW-025), which starts the bundled CPython.
-          cat > ../bundle/bin/pgwire-calcite <<'SH'
-          #!/usr/bin/env bash
-          HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-          ls "$HERE"/jars/*.jar | paste -sd: - > "$HERE/jars.classpath"
-          export PGWIRE_CALCITE_CLASSPATH_FILE="$HERE/jars.classpath"
-          exec "$HERE/jre/bin/java" \
-            "-Dpgwire.python=$HERE/cpython/bin/python" \
-            -jar "$HERE/pgwire-launcher.jar" "$@"
-          SH
-          chmod +x ../bundle/bin/pgwire-calcite
+          # Every JDK module: this runtime starts the launcher and, through JPype, the Calcite JVM
+          # that loads any adapter's whole classpath; a hand-picked list would track every jar.
+          "$JAVA_HOME/bin/jlink" --add-modules ALL-MODULE-PATH \
+            --strip-debug --no-header-files --no-man-pages --compress=2 --output "$RT/jre"
+
+      - name: Manifest + launcher
+        run: python3 pgwire-calcite/packaging/runtime_packs.py runtime "$RT" "$VERSION" "${{ matrix.os.variant }}"
 
       - name: Pack tarball + sha256
         run: |
-          VER="${{ github.event.inputs.version || github.ref_name }}"
-          name="pgwire-calcite-${VER}-${{ matrix.variant }}"
-          mv bundle "$name"
-          tar -czf "${name}.tar.gz" "$name"
-          # See pgwire-adapters-release.yml's identical line for why >/dev/null is required:
-          # without it, `command -v sha256sum`'s own stdout (the binary's path) leaks into
-          # the piped output ahead of the real hash line on any runner where sha256sum
-          # exists, producing a two-line .sha256 file whose first line is not a hash.
+          set -euo pipefail
+          name="pgwire-calcite-runtime-${VERSION}-${{ matrix.os.variant }}"
+          echo "RUNTIME_NAME=$name" >> "$GITHUB_ENV"
+          # Windows' tar cannot create symlinks without a privilege most users lack: -h stores each
+          # link as the file it points at.
+          deref=""
+          if [ "${{ matrix.os.variant }}" = "windows-x86_64" ]; then deref="-h"; fi
+          tar -czf "${name}.tar.gz" $deref -C root runtimes
+          # `command -v` only for its status, so its own output cannot reach the hash file
           (command -v sha256sum >/dev/null 2>&1 && sha256sum "${name}.tar.gz" || shasum -a 256 "${name}.tar.gz") \
             | awk '{print $1}' > "${name}.tar.gz.sha256"
           echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
 
+      - name: GPG-sign tarball
+        if: env.PUBLISH == 'true'
+        env:
+          GPG_KEY_ID:     ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -n "$GPG_PASSPHRASE" ]; then
+            gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+              --local-user "$GPG_KEY_ID" --armor --detach-sign "${RUNTIME_NAME}.tar.gz"
+          else
+            gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "${RUNTIME_NAME}.tar.gz"
+          fi
+
+      - name: Install grype + syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          # not inherited by a later Git-Bash step on windows-latest otherwise (2026-09-21)
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+
+      - name: Generate SBOM (CycloneDX)
+        run: syft "dir:$RT" -o cyclonedx-json="${RUNTIME_NAME}.sbom.cdx.json"
+
+      - name: CVE scan (gates the release, fails on any Critical finding)
+        run: |
+          grype "dir:$RT" -c .grype.yaml \
+            -o json --file "${RUNTIME_NAME}.cve-report.json" --fail-on critical
+
+      - name: Sign tarball (Sigstore attestation)
+        if: env.PUBLISH == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "${{ env.RUNTIME_NAME }}.tar.gz"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: bundle-${{ matrix.variant }}
+          name: runtime-${{ matrix.os.variant }}
           path: |
-            pgwire-calcite-*-${{ matrix.variant }}.tar.gz
-            pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.tar.gz
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.tar.gz.asc
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.tar.gz.sha256
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.sbom.cdx.json
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.cve-report.json
 
+      # Dispatched alone, this run attaches its runtimes. Called from pgwire-adapters-release.yml
+      # (where github.workflow is the caller's name), the caller attaches them with the packs,
+      # after its smoke jobs pass.
       - name: Attach to release
-        # On a release event use its tag; on workflow_dispatch (used because a release created
-        # by GITHUB_TOKEN emits no release event) target engine-v<version>. Plain upload with
-        # --clobber: softprops/action-gh-release tries to *update* the release object as well,
-        # which a dispatched run's token is not allowed to do.
-        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        if: env.PUBLISH == 'true' && github.workflow == 'pgwire-calcite release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
-          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
-            pgwire-calcite-*-${{ matrix.variant }}.tar.gz \
-            pgwire-calcite-*-${{ matrix.variant }}.tar.gz.sha256
+          set -euo pipefail
+          for tarball in pgwire-calcite-runtime-*.tar.gz; do
+            test -f "${tarball}.asc" || { echo "${tarball} has no signature" >&2; exit 1; }
+          done
+          gh release upload "engine-v${VERSION}" --repo "${{ github.repository }}" --clobber \
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.tar.gz \
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.tar.gz.asc \
+            pgwire-calcite-runtime-*-${{ matrix.os.variant }}.tar.gz.sha256

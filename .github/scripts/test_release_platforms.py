@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Every supported platform, Linux arm64 included, gets every pgwire bundle (REQ-294).
+"""Every supported platform, Linux arm64 included, gets the pgwire runtime and every pack (REQ-294,
+REQ-2254).
 
 Covers: the platform table names macOS arm64, Linux x86_64, Linux arm64 (on GitHub's arm64 runner)
-and Windows x86_64; pgwire-adapters-release.yml's plan builds and smoke-tests every adapter on each,
-and its linux-aarch64 scope builds every adapter on Linux arm64 alone; pgwire-calcite-release.yml
-builds the server on the same platforms; the maven-bundles job lays out each platform's Central
-bundles, signs and attaches only in a publishing run, and never uploads to Maven Central; and
-release-assets-complete.sh, against a stubbed gh, holds a release incomplete until every adapter
-bundle and Central bundle of every platform is attached, without asking an older release for them.
+and Windows x86_64; pgwire-adapters-release.yml's plan builds and smoke-tests every adapter's pack on
+each, and its linux-aarch64 scope builds every pack on Linux arm64 alone; pgwire-calcite-release.yml,
+which the adapters release calls, builds the runtime on the same platforms from every adapter's jars;
+the maven-bundles job lays out each platform's Central bundles, signs and attaches only in a
+publishing run, and never uploads to Maven Central; and release-assets-complete.sh, against a
+stubbed gh, holds a release incomplete until the runtime, every pack and every Central bundle of
+every platform is attached, while an older release is asked for the bundles it shipped.
 
 Run: python3 -m pytest .github/scripts/test_release_platforms.py
 """
@@ -50,11 +52,11 @@ def adapters():
         return [a["name"] for a in json.load(f)]
 
 
-def run_plan(scope):
-    """pgwire-adapters-release.yml's plan step, run as the runner would, for one scope."""
-    step = next(s for s in workflow("pgwire-adapters-release.yml")["jobs"]["plan"]["steps"] if s.get("id") == "plan")
+def run_plan(scope, name="pgwire-adapters-release.yml"):
+    """A release workflow's plan step, run as the runner would, for one scope."""
+    step = next(s for s in workflow(name)["jobs"]["plan"]["steps"] if s.get("id") == "plan")
     with tempfile.NamedTemporaryFile("r", suffix=".out") as out:
-        env = dict(os.environ, SCOPE=scope, GITHUB_OUTPUT=out.name)
+        env = dict(os.environ, SCOPE=scope, VERSION="engine-v" + VERSION, GITHUB_OUTPUT=out.name)
         r = subprocess.run(["bash", "-c", step["run"]], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60, check=False)
         assert r.returncode == 0, r.stdout + r.stderr
         lines = out.read().splitlines()
@@ -72,6 +74,7 @@ class AdaptersReleaseTest(unittest.TestCase):
         self.assertEqual(SUPPORTED, {p["variant"]: p["runner"] for p in json.loads(plan["os"])})
         self.assertEqual(adapters(), [a["name"] for a in json.loads(plan["adapters"])])
         self.assertEqual(sorted(CONNECTORS), sorted(adapters()))
+        self.assertEqual(VERSION, plan["version"])
 
     def test_linux_arm64_is_smoke_tested(self):
         smoke = [p["variant"] for p in json.loads(run_plan("all")["smoke_os"])]
@@ -89,10 +92,27 @@ class AdaptersReleaseTest(unittest.TestCase):
         options = wf[True]["workflow_dispatch"]["inputs"]["scope"]["options"]
         self.assertIn("linux-aarch64", options)
 
-    def test_the_bundle_and_publish_jobs_run_on_the_planned_platforms(self):
+    def test_the_pack_and_publish_jobs_run_on_the_planned_platforms(self):
         jobs = workflow("pgwire-adapters-release.yml")["jobs"]
-        for name in ("bundle", "publish", "maven-bundles"):
+        for name in ("pack", "publish", "publish-runtime", "maven-bundles"):
             self.assertEqual("${{ fromJSON(needs.plan.outputs.os) }}", jobs[name]["strategy"]["matrix"]["os"], name)
+
+    def test_the_packs_are_built_against_the_runtime_this_run_builds(self):
+        jobs = workflow("pgwire-adapters-release.yml")["jobs"]
+        self.assertEqual("./.github/workflows/pgwire-calcite-release.yml", jobs["runtime"]["uses"])
+        self.assertEqual("${{ needs.plan.outputs.version }}", jobs["runtime"]["with"]["version"])
+        self.assertEqual("${{ inputs.scope || 'all' }}", jobs["runtime"]["with"]["scope"])
+        self.assertIn("runtime", jobs["pack"]["needs"])
+        downloads = [s["with"].get("name") for s in jobs["pack"]["steps"]
+                     if s.get("uses", "").startswith("actions/download-artifact")]
+        self.assertEqual(["adapter-jars-${{ matrix.adapter.name }}", "runtime-jars",
+                          "runtime-${{ matrix.os.variant }}"], downloads)
+
+    def test_the_runtime_and_packs_are_published_only_after_the_smoke_jobs(self):
+        jobs = workflow("pgwire-adapters-release.yml")["jobs"]
+        for name in ("publish", "publish-runtime"):
+            self.assertIn("smoke", jobs[name]["needs"])
+            self.assertIn("smoke-windows", jobs[name]["needs"])
 
 
 class MavenBundlesJobTest(unittest.TestCase):
@@ -101,10 +121,12 @@ class MavenBundlesJobTest(unittest.TestCase):
         self.steps = {s.get("name"): s for s in self.job["steps"]}
 
     def test_it_lays_out_each_platform_from_that_platforms_bundles(self):
-        download = next(s for s in self.job["steps"] if s.get("uses", "").startswith("actions/download-artifact"))
-        self.assertEqual("bundle-*-${{ matrix.os.variant }}", download["with"]["pattern"])
-        self.assertIn("bundle", self.job["needs"])
-        layout = self.steps["Split the shared files and lay out the Central bundles"]["run"]
+        downloads = [s["with"] for s in self.job["steps"] if s.get("uses", "").startswith("actions/download-artifact")]
+        self.assertEqual("pack-*-${{ matrix.os.variant }}", downloads[0]["pattern"])
+        self.assertEqual("runtime-${{ matrix.os.variant }}", downloads[1]["name"])
+        self.assertIn("pack", self.job["needs"])
+        self.assertIn("runtime", self.job["needs"])
+        layout = self.steps["Lay out the runtime and the packs as Central bundles"]["run"]
         self.assertIn("python3 .github/scripts/pgwire_maven_bundles.py tarballs bundles", layout)
         self.assertTrue(os.path.isfile(os.path.join(SCRIPTS, "pgwire_maven_bundles.py")))
 
@@ -125,9 +147,21 @@ class MavenBundlesJobTest(unittest.TestCase):
 
 
 class CalciteReleaseTest(unittest.TestCase):
-    def test_the_server_is_built_on_every_platform(self):
-        include = workflow("pgwire-calcite-release.yml")["jobs"]["bundle"]["strategy"]["matrix"]["include"]
-        self.assertEqual(SUPPORTED, {i["variant"]: i["os"] for i in include})
+    def test_the_runtime_is_built_on_every_platform(self):
+        jobs = workflow("pgwire-calcite-release.yml")["jobs"]
+        self.assertEqual("${{ fromJSON(needs.plan.outputs.os) }}", jobs["runtime"]["strategy"]["matrix"]["os"])
+        plan = run_plan("all", "pgwire-calcite-release.yml")
+        self.assertEqual(SUPPORTED, {p["variant"]: p["runner"] for p in json.loads(plan["os"])})
+
+    def test_the_runtime_jars_come_from_every_adapter_whatever_the_scope(self):
+        for scope in ("all", "linux-file-govdata", "windows-file", "linux-aarch64"):
+            plan = run_plan(scope, "pgwire-calcite-release.yml")
+            self.assertEqual(adapters(), [a["name"] for a in json.loads(plan["jars"])], scope)
+
+    def test_the_runtime_is_attached_by_the_adapters_release_when_called_from_it(self):
+        attach = next(s for s in workflow("pgwire-calcite-release.yml")["jobs"]["runtime"]["steps"]
+                      if s.get("name") == "Attach to release")
+        self.assertEqual("env.PUBLISH == 'true' && github.workflow == 'pgwire-calcite release'", attach["if"])
 
 
 FAKE_GH = r'''#!/usr/bin/env bash
@@ -165,14 +199,15 @@ class ReleaseAssetsCompleteTest(unittest.TestCase):
         self.assertEqual(1, r.returncode, r.stdout + r.stderr)
         return [line.removeprefix("missing: ") for line in r.stdout.splitlines() if line.startswith("missing: ")]
 
-    def test_every_platform_has_every_connector_bundle_and_central_bundle(self):
+    def test_every_platform_has_the_runtime_every_pack_and_every_central_bundle(self):
         required = set(self.required("engine-v" + VERSION))
         for variant in SUPPORTED:
-            for name in ["calcite"] + CONNECTORS:
-                tarball = f"pgwire-{name}-{VERSION}-{variant}.tar.gz"
+            for tarball in [f"pgwire-calcite-runtime-{VERSION}-{variant}.tar.gz",
+                            *(f"pgwire-{name}-pack-{VERSION}-{variant}.tar.gz" for name in CONNECTORS)]:
                 self.assertIn(tarball, required)
                 self.assertIn(tarball + ".sha256", required)
-            for artifact in ["shared"] + CONNECTORS:
+            self.assertNotIn(f"pgwire-file-{VERSION}-{variant}.tar.gz", required)
+            for artifact in ["calcite-runtime"] + CONNECTORS:
                 zipped = f"pgwire-{artifact}-{variant}-{VERSION}-central-bundle.zip"
                 self.assertIn(zipped, required)
                 self.assertIn(zipped + ".sha256", required)
@@ -182,8 +217,9 @@ class ReleaseAssetsCompleteTest(unittest.TestCase):
         required = self.required(tag)
         r = self.check(tag, required)
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
-        for gone in (f"pgwire-govdata-{VERSION}-linux-aarch64.tar.gz",
-                     f"pgwire-shared-linux-aarch64-{VERSION}-central-bundle.zip"):
+        for gone in (f"pgwire-govdata-pack-{VERSION}-linux-aarch64.tar.gz",
+                     f"pgwire-calcite-runtime-{VERSION}-linux-aarch64.tar.gz",
+                     f"pgwire-calcite-runtime-linux-aarch64-{VERSION}-central-bundle.zip"):
             r = self.check(tag, [a for a in required if a != gone])
             self.assertEqual(1, r.returncode, r.stdout)
             self.assertIn("missing: " + gone + "\n", r.stdout)
@@ -192,6 +228,12 @@ class ReleaseAssetsCompleteTest(unittest.TestCase):
         required = self.required("engine-v0.127.1")
         self.assertIn("pgwire-file-0.127.1-linux-x86_64.tar.gz", required)
         self.assertFalse([a for a in required if "linux-aarch64" in a or "pgwire-shared" in a], required)
+
+    def test_a_release_before_the_packs_is_asked_for_its_bundles(self):
+        required = self.required("engine-v0.128.7")
+        self.assertIn("pgwire-govdata-0.128.7-linux-aarch64.tar.gz", required)
+        self.assertIn("pgwire-shared-linux-aarch64-0.128.7-central-bundle.zip", required)
+        self.assertFalse([a for a in required if "-pack-" in a or "runtime" in a], required)
 
     def test_an_unreadable_release_is_not_complete(self):
         open(os.path.join(self.d, "view_fails"), "w").close()
