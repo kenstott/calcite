@@ -1,0 +1,2995 @@
+{
+  "date": "2026-11-19",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 18 or 19, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 19 at about 7:57 ET, less the stories earlier pages already used. No transcript from the fixed transcript sources was dated in that window; transcripts from Nov. 12 to 17 were searched only to confirm quotes, and none matched. PBS NewsHour carries Associated Press reporting. Quotes under five words were left out, as were commentators' accounts of what an official said and statements by officials outside the offices in scope. Statements are worded as the outlet reported them; entries beginning \"Reported as\" are the reporter's wording.",
+  "lede": [
+    "Wednesday's political news centered on three threads. House Democrats nominated Hakeem Jeffries for speaker. Homeland Security Secretary Markwayne Mullin testified to a House committee about last week's string of technology outages and about his flight to a college football game the day after the Nov. 13 nationwide ground stop. President Trump traveled through Asia to a three-way meeting with Chinese President Xi Jinping and Russian President Vladimir Putin in Shenzhen.",
+    "Senators also spoke on the final Senate count after the Alaska race was called, on Sen. Bernie Sanders's plan for Medicare for All, and on Sen. John Cornyn's decision to block a Justice Department official nominated to a federal court seat in Texas. Rep. Mike Lawler, who lost his re-election bid, talked about the coming funding deadline and about guardrails for artificial intelligence.",
+    "This page lists 78 statements by 17 officeholders. Thirty-four made a checkable factual claim, or rested a prediction on one, and every one of them was checked. Most of the checks turned on a single official document: the FAA's account of the ground stop, a GAO report on AI platforms, the CMS health spending figures, the Senate's cloture rule. The rest relied on news reports where no primary record was available, and each finding says which applies."
+  ],
+  "stories": [
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/democrat-mary-peltola-wins-alaska-senate-seat-beating-republican-incumbent-dan-sullivan",
+      "headline": "Democrat Mary Peltola wins Alaska Senate seat, beating Republican incumbent Dan Sullivan",
+      "published": "2026-11-18T09:25-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-live-dhs-secretary-mullin-testifies-on-worldwide-threats-amid-tech-outages-iran-warnings",
+      "headline": "WATCH: Mullin defends Trump administration's messaging on spate of outages, flight to football game during ground stop",
+      "published": "2026-11-18T09:56-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first",
+      "headline": "Democrats nominate Hakeem Jeffries to become House speaker, a historic first",
+      "published": "2026-11-18T10:55-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes",
+      "headline": "Democrats formally nominate Hakeem Jeffries for speaker of the House",
+      "published": "2026-11-18T10:56-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/world/trump-plans-to-meet-separately-with-putin-on-his-china-trip-in-addition-to-their-3-way-talks-with-xi",
+      "headline": "Trump plans to meet separately with Putin on his China trip in addition to their 3-way talks with Xi",
+      "published": "2026-11-18T11:57-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6044209/drug-deaths-overdose-drop-trump-biden-fentanyl",
+      "headline": "As overdose deaths fall, White House makes misleading claims about who deserves credit",
+      "published": "2026-11-18T13:18-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-intelligence-official-pressed-to-explain-cause-of-national-security-agency-outage",
+      "headline": "WATCH: Intelligence official pressed to explain cause of National Security Agency outage",
+      "published": "2026-11-18T13:29-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/dot-secretary-sean-duffy-keeps-blaming-l3harris-after-faa-ground-stop-even-as-cause-remains-unknown",
+      "headline": "Duffy keeps blaming L3Harris after FAA ground stop, even as cause remains unknown",
+      "published": "2026-11-18T15:50-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas",
+      "headline": "Cornyn blocks top Justice Department official nominated for judicial vacancy in Texas",
+      "published": "2026-11-18T16:02-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6043103/democratic-black-women-take-over-almost-all-state-agencies-in-georgia-soon",
+      "headline": "Democratic Black women take over almost all state agencies in Georgia soon",
+      "published": "2026-11-18T16:51-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6032798-e1/democratic-strategists-think-montana-house-race-could-hold-the-secret-to-future-wins",
+      "headline": "Democratic strategists think Montana House race could hold the secret to future wins",
+      "published": "2026-11-18T16:53-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6043185/democrats-nominate-jeffries-for-speaker-prep-investigations-into-trumps-orbit",
+      "headline": "Democrats nominate Jeffries for speaker, prep investigations into Trump's orbit",
+      "published": "2026-11-18T17:01-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/democrats-flipped-9-us-senate-seats-the-most-in-almost-70-years",
+      "headline": "Democrats flipped 9 U.S. Senate seats — the most in almost 70 years",
+      "published": "2026-11-18T17:11-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6044275/why-the-nvidia-scandal-is-a-national-security-issue",
+      "headline": "Why the Nvidia scandal is a national security issue",
+      "published": "2026-11-18T17:12-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6041708/the-law-releasing-the-epstein-files-passed-one-year-ago-what-do-his-victims-say",
+      "headline": "The law releasing the Epstein files passed one year ago. What do his victims say?",
+      "published": "2026-11-18T17:27-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power",
+      "headline": "AP report: Bernie Sanders unveils how he'll push for Medicare for All when Democrats take power",
+      "published": "2026-11-18T17:38-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/high-school-valedictorians-to-get-custom-kicks-after-sen-elect-colom-asks-nike-to-just-do-it",
+      "headline": "High school valedictorians to get custom kicks after Sen.-elect Colom asks Nike to 'Just Do It'",
+      "published": "2026-11-18T18:07-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/paris-hilton-pushes-for-law-against-deepfakes-i-want-to-help-build-a-world-thats-safe",
+      "headline": "Paris Hilton pushes for law against deepfakes: 'I want to help build a world that's safe'",
+      "published": "2026-11-18T18:25-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says",
+      "headline": "Republicans need to focus on 'quality of life issues,' ousted GOP Rep. Lawler says",
+      "published": "2026-11-18T18:30-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics",
+      "headline": "Lawmakers press Mullin on flight disruptions and ICE tactics",
+      "published": "2026-11-18T18:40-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/news-wrap-democrats-nominate-hakeem-jeffries-for-speaker-of-the-house",
+      "headline": "News Wrap: Democrats nominate Hakeem Jeffries for Speaker of the House",
+      "published": "2026-11-18T18:45-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/18/nx-s1-6040432/trump-xi-and-putin-shenzhen-china-russia-usa",
+      "headline": "Trump, Xi and Putin meet as global alliances hang in the balance",
+      "published": "2026-11-19T04:44-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/19/g-s1-154344/up-first-newsletter-house-democrats-trump-xi-putin-anthropic",
+      "headline": "Anthropic raises more than $100B in IPO. And, Dems nominate Jeffries for House speaker",
+      "published": "2026-11-19T07:26-05:00"
+    }
+  ],
+  "statements": [
+    {
+      "id": 1,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "After House Democrats nominated him for speaker on Nov. 18, Jeffries described the economy under the Trump administration in his remarks to the press.",
+      "topic": "Cost of living and economy",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Our message to the American people who are struggling in this failed economy  is a simple one.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 2,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Asked about opposition to his nomination from some incoming House Democrats, Jeffries described how the caucus would work after the Nov. 18 vote.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "We're going to work hard throughout every corner of the caucus to deliver for the American people.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "We're going to work hard throughout every corner of the caucus to deliver for the American people.",
+          "outlet": "PBS NewsHour",
+          "url": "https://www.pbs.org/newshour/show/news-wrap-democrats-nominate-hakeem-jeffries-for-speaker-of-the-house"
+        }
+      ],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 3,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Asked on Nov. 18 about opposition to his speaker nomination from some incoming House Democrats, Jeffries described what he sees as the caucus's job.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Our job is to fight MAGA extremism — not each other — to fight MAGA extremism and to get big things done for the American people.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "Our job is to fight MAGA extremism, not each other, to fight MAGA extremism, and to get big things done for the American people.",
+          "outlet": "PBS NewsHour",
+          "url": "https://www.pbs.org/newshour/show/news-wrap-democrats-nominate-hakeem-jeffries-for-speaker-of-the-house"
+        }
+      ],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 4,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "In remarks after House Democrats nominated him for speaker on Nov. 18, Jeffries described the cost-of-living priorities Democrats would pursue in the majority.",
+      "topic": "Cost of living and economy",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Reported as: Jeffries centered his remarks on cost of living issues, saying Democrats would fight to lower the cost of groceries, gas, housing and health care.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 5,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Jeffries said on Nov. 18 that Democrats would hold officials accountable in the face of what he called unprecedented corruption, explaining the motive for doing so.",
+      "topic": "House Democratic oversight plans",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Not for partisan reasons but for patriotic ones, because the American people deserve better",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 6,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Jeffries spoke after the closed-door House Democratic vote on Nov. 18 that nominated him for speaker, describing what voters are demanding.",
+      "topic": "Midterm election results",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "The people of this country are demanding bold, dramatic and transformational change. The status quo is unacceptable.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6043185/democrats-nominate-jeffries-for-speaker-prep-investigations-into-trumps-orbit"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 7,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "AP reported Jeffries's pledge, made before Nov. 18, about House Democrats' first health care actions after taking the majority in January.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Reported as: House Democratic leader Hakeem Jeffries of New York has pledged to get to work \"right out of the gate\" to restore Affordable Care Act subsidies and reverse Medicaid cuts enacted under Republicans.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 8,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "At a House Homeland Security hearing on Nov. 18, Mullin explained why he did not cancel his Saturday flight to the LSU-Texas game after the nationwide ground stop.",
+      "topic": "Secretary's flight to football game",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [
+        "LA"
+      ],
+      "quote": "If we canceled something with the airspace completely open, it could bring confusion",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-dhs-secretary-mullin-testifies-on-worldwide-threats-amid-tech-outages-iran-warnings"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "True if FAA records show the Nov. 13 nationwide ground stop had been lifted and the national airspace was open to normal traffic before Mullin's flight on Saturday, Nov. 14. False if FAA records show the ground stop or a nationwide traffic restriction still in effect when the flight departed. Cannot be determined if the flight time or the time the restrictions ended cannot be established from records.",
+      "premise": "The national airspace had fully reopened when Mullin's Saturday, Nov. 14 flight to the LSU-Texas game took place, after the Nov. 13 nationwide ground stop.",
+      "counter_statements": [
+        76
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "As reported by NPR and the AP citing the FAA, the Nov. 13 nationwide ground stop ended around 8:15 p.m. ET that Friday; CNN reports Mullin's Coast Guard jet landed in Baton Rouge on Saturday night, nearly a day later. The FAA's own records were not read directly.",
+      "evidence": [
+        {
+          "label": "NPR via WAMC, FAA lifts the nationwide ground stop",
+          "url": "https://www.wamc.org/2026-11-13/faa-lifts-the-nationwide-ground-stop-for-all-u-s-airports"
+        },
+        {
+          "label": "AP via HuffPost, Mullin defends using government plane",
+          "url": "https://www.huffpost.com/entry/mullin-defends-using-government-plane-for-lsu-texas-game_n_6afc9fdde4b02da00c022723"
+        },
+        {
+          "label": "CNN, Mullin and the FAA ground stop",
+          "url": "https://www.cnn.com/2026/11/17/politics/markwayne-mullin-faa-ground-stop"
+        },
+        {
+          "label": "New York Post, Mullin defends flight",
+          "url": "https://nypost.com/2026/11/18/us-news/markwayne-mullin-furiously-defends-govt-flight-to-lsu-texas-game-after-faa-ground-stop-accuses-dems-of-hypocrisy/"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-19"
+    },
+    {
+      "id": 9,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "Mullin told a House hearing on Nov. 18 why he would have been at the LSU-Texas game in Louisiana, which he flew to after the nationwide ground stop.",
+      "topic": "Secretary's flight to football game",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [
+        "LA"
+      ],
+      "quote": "I was meeting the governor there.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-dhs-secretary-mullin-testifies-on-worldwide-threats-amid-tech-outages-iran-warnings"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a public record (the Louisiana governor's schedule or statement, or contemporaneous reporting of the event) shows Mullin met Louisiana's governor at or around the Nov. 14 LSU-Texas game. False if the governor's office or a record shows no meeting was planned or held. Cannot be determined if no record speaks to it.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "No schedule or statement from Gov. Jeff Landry's office and no report of a meeting at the game was found; reports place Mullin in a private box with tickets obtained through Rep. Steve Scalise. The record neither shows a meeting nor shows that none was planned.",
+      "evidence": [
+        {
+          "label": "New York Daily News (AP), Mullin congressional hearing",
+          "url": "https://www.nydailynews.com/2026/11/18/markwayne-mullin-congressional-hearing/"
+        },
+        {
+          "label": "New York Post, Mullin defends flight",
+          "url": "https://nypost.com/2026/11/18/us-news/markwayne-mullin-furiously-defends-govt-flight-to-lsu-texas-game-after-faa-ground-stop-accuses-dems-of-hypocrisy/"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-19"
+    },
+    {
+      "id": 10,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "Mullin described how flights already in the air were landed when the Nov. 13 nationwide FAA ground stop began, at a House Homeland Security hearing on Nov. 18.",
+      "topic": "Air traffic ground stop",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We landed over 4,000 planes when the ground stoppage went out because of the communication and didn't have one single incident.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-dhs-secretary-mullin-testifies-on-worldwide-threats-amid-tech-outages-iran-warnings"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if FAA or other official figures show more than 4,000 airborne aircraft were landed after the Nov. 13 ground stop began, with no reported accident or incident. False if official figures show fewer than 4,000, or an accident or incident was reported during that period. Cannot be determined if no official count has been published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "We landed over 4,000 planes when the ground stoppage went out because of the communication, and didn't have one single incident.",
+          "outlet": "PBS NewsHour",
+          "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+        }
+      ],
+      "result": "contradicted",
+      "finding": "The FAA's Nov. 15 Q&A says \"approximately 3,500 aircraft safely landed\" when the ground stop was implemented, below the more than 4,000 stated, and that every passenger arrived safely. The FAA figure is approximate, and the FAA and L3Harris investigation into the root cause is still open.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-19"
+    },
+    {
+      "id": 11,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "Mullin assessed the response to the nationwide FAA ground stop, saying planes were landed without incident, at a House Homeland Security hearing on Nov. 18.",
+      "topic": "Air traffic ground stop",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "That in itself is a great success",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-dhs-secretary-mullin-testifies-on-worldwide-threats-amid-tech-outages-iran-warnings"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 12,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "Questioned at a House hearing on Nov. 18 about his flight to the LSU game after the ground stop, Mullin said when the trip had been scheduled.",
+      "topic": "Secretary's flight to football game",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [
+        "LA"
+      ],
+      "quote": "I took my family and my great-nieces to an LSU game that was scheduled for weeks prior to that",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the LSU-Texas game date, or Mullin's planned attendance, was on record at least two weeks before Nov. 14. False if both the game date and the trip were set only in the days before. Cannot be determined if neither can be dated from a record.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "LSU's schedule release of Dec. 11, 2025 listed Texas at Tiger Stadium on Nov. 14, 2026, about 11 months before the game. When Mullin's own trip was planned is not on any independent record.",
+      "evidence": [
+        {
+          "label": "LSU Sports, 2026 home schedule release",
+          "url": "https://lsusports.net/news/2025/12/11/kiffin-era-at-lsu-football-begins-with-exciting-2026-home-schedule"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-19"
+    },
+    {
+      "id": 13,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "AP reported what Mullin said on Nov. 17 and 18 about the government plane and the cost of his flight to the LSU-Texas game.",
+      "topic": "Secretary's flight to football game",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [
+        "LA"
+      ],
+      "quote": "Reported as: Mullin had said Tuesday and reiterated Wednesday that he is required to fly on government planes and that he personally paid for the trip.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-dhs-secretary-mullin-testifies-on-worldwide-threats-amid-tech-outages-iran-warnings"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if DHS or federal travel rules require the Secretary of Homeland Security to fly on government aircraft and a record shows Mullin paid for the trip's personal portion. False if the rules let the secretary fly commercially for personal travel, or a record shows he did not pay. Cannot be determined if the rule or the payment record is not public.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "DHS told CNN that Mullin was \"required by law\" to use a government plane and pays personally for non-official flights, but no statute or DHS policy text and no payment or reimbursement record was found. The claim rests only on Mullin's and DHS's own statements.",
+      "evidence": [
+        {
+          "label": "CNN, DHS statement on Mullin's flight",
+          "url": "https://www.cnn.com/2026/11/17/politics/markwayne-mullin-faa-ground-stop"
+        },
+        {
+          "label": "AP via HuffPost, Mullin defends using government plane",
+          "url": "https://www.huffpost.com/entry/mullin-defends-using-government-plane-for-lsu-texas-game_n_6afc9fdde4b02da00c022723"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-19"
+    },
+    {
+      "id": 14,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "At a House Homeland Security hearing on Nov. 18, Mullin gave his level of confidence about the cause of the week's technology outages and nationwide ground stop.",
+      "topic": "Technology outages and cybersecurity",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I'm 98 percent confident that this has nothing to do with our adversaries hacking or going after our systems.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 15,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "AP reported what Mullin told the public at a White House news conference with Transportation Secretary Duffy on Nov. 13, the day of the nationwide ground stop.",
+      "topic": "Air traffic ground stop",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: During a news conference Friday with Transportation Secretary Sean Duffy at the White House, he pushed for more funding for the aging air traffic control system while also assuring the public that the government was not seeing any signs of a deliberate cyberattack.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-dhs-secretary-mullin-testifies-on-worldwide-threats-amid-tech-outages-iran-warnings"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official accounts (FAA, DHS, CISA) to date report no evidence of a deliberate cyberattack behind the Nov. 13 ground stop. False if an official account reports evidence of a deliberate cyberattack. Cannot be determined if no official account addresses the cause.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "The FAA's Nov. 15 Q&A says \"we have no indication that this was a cyberattack or an outside nefarious actor\" and traces the stop to data flooding its telecommunications network from sites in Amarillo, Texas, and El Dorado, Arkansas. The root-cause investigation is still open.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-19"
+    },
+    {
+      "id": 16,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "Questioned on Nov. 18 about immigration enforcement and ICE, Mullin described the Department of Homeland Security's current enforcement policy.",
+      "topic": "Immigration enforcement policy",
+      "broad_topic": "Immigration",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Our policy right now is to go after the worst of the worst.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if DHS or ICE published policy or ICE's own arrest and detention data show enforcement concentrated on people with serious criminal convictions or charges. False if ICE's own data show most people arrested or detained have no criminal conviction or pending charge. Cannot be determined if no official policy or data from the current period speak to it.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "AskAmerica's ICE detention data (TRAC compilation of ICE figures, snapshot of July 11, 2026) show 19,329 of 65,765 detainees convicted and 20,247 with pending charges, about 60% combined; an American Immigration Council analysis of ICE arrest data found most at-large arrests in December 2025 and January 2026 involved people with no criminal record. \"Worst of the worst\" has no defined threshold, so the evidence does not decide the claim.",
+      "evidence": [
+        {
+          "label": "crime.ice_detention_population_by_criminality (July 11, 2026 snapshot)",
+          "url": "https://askamerica.ai/catalog/schemas/crime/#ice_detention_population_by_criminality-table",
+          "askamerica": true,
+          "sql": "SELECT snapshot_date, criminality, detained_population FROM crime.ice_detention_population_by_criminality WHERE arresting_agency='Total' ORDER BY snapshot_date DESC, criminality FETCH FIRST 12 ROWS ONLY"
+        },
+        {
+          "label": "American Immigration Council, analysis of ICE arrest data",
+          "url": "https://www.americanimmigrationcouncil.org/blog/ice-arrest-statistics-americans-noncriminals/"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-19"
+    },
+    {
+      "id": 17,
+      "speaker": "Markwayne Mullin",
+      "office": "Secretary of Homeland Security",
+      "party": "R",
+      "context": "Mullin explained to a House committee on Nov. 18 why immigration enforcement arrests include people beyond the targeted individual.",
+      "topic": "Immigration enforcement policy",
+      "broad_topic": "Immigration",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "So, when we arrest someone that's on a warrant, most of the time, they're not by themselves.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official source (ICE data, DHS or inspector general report) shows that most warrant-based arrests encounter other people with the target. False if official data show most such arrests find the target alone. Cannot be determined if no official data describe who is present at arrests.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "No official ICE, DHS or inspector general source found describes who is present at warrant-based arrests. Secondary analyses of ICE data put \"collateral\" arrests at about a quarter of ICE arrests, which is a different measure from the one the statement makes.",
+      "evidence": [
+        {
+          "label": "American Immigration Council, analysis of ICE arrest data",
+          "url": "https://www.americanimmigrationcouncil.org/blog/ice-arrest-statistics-americans-noncriminals/"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-19"
+    },
+    {
+      "id": 18,
+      "speaker": "Sean Duffy",
+      "office": "Secretary of Transportation",
+      "party": "R",
+      "context": "AP reported what Duffy said on Nov. 18 about who was responsible for the router problem behind the Nov. 13 nationwide FAA ground stop.",
+      "topic": "Air traffic ground stop",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Duffy said on \"The Morning Meeting\" show Wednesday that a contractor failed to identify and isolate the router issue that caused the weekend ground stop quickly enough.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/dot-secretary-sean-duffy-keeps-blaming-l3harris-after-faa-ground-stop-even-as-cause-remains-unknown"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the FAA or another official investigative account finds the contractor (L3Harris) failed to identify and isolate the router problem quickly enough. False if an official account places the delay or responsibility elsewhere. Cannot be determined if the official investigation has not yet assigned responsibility.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "No FAA or other official investigative account has assigned responsibility for the router problem; the AP reports investigators are still weighing installer misconfiguration against faulty equipment, and the router maker's owner says the device worked as configured. AskAmerica's FAA advisory data show the national ground stop issued and cancelled on Nov. 13, with no cause recorded.",
+      "evidence": [
+        {
+          "label": "transport.faa_atcscc_advisories (Nov. 13-14, 2026 ground stop advisories)",
+          "url": "https://askamerica.ai/catalog/schemas/transport/#faa_atcscc_advisories-table",
+          "askamerica": true,
+          "sql": "SELECT advisory_date, advisory_number, facility, subject, sent_time_utc FROM transport.faa_atcscc_advisories WHERE advisory_date BETWEEN '2026-11-13' AND '2026-11-14' AND (advisory_type='GROUND_STOP' OR subject LIKE '%NATIONWIDE%' OR subject LIKE '%ALL%') ORDER BY sent_time_utc FETCH FIRST 30 ROWS ONLY"
+        },
+        {
+          "label": "AP via Chicago Tribune, Duffy blames L3Harris",
+          "url": "https://www.chicagotribune.com/2026/11/18/sean-duffy-l3harris-contractor-faa-ground-stop/"
+        }
+      ],
+      "check_run": "q204/askamerica/2026-11-19"
+    },
+    {
+      "id": 19,
+      "speaker": "Sean Duffy",
+      "office": "Secretary of Transportation",
+      "party": "R",
+      "context": "Duffy spoke on Nov. 18 about the FAA telecommunications network after the nationwide ground stop caused by a router problem.",
+      "topic": "Air traffic ground stop",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "The monitoring of the network matters",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/dot-secretary-sean-duffy-keeps-blaming-l3harris-after-faa-ground-stop-even-as-cause-remains-unknown"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 20,
+      "speaker": "Marco Rubio",
+      "office": "Secretary of State",
+      "party": "R",
+      "context": "AP reported Rubio's statement to reporters during President Trump's Asia trip on Nov. 18 about whether the week's technology outages were connected or caused by outside actors.",
+      "topic": "Technology outages and cybersecurity",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Rubio told reporters there was \"zero\" evidence that the outages were connected or were tied to rival nations, cyber hackers or criminals.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/trump-plans-to-meet-separately-with-putin-on-his-china-trip-in-addition-to-their-3-way-talks-with-xi"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official accounts of each of the week's outages (the FAA ground stop, Microsoft, the banks, the NSA) report non-malicious causes and no link among them. False if an official account reports a link among the outages or a hostile nation, hacker or criminal behind one. Cannot be determined if the causes have not been officially published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "The accounts found for each outage are non-malicious and none links them: Microsoft cites a latent software defect, JPMorgan Chase \"a software bug\" that \"is not cyber-related,\" the NSA \"temporary degradation during scheduled routine maintenance,\" and the FAA network data flooding. The NSA gave no further cause, the FAA account was not read from its primary document in this check, and Microsoft's final report was still pending, so the evidence does not fully decide the claim.",
+      "evidence": [
+        {
+          "label": "AP via FOX19, NSA communications network outage",
+          "url": "https://www.fox19.com/2026/11/17/highly-classified-nsa-communications-network-is-down-report-says/"
+        },
+        {
+          "label": "Al Jazeera, what caused the Chase outage",
+          "url": "https://www.aljazeera.com/amp/news/2026/11/17/us-bank-outage-what-caused-chase-problems-and-zelle-payment-delays"
+        },
+        {
+          "label": "ITPro, Microsoft 365 outage root cause",
+          "url": "https://www.itpro.com/software/microsoft/microsoft-365-outage-company-exec-lifts-lid-on-the-cascading-failure-that-caused-lengthy-disruption"
+        },
+        {
+          "label": "WEAR-TV, nationwide disruptions",
+          "url": "https://weartv.com/news/nation-world/nationwide-disruptions-expose-risks-of-technology-dependence"
+        }
+      ],
+      "check_run": "q205/askamerica/2026-11-19"
+    },
+    {
+      "id": 21,
+      "speaker": "Marco Rubio",
+      "office": "Secretary of State",
+      "party": "R",
+      "context": "Rubio, speaking on Nov. 18, explained how fixing a software vulnerability can itself cause the kind of technology outages seen that week.",
+      "topic": "Technology outages and cybersecurity",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Sometimes when you are going in to fix your system because you've identified a vulnerability, it creates a short-term disruption",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/trump-plans-to-meet-separately-with-putin-on-his-china-trip-in-addition-to-their-3-way-talks-with-xi"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official or vendor incident report documents a fix for an identified vulnerability, or the remediation work itself, causing a short-term outage (in general, or in one of the week's outages). False if no such case is on record. Cannot be determined if records describe outages during maintenance without saying whether the work addressed a vulnerability.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "Microsoft's support article KB5025885 says its fix for the Secure Boot vulnerability CVE-2023-24932 \"could cause issues for some device boot configurations\" and lists known issues from applying it, including devices that fail to boot and BitLocker recovery prompts, with recovery steps. No outage from the week of Nov. 12-18 is documented as caused by a vulnerability fix.",
+      "evidence": [
+        {
+          "label": "Microsoft, KB5025885 Windows Boot Manager revocations for CVE-2023-24932",
+          "url": "https://support.microsoft.com/en-us/topic/kb5025885-how-to-manage-the-windows-boot-manager-revocations-for-secure-boot-changes-associated-with-cve-2023-24932-41a975df-beb2-40c1-99a3-b3ff139f832d"
+        },
+        {
+          "label": "AP via FOX19, NSA communications network outage",
+          "url": "https://www.fox19.com/2026/11/17/highly-classified-nsa-communications-network-is-down-report-says/"
+        }
+      ],
+      "check_run": "q205/askamerica/2026-11-19"
+    },
+    {
+      "id": 22,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump spoke on Nov. 17 about the prospects for ending Russia's war in Ukraine, ahead of his planned meetings with Putin and Xi.",
+      "topic": "Trump-Xi-Putin summit",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I think it's very close to getting it done",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/trump-plans-to-meet-separately-with-putin-on-his-china-trip-in-addition-to-their-3-way-talks-with-xi"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 23,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "AP reported Trump's Nov. 17 explanation of why Russia's war in Ukraine might now be resolved.",
+      "topic": "Trump-Xi-Putin summit",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: But Trump said on Tuesday that the deaths of tens of thousands of Russian troops every month had created an opening to resolve the conflict.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/trump-plans-to-meet-separately-with-putin-on-his-china-trip-in-addition-to-their-3-way-talks-with-xi"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official or independent estimates (U.S., U.K. Ministry of Defence, Ukrainian General Staff, or published studies) put Russian troops killed at tens of thousands per month in recent months. False if those estimates put deaths well below 20,000 a month. Cannot be determined if the estimates give only total casualties (killed and wounded) and cannot separate deaths.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "NATO Secretary General Mark Rutte said in January 2026 that 20,000 to 25,000 Russian soldiers are killed each month, excluding the seriously wounded, while U.K. Ministry of Defence figures combine killed and wounded and other estimates found in search put deaths near 9,000 a month. The estimates straddle the line the test draws, so they do not decide it.",
+      "evidence": [
+        {
+          "label": "UNITED24 Media, NATO says Russia loses up to 25,000 soldiers killed per month",
+          "url": "https://united24media.com/latest-news/nato-says-russia-loses-up-to-25000-soldiers-killed-per-month-in-ukraine-14992"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-19"
+    },
+    {
+      "id": 24,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "AP reported what Trump said after his Nov. 18 lunch meeting with Philippine President Marcos in Manila about a U.S.-Philippines trade agreement.",
+      "topic": "Trade deal with Philippines",
+      "broad_topic": "Trade and Tariffs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: He said after their meeting that the two nations had reached a trade deal on Wednesday, though he had also said last year that an agreement had been reached.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/trump-plans-to-meet-separately-with-putin-on-his-china-trip-in-addition-to-their-3-way-talks-with-xi"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a White House, USTR or Philippine government document announces a U.S.-Philippines trade agreement reached on Nov. 18, 2026. False if either government states no agreement was reached that day. Cannot be determined if only verbal claims exist and no document has been released.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "Neither the White House statements page (current through Nov. 17) nor USTR's press releases (current through Nov. 18) carried a U.S.-Philippines trade document, and neither government has said no deal was reached; an AP report dates a signing to Tuesday, Nov. 17. Only verbal accounts of the agreement were found.",
+      "evidence": [
+        {
+          "label": "Fox 9 (AP), Trump opens Asia trip with Philippines trade agreement",
+          "url": "https://www.fox9.com/news/trump-opens-asia-trip-trade-agreement-philippines"
+        },
+        {
+          "label": "USTR press releases",
+          "url": "https://ustr.gov/about-us/policy-offices/press-office/press-releases"
+        },
+        {
+          "label": "White House briefings and statements",
+          "url": "https://www.whitehouse.gov/briefings-statements/"
+        }
+      ],
+      "check_run": "q207/askamerica/2026-11-19"
+    },
+    {
+      "id": 25,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "AP reported what Trump said he plans to discuss in the joint meeting with Chinese President Xi and Russian President Putin in Shenzhen on Nov. 19.",
+      "topic": "Trump-Xi-Putin summit",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Trump said he plans to talk with Xi and Putin in their joint meeting about limiting nuclear weapons and bringing an end to the war in Ukraine, which began in 2022 with Russia's invasion.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/trump-plans-to-meet-separately-with-putin-on-his-china-trip-in-addition-to-their-3-way-talks-with-xi"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 26,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump spoke on Nov. 19 in Shenzhen, China, at the opening of the three-way meeting with Chinese President Xi and Russian President Putin.",
+      "topic": "Trump-Xi-Putin summit",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "In that sense and I think in lots of other ways, we are making history",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6040432/trump-xi-and-putin-shenzhen-china-russia-usa"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 27,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump greeted Russian President Putin before their bilateral meeting in Shenzhen, China, on Nov. 19, speaking of the meeting's prospects.",
+      "topic": "Trump-Xi-Putin summit",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "And I think a lot of wonderful things can come of this.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6040432/trump-xi-and-putin-shenzhen-china-russia-usa"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 28,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump told Chinese President Xi in Shenzhen on Nov. 19 about relations between the United States and China.",
+      "topic": "Trump-Xi-Putin summit",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "as long as you and I are in charge of things, we're never going to have a problem.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6040432/trump-xi-and-putin-shenzhen-china-russia-usa"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 29,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump spoke to Russian President Putin as they shook hands before their bilateral meeting in Shenzhen, China, on Nov. 19.",
+      "topic": "Trump-Xi-Putin summit",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We've known each other for a long time",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6040432/trump-xi-and-putin-shenzhen-china-russia-usa"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if records show Trump and Putin met or spoke during Trump's first term (2017-2021) or earlier. False if their first meeting or call was recent. Cannot be determined if no record of earlier contact exists.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "Trump and Putin first met at the G20 summit in Hamburg on July 7, 2017, and again in Helsinki in 2018; Kyiv Post counts six in-person meetings during Trump's first term.",
+      "evidence": [
+        {
+          "label": "Kyiv Post, Trump-Putin meetings",
+          "url": "https://www.kyivpost.com/post/58226"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-19"
+    },
+    {
+      "id": 30,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In a September remarks played by NPR, Trump described the position of the United States relative to China in artificial intelligence.",
+      "topic": "AI and chip exports to China",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We're leading China in AI. We're the most sophisticated country in the world.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6044275/why-the-nvidia-scandal-is-a-national-security-issue"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if standard published measures (for example the Stanford AI Index on notable models, private investment and compute) show the United States ahead of China in AI. False if they show China ahead on most of them. Cannot be determined if the measures split. 'Most sophisticated country in the world' is an opinion and is not assessed.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "Stanford's 2026 AI Index shows the U.S. ahead on top-tier models and on private AI investment ($285.9 billion in 2025 against China's $12.4 billion), though it says the model performance gap \"has effectively closed,\" with a 2.7% U.S. lead in March 2026; China leads on publications, citations and patents. \"Most sophisticated country in the world\" is an opinion and was not assessed.",
+      "evidence": [
+        {
+          "label": "Stanford HAI, 2026 AI Index Report",
+          "url": "https://hai.stanford.edu/ai-index/2026-ai-index-report"
+        }
+      ],
+      "check_run": "q208/askamerica/2026-11-19"
+    },
+    {
+      "id": 31,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In September remarks played by NPR, Trump explained why he wants the United States to stay ahead of China in artificial intelligence.",
+      "topic": "AI and chip exports to China",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "And frankly, I want to keep it that way, because whoever wins AI wins.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6044275/why-the-nvidia-scandal-is-a-national-security-issue"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 32,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "AP reported Trump's statement about the Justice Department lawsuit seeking to block certification of the Alaska Senate race if the incumbent lost.",
+      "topic": "Alaska Senate race",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": null,
+      "about_states": [
+        "AK"
+      ],
+      "quote": "Reported as: The Department of Justice filed a lawsuit that Trump said he ordered.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrat-mary-peltola-wins-alaska-senate-seat-beating-republican-incumbent-dan-sullivan"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if court records show the Justice Department filed a suit concerning certification of the Alaska Senate race and a statement by Trump himself (post or remarks) says he directed it. False if no such suit was filed or Trump's own statement says otherwise. Cannot be determined if whether he ordered it rests only on secondhand accounts.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "The Justice Department filed United States v. State of Alaska (D. Alaska, 3:26-cv-00376) on Oct. 22, 2026, seeking to block certification of Senate results it said were tainted by a second Dan Sullivan on the ballot; the court dismissed it Nov. 1 and the department appealed. The AP reports Trump told reporters on Oct. 23, \"I'm the one that said do it\"; no video or transcript of the remarks was read.",
+      "evidence": [
+        {
+          "label": "Justice Department complaint, U.S. v. State of Alaska",
+          "url": "https://storage.courtlistener.com/recap/gov.uscourts.akd.80263/gov.uscourts.akd.80263.1.0_1.pdf"
+        },
+        {
+          "label": "Democracy Docket, case page and docket history",
+          "url": "https://www.democracydocket.com/cases/alaska-u-s-senate-election-certification-challenge-doj/"
+        },
+        {
+          "label": "AP via WDBJ7, Trump administration files lawsuit",
+          "url": "https://www.wdbj7.com/2026/10/23/trump-administration-files-lawsuit-block-possible-democratic-win-alaska-senate-race/?outputType=amp"
+        }
+      ],
+      "check_run": "q209/askamerica/2026-11-19"
+    },
+    {
+      "id": 33,
+      "speaker": "Chuck Schumer",
+      "office": "U.S. Senator from New York",
+      "party": "D",
+      "context": "Schumer, the Senate Democratic leader, commented in a social media statement on Democrats' final seat count after the Alaska Senate race was called.",
+      "topic": "Midterm election results",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "56 seats was an unimaginable result even just a few months ago",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-flipped-9-us-senate-seats-the-most-in-almost-70-years"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "True if called or certified 2026 results give Democrats (counting independents who caucus with them) 56 of 100 Senate seats in the new Congress. False if called results give a different number. Cannot be determined if uncalled races could change the total.",
+      "premise": "Democrats will hold 56 of the 100 Senate seats when the new Congress begins in January 2027.",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "As reported by the Deseret News citing Associated Press race calls, Mary Peltola's Alaska win was the last Senate race decided and leaves Democrats with a 56-44 majority after flipping nine seats. Certified results and the AP's own seat tally were not read.",
+      "evidence": [
+        {
+          "label": "Deseret News, Mary Peltola flips Alaska Senate seat",
+          "url": "https://www.deseret.com/politics/2026/11/18/mary-peltola-flips-alaska-senate-seat/"
+        }
+      ],
+      "check_run": "q210/askamerica/2026-11-19"
+    },
+    {
+      "id": 34,
+      "speaker": "Chuck Schumer",
+      "office": "U.S. Senator from New York",
+      "party": "D",
+      "context": "Schumer, the Senate Democratic leader, described in a social media statement what people thought at the start of the 2026 election cycle about Democrats winning 51 Senate seats.",
+      "topic": "Midterm election results",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Most people didn't think 51 Democratic Senate seats was a possibility at the beginning of this cycle.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-flipped-9-us-senate-seats-the-most-in-almost-70-years"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if forecasts or prediction markets at the start of the 2025-26 cycle gave Democrats less than an even chance of winning 51 Senate seats. False if they favored Democrats to win 51 or more. Cannot be determined if no forecasts from the start of the cycle can be found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "Sabato's Crystal Ball's first 2026 Senate ratings (Feb. 13, 2025) said Republicans were \"clearly favored to hold the Senate,\" and Inside Elections (July 25, 2025) said Democrats would need to win every competitive race to reach 51, a scenario \"not currently likely.\" Prediction-market prices from that time were not found.",
+      "evidence": [
+        {
+          "label": "Sabato's Crystal Ball initial 2026 Senate ratings (Rasmussen Reports reprint)",
+          "url": "https://www.rasmussenreports.com/public_content/political_commentary/commentary_by_kyle_kondik/our_initial_senate_ratings_republicans_start_as_strong_favorites_to_hold_majority"
+        },
+        {
+          "label": "Roll Call, Inside Elections Senate ratings",
+          "url": "https://rollcall.com/2025/07/25/senate-ratings-midterm-elections-2026/"
+        }
+      ],
+      "check_run": "q210/askamerica/2026-11-19"
+    },
+    {
+      "id": 35,
+      "speaker": "Chuck Schumer",
+      "office": "U.S. Senator from New York",
+      "party": "D",
+      "context": "NPR reported Schumer's position, as of Nov. 18, on his support in the Senate Democratic leadership election challenged by Sen. Chris Van Hollen.",
+      "topic": "Senate Democratic leadership election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Reported as: Schumer, the top Democrat in the Senate for nearly a decade, contends that he still has the needed votes to be elected majority leader.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a public whip count or the leadership vote shows Schumer with a majority of the incoming Senate Democratic caucus. False if the vote or a public count shows him short. Cannot be determined if the vote has not happened and no public count exists.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "The secret-ballot leadership vote is set for Dec. 1 and no whip count has been published; the AP reports about 15 of the 55 incoming Democratic senators have publicly backed Schumer and four Sen. Chris Van Hollen, which shows neither a majority nor a shortfall.",
+      "evidence": [
+        {
+          "label": "AP via WDBO, Van Hollen's bid to replace Schumer",
+          "url": "https://www.wdbo.com/news/politics/van-hollens-bid/LXOWCTN2Y4ZOVKOPNJ4CRD5VR4/"
+        },
+        {
+          "label": "NPR, Democrats formally nominate Hakeem Jeffries",
+          "url": "https://www.npr.org/2026/11/18/nx-s1-6043183/hakeem-jeffries-house-democrats-leadership-votes"
+        }
+      ],
+      "check_run": "q211/askamerica/2026-11-19"
+    },
+    {
+      "id": 36,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "Sanders told the AP about his plan for Medicare for All as the expected incoming chairman of the Senate health committee.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "This is no longer a utopian vision. This is where the American people are",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 37,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "Sanders told the AP what he thinks the November 2026 midterm election results signaled to Congress and Democrats.",
+      "topic": "Midterm election results",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "I think the election, in my opinion, was a crying out for fundamental change in the way the government does business and the absolute need to protect a struggling working class",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 38,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "Sanders told the AP why Medicare for All would be phased in over four years rather than enacted all at once, citing the size of the health care system.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "Transforming a system which is 18% of the GDP of America",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if CMS National Health Expenditure data put U.S. health spending at about 17.5 to 18.5 percent of GDP in the latest year published. False if the latest figure is outside roughly 16.5 to 19.5 percent. Cannot be determined if no recent figure is published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "The CMS National Health Expenditure fact sheet says U.S. health spending grew 7.2% to $5.3 trillion in 2024, the latest year published, and \"accounted for 18.0% of Gross Domestic Product.\"",
+      "evidence": [
+        {
+          "label": "CMS, National Health Expenditure fact sheet",
+          "url": "https://www.cms.gov/data-research/statistics-trends-and-reports/national-health-expenditure-data/nhe-fact-sheet"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-19"
+    },
+    {
+      "id": 39,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "Sanders told the AP why Medicare for All, which would replace much of the current health care system, should be phased in over four years.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "you don't do that overnight",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 40,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "Sanders told the AP what House Democratic leader Hakeem Jeffries has said about Democrats' health care plans.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "Jeffries basically supported the first year of Medicare for All",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Jeffries's own stated health agenda matches the first year of Sanders's plan (expanding Medicare eligibility and benefits). False if Jeffries has stated opposition to those first-year steps. Cannot be determined if Jeffries's statements partly match, given the loose word 'basically'.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "Jeffries has not stated opposition to expanding Medicare eligibility and benefits, but the reported House Democratic discussions of a lower Medicare age and added dental, vision and hearing coverage rest on anonymous sources, and his on-record priorities read here cover only reversing Medicaid cuts and restoring ACA subsidies. The match is partial, and \"basically\" is a loose term.",
+      "evidence": [
+        {
+          "label": "Anchorage Daily News (Washington Post), Democrats eye expanded Medicare coverage",
+          "url": "https://www.adn.com/nation-world/2026/09/03/democrats-eye-expanded-medicare-coverage-if-they-take-us-house/"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-19"
+    },
+    {
+      "id": 41,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "Sanders told the AP that President Trump could sign Medicare for All if Congress passed it, responding to doubts that Trump would do so.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "Donald Trump may be crazy, but he is not stupid.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 42,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "Sanders told the AP why he believes President Trump could sign Medicare for All into law if Congress passed it.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "He's a smart guy, and he's a very good politician",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 43,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "AP reported the contents of Sanders's agenda for the new Congress, first provided to the AP, describing his Medicare for All plan.",
+      "topic": "Medicare for All and health care",
+      "broad_topic": "Health",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "Reported as: His proposal for the new Congress lays out a four-year transition to that system, beginning with expanding Medicare eligibility and benefits.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 44,
+      "speaker": "Bernie Sanders",
+      "office": "U.S. Senator from Vermont",
+      "party": "I",
+      "context": "AP reported what Sanders plans to push through the Senate health committee, which he is expected to chair when Democrats take control in January.",
+      "topic": "Minimum wage and labor agenda",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "VT",
+      "about_states": [],
+      "quote": "Reported as: Sanders is also preparing to use the committee to advance a broader economic agenda that includes raising the federal minimum wage from $7.25 an hour to $20 an hour and promoting the PRO Act, which would strengthen workers' rights to unionize.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/ap-report-bernie-sanders-unveils-how-hell-push-for-medicare-for-all-when-democrats-take-power"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 45,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "AP reported Cornyn's stated intention on Nov. 18 regarding the Trump nominee Elliot Gaiser for a federal court vacancy in Texas.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "Reported as: A senior outgoing Republican senator said Wednesday that he will block one of President Donald Trump's final judicial picks for a court vacancy in Texas, as the GOP-led Senate scrambles to fill all the remaining vacancies in the federal courts before Democrats assume power in January.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 46,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "AP reported Cornyn's account on Nov. 18 of whether he had returned the home-state 'blue slip' for Justice Department official Elliot Gaiser's judicial nomination.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "Reported as: Texas Sen. John Cornyn told The Associated Press that he has not returned the \"blue slip\" for Elliot Gaiser, a top official at the Justice Department who was nominated for the Dallas-area vacancy earlier this month, nor does he plan to.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Senate Judiciary Committee's blue-slip record shows no returned blue slip from Cornyn for Elliot Gaiser. False if the committee shows Cornyn returned a blue slip for him. Cannot be determined if the committee has published nothing on it.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "AskAmerica's nominations data show T. Elliot Gaiser's nomination (PN1505) referred to the Senate Judiciary Committee on Nov. 16, 2026; the committee publishes no per-nominee blue-slip record, and the only account of a withheld blue slip is Cornyn's own.",
+      "evidence": [
+        {
+          "label": "officials.nominations (Gaiser nomination PN1505, referred Nov. 16, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#nominations-table",
+          "askamerica": true,
+          "sql": "SELECT citation, description, organization, latest_action_text, latest_action_date FROM officials.nominations WHERE description ILIKE '%Gaiser%' OR description ILIKE '%Fahey%' FETCH FIRST 10 ROWS ONLY"
+        },
+        {
+          "label": "Senate Judiciary Committee, judicial nominations",
+          "url": "https://www.judiciary.senate.gov/nominations/judicial"
+        },
+        {
+          "label": "HNGN, Cornyn blocks Trump judicial nominee Elliot Gaiser",
+          "url": "https://www.hngn.com/articles/273875/20261118/cornyn-blocks-trump-judicial-nominee-elliot-gaiser-texas.htm"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-19"
+    },
+    {
+      "id": 47,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "Cornyn told the AP on Nov. 18 about the background of Elliot Gaiser, nominated by President Trump to a federal court vacancy in Dallas.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "He's not from Texas. He hasn't been vetted.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Gaiser's official biography or Senate questionnaire shows no Texas residence, schooling, practice or bar admission, and no completed background check. False if records show Texas residence or bar admission, or a completed background investigation. Cannot be determined if records speak to one part only, or to neither.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "AskAmerica's nominations data list the nominee as \"T. Elliot Gaiser, of Ohio,\" and CBS reporting relayed by HNGN says his only apparent Texas tie is a one-year clerkship in Houston. On vetting, the AP reports Cornyn meant Texas's bipartisan judicial evaluation committee, while Cruz is reported as saying Gaiser has a completed FBI background check; \"vetted\" fits either reading, and the questionnaire was not read.",
+      "evidence": [
+        {
+          "label": "officials.nominations (Gaiser nomination PN1505, \"of Ohio\")",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#nominations-table",
+          "askamerica": true,
+          "sql": "SELECT citation, description, organization, latest_action_text, latest_action_date FROM officials.nominations WHERE description ILIKE '%Gaiser%' OR description ILIKE '%Fahey%' FETCH FIRST 10 ROWS ONLY"
+        },
+        {
+          "label": "AP via WPXI, White House faces Cornyn block",
+          "url": "https://www.wpxi.com/news/politics/white-house-faces/RQ65SXQ7LQYYLD4NOCAU3QMM7I/?outputType=amp"
+        },
+        {
+          "label": "HNGN, Cornyn blocks Trump judicial nominee Elliot Gaiser",
+          "url": "https://www.hngn.com/articles/273875/20261118/cornyn-blocks-trump-judicial-nominee-elliot-gaiser-texas.htm"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-19"
+    },
+    {
+      "id": 48,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "Cornyn told the AP on Nov. 18 about other potential nominees for the federal court vacancy in Dallas for which Elliot Gaiser was nominated.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "there's better qualified people to hold that job",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [
+        54
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 49,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "Cornyn told the AP on Nov. 18 about consultation by the White House with senators over Elliot Gaiser's nomination to a federal court in Texas.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "it's hard to provide advice and consent when there's zero consultation, which happened in that case.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a record (the committee's file, White House statement, or contemporaneous reporting citing both sides) shows the White House did not consult Cornyn before nominating Gaiser. False if a record shows consultation with Cornyn. Cannot be determined if no record speaks to it beyond Cornyn's own account.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "HNGN, citing Gaiser's Senate questionnaire, reports that Cornyn's staff discussed a possible nomination with Gaiser on Nov. 6, the day the White House Counsel's Office told him he was under consideration; that is staff-level contact, and the White House has not said whether it consulted Cornyn himself. The questionnaire was not read directly.",
+      "evidence": [
+        {
+          "label": "HNGN, Cornyn blocks Trump judicial nominee Elliot Gaiser",
+          "url": "https://www.hngn.com/articles/273875/20261118/cornyn-blocks-trump-judicial-nominee-elliot-gaiser-texas.htm"
+        },
+        {
+          "label": "AP via WPXI, White House faces Cornyn block",
+          "url": "https://www.wpxi.com/news/politics/white-house-faces/RQ65SXQ7LQYYLD4NOCAU3QMM7I/?outputType=amp"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-19"
+    },
+    {
+      "id": 50,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "AP reported what Cornyn said on Nov. 18 about the White House's request for information on his preferred nominee for the Dallas-area federal court vacancy.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "Reported as: Cornyn also said the White House has requested information about his preferred candidate, Fort Worth lawyer Steve Fahey.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a White House statement or other record confirms it requested information about Steve Fahey. False if the White House states it made no such request. Cannot be determined if no record beyond Cornyn's own account speaks to it.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsupported",
+      "finding": "No White House statement or other record of a request for information about Steve Fahey was found; the only accounts are Cornyn's and his aide's. The search covered AskAmerica's nominations data, the AP and HNGN reports, the Senate Judiciary Committee's nominations page and a web search; White House records not made public were not reachable.",
+      "evidence": [
+        {
+          "label": "HNGN, Cornyn blocks Trump judicial nominee Elliot Gaiser",
+          "url": "https://www.hngn.com/articles/273875/20261118/cornyn-blocks-trump-judicial-nominee-elliot-gaiser-texas.htm"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-19"
+    },
+    {
+      "id": 51,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "Cornyn told the AP on Nov. 18 how he views the treatment of Elliot Gaiser, the Justice Department official nominated for a Dallas-area federal court seat.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "I kind of feel bad that he's been used basically as a pawn in this process.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 52,
+      "speaker": "John Cornyn",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "Cornyn described Elliot Gaiser, the Justice Department official whose nomination to a Dallas-area federal court seat he is blocking, in an AP interview on Nov. 18.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "He's a very bright young man, and I think has a very bright future",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 53,
+      "speaker": "Ted Cruz",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "AP reported Cruz's Nov. 18 statement about why Elliot Gaiser is the nominee who could be confirmed for the Texas federal court vacancy before year-end.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "Reported as: In a statement Wednesday, Cruz said that Gaiser is the \"only nominee who could actually be confirmed by the end of the year\" and that the White House has been \"explicit\" that there is no time for a background check to be confirmed for another potential nominee.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Senate Judiciary Committee timing (questionnaire, hearing notice, hold-over, floor time) leaves no room for a newly named Texas nominee to be confirmed before the current Congress ends, while Gaiser's nomination is already pending, and a record shows the White House said no background check could be done in time. False if records show another Texas nominee already in the process who could be confirmed in time. Cannot be determined if the timing depends on Senate scheduling choices.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "AskAmerica's nominations data show Gaiser as the only nominee for the Northern District of Texas seat, received and referred on Nov. 16, 2026, with no nomination for Steve Fahey. The White House's reported statement that no background check could be finished in time appears only in secondary reports, and whether a new nominee could still be confirmed depends on Senate scheduling choices.",
+      "evidence": [
+        {
+          "label": "officials.nominations (Northern District of Texas nominations, Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#nominations-table",
+          "askamerica": true,
+          "sql": "SELECT citation, description, latest_action_date, latest_action_text FROM officials.nominations WHERE description ILIKE '%Gaiser%' OR description ILIKE '%Fahey%' FETCH FIRST 10 ROWS ONLY"
+        },
+        {
+          "label": "HNGN, Cornyn blocks Trump judicial nominee Elliot Gaiser",
+          "url": "https://www.hngn.com/articles/273875/20261118/cornyn-blocks-trump-judicial-nominee-elliot-gaiser-texas.htm"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-19"
+    },
+    {
+      "id": 54,
+      "speaker": "Ted Cruz",
+      "office": "U.S. Senator from Texas",
+      "party": "R",
+      "context": "Cruz said in a Nov. 18 statement what would happen to the Dallas-area federal court vacancy if the Senate Judiciary Committee does not advance Elliot Gaiser's nomination.",
+      "topic": "Texas judicial nomination",
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "TX",
+      "about_states": [
+        "TX"
+      ],
+      "quote": "If the Senate Judiciary Committee does not move Gaiser forward, the people of Texas will pay the price because it will effectively give the judicial seat to the Democrats, who will keep it vacant in perpetuity",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/cornyn-blocks-top-justice-department-official-nominated-for-judicial-vacancy-in-texas"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [
+        48
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 55,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, a New York Republican who lost reelection, commented on Nov. 18 on the week's technology outages and the administration's explanations.",
+      "topic": "Technology outages and cybersecurity",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "I'm not a conspiracy theorist, but obviously there's a lot of coincidences happening all at once.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 56,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, discussing the need for guardrails on artificial intelligence on Nov. 18, described a Government Accountability Office report that tested major AI platforms.",
+      "topic": "AI safety and guardrails",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "in the four major AI platforms, GAO was able to have them create a terrorist manifesto, if you will.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a GAO report says testers got four major AI platforms to produce a terrorist manifesto or comparable violent-extremist content. False if the GAO report says otherwise (a different number of platforms, or the platforms refused). Cannot be determined if no such GAO report can be found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "GAO report GAO-27-108814 (Nov. 18, 2026) says covert prompts got all four most-used generative AI platforms to produce feasible plans for mass-casualty attacks and attacks on the electrical grid after first refusing. The report does not use the word \"manifesto\"; whether attack plans count as the content described is a reading the evidence does not settle.",
+      "evidence": [
+        {
+          "label": "GAO, GAO-27-108814",
+          "url": "https://files.gao.gov/reports/GAO-27-108814/index.html"
+        }
+      ],
+      "check_run": "q215/askamerica/2026-11-19"
+    },
+    {
+      "id": 57,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, a New York Republican who lost reelection, predicted on Nov. 18 how House Democratic leader Hakeem Jeffries would lead in the majority.",
+      "topic": "House Democratic leadership",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "My hunch is, knowing Leader Jeffries as I do, we're going to have two years of gridlock and investigation and very little results.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 58,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, a New York Republican who lost reelection, spoke on Nov. 18 about Rep. Jim Jordan, chosen by House Republicans as their leader in the minority.",
+      "topic": "House Republican leadership",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "I think he will do a great job as Republican leader and unify the conference as they head into the minority for the next two years.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 59,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, discussing the Dec. 11 government funding deadline on Nov. 18, described a past government shutdown affecting the Department of Homeland Security.",
+      "topic": "Government funding and shutdown",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "they shut the government down for 118 days with respect to the Department of Homeland Security.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if appropriations records show a lapse in Department of Homeland Security funding lasting 118 days. False if the lapse lasted a different length, or there was none. Cannot be determined if the records do not give the dates.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "As reported by NPR, the House passed the bill ending the DHS shutdown on its 76th day, April 30, 2026, but that bill left out ICE and Customs and Border Protection, whose funding was moved to a separate reconciliation bill whose outcome was not found, so a longer count for part of the department cannot be ruled out. The appropriations record itself could not be read directly.",
+      "evidence": [
+        {
+          "label": "NPR via OPB, Congress ends record shutdown at DHS",
+          "url": "https://www.opb.org/article/2026/04/30/congress-ends-record-shutdown-at-dhs/"
+        }
+      ],
+      "check_run": "q216/askamerica/2026-11-19"
+    },
+    {
+      "id": 60,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, discussing a possible shutdown over the Dec. 11 funding deadline on Nov. 18, said what makes a Democratic-led shutdown possible in the Senate.",
+      "topic": "Government funding and shutdown",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "They have the ability to do it because of the 60-vote threshold in the Senate.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Senate rules (cloture under Rule XXII) require 60 votes to end debate on a regular appropriations bill, so a minority of 41 can block it. False if regular appropriations bills can pass with a simple majority without cloture. Cannot be determined if the answer turns on a disputed reading of the rules.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "The Senate's history of filibuster and cloture says that since 1975 Rule XXII has required three-fifths of senators, \"or 60 of the current 100 senators,\" to end debate, so 41 senators can block a bill. The rule's text and appropriations-specific procedure were not read.",
+      "evidence": [
+        {
+          "label": "U.S. Senate, About Filibusters and Cloture",
+          "url": "https://www.senate.gov/artandhistory/history/common/briefing/Filibuster_Cloture.htm"
+        }
+      ],
+      "check_run": "q216/askamerica/2026-11-19"
+    },
+    {
+      "id": 61,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, a New York Republican who lost reelection, gave his view on Nov. 18 of Democrats using the Dec. 11 funding deadline to restrict funding for the Iran war.",
+      "topic": "Government funding and shutdown",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "that is the height of stupidity for Chuck Schumer and Hakeem Jeffries to embark on a government shutdown as their first priority here.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 62,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, a New York Republican who lost reelection, predicted on Nov. 18 which presidential candidates and parties would do well, discussing lessons from the midterms.",
+      "topic": "Midterm election results",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "the candidate that seeks to talk to the 60 percent of the country is going to do well.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 63,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Lawler, a New York Republican who lost reelection, said on Nov. 18 what Republicans should do after the midterm election losses.",
+      "topic": "Midterm election results",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "Republicans need to obviously rebuild, lick their wounds, but focus on the issues most acutely impacting the American people.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 64,
+      "speaker": "Mike Lawler",
+      "office": "U.S. Representative from New York",
+      "party": "R",
+      "context": "Asked on Nov. 18 whether he might run for New York governor in 2030, Lawler said what he will do next after losing reelection.",
+      "topic": "Midterm election results",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [
+        "NY"
+      ],
+      "quote": "Right now, I'm going to focus on my family.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/republicans-need-to-focus-on-quality-of-life-issues-ousted-gop-rep-lawler-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 65,
+      "speaker": "Alexandria Ocasio-Cortez",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Ocasio-Cortez, a lead sponsor of the DEFIANCE Act on deepfake sexual images, spoke about Paris Hilton's lobbying for the bill on Capitol Hill this week.",
+      "topic": "Deepfake legislation",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "I think it shows the unity that this issue will inspire people.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/paris-hilton-pushes-for-law-against-deepfakes-i-want-to-help-build-a-world-thats-safe"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 66,
+      "speaker": "Alexandria Ocasio-Cortez",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Ocasio-Cortez spoke at the Capitol on Nov. 18, around the House Democratic vote on its candidate for speaker, about the number of candidates in the race.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "There is one candidate in this race: Hakeem Jeffries",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Jeffries was the only candidate nominated for speaker in the House Democratic caucus vote on Nov. 18. False if another candidate was nominated or received votes as a candidate. Cannot be determined if no record of the caucus vote is available.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "CNN and MS NOW report that Jeffries ran unopposed and won the Nov. 18 caucus secret ballot 251 to 11, with the 11 described as votes against him rather than for another candidate. No official caucus tally was available to read.",
+      "evidence": [
+        {
+          "label": "CNN, House Democrats leadership elections",
+          "url": "https://www.cnn.com/2026/11/18/politics/hakeem-jeffries-house-democrats-leadership-elections"
+        },
+        {
+          "label": "MS NOW, Jeffries nominated as first Black House speaker",
+          "url": "https://www.ms.now/news/hakeem-jeffries-nominated-first-black-house-speaker"
+        }
+      ],
+      "check_run": "q217/askamerica/2026-11-19"
+    },
+    {
+      "id": 67,
+      "speaker": "Alexandria Ocasio-Cortez",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Ocasio-Cortez said at the Capitol on Nov. 18 what House members are concerned about regarding the Democratic leadership for the new Congress.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NY",
+      "about_states": [],
+      "quote": "I think that everyone is far more concerned what that leadership means, what is it promising.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 68,
+      "speaker": "Emily Randall",
+      "office": "U.S. Representative from Washington",
+      "party": "D",
+      "context": "Randall described messages she received on social media about the House Democratic leadership election, before the Nov. 18 vote.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "WA",
+      "about_states": [],
+      "quote": "People have messaged me asking if Bernie Sanders could be the speaker of the House",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a public record (Randall's own posts, or reporting that saw the messages) shows people asked her whether Bernie Sanders could be speaker. False if a record shows no such messages. Cannot be determined if no record beyond Randall's own account exists.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "The only record of the messages is Randall's own account as reported by PBS NewsHour, which says she was watching direct messages about the leadership election arrive on Instagram. No independent record (her posts, or reporting that saw the messages) was found; her social media accounts were not searched.",
+      "evidence": [],
+      "check_run": "q218/askamerica/2026-11-19"
+    },
+    {
+      "id": 69,
+      "speaker": "Emily Randall",
+      "office": "U.S. Representative from Washington",
+      "party": "D",
+      "context": "Randall answered whether Sen. Bernie Sanders, a Vermont independent, could be elected House speaker, before the Nov. 18 House Democratic vote.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "WA",
+      "about_states": [],
+      "quote": "Technically yes, and it would be probably difficult.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "True if the Constitution (Art. I, Sec. 2) and House rules and precedent impose no requirement that the Speaker be a House member. False if a rule, law or precedent requires the Speaker to be a member. Cannot be determined if it turns on a contested reading.",
+      "premise": "A person who is not a member of the House, such as a sitting senator, can legally be elected Speaker of the House.",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "Article I, Section 2 of the Constitution says the House \"shall chuse their Speaker and other Officers\" with no membership requirement, and the House's Office of the Historian says the Speaker \"has always been (but is not required to be) a House Member.\"",
+      "evidence": [
+        {
+          "label": "National Archives, Constitution transcript",
+          "url": "https://www.archives.gov/founding-docs/constitution-transcript"
+        },
+        {
+          "label": "U.S. House History, Speaker of the House",
+          "url": "https://history.house.gov/Institution/Origins-Development/Speaker-of-the-House/"
+        }
+      ],
+      "check_run": "q218/askamerica/2026-11-19"
+    },
+    {
+      "id": 70,
+      "speaker": "Emily Randall",
+      "office": "U.S. Representative from Washington",
+      "party": "D",
+      "context": "Randall described what she told a constituent about her intended vote for House speaker, before the Nov. 18 House Democratic vote.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "WA",
+      "about_states": [],
+      "quote": "I am supporting Hakeem Jeffries for speaker",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 71,
+      "speaker": "Emily Randall",
+      "office": "U.S. Representative from Washington",
+      "party": "D",
+      "context": "Randall told a constituent, before the Nov. 18 House Democratic vote, what House Democrats would accomplish under Jeffries as speaker.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "WA",
+      "about_states": [],
+      "quote": "I think we will accomplish a lot of the things that he was asking us to.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 72,
+      "speaker": "Yassamin Ansari",
+      "office": "U.S. Representative from Arizona",
+      "party": "D",
+      "context": "Ansari described the role of Hakeem Jeffries as House Democratic leader, before House Democrats nominated him for speaker on Nov. 18.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "AZ",
+      "about_states": [],
+      "quote": "His job is to reflect all of us, not just a faction",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 73,
+      "speaker": "Shomari Figures",
+      "office": "U.S. Representative from Alabama",
+      "party": "D",
+      "context": "Figures described Hakeem Jeffries's leadership of House Democrats before the Nov. 18 vote nominating Jeffries for speaker.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "AL",
+      "about_states": [],
+      "quote": "led us through what is likely the most tumultuous two-year tenure of any presidency in the history of this nation.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 74,
+      "speaker": "Shomari Figures",
+      "office": "U.S. Representative from Alabama",
+      "party": "D",
+      "context": "Figures said before the Nov. 18 House Democratic vote how he would vote on Hakeem Jeffries's nomination for speaker.",
+      "topic": "House speaker election",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "AL",
+      "about_states": [],
+      "quote": "I'm not going to not stand by him right here on the precipice of history",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-nominate-hakeem-jeffries-to-become-house-speaker-a-historic-first"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 75,
+      "speaker": "Bennie Thompson",
+      "office": "U.S. Representative from Mississippi",
+      "party": "D",
+      "context": "Thompson, the top Democrat on House Homeland Security, questioned Secretary Mullin on Nov. 18 about the Saturday flight to the LSU-Texas game after the nationwide ground stop.",
+      "topic": "Secretary's flight to football game",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": "MS",
+      "about_states": [
+        "LA"
+      ],
+      "quote": "While Americans were stranded in airports across the country, with many sleeping on the floor at their gates, the secretary boarded a luxury jet, flew to a college football game.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if records show Mullin flew on a government jet to the LSU-Texas game on Nov. 14 while passengers were still stranded by disruptions from the Nov. 13 ground stop. False if the flight took place after the disruptions had cleared, or was not on a jet. Cannot be determined if the timing of the disruptions against the flight cannot be established. 'Luxury' is a loose description and is not assessed.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "unsettled",
+      "finding": "The AP reports Mullin flew on a government plane to the LSU-Texas game on Saturday, Nov. 14, the day after the Nov. 13 nationwide ground stop, which the AP says ended around 8:15 p.m. ET Friday. AskAmerica's FAA advisory data show airport-level ground stops continuing at some airports on Nov. 14 and 15, but neither source shows whether passengers were still stranded when the flight left.",
+      "evidence": [
+        {
+          "label": "transport.faa_atcscc_advisories (Nov. 13-15, 2026 ground stop advisories)",
+          "url": "https://askamerica.ai/catalog/schemas/transport/#faa_atcscc_advisories-table",
+          "askamerica": true,
+          "sql": "SELECT advisory_date, advisory_number, facility, subject, advisory_type, sent_time_utc FROM transport.faa_atcscc_advisories WHERE advisory_date IN ('2026-11-13','2026-11-14','2026-11-15') AND (advisory_type='GROUND_STOP' OR subject ILIKE '%NATIONWIDE%' OR subject ILIKE '%ALL %' OR subject ILIKE '%COMM%') ORDER BY sent_time_utc"
+        },
+        {
+          "label": "ABC11 (AP), Mullin defends use of government plane",
+          "url": "https://abc11.com/story/mullin-defends-use-government-plane-go-college-football-game-ground-stop/20048437"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-19"
+    },
+    {
+      "id": 76,
+      "speaker": "Bennie Thompson",
+      "office": "U.S. Representative from Mississippi",
+      "party": "D",
+      "context": "Thompson, the top Democrat on House Homeland Security, described Secretary Mullin's flight to a football game after the nationwide ground stop, at the Nov. 18 hearing.",
+      "topic": "Secretary's flight to football game",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": "MS",
+      "about_states": [],
+      "quote": "For the secretary of homeland security to do that during a crisis was not only irresponsible, Mr. Secretary, but also incredibly tone-deaf.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [
+        8
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 77,
+      "speaker": "Michael Guest",
+      "office": "U.S. Representative from Mississippi",
+      "party": "R",
+      "context": "Guest listed the technology and transportation disruptions of recent days at the House Homeland Security hearing with Secretary Mullin on Nov. 18.",
+      "topic": "Technology outages and cybersecurity",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "MS",
+      "about_states": [],
+      "quote": "We have seen Microsoft services go offline, a nationwide ground stop, disruption within our major banking institutions, disruption of U.S. national security communications infrastructure.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official or company reports confirm each of the four disruptions in recent days: a Microsoft service outage, the nationwide ground stop, a disruption at major banks, and a disruption of U.S. national security communications. False if a record shows one of them did not occur. Cannot be determined if some are confirmed and others have no record.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "supported",
+      "finding": "Company and agency statements confirm all four: a Microsoft 365 outage on Nov. 12-13, the FAA's nationwide ground stop on Nov. 13, transaction delays at JPMorgan Chase, which also held up other banks' Chase transactions, on Nov. 16, and the NSA's \"temporary degradation\" of internal systems during maintenance on Nov. 17. The NSA said its mission-critical capabilities stayed up.",
+      "evidence": [
+        {
+          "label": "Fox News, timeline of the week's outages",
+          "url": "https://www.foxnews.com/us/america-hits-tech-wall-outages-cripple-email-ground-flights-disrupt-major-banks.print"
+        },
+        {
+          "label": "Gulf News, US hit by wave of outages",
+          "url": "https://gulfnews.com/world/americas/us-hit-by-wave-of-outages-microsoft-flights-banks-and-nsa-affected-1.500751032"
+        },
+        {
+          "label": "AP via WBTV, Microsoft says services fully restored",
+          "url": "https://www.wbtv.com/2026/11/14/microsoft-says-services-fully-restored-after-hourslong-global-outage/"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-19"
+    },
+    {
+      "id": 78,
+      "speaker": "Pablo José Hernández Rivera",
+      "office": "Resident Commissioner of Puerto Rico (U.S. House)",
+      "context": "Hernández Rivera spoke at the Nov. 18 House Homeland Security hearing with Secretary Mullin about immigration enforcement operations.",
+      "topic": "Immigration enforcement policy",
+      "broad_topic": "Immigration",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "When the government enters an apartment and zip-ties children and citizens, the government is the threat.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/lawmakers-press-mullin-on-flight-disruptions-and-ice-tactics"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    }
+  ]
+}
