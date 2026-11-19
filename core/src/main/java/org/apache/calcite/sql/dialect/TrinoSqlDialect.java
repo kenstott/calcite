@@ -33,10 +33,13 @@ import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlIntervalQualifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlLiteral;
+import org.apache.calcite.sql.SqlMapTypeNameSpec;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlNumericLiteral;
 import org.apache.calcite.sql.SqlOperator;
+import org.apache.calcite.sql.SqlRowTypeNameSpec;
+import org.apache.calcite.sql.SqlTypeNameSpec;
 import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.fun.SqlLibraryOperators;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -47,6 +50,7 @@ import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.RelToSqlConverterUtil;
 import org.apache.calcite.util.TimestampString;
+import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -255,6 +259,39 @@ public class TrinoSqlDialect extends PrestoSqlDialect {
       return paramTypes.size() == 2;
     }
     return SUPPORTED_OPERATORS.contains(operator);
+  }
+
+  /** {@inheritDoc}
+   *
+   * <p>Trino's MAP and ROW types take no {@code NULL} or {@code NOT NULL} on
+   * their components, so the nullability Calcite writes there is dropped. */
+  @Override public @Nullable SqlNode getCastSpec(RelDataType type) {
+    final SqlNode spec = super.getCastSpec(type);
+    if (spec instanceof SqlDataTypeSpec) {
+      return withoutNullability((SqlDataTypeSpec) spec);
+    }
+    return spec;
+  }
+
+  private static SqlDataTypeSpec withoutNullability(SqlDataTypeSpec spec) {
+    final SqlParserPos pos = spec.getParserPosition();
+    final SqlTypeNameSpec name = spec.getTypeNameSpec();
+    if (name instanceof SqlMapTypeNameSpec) {
+      final SqlMapTypeNameSpec map = (SqlMapTypeNameSpec) name;
+      return new SqlDataTypeSpec(
+          new SqlMapTypeNameSpec(withoutNullability(map.getKeyType()),
+              withoutNullability(map.getValType()), map.getParserPos()),
+          spec.getTimeZone(), pos);
+    }
+    if (name instanceof SqlRowTypeNameSpec) {
+      final SqlRowTypeNameSpec row = (SqlRowTypeNameSpec) name;
+      return new SqlDataTypeSpec(
+          new SqlRowTypeNameSpec(row.getParserPos(), row.getFieldNames(),
+              Util.transform(row.getFieldTypes(),
+                  TrinoSqlDialect::withoutNullability)),
+          spec.getTimeZone(), pos);
+    }
+    return new SqlDataTypeSpec(name, spec.getTimeZone(), pos);
   }
 
   /** {@inheritDoc}

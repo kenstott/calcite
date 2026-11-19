@@ -6187,6 +6187,110 @@ class RelToSqlConverterTest {
         .withDoris().ok(expectedStarRocks);
   }
 
+  /** Trino returns an empty string for a SUBSTRING start of 0 and counts a
+   * negative start from the end; a start that is not a literal of at least 1
+   * is clamped to 1, and the characters before position 1 count against the
+   * length, as in standard SQL (REQ-2257). */
+  @Test void testTrinoSubstringStartBelowOne() {
+    final String query = "select substring(\"brand_name\" from 0 for 2),\n"
+        + " substring(\"brand_name\" from \"product_id\" - 2),\n"
+        + " substring(\"brand_name\" from 1 for 2)\n"
+        + "from \"product\"";
+    final String expectedTrino = "SELECT SUBSTRING(\"brand_name\", GREATEST(0, 1),"
+        + " GREATEST(0 + 2 - GREATEST(0, 1), 0)),"
+        + " SUBSTRING(\"brand_name\", GREATEST(\"product_id\" - 2, 1)),"
+        + " SUBSTRING(\"brand_name\", 1, 2)\n"
+        + "FROM \"foodmart\".\"product\"";
+    sql(query).withTrino().ok(expectedTrino);
+  }
+
+  /** Units of EXTRACT that Trino lacks, or numbers differently (its day of
+   * week is ISO, Monday = 1), are rendered with Trino functions that give
+   * Calcite's answer (REQ-2257). */
+  @Test void testTrinoExtract() {
+    final String query = "select extract(dow from \"birth_date\"),\n"
+        + " extract(isodow from \"birth_date\"),\n"
+        + " extract(isoyear from \"birth_date\"),\n"
+        + " extract(doy from \"birth_date\"),\n"
+        + " extract(decade from \"birth_date\"),\n"
+        + " extract(century from \"birth_date\"),\n"
+        + " extract(millisecond from \"hire_date\"),\n"
+        + " extract(microsecond from \"hire_date\"),\n"
+        + " extract(epoch from \"hire_date\"),\n"
+        + " extract(year from \"hire_date\")\n"
+        + "from \"employee\"";
+    final String expectedTrino = "SELECT"
+        + " (MOD(DAY_OF_WEEK(\"birth_date\"), 7) + 1),"
+        + " (DAY_OF_WEEK(\"birth_date\")),"
+        + " (YEAR_OF_WEEK(\"birth_date\")),"
+        + " EXTRACT(DOY FROM \"birth_date\"),"
+        + " (YEAR(\"birth_date\") / 10),"
+        + " (CASE WHEN YEAR(\"birth_date\") > 0"
+        + " THEN (YEAR(\"birth_date\") + 99) / 100"
+        + " ELSE (YEAR(\"birth_date\") - 99) / 100 END),"
+        + " (SECOND(\"hire_date\") * 1000 + MILLISECOND(\"hire_date\")),"
+        + " ((SECOND(\"hire_date\") * 1000 + MILLISECOND(\"hire_date\"))"
+        + " * 1000),"
+        + " (DATE_DIFF('second', TIMESTAMP '1970-01-01 00:00:00',"
+        + " CAST(\"hire_date\" AS TIMESTAMP))),"
+        + " EXTRACT(YEAR FROM \"hire_date\")\n"
+        + "FROM \"foodmart\".\"employee\"";
+    sql(query).withTrino().ok(expectedTrino);
+  }
+
+  /** Calcite's week starts on Sunday, Trino's DATE_TRUNC('WEEK') on Monday
+   * (REQ-2257). */
+  @Test void testTrinoFloorToWeek() {
+    final String query = "select floor(\"hire_date\" to week),\n"
+        + " floor(\"hire_date\" to month)\n"
+        + "from \"employee\"";
+    final String expectedTrino = "SELECT"
+        + " (DATE_TRUNC('WEEK', \"hire_date\" + INTERVAL '1' DAY)"
+        + " - INTERVAL '1' DAY),"
+        + " DATE_TRUNC('MONTH', \"hire_date\")\n"
+        + "FROM \"foodmart\".\"employee\"";
+    sql(query).withTrino().ok(expectedTrino);
+  }
+
+  /** Trino rounds when it casts a DECIMAL or floating-point value to an
+   * integer type, Calcite truncates (REQ-2257). */
+  @Test void testTrinoCastFractionToInteger() {
+    final String query = "select cast(\"net_weight\" as integer),\n"
+        + " cast(cast(\"net_weight\" as decimal(10, 2)) as bigint),\n"
+        + " cast(\"product_id\" as bigint)\n"
+        + "from \"product\"";
+    final String expectedTrino = "SELECT"
+        + " CAST(TRUNCATE(\"net_weight\") AS INTEGER),"
+        + " CAST(TRUNCATE(CAST(\"net_weight\" AS DECIMAL(10, 2))) AS BIGINT),"
+        + " CAST(\"product_id\" AS BIGINT)\n"
+        + "FROM \"foodmart\".\"product\"";
+    sql(query).withTrino().ok(expectedTrino);
+  }
+
+  /** Trino's MAP type takes no NULL on its components (REQ-2257). A cast to
+   * ROW is checked against Trino in TrinoDialectLiveTest; here the converter
+   * folds it into the ROW constructor. */
+  @Test void testTrinoCastToMap() {
+    final String query = "select cast(map['k', \"product_id\"]"
+        + " as map<varchar(1), bigint>)\n"
+        + "from \"product\"";
+    final String expectedTrino = "SELECT CAST(MAP (ARRAY['k'],"
+        + " ARRAY[\"product_id\"]) AS MAP< VARCHAR(1), BIGINT >)\n"
+        + "FROM \"foodmart\".\"product\"";
+    sql(query).withTrino().ok(expectedTrino);
+  }
+
+  /** Trino has no SOME aggregate; its name is BOOL_OR (REQ-2257). */
+  @Test void testTrinoSomeIsBoolOr() {
+    final String query = "select some(\"product_id\" > 10),\n"
+        + " every(\"product_id\" > 10)\n"
+        + "from \"product\"";
+    final String expectedTrino = "SELECT BOOL_OR(\"product_id\" > 10),"
+        + " EVERY(\"product_id\" > 10)\n"
+        + "FROM \"foodmart\".\"product\"";
+    sql(query).withTrino().ok(expectedTrino);
+  }
+
   /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-1849">[CALCITE-1849]
    * Support sub-queries (RexSubQuery) in RelToSqlConverter</a>. */

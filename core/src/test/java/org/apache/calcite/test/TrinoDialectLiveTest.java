@@ -429,6 +429,73 @@ class TrinoDialectLiveTest {
     assertTrue(failures.isEmpty(), String.join("\n", failures));
   }
 
+  /** Casts to Trino's nested and zoned types, pushed through getCastSpec. */
+  @Test void nestedAndZonedCastsPushed() throws Exception {
+    final String[][] cases = {
+        {"cast(arr as bigint array)", "BIGINT ARRAY", "[1, 2, 3]"},
+        {"cast(m as map<varchar, bigint>)", "MAP<", "{k1=1, k2=2}"},
+        {"cast(ts6 as varchar)", "VARCHAR", "2024-03-15 10:20:30.123456"},
+        {"cast(c as varchar(5))", "VARCHAR(5)", "ab   "},
+        {"cast(tm as varchar)", "VARCHAR", "10:20:30.123"},
+    };
+    final List<String> failures = new ArrayList<>();
+    try (Connection c = calcite()) {
+      for (String[] cs : cases) {
+        final List<String> sqls = new ArrayList<>();
+        final String sql = "select " + cs[0] + " from trino.types_t";
+        try (Hook.Closeable ignored =
+                 Hook.QUERY_PLAN.addThread((Consumer<String>) sqls::add);
+             Statement s = c.createStatement();
+             ResultSet rs = s.executeQuery(sql)) {
+          rs.next();
+          final String got = render(rs.getObject(1));
+          System.out.println("CAST|" + cs[0] + "|" + got + "|" + sqls);
+          if (!cs[2].equals(got)
+              || sqls.stream().noneMatch(q -> q.contains(cs[1]))) {
+            failures.add(cs[0] + ": got " + got + " via " + sqls);
+          }
+        } catch (SQLException e) {
+          System.out.println("CAST|" + cs[0] + "|error|" + sqls + "|" + e);
+          failures.add(cs[0] + ": " + sqls + " " + e);
+        }
+      }
+    }
+    assertTrue(failures.isEmpty(), String.join("\n", failures));
+  }
+
+  /** A cast to ROW renders as Trino SQL that Trino runs, but the JDBC
+   * adapter cannot read the result: it reads a ROW-typed column's fields by
+   * reflection on the driver's {@code io.trino.jdbc.Row}, which has no such
+   * fields. The test runs the pushed SQL on Trino directly and pins the
+   * adapter's failure, so that a fix in the adapter shows up here. */
+  @Test void rowCastRunsOnTrinoButAdapterCannotReadRow() throws Exception {
+    final List<String> sqls = new ArrayList<>();
+    String adapterError = null;
+    try (Connection c = calcite();
+         Hook.Closeable ignored =
+             Hook.QUERY_PLAN.addThread((Consumer<String>) sqls::add);
+         Statement s = c.createStatement();
+         ResultSet rs = s.executeQuery("select cast(r as row(a bigint, b varchar))"
+             + " from trino.types_t")) {
+      rs.next();
+      rs.getObject(1);
+    } catch (SQLException e) {
+      adapterError = e.getMessage();
+    }
+    assertEquals("[SELECT CAST(\"r\" AS ROW(\"a\" BIGINT, \"b\" VARCHAR))\n"
+        + "FROM \"memory\".\"default\".\"types_t\"]", sqls.toString());
+    try (Connection t = trino(); Statement s = t.createStatement();
+         ResultSet rs = s.executeQuery(sqls.get(0))) {
+      rs.next();
+      assertEquals("{a=7, b=seven}", render(rs.getObject(1)));
+    }
+    System.out.println("ROUNDTRIP-GAP|row cast|adapter error " + adapterError);
+    assertTrue(adapterError != null
+            && adapterError.contains("NoSuchFieldException: a"),
+        () -> "the adapter now reads the ROW result; move this case to"
+            + " nestedAndZonedCastsPushed");
+  }
+
   /** Values the JDBC adapter reads wrongly for reasons outside the dialect.
    * Each row is the column, the value Trino holds, the value Calcite reads
    * today, and the reason; the test pins today's value so that a fix in the
@@ -507,7 +574,8 @@ class TrinoDialectLiveTest {
         rows = rows(c, sql);
       }
       final String plan = plan(c, sql);
-      System.out.println("PLAN|" + sql + "\n" + plan + "SQL|" + sqls);
+      System.out.println("PLAN|" + sql);
+      System.out.println(plan + "SQL|" + sqls);
       if (expectedRows != null) {
         assertEquals(expectedRows, rows.toString(), sql);
       }
@@ -532,7 +600,8 @@ class TrinoDialectLiveTest {
       final String plan = plan(c, sql);
       final List<List<Object>> expected =
           rows(c, sql.replace("trino.", "calc."));
-      System.out.println("KEPT|" + sql + "\n" + plan + "SQL|" + sqls);
+      System.out.println("KEPT|" + sql);
+      System.out.println(plan + "SQL|" + sqls);
       if (expectedRows != null) {
         assertEquals(expectedRows, rows.toString(), sql);
       }
