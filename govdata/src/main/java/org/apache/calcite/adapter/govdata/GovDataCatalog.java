@@ -115,16 +115,27 @@ public final class GovDataCatalog {
    * only when the seed shipped in this jar has it, so every listed name is queryable by the
    * engine that serves this release. The YAMLs on a branch can run ahead of the seed (a table
    * added after the seed was last rebuilt); those entries are left out until the seed carries
-   * them. Schemas left with no entry are dropped.
+   * them. The same holds at column grain: a column the seed does not declare for its table
+   * is not listed, since the served table cannot be queried by it. Schemas left with no
+   * entry are dropped.
    */
   public static ArrayNode buildServed(Collection<String> schemas) {
     Set<String> served = seedTables();
+    Set<String> servedColumns = seedColumns();
     ArrayNode out = MAPPER.createArrayNode();
     for (JsonNode sc : build(schemas)) {
       String schema = sc.path("schema").asText();
       ArrayNode kept = MAPPER.createArrayNode();
       for (JsonNode t : sc.path("tables")) {
-        if (served.contains(schema + "." + t.path("name").asText())) {
+        String table = schema + "." + t.path("name").asText();
+        if (served.contains(table)) {
+          ArrayNode cols = MAPPER.createArrayNode();
+          for (JsonNode c : t.path("columns")) {
+            if (servedColumns.contains(table + "." + c.path("name").asText())) {
+              cols.add(c);
+            }
+          }
+          ((ObjectNode) t).set("columns", cols);
           kept.add(t);
         }
       }
@@ -138,6 +149,15 @@ public final class GovDataCatalog {
 
   /** {@code schema.table} for every table and view in the seed's schema listing. */
   static Set<String> seedTables() {
+    Set<String> names = new HashSet<>();
+    for (String col : seedColumns()) {
+      names.add(col.substring(0, col.lastIndexOf('.')));
+    }
+    return names;
+  }
+
+  /** {@code schema.table.column} for every column in the seed's schema listing. */
+  static Set<String> seedColumns() {
     try (InputStream is = GovDataCatalog.class.getResourceAsStream(SEED_SCHEMA_RESOURCE)) {
       if (is == null) {
         throw new IllegalStateException(
@@ -152,9 +172,8 @@ public final class GovDataCatalog {
         }
         int colon = line.lastIndexOf(':');
         String col = colon < 0 ? line : line.substring(0, colon);
-        int lastDot = col.lastIndexOf('.');
-        if (lastDot > 0) {
-          names.add(col.substring(0, lastDot));
+        if (col.lastIndexOf('.') > 0) {
+          names.add(col);
         }
       }
       return names;

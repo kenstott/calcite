@@ -63,4 +63,27 @@ class GovDataCatalogServedTest {
     }
     throw new AssertionError("no YAML table missing from the seed found to exercise the filter");
   }
+
+  @Test void servedCatalogListsOnlySeedColumns() {
+    Set<String> seedColumns = GovDataCatalog.seedColumns();
+    boolean trimmed = false;
+    for (JsonNode sc : GovDataCatalog.buildServed(Arrays.asList("edu"))) {
+      for (JsonNode t : sc.path("tables")) {
+        String table = sc.path("schema").asText() + "." + t.path("name").asText();
+        for (JsonNode c : t.path("columns")) {
+          assertTrue(seedColumns.contains(table + "." + c.path("name").asText()),
+              table + "." + c.path("name").asText() + " is listed but not in the seed");
+        }
+      }
+    }
+    for (JsonNode sc : GovDataCatalog.build(Arrays.asList("edu"))) {
+      for (JsonNode t : sc.path("tables")) {
+        for (JsonNode c : t.path("columns")) {
+          String col = "edu." + t.path("name").asText() + "." + c.path("name").asText();
+          trimmed |= !seedColumns.contains(col);
+        }
+      }
+    }
+    assertTrue(trimmed, "no edu YAML column missing from the seed found to exercise the filter");
+  }
 }
