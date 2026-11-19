@@ -10,11 +10,13 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 R="$T/root"
 mkdir -p "$R/econ/gdp/metadata" "$R/econ/nohint/metadata" "$R/econ/legacy/acc1" "$R/econ/legacy/acc2" \
          "$R/econ/emptymeta/metadata" "$R/econ/type=qcew_bulk/year=2020" "$R/ref/vectorized_chunk_codes" \
-         "$R/ref/calendar/metadata" "$R/sec/year=2020" "$R/sec/filing/metadata"
+         "$R/ref/calendar/metadata" "$R/sec/year=2020" "$R/sec/filing/metadata" \
+         "$R/econ/vectorized_chunk_codes" "$R/telemetry/metadata"
 : > "$R/econ/gdp/metadata/v3.metadata.json"; : > "$R/econ/gdp/metadata/version-hint.text"
 : > "$R/econ/nohint/metadata/v1.metadata.json"
 : > "$R/econ/emptymeta/metadata/snap-1.avro"
 : > "$R/sec/filing/metadata/v1.metadata.json"
+: > "$R/econ/stray.marker"; : > "$R/telemetry/events.parquet"; : > "$R/telemetry/metadata/x.txt"
 mkdir -p "$T/bin"
 # stub rclone: lsf on a directory prints its entries (dirs with a trailing /); exit 3 when it is missing;
 # STUB_FAIL=<substring> makes any path containing it fail with rc 1; every path is logged.
@@ -46,11 +48,23 @@ ok "type=*_bulk plain folder is skipped"               '_is_excluded econ type=q
 ok "skipped names are logged once"                     '[ "$(grep -c "skipping non-Iceberg folders" "$T/info")" -eq 1 ] && grep -q "legacy" "$T/info" && grep -q "type=qcew_bulk" "$T/info"'
 ok "exclude flags carry the skipped folders"           '_set_exclude_args econ; [[ "${_EXARGS[*]}" == *"--exclude /legacy/**"* && "${_EXARGS[*]}" != *"/gdp/**"* ]]'
 ok "no recursive listing of a skipped folder"          '! grep -qE "/legacy/acc|/legacy$|/type=qcew_bulk/year" "$T/calls"'
+ok "plain vectorized_chunk_codes is synced anyway"     '! _is_excluded econ vectorized_chunk_codes'
+ok "vectorized_chunk_codes is not probed"              '! grep -q "/econ/vectorized_chunk_codes/metadata" "$T/calls"'
+ok "a plain root file is skipped"                      '_is_excluded econ stray.marker'
+ok "root file exclude flag matches the file itself"    '_set_exclude_args econ; [[ "${_EXARGS[*]}" == *"--exclude /stray.marker "* ]]'
+ok "exception list is logged"                          'grep -q "plain exceptions.*vectorized_chunk_codes" "$T/info"'
 ok "the skip set does not leak to another schema"      '! _is_excluded sec legacy'
 
 : > "$T/info"; _classify_schema ref 2>/dev/null; rc=$?
 ok "ref is synced in full, nothing skipped"            '[ "$rc" -eq 0 ] && ! _is_excluded ref vectorized_chunk_codes && ! _is_excluded ref calendar'
 ok "ref is not probed"                                 '! grep -q "/ref/vectorized_chunk_codes/metadata" "$T/calls"'
+
+_classify_schema telemetry 2>/dev/null
+ok "telemetry parquet files are synced"                '! _is_excluded telemetry events.parquet'
+ok "telemetry folder is synced"                        '! _is_excluded telemetry metadata'
+GOVDATA_R2_SYNC_ALWAYS="" ; ALWAYS_SYNC=""; _classify_schema econ 2>/dev/null
+ok "exceptions can be overridden away"                 '_is_excluded econ vectorized_chunk_codes'
+ALWAYS_SYNC="*/vectorized_chunk_codes telemetry/*"
 
 STUB_FAIL="/econ/nohint/metadata" _classify_schema econ 2>"$T/err"; rc=$?
 ok "a failing probe fails the classification"          '[ "$rc" -eq 75 ]'
