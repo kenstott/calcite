@@ -28,7 +28,8 @@
 #               and a code commit not on origin/main is refused): its newest "CI" workflow run
 #               (main.yml) on kenstott/calcite must be completed with conclusion success. A run
 #               still queued or in progress is waited for (CI_WAIT_SECS, default 90 min; a head with
-#               no run yet gets CI_NONE_GRACE_SECS, default 5 min). A cancelled, failed or missing
+#               no run yet gets CI_NONE_GRACE_SECS, default 5 min). A run that failed only while
+#               resolving a dependency or plugin is rerun once (failed jobs) and waited for again. A cancelled, failed or missing
 #               run, a timeout, or a run that cannot be read, is not green: nothing is released or
 #               staged, the reason (sha, run state, URL) is logged and the script exits 1, so the
 #               window continues on the jar already staged. The log then says the shared jar is
@@ -245,6 +246,15 @@ else:
 ' <<<"$runs" 2>&1 || { echo "CI for $1 could not be parsed"; return 1; }
 }
 
+# ci_setup_failure <run-url>: 0 when the run's failed jobs died resolving a build dependency or
+# plugin (before any code compiled), which says nothing about the code under test.
+ci_setup_failure() {
+  local id="${1##*/}" log
+  [[ "$id" =~ ^[0-9]+$ ]] || return 1
+  log="$(gh run view "$id" --repo "$FORK" --log-failed 2>/dev/null)" || return 1
+  grep -qE "could not resolve plugin artifact|Could not resolve [a-zA-Z0-9_.:-]+:[a-zA-Z0-9_.:-]+" <<<"$log"
+}
+
 # ci_gate: 0 when CI is completed/success for HEAD; otherwise 1. Sets ci_reason.
 # Every commit above the code commit is a generated seed/coverage commit that changes no code, so
 # the head's run covers the code commit too (a seed push cancels the code commit's own run through
@@ -252,7 +262,7 @@ else:
 # in progress is waited for, up to CI_WAIT_SECS; a head with no run yet gets CI_NONE_GRACE_SECS
 # for GitHub to start one. --dry-run never waits.
 ci_gate() {
-  local code_sha subject head state waited=0 limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
+  local code_sha subject head state waited=0 rerun_done=false limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
   code_sha=""
   while IFS=$'\t' read -r sha subject; do
     if ! grep -qE "$GENERATED_SUBJECTS" <<<"$subject"; then code_sha="$sha"; break; fi
@@ -274,6 +284,15 @@ ci_gate() {
       completed)
         if [ "$run_conclusion" = success ]; then
           ci_reason="CI green for $head, covering code commit $code_sha ($run_url)"; return 0
+        fi
+        # A run that failed only while resolving dependencies is rerun once (failed jobs only) and
+        # waited for again; any other failure, or a second one, refuses.
+        if ! $DRY_RUN && ! $rerun_done && [ "$run_conclusion" = failure ] && ci_setup_failure "$run_url"; then
+          if gh run rerun "${run_url##*/}" --failed --repo "$FORK" >/dev/null 2>&1; then
+            rerun_done=true
+            log "CI gate: $head failed resolving dependencies (no code compiled); reran the failed jobs once $run_url"
+            sleep 30; waited=$((waited + 30)); continue
+          fi
         fi
         ci_reason="CI not green for $head (code commit $code_sha): status=completed conclusion=${run_conclusion:-none} $run_url"
         return 1 ;;
