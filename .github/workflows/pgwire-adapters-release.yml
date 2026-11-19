@@ -137,6 +137,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      # Same plugin cache + retried resolution as main.yml: without it each matrix job resolves the
+      # buildSrc plugins fresh, and one not-found answer fails the job in ~22 s (#1350).
+      - name: Warm Gradle plugins
+        uses: ./.github/actions/warm-gradle-plugins
       - name: Build adapter jars + resolve runtime classpath
         run: |
           ./gradlew :${{ matrix.adapter.module }}:jar :core:jar :linq4j:jar \
