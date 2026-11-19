@@ -185,6 +185,11 @@ FULL_SCHEMAS="${GOVDATA_R2_SYNC_FULL_SCHEMAS:-ref}"
 # tables, or that live in a FULL_SCHEMAS schema. Space-separated globs matched against "<schema>/<top-level
 # dir>"; this is the single place the list lives. Override with GOVDATA_R2_SYNC_EXCLUDE.
 LEGACY_EXCLUDE="${GOVDATA_R2_SYNC_EXCLUDE:-sec/year=*}"
+# Plain (non-Iceberg) entries that are synced anyway: */vectorized_chunk_codes is plain parquet read at query
+# time, and the telemetry schema's parquet files stay until nothing is shown to read them. Space-separated
+# globs matched against "<schema>/<top-level name>"; LEGACY_EXCLUDE still wins. Override with
+# GOVDATA_R2_SYNC_ALWAYS.
+ALWAYS_SYNC="${GOVDATA_R2_SYNC_ALWAYS:-*/vectorized_chunk_codes telemetry/*}"
 # The schema whose non-Iceberg folders _classify_schema last recorded, and those folders' names. Set only
 # after a complete classification, so a failed one leaves nothing half-filtered.
 _SKIP_SCHEMA=""
@@ -215,7 +220,7 @@ _set_exclude_args() {
   local g gs gd globs k
   _EXARGS=()
   if [ "$1" = "$_SKIP_SCHEMA" ]; then
-    for k in ${_SKIP_DIRS[@]+"${_SKIP_DIRS[@]}"}; do _EXARGS+=(--exclude "/$k/**"); done
+    for k in ${_SKIP_DIRS[@]+"${_SKIP_DIRS[@]}"}; do _EXARGS+=(--exclude "/$k" --exclude "/$k/**"); done
   fi
   read -ra globs <<< "$LEGACY_EXCLUDE"
   for g in "${globs[@]}"; do
@@ -234,6 +239,17 @@ _lsf() {
     log_error "sync-to-r2: listing failed or exceeded ${LIST_CAP:-$LIST_MAX} (rc=$rc): rclone lsf $*" >&2
     return "$rc"
   fi
+}
+
+# _is_always_synced <schema> <name> → 0 when <schema>/<name> matches ALWAYS_SYNC.
+_is_always_synced() {
+  local g globs
+  read -ra globs <<< "$ALWAYS_SYNC"
+  for g in "${globs[@]}"; do
+    # shellcheck disable=SC2254
+    case "$1/$2" in $g) return 0 ;; esac
+  done
+  return 1
 }
 
 # _probe_iceberg <schema> <dir> → 0 when <schema>/<dir>/metadata/ holds a *.metadata.json, 1 when it does not
@@ -256,7 +272,7 @@ _probe_iceberg() {
 # a listing or probe failed: the caller holds the schema's sentinel, a failed probe never reads as "not Iceberg".
 # Folders matched by LEGACY_EXCLUDE are not probed; they are excluded either way.
 _classify_schema() {
-  local s=$1 lst d x names="" rc
+  local s=$1 lst flst d x names="" kept="" rc
   local skip=()
   _SKIP_SCHEMA=""; _SKIP_DIRS=()
   for x in ${FULL_SCHEMAS//,/ }; do
@@ -272,6 +288,7 @@ _classify_schema() {
   while IFS= read -r d; do
     [ -n "$d" ] || continue
     _is_excluded "$s" "$d" && continue
+    if _is_always_synced "$s" "$d"; then kept="$kept $d"; continue; fi
     rc=0; _probe_iceberg "$s" "$d" || rc=$?
     case "$rc" in
       0) ;;
@@ -279,9 +296,20 @@ _classify_schema() {
       *) return 75 ;;
     esac
   done <<< "$(sed 's#/*$##' <<< "$lst")"
+  # Plain files directly under the schema are not Iceberg tables either; they follow the same rule.
+  flst=$(_lsf --files-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s") || {
+    log_error "sync-to-r2: [$s] file listing failed — folders not classified"
+    return 75
+  }
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    _is_excluded "$s" "$d" && continue
+    if _is_always_synced "$s" "$d"; then kept="$kept $d"; continue; fi
+    skip+=("$d"); names="$names $d"
+  done <<< "$flst"
   _SKIP_SCHEMA=$s
   if [ "${#skip[@]}" -gt 0 ]; then _SKIP_DIRS=("${skip[@]}"); fi
-  log_info "sync-to-r2: [$s] skipping non-Iceberg folders:${names:- (none)}"
+  log_info "sync-to-r2: [$s] skipping non-Iceberg folders:${names:- (none)}; synced as plain exceptions (GOVDATA_R2_SYNC_ALWAYS):${kept:- (none)}"
 }
 
 # ── Pointer pinning ────────────────────────────────────────────────────────────
