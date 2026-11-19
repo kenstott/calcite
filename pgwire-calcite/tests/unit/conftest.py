@@ -25,6 +25,7 @@ from pgwire_calcite.classpath import ClasspathError, resolve_classpath
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
 MODEL = str(FIXTURES / "file-model.json")
 WIDE_MODEL = str(FIXTURES / "wide-model.json")
+SIZED_MODEL = str(FIXTURES / "sized-model.json")
 
 
 @pytest.fixture(scope="session")
@@ -55,5 +56,21 @@ def widetypes_backend():
     from pgwire_calcite.calcite_backend import CalciteBackend
 
     backend = CalciteBackend(model_path=WIDE_MODEL, jvm_args=["-Xmx1g"])
+    yield backend
+    backend.close()
+
+
+@pytest.fixture(scope="session")
+def sized_backend():
+    """A Calcite connection over a view whose columns declare sizes (REQ-2255): DECIMAL(7,2),
+    DECIMAL(10,0), VARCHAR(10), CHAR(3), an unsized VARCHAR, TIMESTAMP(3), TIMESTAMP and TIME(0).
+    A map-schema view needs no adapter jar, so it runs on CI's file-adapter classpath."""
+    try:
+        resolve_classpath()
+    except ClasspathError as exc:
+        pytest.skip(f"Calcite classpath unavailable: {exc}")
+    from pgwire_calcite.calcite_backend import CalciteBackend
+
+    backend = CalciteBackend(model_path=SIZED_MODEL, jvm_args=["-Xmx1g"])
     yield backend
     backend.close()

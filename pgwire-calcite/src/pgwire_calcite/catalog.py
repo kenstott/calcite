@@ -25,6 +25,7 @@ import re
 import threading
 from datetime import datetime, timezone
 
+from pgwire_calcite import normalize
 from pgwire_calcite.bulk_insert import insert_rows
 
 log = logging.getLogger(__name__)
@@ -76,7 +77,9 @@ _PG_TYPE_DISPLAY_NAMES: dict[str, str] = {
     "float8": "double precision",
     "varchar": "character varying",
     "bpchar": "character",
+    "timestamp": "timestamp without time zone",
     "timestamptz": "timestamp with time zone",
+    "time": "time without time zone",
     "timetz": "time with time zone",
 }
 
@@ -1732,6 +1735,7 @@ class CatalogIndex:  # REQ-532
         "table_type",
         "table_comment",
         "col_comment",
+        "col_typmod",
         "schema_comment",
     )
 
@@ -1746,6 +1750,8 @@ class CatalogIndex:  # REQ-532
         self.table_type: dict[int, str] = {}
         self.table_comment: dict[int, str | None] = {}
         self.col_comment: dict[tuple[int, str], str | None] = {}
+        #: (table oid, column) -> PostgreSQL atttypmod (REQ-2255; ColumnMeta.typmod)
+        self.col_typmod: dict[tuple[int, str], int] = {}
         #: every listed schema (SQL name) -> its comment or None, for information_schema.schemata
         self.schema_comment: dict[str, str | None] = {}
 
@@ -1800,6 +1806,7 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
             exposed = _p2s.get((tm.table_id, phys)) or apply_sql_name(phys)
             idx.all_cols.append((toid, exposed, col.data_type, col.is_nullable, i))
             idx.col_comment[(toid, exposed)] = col.comment
+            idx.col_typmod[(toid, exposed)] = col.typmod
             idx.col_attnum[(toid, exposed)] = i
             idx.attnum_to_col[(toid, i)] = exposed
 
@@ -1807,6 +1814,7 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
         for j, vcol in enumerate(virtual, len(real_cols) + 1):
             idx.all_cols.append((toid, vcol, "varchar", True, j))
             idx.col_comment[(toid, vcol)] = None
+            idx.col_typmod[(toid, vcol)] = -1
             idx.col_attnum[(toid, vcol)] = j
             idx.attnum_to_col[(toid, j)] = vcol
 
@@ -1868,6 +1876,9 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
         c, s, t = idx.toid_to_table.get(toid, (_DATABASE_NAME, "public", ""))
         pg_type = _trino_to_pg_name(col_type)
         null_str = "YES" if is_nullable else "NO"
+        char_len, num_prec, num_radix, num_scale, dt_prec = normalize.information_schema_sizes(
+            _trino_to_pg_oid(col_type), idx.col_typmod[(toid, col_name)]
+        )
         col_rows.append(
             (
                 c,
@@ -1878,12 +1889,12 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
                 None,
                 null_str,
                 pg_type,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
+                char_len,
+                None if char_len is None else char_len * 4,
+                num_prec,
+                num_radix,
+                num_scale,
+                dt_prec,
                 None,
                 None,
                 None,
@@ -2170,7 +2181,7 @@ def _populate_pg_attribute(db, idx: CatalogIndex, pk_notnull_cols: set = None) -
                 ordinal,
                 0,
                 -1,
-                -1,
+                idx.col_typmod[(toid, col_name)],
                 attbyval,
                 attalign,
                 attstorage,
@@ -3590,10 +3601,10 @@ SELECT CASE
         THEN 'numeric(' || CAST((((({mod}) - 4) >> 16) & 65535) AS VARCHAR)
              || ',' || CAST(((({mod}) - 4) & 65535) AS VARCHAR) || ')'
     WHEN _ft.typname IN ('timestamp', 'timestamptz', 'time', 'timetz') AND ({mod}) >= 0
-        THEN replace({display}, ' with time zone', '')
+        THEN CASE WHEN _ft.typname IN ('timestamp', 'timestamptz') THEN 'timestamp' ELSE 'time' END
              || '(' || CAST(({mod}) AS VARCHAR) || ')'
              || CASE WHEN _ft.typname IN ('timestamptz', 'timetz')
-                     THEN ' with time zone' ELSE '' END
+                     THEN ' with time zone' ELSE ' without time zone' END
     ELSE {display}
 END
 FROM _pg_type AS _ft WHERE _ft.oid = ({typid})

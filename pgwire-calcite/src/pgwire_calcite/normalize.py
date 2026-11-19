@@ -173,6 +173,78 @@ def pg_oid(sql_type: str) -> int:
     return type_mapping(sql_type).pg_oid
 
 
+#: PostgreSQL's limits on a declared size: numeric precision (NUMERIC_MAX_PRECISION) and a
+#: character type's length (MaxAttrSize / 1GB in characters, as varchar(n) accepts it).
+_NUMERIC_MAX_PRECISION = 1000
+_CHAR_MAX_LENGTH = 10485760
+#: MAX_TIMESTAMP_PRECISION / MAX_TIME_PRECISION.
+_MAX_DATETIME_PRECISION = 6
+#: VARHDRSZ: PostgreSQL stores a sized type's typmod offset by the varlena header size.
+_VARHDRSZ = 4
+
+
+def _declared_size(text: Optional[str]) -> Optional[int]:
+    """A JDBC COLUMN_SIZE / DECIMAL_DIGITS / precision as an int, or None when the source
+    declared none (NULL, or Calcite's PRECISION_NOT_SPECIFIED, -1)."""
+    if text is None:
+        return None
+    value = int(text)
+    return value if value >= 0 else None
+
+
+def pg_typmod(sql_type: str, column_size: Optional[str], decimal_digits: Optional[str]) -> int:
+    """PostgreSQL's atttypmod for a column of ``sql_type`` declared with JDBC ``column_size`` and
+    ``decimal_digits``, as pgwire and pg_attribute report it (REQ-2255, ported from Provisa's
+    REQ-1961): ``numeric(p,s)`` is ``((p << 16) | s) + 4``, a character type of length ``n`` is
+    ``n + 4``. Every other type, and a type declared without a size, is -1 -- PostgreSQL's own
+    "no modifier" value, which a client reads as an unconstrained column."""
+    oid = pg_oid(sql_type)
+    size = _declared_size(column_size)
+    if oid == 1700:
+        if size is None or size == 0 or size > _NUMERIC_MAX_PRECISION:
+            return -1
+        scale = _declared_size(decimal_digits)
+        scale = 0 if scale is None else scale
+        if scale > size:
+            return -1
+        return ((size << 16) | scale) + _VARHDRSZ
+    if oid in (1042, 1043):
+        if size is None or size == 0 or size > _CHAR_MAX_LENGTH:
+            return -1
+        return size + _VARHDRSZ
+    if oid in (1083, 1114):
+        # time(p) / timestamp(p): the typmod is p itself. Calcite's COLUMN_SIZE for these is the
+        # fractional-seconds precision (TIMESTAMP is TIMESTAMP(0)). PostgreSQL caps p at 6; a
+        # finer source precision has no PostgreSQL spelling, so it is the unconstrained type.
+        if size is None or size > _MAX_DATETIME_PRECISION:
+            return -1
+        return size
+    return -1
+
+
+def information_schema_sizes(oid: int, typmod: int) -> tuple:
+    """(character_maximum_length, numeric_precision, numeric_precision_radix, numeric_scale,
+    datetime_precision) of a column, as information_schema.columns reports them: PostgreSQL's
+    _pg_char_max_length, _pg_numeric_precision, _pg_numeric_precision_radix, _pg_numeric_scale
+    and _pg_datetime_precision over (atttypid, atttypmod)."""
+    char_len = num_prec = num_radix = num_scale = dt_prec = None
+    if oid in (1042, 1043) and typmod >= 0:
+        char_len = typmod - _VARHDRSZ
+    elif oid in (21, 23, 20):
+        num_prec, num_radix, num_scale = {21: 16, 23: 32, 20: 64}[oid], 2, 0
+    elif oid in (700, 701):
+        num_prec, num_radix = {700: 24, 701: 53}[oid], 2
+    elif oid == 1700:
+        num_radix = 10
+        if typmod >= 0:
+            raw = typmod - _VARHDRSZ
+            num_prec, num_scale = (raw >> 16) & 0xFFFF, raw & 0xFFFF
+    elif oid in (1082, 1083, 1114, 1184):
+        # date has precision 0; a time or timestamp without a typmod is 6.
+        dt_prec = 0 if oid == 1082 else (typmod if typmod >= 0 else 6)
+    return char_len, num_prec, num_radix, num_scale, dt_prec
+
+
 def pg_typname(sql_type: str) -> str:
     return type_mapping(sql_type).pg_typname
 
