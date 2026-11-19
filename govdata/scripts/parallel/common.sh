@@ -1884,9 +1884,11 @@ build_inline_model() {
 
 # Echoes the bundled schema YAML resource path (relative to the resources root) for a schema
 # name. Most schemas live at <schema>/<schema>-schema.yaml; the schemas that share a directory
-# with a sibling (econ_reference beside econ, cyber_vuln/cyber_threat under cyber) do not.
+# with a sibling (econ_reference beside econ, cyber_vuln/cyber_threat under cyber) do not; the
+# sec_* pool slots are workload splits of the single sec schema and share its YAML.
 schema_yaml_resource() {
   case "$1" in
+    sec_primary|sec_secondary|sec_13f|sec_prices) echo "sec/sec-schema.yaml" ;;
     econ_reference) echo "econ/econ-reference-schema.yaml" ;;
     cyber_vuln)     echo "cyber/cyber-vuln-schema.yaml" ;;
     cyber_threat)   echo "cyber/cyber-threat-schema.yaml" ;;

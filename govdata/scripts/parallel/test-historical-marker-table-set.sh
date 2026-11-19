@@ -52,4 +52,12 @@ queue=(); hcy_enqueue zz once; [ "${#queue[@]}" = 0 ] && ok "re-marked once slot
 printf 'once\n2019\n' > "$T/state/leg.done"; mkdir -p "$T/govdata/src/main/resources/leg"; cp "$YAML" "$T/govdata/src/main/resources/leg/leg-schema.yaml"
 queue=(); hcy_enqueue leg once; hcy_enqueue leg 2019; [ "${#queue[@]}" = 0 ] && ok "legacy bare markers stay valid" || bad "legacy"
 
+# #1349: every sec pool slot resolves to a bundled schema YAML that exists
+eval "$(sed -n '/^schema_yaml_resource()/,/^}/p' "$HERE/common.sh")"
+for slot in sec_primary sec_secondary sec_13f sec_prices; do
+  [ -f "$HERE/../../src/main/resources/$(schema_yaml_resource "$slot")" ] && ok "$slot resolves to an existing YAML" || bad "$slot YAML missing"
+done
+SCRIPT_DIR="$HERE"
+fp=$(hcy_fingerprint sec_13f 2025) && [ -n "$fp" ] && ok "sec_13f:2025 fingerprints" || bad "sec_13f fingerprint"
+
 exit $fail
