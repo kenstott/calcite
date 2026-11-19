@@ -52,15 +52,20 @@ final class Catalog {
             synchronized (Catalog.class) {
                 r = root;
                 if (r == null) {
-                    JsonNode built = null;
+                    // The driver's baked-in schema YAMLs, limited to the tables and views
+                    // the release's seed carries, so only names the engine can serve show.
+                    JsonNode built;
                     try {
-                        // The driver's baked-in schema YAMLs, limited to the tables and views
-                        // the release's seed carries, so only names the engine can serve show.
                         built = GovDataCatalog.buildServed(schemaList());
-                    } catch (Throwable ignored) {
-                        // fall through to empty catalog
+                    } catch (Exception e) {
+                        throw new IllegalStateException(
+                            "The catalog could not be built: " + e.getMessage(), e);
                     }
-                    root = (built != null && built.isArray()) ? built : MAPPER.createArrayNode();
+                    if (built == null || !built.isArray()) {
+                        throw new IllegalStateException(
+                            "The catalog could not be built: buildServed returned no array");
+                    }
+                    root = built;
                     r = root;
                 }
             }

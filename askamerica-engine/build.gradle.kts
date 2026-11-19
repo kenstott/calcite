@@ -164,12 +164,14 @@ val sharedSources by tasks.registering(Sync::class) {
     }
     into(layout.buildDirectory.dir("shared-sources"))
 }
-// What search_catalog and the tool descriptions read without a server: the schema YAMLs.
+// What search_catalog and the tool descriptions read without a server: the schema YAMLs
+// and the seed's table listing that limits them to what the release serves.
 // Also govdata's log4j2.xml, the logging configuration this jar has always shipped.
 val sharedResources by tasks.registering(Sync::class) {
     from("../govdata/src/main/resources") {
         include("**/*-schema.yaml")
         include("log4j2.xml")
+        include("duckdb/seed/govdata-seed.schema")
     }
     into(layout.buildDirectory.dir("shared-resources"))
 }
