@@ -3074,6 +3074,11 @@ partitionedTables:
         pattern: "type=industry_occupation_employment_history/year=*/"
       partition:
         columns: [type, year]
+        # The partition year is the OEWS reference year (effective_year), not the publish year the
+        # dimension iterates; without this the self-heal reads year=2025 as publish year 2025
+        # (reference 2024) and skips reference 2024 once reference 2025 exists.
+        valueSource:
+          year: effective_year
       options:
         compression: snappy
         batchSize: 50000
