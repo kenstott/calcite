@@ -814,6 +814,8 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         from pgwire_calcite import catalog as _catalog_settings
 
         _catalog_settings.publish_session_settings(self.settings)
+        ctx = self.ctx
+        _catalog_settings.publish_backend_pid(ctx.process_id if ctx is not None else 0)
 
         # Session / transaction commands: accepted and acknowledged, no real
         # transaction isolation (PGW-004). Empty result -> command tag from SQL.
