@@ -275,6 +275,9 @@ def _tag_from_sql(sql: str) -> str:
     return ""
 
 
+#: Wire types whose RowDescription OID takes a typmod: numeric(p,s), time(p), timestamp(p).
+_SIZED_WIRE_TYPES = frozenset({BVType.DECIMAL, BVType.TIME, BVType.TIMESTAMP})
+
 _DUCKDB_TYPE_TO_BVTYPE: dict[str, BVType] = {
     "INTEGER[]": BVType.INTEGERARRAY,
     "VARCHAR[]": BVType.STRINGARRAY,
@@ -369,6 +372,7 @@ class CalciteQueryResult(BVQueryResult):
     def __init__(self, result: TrinoResult, original_sql: str = "", status: str | None = None):
         super().__init__()
         self._cols = result.column_names
+        self._typmods = result.column_typmods
         self._status = status if status is not None else _tag_from_sql(original_sql)
         #: Command-tag prefix for a result that carries rows but is not a SELECT (a DML
         #: statement with RETURNING): "INSERT 0", "UPDATE" or "DELETE". None = "SELECT".
@@ -412,6 +416,15 @@ class CalciteQueryResult(BVQueryResult):
 
     def column(self, index: int) -> Tuple[str, BVType]:
         return (self._cols[index], self._types[index])
+
+    def column_typmod(self, index: int) -> int:
+        """The column's declared size (REQ-2255); a result with no source metadata (catalog
+        intercept, session commands) has none -- PostgreSQL's -1. A character column goes
+        out as text (OID 25), which has no length, so only a numeric, time or timestamp
+        column carries its typmod on the wire."""
+        if self._typmods is None or self._types[index] not in _SIZED_WIRE_TYPES:
+            return -1
+        return self._typmods[index]
 
     def rows(self) -> Iterator[list]:
         """Yield rows one batch at a time, resumably.
@@ -815,7 +828,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         result = backend.execute_sql(pg_sql, self.role_id, None, **self._statement_args())
         rows = [tuple(r) for r in result.iter_rows()]
         return TrinoResult(
-            rows=rows, column_names=list(result.column_names), column_types=result.column_types
+            rows=rows,
+            column_names=list(result.column_names),
+            column_types=result.column_types,
+            column_typmods=result.column_typmods,
         )
 
     def _execute_returning(self, backend, plan) -> TrinoResult:
@@ -851,12 +867,13 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         conditions = returning.key_conditions(key, keys) or ["1 = 0"]
         names: list = []
         types = None
+        typmods = None
         by_key: dict = {}
         for condition in conditions:
             chunk = self._select_rows(
                 backend, returning.select_sql(select_list, plan.table_sql, condition)
             )
-            names, types = chunk.column_names, chunk.column_types
+            names, types, typmods = chunk.column_names, chunk.column_types, chunk.column_typmods
             for row in chunk.rows:
                 by_key[str(row[-1])] = row[:-1]
         rows = [by_key[str(k)] for k in keys if str(k) in by_key]
@@ -864,6 +881,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             rows=rows,
             column_names=names[:-1],
             column_types=types[:-1] if types else None,
+            column_typmods=typmods[:-1] if typmods else None,
         )
 
     def parameter_oids(self, sql: str, cast_map: dict, count: int) -> list:

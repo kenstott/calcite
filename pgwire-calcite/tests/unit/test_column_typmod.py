@@ -134,3 +134,28 @@ def test_duckdb_attach_reads_a_sized_decimal_as_decimal(sized_backend):
     finally:
         con.close()
         srv.shutdown()
+
+
+def test_row_description_carries_numeric_and_timestamp_sizes(sized_backend):
+    """psycopg reads a column's precision and scale from RowDescription's typmod. A character
+    column goes out as text (OID 25), which carries no length."""
+    psycopg = pytest.importorskip("psycopg")
+    port = _free_port()
+    srv = launcher.serve(host="127.0.0.1", port=port, auth="none", backend=sized_backend)
+    time.sleep(0.2)
+    try:
+        with psycopg.connect(
+            f"host=127.0.0.1 port={port} user=tester dbname=postgres", autocommit=True
+        ) as conn:
+            cur = conn.execute(
+                'SELECT "amount", "whole", "name", "ts3", "id" FROM "SIZED"."sized"'
+            )
+            cols = {c.name: c for c in cur.description}
+            assert (cols["amount"].precision, cols["amount"].scale) == (7, 2)
+            assert (cols["whole"].precision, cols["whole"].scale) == (10, 0)
+            assert cols["ts3"].precision == 3
+            assert cols["name"].type_code == 25 and cols["name"].precision is None
+            assert cols["id"].precision is None
+            assert cur.fetchone()[0] == decimal.Decimal("5000.00")
+    finally:
+        srv.shutdown()

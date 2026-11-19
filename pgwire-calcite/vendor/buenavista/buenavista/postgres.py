@@ -728,7 +728,8 @@ class BuenaVistaHandler(socketserver.StreamRequestHandler):
             oid = BVTYPE_TO_PGTYPE.get(bvtype, PG_UNKNOWN)[0]
             buf.write_string(name)
             fmt = query_result.result_format[i] if query_result.result_format else 0
-            buf.write_bytes(struct.pack("!ihihih", 0, 0, oid, 0, -1, fmt))
+            typmod = query_result.column_typmod(i)
+            buf.write_bytes(struct.pack("!ihihih", 0, 0, oid, 0, typmod, fmt))
         out = buf.get_value()
         sig = struct.pack(
             "!cih",

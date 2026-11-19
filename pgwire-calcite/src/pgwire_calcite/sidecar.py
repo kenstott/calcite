@@ -258,7 +258,7 @@ class _ChildHandler(socketserver.StreamRequestHandler):
             body["max_queue_wait_ms"],
         )
         conn, lock = backend.lane(body["lane"])
-        names, labels, ipc = arrow_bridge.stream_ipc_batches(
+        names, labels, typmods, ipc = arrow_bridge.stream_ipc_batches(
             conn, lock, body["sql"], cancel_scope=scope
         )
         failure: Optional[BaseException] = None
@@ -267,7 +267,7 @@ class _ChildHandler(socketserver.StreamRequestHandler):
         try:
             self.wfile.write(_STATUS_OK)
             write_frame(
-                self.wfile, json.dumps({"names": names, "labels": labels}).encode("utf-8")
+                self.wfile, json.dumps({"names": names, "labels": labels, "typmods": typmods}).encode("utf-8")
             )
             self.wfile.flush()
             try:
@@ -574,6 +574,8 @@ class BridgeBackend:
         h = json.loads(header.decode("utf-8"))
         names: List[str] = h.get("names", [])
         labels: List[str] = h.get("labels", [])
+        # Written by the same package's child (above), so always present.
+        typmods: List[int] = h["typmods"]
 
         def _ipc_iter():
             while True:
@@ -596,4 +598,7 @@ class BridgeBackend:
             finally:
                 sock.close()
 
-        return QueryResult(column_names=names, column_types=labels, row_batches=_batches())
+        return QueryResult(
+            column_names=names, column_types=labels, column_typmods=typmods,
+            row_batches=_batches(),
+        )
