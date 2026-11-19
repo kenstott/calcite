@@ -1020,6 +1020,146 @@ SELECT 'weather', 'climate_area_monthly', 'known_value', CASE WHEN n = 1 THEN 'p
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_area_monthly', allow_moved_paths=true) WHERE element = 'tmpc' AND area_code = '001' AND year = 1895 AND month = 1 AND value = 43.1);
 
 -- ============================================================
+-- TABLE: enso_oni_seasonal (ENSO index, ops#1358)
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'weather', 'enso_oni_seasonal', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_oni_seasonal', 'row_count', CASE WHEN n >= 900 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '900', 'one row per season since DJF 1950'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true));
+
+SELECT 'enso_oni_seasonal' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_oni_seasonal', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_oni_seasonal', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_oni_seasonal', 'pk_dupes', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'duplicate (year, season) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, season FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_oni_seasonal', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows outside expected ranges'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true) WHERE center_month NOT BETWEEN 1 AND 12 OR oni_c NOT BETWEEN -3.5 AND 3.5 OR nino34_sst_c NOT BETWEEN 22 AND 32);
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_oni_seasonal', 'known_value', CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'DJF 1950 ONI is -1.32 (first value in the CPC file)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_oni_seasonal', allow_moved_paths=true) WHERE year = 1950 AND season = 'DJF' AND oni_c = -1.32 AND nino34_sst_c = 25.01);
+
+-- ============================================================
+-- TABLE: enso_roni_seasonal (ENSO index, ops#1358)
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'weather', 'enso_roni_seasonal', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_roni_seasonal', 'row_count', CASE WHEN n >= 900 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '900', 'one row per season since DJF 1950'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true));
+
+SELECT 'enso_roni_seasonal' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_roni_seasonal', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_roni_seasonal', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_roni_seasonal', 'pk_dupes', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'duplicate (year, season) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, season FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_roni_seasonal', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows outside expected ranges'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true) WHERE center_month NOT BETWEEN 1 AND 12 OR roni_c NOT BETWEEN -3.5 AND 3.5);
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_roni_seasonal', 'known_value', CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'DJF 1950 RONI is -1.19 (first value in the CPC file)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_roni_seasonal', allow_moved_paths=true) WHERE year = 1950 AND season = 'DJF' AND roni_c = -1.19);
+
+-- ============================================================
+-- TABLE: enso_nino_monthly (ENSO index, ops#1358)
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_monthly', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_monthly', 'row_count', CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '500', 'one row per month since Jan 1982'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true));
+
+SELECT 'enso_nino_monthly' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_monthly', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_monthly', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_monthly', 'pk_dupes', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'duplicate (year, month) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_monthly', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows outside expected ranges'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true) WHERE month NOT BETWEEN 1 AND 12 OR nino34_sst_c NOT BETWEEN 22 AND 32 OR nino34_anomaly_c NOT BETWEEN -4 AND 5 OR nino12_anomaly_c NOT BETWEEN -6 AND 8);
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_monthly', 'known_value', CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Jan 1982 Nino 3.4 SST is 26.65 with anomaly 0.08 (first value in the CPC file)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_monthly', allow_moved_paths=true) WHERE year = 1982 AND month = 1 AND nino34_sst_c = 26.65 AND nino34_anomaly_c = 0.08);
+
+-- ============================================================
+-- TABLE: enso_nino_weekly (ENSO index, ops#1358)
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_weekly', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_weekly', 'row_count', CASE WHEN n >= 2300 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '2300', 'one row per week since 2 Sep 1981'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true));
+
+SELECT 'enso_nino_weekly' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_weekly', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_weekly', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_weekly', 'pk_dupes', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'duplicate (week_center_date) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT week_center_date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_weekly', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows outside expected ranges'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true) WHERE nino34_sst_c NOT BETWEEN 22 AND 32 OR nino34_anomaly_c NOT BETWEEN -4 AND 5 OR dayofweek(CAST(week_center_date AS DATE)) <> 3);
+
+INSERT INTO dq_results
+SELECT 'weather', 'enso_nino_weekly', 'known_value', CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'week of 2 Sep 1981 Nino 3.4 SST is 26.5 with anomaly -0.2 (first value in the CPC file)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/enso_nino_weekly', allow_moved_paths=true) WHERE week_center_date = '1981-09-02' AND nino34_sst_c = 26.5 AND nino34_anomaly_c = -0.2);
+
+-- ============================================================
 SELECT '=== ALL DQ RESULTS ===' AS section;
 SELECT * FROM dq_results ORDER BY tbl, test;
 
