@@ -178,4 +178,12 @@ public class ExasolSqlDialect extends SqlDialect {
   @Override public TextComparisonPushdown getTextComparisonPushdown() {
     return TextComparisonPushdown.ALL;
   }
+
+  /** {@inheritDoc}
+   *
+   * <p>Exasol does not distinguish the empty string from NULL: an empty
+   * string literal or value is NULL. */
+  @Override public boolean treatsEmptyStringAsNull() {
+    return true;
+  }
 }

@@ -896,6 +896,21 @@ public class SqlDialect {
     return TextComparisonPushdown.NONE;
   }
 
+  /** Returns whether this database evaluates an empty character string as
+   * NULL.
+   *
+   * <p>Calcite treats {@code ''} as a string of length zero, distinct from
+   * NULL. On a database that returns true, a comparison with an empty
+   * character literal ({@code col = ''}, {@code col <> ''},
+   * {@code col IN ('', 'a')}, {@code col LIKE ''}) evaluates to UNKNOWN, so
+   * the JDBC adapter evaluates such comparisons in Calcite instead, whatever
+   * the {@link #getTextComparisonPushdown() text comparison level}.
+   *
+   * <p>The default is false. */
+  public boolean treatsEmptyStringAsNull() {
+    return false;
+  }
+
   public CalendarPolicy getCalendarPolicy() {
     return CalendarPolicy.NULL;
   }

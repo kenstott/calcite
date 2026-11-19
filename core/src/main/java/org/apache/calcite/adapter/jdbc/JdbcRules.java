@@ -46,6 +46,7 @@ import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.core.Minus;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.RelFactories;
+import org.apache.calcite.rel.core.SetOp;
 import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.Union;
@@ -56,12 +57,14 @@ import org.apache.calcite.rel.rel2sql.SqlImplementor;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexFieldCollation;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexOver;
 import org.apache.calcite.rex.RexProgram;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.rex.RexVisitorImpl;
+import org.apache.calcite.rex.RexWindow;
 import org.apache.calcite.schema.ModifiableTable;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlFunction;
@@ -71,12 +74,14 @@ import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.NlsString;
 import org.apache.calcite.util.Sarg;
 import org.apache.calcite.util.Util;
 import org.apache.calcite.util.trace.CalciteTrace;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Range;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -251,6 +256,7 @@ public class JdbcRules {
     consumer.accept(JdbcProjectRule.create(out));
     consumer.accept(JdbcFilterRule.create(out));
     consumer.accept(JdbcFilterSplitRule.create(out));
+    consumer.accept(JdbcFilterSplitRule.createOverProject(out));
     consumer.accept(JdbcAggregateRule.create(out));
     consumer.accept(JdbcSortRule.create(out));
     consumer.accept(JdbcUnionRule.create(out));
@@ -670,10 +676,12 @@ public class JdbcRules {
   }
 
   /** Returns whether a source with the given dialect can group by the
-   * aggregate's keys and compute its MIN and MAX calls as Calcite does.
+   * aggregate's keys and compute its MIN, MAX and DISTINCT calls as Calcite
+   * does.
    *
-   * <p>Grouping by a character value, or taking its MIN or MAX, is pushed
-   * only to a dialect whose
+   * <p>Grouping by a character value, taking its MIN or MAX, or aggregating
+   * its distinct values (COUNT(DISTINCT), for example) is pushed only to a
+   * dialect whose
    * {@link SqlDialect#getTextComparisonPushdown() text comparison level} is
    * {@link SqlDialect.TextComparisonPushdown#ALL ALL}. */
   static boolean canPushTextOrdering(Aggregate aggregate, SqlDialect dialect) {
@@ -689,6 +697,13 @@ public class JdbcRules {
       }
     }
     for (AggregateCall aggCall : aggregate.getAggCallList()) {
+      if (aggCall.isDistinct()) {
+        for (int arg : aggCall.getArgList()) {
+          if (SqlTypeUtil.inCharFamily(fields.get(arg).getType())) {
+            return false;
+          }
+        }
+      }
       switch (aggCall.getAggregation().getKind()) {
       case MIN:
       case MAX:
@@ -723,6 +738,28 @@ public class JdbcRules {
         : sort.getCollation().getFieldCollations()) {
       if (SqlTypeUtil.inCharFamily(
           fields.get(fieldCollation.getFieldIndex()).getType())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Returns whether a source with the given dialect can compare the rows
+   * of a set operation as Calcite does.
+   *
+   * <p>A set operation that compares rows (UNION, INTERSECT and EXCEPT
+   * without ALL) over a character column is pushed only to a dialect whose
+   * {@link SqlDialect#getTextComparisonPushdown() text comparison level} is
+   * {@link SqlDialect.TextComparisonPushdown#ALL ALL}, as GROUP BY is; UNION
+   * ALL compares nothing and is always pushed. */
+  static boolean canPushTextOrdering(SetOp setOp, SqlDialect dialect) {
+    if (setOp.all
+        || dialect.getTextComparisonPushdown()
+        == SqlDialect.TextComparisonPushdown.ALL) {
+      return true;
+    }
+    for (RelDataTypeField field : setOp.getRowType().getFieldList()) {
+      if (SqlTypeUtil.inCharFamily(field.getType())) {
         return false;
       }
     }
@@ -883,7 +920,9 @@ public class JdbcRules {
     /** Creates a JdbcUnionRule. */
     public static JdbcUnionRule create(JdbcConvention out) {
       return Config.INSTANCE
-          .withConversion(Union.class, Convention.NONE, out, "JdbcUnionRule")
+          .withConversion(Union.class,
+              union -> canPushTextOrdering(union, out.dialect),
+              Convention.NONE, out, "JdbcUnionRule")
           .withRuleFactory(JdbcUnionRule::new)
           .toRule(JdbcUnionRule.class);
     }
@@ -939,8 +978,9 @@ public class JdbcRules {
     /** Creates a JdbcIntersectRule. */
     public static JdbcIntersectRule create(JdbcConvention out) {
       return Config.INSTANCE
-          .withConversion(Intersect.class, Convention.NONE, out,
-              "JdbcIntersectRule")
+          .withConversion(Intersect.class,
+              intersect -> canPushTextOrdering(intersect, out.dialect),
+              Convention.NONE, out, "JdbcIntersectRule")
           .withRuleFactory(JdbcIntersectRule::new)
           .toRule(JdbcIntersectRule.class);
     }
@@ -993,7 +1033,9 @@ public class JdbcRules {
     /** Creates a JdbcMinusRule. */
     public static JdbcMinusRule create(JdbcConvention out) {
       return Config.INSTANCE
-          .withConversion(Minus.class, Convention.NONE, out, "JdbcMinusRule")
+          .withConversion(Minus.class,
+              minus -> canPushTextOrdering(minus, out.dialect),
+              Convention.NONE, out, "JdbcMinusRule")
           .withRuleFactory(JdbcMinusRule::new)
           .toRule(JdbcMinusRule.class);
     }
@@ -1216,14 +1258,15 @@ public class JdbcRules {
     }
 
     /** Returns whether a call, if it compares character values, compares
-     * them in a way the dialect's collation answers as Calcite does. */
+     * them in a way the dialect answers as Calcite does: its collation
+     * ({@link SqlDialect#getTextComparisonPushdown()}) and, for a comparison
+     * with an empty string, {@link SqlDialect#treatsEmptyStringAsNull()}. */
     private boolean canPushTextComparison(RexCall call) {
-      final SqlDialect.TextComparisonPushdown level =
-          dialect.getTextComparisonPushdown();
-      if (level == SqlDialect.TextComparisonPushdown.ALL
-          || !hasCharacterOperand(call)) {
+      if (!hasCharacterOperand(call)) {
         return true;
       }
+      final SqlDialect.TextComparisonPushdown level =
+          dialect.getTextComparisonPushdown();
       switch (call.getKind()) {
       case EQUALS:
       case NOT_EQUALS:
@@ -1233,22 +1276,95 @@ public class JdbcRules {
       case NOT_IN:
       case LIKE:
       case SIMILAR:
-        return level == SqlDialect.TextComparisonPushdown.EQUALITY;
+        return level != SqlDialect.TextComparisonPushdown.NONE
+            && !comparesWithEmptyString(call);
       case SEARCH:
         final Sarg<?> sarg =
             requireNonNull(((RexLiteral) call.getOperands().get(1))
                 .getValueAs(Sarg.class), "sarg");
-        return level == SqlDialect.TextComparisonPushdown.EQUALITY
+        if (dialect.treatsEmptyStringAsNull() && hasEmptyString(sarg)) {
+          return false;
+        }
+        return level == SqlDialect.TextComparisonPushdown.ALL
+            || level == SqlDialect.TextComparisonPushdown.EQUALITY
             && (sarg.isPoints() || sarg.isComplementedPoints());
       case LESS_THAN:
       case LESS_THAN_OR_EQUAL:
       case GREATER_THAN:
       case GREATER_THAN_OR_EQUAL:
       case BETWEEN:
-        return false;
+        return level == SqlDialect.TextComparisonPushdown.ALL
+            && !comparesWithEmptyString(call);
       default:
         return true;
       }
+    }
+
+    /** Returns whether the dialect evaluates an empty string as NULL and the
+     * call has an empty character literal operand. */
+    private boolean comparesWithEmptyString(RexCall call) {
+      if (!dialect.treatsEmptyStringAsNull()) {
+        return false;
+      }
+      for (RexNode operand : call.getOperands()) {
+        final RexNode e = RexUtil.removeCast(operand);
+        if (e instanceof RexLiteral
+            && !((RexLiteral) e).isNull()
+            && SqlTypeUtil.inCharFamily(e.getType())
+            && requireNonNull(((RexLiteral) e).getValueAs(String.class),
+                "value").isEmpty()) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /** Returns whether a search argument has the empty string as a point or
+     * a bound. */
+    private static boolean hasEmptyString(Sarg<?> sarg) {
+      for (Range<?> range : sarg.rangeSet.asRanges()) {
+        if (range.hasLowerBound() && isEmptyString(range.lowerEndpoint())
+            || range.hasUpperBound()
+            && isEmptyString(range.upperEndpoint())) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    private static boolean isEmptyString(Object value) {
+      return value instanceof NlsString
+          && ((NlsString) value).getValue().isEmpty();
+    }
+
+    @Override public Void visitOver(RexOver over) {
+      if (pushable && !canPushWindowOrdering(over)) {
+        pushable = false;
+      }
+      return super.visitOver(over);
+    }
+
+    /** Returns whether the dialect partitions and orders the window of a
+     * windowed aggregate as Calcite does: a character partition or order key
+     * is pushed only at level
+     * {@link SqlDialect.TextComparisonPushdown#ALL ALL}. */
+    private boolean canPushWindowOrdering(RexOver over) {
+      if (dialect.getTextComparisonPushdown()
+          == SqlDialect.TextComparisonPushdown.ALL) {
+        return true;
+      }
+      final RexWindow window = over.getWindow();
+      for (RexNode key : window.partitionKeys) {
+        if (SqlTypeUtil.inCharFamily(key.getType())) {
+          return false;
+        }
+      }
+      for (RexFieldCollation key : window.orderKeys) {
+        if (SqlTypeUtil.inCharFamily(key.left.getType())) {
+          return false;
+        }
+      }
+      return true;
     }
 
     private static boolean hasCharacterOperand(RexCall call) {

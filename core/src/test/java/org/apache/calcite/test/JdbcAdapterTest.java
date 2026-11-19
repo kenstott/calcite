@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.java.ReflectiveSchema;
 import org.apache.calcite.config.CalciteConnectionProperty;
 import org.apache.calcite.config.Lex;
 import org.apache.calcite.plan.RelOptPlanner;
+import org.apache.calcite.rel.rules.CoreRules;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.sql.SqlDialect;
@@ -1796,6 +1797,259 @@ class JdbcAdapterTest {
         .returns("ENAME=WARD\n");
   }
 
+  /** A comparison with an empty text literal is withheld from a source
+   * that evaluates the empty string as NULL, even at text level ALL; the
+   * rest of the filter is still pushed (REQ-2256). */
+  @Test void testEmptyStringComparisonWithheldWhenEmptyIsNull() {
+    CalciteAssert.model(scottModel(EmptyStringIsNullDialectFactory.class))
+        .query("select ename from scott.emp\n"
+            + "where ename <> '' and deptno = 10")
+        .explainContains("PLAN=EnumerableCalc(expr#0..7=[{inputs}], "
+            + "expr#8=['':VARCHAR(10)], expr#9=[<>($t1, $t8)], ENAME=[$t1], "
+            + "$condition=[$t9])\n"
+            + "  JdbcToEnumerableConverter\n"
+            + "    JdbcFilter(condition=[=(CAST($7):INTEGER, 10)])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("ENAME=CLARK", "ENAME=KING", "ENAME=MILLER");
+  }
+
+  @Test void testEmptyStringInListWithheldWhenEmptyIsNull() {
+    CalciteAssert.model(scottModel(EmptyStringIsNullDialectFactory.class))
+        .query("select ename from scott.emp where ename in ('', 'WARD')")
+        .explainContains("  JdbcToEnumerableConverter\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=WARD\n");
+  }
+
+  /** A comparison with a non-empty text literal is still pushed to that
+   * source. */
+  @Test void testNonEmptyStringComparisonPushedWhenEmptyIsNull() {
+    CalciteAssert.model(scottModel(EmptyStringIsNullDialectFactory.class))
+        .query("select ename from scott.emp\n"
+            + "where ename <> 'KING' and deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1])\n"
+            + "    JdbcFilter(condition=[AND(<>($1, 'KING'), "
+            + "=(CAST($7):INTEGER, 10))])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("ENAME=CLARK", "ENAME=MILLER");
+  }
+
+  /** COUNT(DISTINCT) on text is withheld from a source whose text level is
+   * below ALL, as GROUP BY is; it is pushed at ALL (REQ-2256). */
+  @Test void testTextCountDistinctWithheldBelowAll() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select count(distinct job) as c from scott.emp")
+        .explainContains("PLAN=EnumerableAggregate(group=[{}], C=[COUNT($0)])\n"
+            + "  EnumerableAggregate(group=[{2}])\n"
+            + "    JdbcToEnumerableConverter\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("C=5\n");
+  }
+
+  @Test void testTextCountDistinctPushedAtAll() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .query("select count(distinct job) as c from scott.emp")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{}], C=[COUNT(DISTINCT $2)])\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("C=5\n");
+  }
+
+  @Test void testNumericCountDistinctPushedBelowAll() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select count(distinct deptno) as c from scott.emp")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{}], C=[COUNT(DISTINCT $7)])\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("C=3\n");
+  }
+
+  /** UNION (distinct) of text rows is withheld from a source whose text
+   * level is below ALL; its inputs are still pushed (REQ-2256). */
+  @Test void testTextUnionWithheldBelowAll() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select job from scott.emp where deptno = 10\n"
+            + "union select job from scott.emp where deptno = 20")
+        .explainContains("EnumerableUnion(all=[false])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("JOB=ANALYST", "JOB=CLERK", "JOB=MANAGER",
+            "JOB=PRESIDENT");
+  }
+
+  @Test void testTextUnionPushedAtAll() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .query("select job from scott.emp where deptno = 10\n"
+            + "union select job from scott.emp where deptno = 20")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcUnion(all=[false])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("JOB=ANALYST", "JOB=CLERK", "JOB=MANAGER",
+            "JOB=PRESIDENT");
+  }
+
+  /** UNION ALL compares no rows and is pushed at any text level. */
+  @Test void testTextUnionAllPushedBelowAll() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select job from scott.emp where deptno = 10\n"
+            + "union all select job from scott.emp where deptno = 20")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcUnion(all=[true])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsCount(8);
+  }
+
+  @Test void testNumericUnionPushedBelowAll() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select empno from scott.emp where deptno = 10\n"
+            + "union select empno from scott.emp where deptno = 20")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcUnion(all=[false])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsCount(8);
+  }
+
+  /** EXCEPT (distinct) of text rows is withheld from a source whose text
+   * level is below ALL (REQ-2256). */
+  @Test void testTextExceptWithheldBelowAll() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select job from scott.emp where deptno = 10\n"
+            + "except select job from scott.emp where deptno = 20")
+        .explainContains("EnumerableMinus(all=[false])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("JOB=PRESIDENT\n");
+  }
+
+  @Test void testTextExceptPushedAtAll() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .query("select job from scott.emp where deptno = 10\n"
+            + "except select job from scott.emp where deptno = 20")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcMinus(all=[false])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("JOB=PRESIDENT\n");
+  }
+
+  /** INTERSECT (distinct) of text rows is withheld from a source whose text
+   * level is below ALL. The planner's rewrite of INTERSECT into UNION ALL
+   * and GROUP BY is removed so that JdbcIntersectRule decides (REQ-2256). */
+  @Test void testTextIntersectWithheldBelowAll() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .withHook(Hook.PLANNER, (Consumer<RelOptPlanner>) planner ->
+            planner.removeRule(CoreRules.INTERSECT_TO_DISTINCT))
+        .query("select job from scott.emp where deptno = 10\n"
+            + "intersect select job from scott.emp where deptno = 20")
+        .explainContains("EnumerableIntersect(all=[false])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("JOB=CLERK", "JOB=MANAGER");
+  }
+
+  @Test void testTextIntersectPushedAtAll() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .withHook(Hook.PLANNER, (Consumer<RelOptPlanner>) planner ->
+            planner.removeRule(CoreRules.INTERSECT_TO_DISTINCT))
+        .query("select job from scott.emp where deptno = 10\n"
+            + "intersect select job from scott.emp where deptno = 20")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcIntersect(all=[false])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("JOB=CLERK", "JOB=MANAGER");
+  }
+
+  /** A window ordered by text is withheld from a source whose text level is
+   * below ALL (REQ-2256). The pushed plans are checked by EXPLAIN only:
+   * HSQLDB does not run the window clause the JDBC adapter generates. */
+  @Test void testTextWindowOrderByWithheldBelowAll() {
+    CalciteAssert.model(scottModel(WindowTextEqualityOnlyDialectFactory.class))
+        .query("select ename, row_number() over (order by ename) as r\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("EnumerableWindow(window#0=[window(order by [")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("ENAME=CLARK; R=1", "ENAME=KING; R=2",
+            "ENAME=MILLER; R=3");
+  }
+
+  /** A window partitioned by text is withheld from a source whose text
+   * level is below ALL (REQ-2256). */
+  @Test void testTextWindowPartitionByWithheldBelowAll() {
+    CalciteAssert.model(scottModel(WindowTextEqualityOnlyDialectFactory.class))
+        .query("select ename,\n"
+            + "  row_number() over (partition by job order by empno) as r\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("  EnumerableWindow(window#0=[window(partition {2} ")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("ENAME=CLARK; R=1", "ENAME=KING; R=1",
+            "ENAME=MILLER; R=1");
+  }
+
+  @Test void testNumericWindowPushedBelowAll() {
+    CalciteAssert.model(scottModel(WindowTextEqualityOnlyDialectFactory.class))
+        .query("select ename,\n"
+            + "  row_number() over (partition by deptno order by empno) as r\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1], "
+            + "R=[ROW_NUMBER() OVER (PARTITION BY $7 ORDER BY $0)])\n");
+  }
+
+  @Test void testTextWindowPushedAtAll() {
+    CalciteAssert.model(scottModel(WindowDialectFactory.class))
+        .query("select ename,\n"
+            + "  row_number() over (partition by job order by ename) as r\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1], "
+            + "R=[ROW_NUMBER() OVER (PARTITION BY $2 ORDER BY $1)])\n");
+  }
+
+  /** A partly pushable filter over a project the planner cannot move it
+   * below (a windowed aggregate) is split: the pushable conjunct goes to the
+   * source above the project, the text comparison stays in Calcite
+   * (REQ-2256). Checked by EXPLAIN only: HSQLDB does not run the window
+   * clause the JDBC adapter generates. */
+  /** A partly pushable filter that reaches the planner over a project on
+   * the JDBC scan, not directly over the scan, is split: the pushable
+   * conjunct goes to the source above the project and the text comparison
+   * stays in Calcite (REQ-2256). The planner here does not move filters
+   * below projects, so the filter stays over the project. */
+  @Test void testPartlyPushableFilterOverProjectIsSplit() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .withHook(Hook.PLANNER, (Consumer<RelOptPlanner>) planner ->
+            planner.removeRule(CoreRules.FILTER_PROJECT_TRANSPOSE))
+        .query("select * from (\n"
+            + "  select ename, deptno * 2 as d from scott.emp)\n"
+            + "where ename = 'SMITH' and d = 40")
+        .explainContains("  JdbcToEnumerableConverter\n"
+            + "    JdbcFilter(condition=[=($1, 40)])\n"
+            + "      JdbcProject(ENAME=[$1], D=[*($7, 2)])\n"
+            + "        JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=SMITH; D=40\n");
+  }
+
   /** HSQLDB dialect that does not support UPPER. */
   public static class NoUpperDialectFactory implements SqlDialectFactory {
     @Override public SqlDialect create(DatabaseMetaData metaData) {
@@ -1841,6 +2095,52 @@ class JdbcAdapterTest {
       return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
         @Override public TextComparisonPushdown getTextComparisonPushdown() {
           return TextComparisonPushdown.NONE;
+        }
+      };
+    }
+  }
+
+  /** HSQLDB dialect, text level ALL, that is taken to evaluate the empty
+   * string as NULL, as Exasol does. */
+  public static class EmptyStringIsNullDialectFactory
+      implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public TextComparisonPushdown getTextComparisonPushdown() {
+          return TextComparisonPushdown.ALL;
+        }
+
+        @Override public boolean treatsEmptyStringAsNull() {
+          return true;
+        }
+      };
+    }
+  }
+
+  /** HSQLDB dialect, text level ALL, that is taken to support window
+   * functions. */
+  public static class WindowDialectFactory implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public boolean supportsWindowFunctions() {
+          return true;
+        }
+      };
+    }
+  }
+
+  /** HSQLDB dialect, text level EQUALITY, that is taken to support window
+   * functions. */
+  public static class WindowTextEqualityOnlyDialectFactory
+      implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public TextComparisonPushdown getTextComparisonPushdown() {
+          return TextComparisonPushdown.EQUALITY;
+        }
+
+        @Override public boolean supportsWindowFunctions() {
+          return true;
         }
       };
     }

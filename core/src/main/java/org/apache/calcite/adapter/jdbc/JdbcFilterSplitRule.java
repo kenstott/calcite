@@ -22,6 +22,7 @@ import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelRule;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Filter;
+import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.rules.SubstitutionRule;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexNode;
@@ -40,10 +41,12 @@ import java.util.List;
  * {@link JdbcRules.JdbcFilterRule} then pushes, and an upper one holding the
  * rest, which Calcite evaluates.
  *
- * <p>It matches only a filter whose input is in the rule's
- * {@link JdbcConvention}. It is a {@link SubstitutionRule} and prunes the
- * original filter, so the split replaces it rather than competing with it on
- * cost.
+ * <p>It matches a filter whose input is in the rule's {@link JdbcConvention}
+ * ({@link #create}), or is a {@link Project} whose input is
+ * ({@link #createOverProject}): a filter the planner has not moved below
+ * its project. It is a
+ * {@link SubstitutionRule} and prunes the original filter, so the split
+ * replaces it rather than competing with it on cost.
  */
 @Value.Enclosing
 public class JdbcFilterSplitRule extends RelRule<JdbcFilterSplitRule.Config>
@@ -67,6 +70,29 @@ public class JdbcFilterSplitRule extends RelRule<JdbcFilterSplitRule.Config>
                             out.dialect))
                 .anyInputs())
         .withDescription("JdbcFilterSplitRule(out:" + out + ")")
+        .build()
+        .toRule();
+  }
+
+  /** Creates a JdbcFilterSplitRule for a filter over a {@link Project} whose
+   * input is in the given JDBC convention; the lower filter goes between the
+   * filter and the project, and {@link JdbcRules.JdbcFilterRule} pushes it
+   * with the project. */
+  public static JdbcFilterSplitRule createOverProject(JdbcConvention out) {
+    return ImmutableJdbcFilterSplitRule.Config.builder()
+        .withDialect(out.dialect)
+        .withOperandSupplier(b0 ->
+            b0.operand(Filter.class)
+                .trait(Convention.NONE)
+                .predicate(filter ->
+                    isPartlyPushable(filter.getCondition(), out.dialect))
+                .oneInput(b1 ->
+                    b1.operand(Project.class)
+                        .trait(Convention.NONE)
+                        .predicate(project ->
+                            project.getInput().getConvention() == out)
+                        .anyInputs()))
+        .withDescription("JdbcFilterSplitRule:project(out:" + out + ")")
         .build()
         .toRule();
   }

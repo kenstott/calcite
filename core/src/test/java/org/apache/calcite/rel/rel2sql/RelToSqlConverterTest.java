@@ -5714,6 +5714,15 @@ class RelToSqlConverterTest {
         is(SqlDialect.TextComparisonPushdown.EQUALITY));
   }
 
+  /** Exasol evaluates the empty string as NULL, so the JDBC adapter
+   * withholds comparisons with an empty text literal from it; Calcite's own
+   * dialect does not (REQ-2256). */
+  @Test void testTreatsEmptyStringAsNullExasol() {
+    assertThat(ExasolSqlDialect.DEFAULT.treatsEmptyStringAsNull(), is(true));
+    assertThat(CalciteSqlDialect.DEFAULT.treatsEmptyStringAsNull(),
+        is(false));
+  }
+
   /** OFFSET without FETCH renders for Sybase instead of failing on the
    * missing fetch (REQ-2256). */
   @Test void testOffsetWithoutFetchSybase() {
