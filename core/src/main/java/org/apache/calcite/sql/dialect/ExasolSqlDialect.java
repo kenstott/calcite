@@ -171,9 +171,11 @@ public class ExasolSqlDialect extends SqlDialect {
 
   /** {@inheritDoc}
    *
-   * <p>Exasol equates character values as Calcite does; its ordering
-   * of non-ASCII characters is not documented to be by code point. */
+   * <p>Exasol has no collations and compares and sorts character values
+   * case- and accent-sensitively by their UTF-8 binary representation, which
+   * is code point order, as Calcite does (Exasol documentation, "Sorting" and
+   * "Character encoding"). */
   @Override public TextComparisonPushdown getTextComparisonPushdown() {
-    return TextComparisonPushdown.EQUALITY;
+    return TextComparisonPushdown.ALL;
   }
 }

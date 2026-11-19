@@ -62,7 +62,9 @@ import org.apache.calcite.sql.dialect.AnsiSqlDialect;
 import org.apache.calcite.sql.dialect.BigQuerySqlDialect;
 import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.dialect.ClickHouseSqlDialect;
+import org.apache.calcite.sql.dialect.Db2SqlDialect;
 import org.apache.calcite.sql.dialect.DuckDBSqlDialect;
+import org.apache.calcite.sql.dialect.ExasolSqlDialect;
 import org.apache.calcite.sql.dialect.HiveSqlDialect;
 import org.apache.calcite.sql.dialect.JethroDataSqlDialect;
 import org.apache.calcite.sql.dialect.MssqlSqlDialect;
@@ -5700,6 +5702,16 @@ class RelToSqlConverterTest {
     String expected = "SELECT TOP (1) *\nFROM [foodmart].[employee]";
     sql(query)
         .withMssql().ok(expected);
+  }
+
+  /** Exasol compares text by UTF-8 binary order, so every text comparison,
+   * sort and MIN/MAX is pushed to it; Db2's collation is chosen per database
+   * (IDENTITY or a language-aware one), so only equality is (REQ-2256). */
+  @Test void testTextComparisonPushdownExasolDb2() {
+    assertThat(ExasolSqlDialect.DEFAULT.getTextComparisonPushdown(),
+        is(SqlDialect.TextComparisonPushdown.ALL));
+    assertThat(Db2SqlDialect.DEFAULT.getTextComparisonPushdown(),
+        is(SqlDialect.TextComparisonPushdown.EQUALITY));
   }
 
   /** OFFSET without FETCH renders for Sybase instead of failing on the
