@@ -42,6 +42,7 @@ val testH2 by configurations.creating(integrationTestConfig)
 val testOracle by configurations.creating(integrationTestConfig)
 val testPostgresql by configurations.creating(integrationTestConfig)
 val testMysql by configurations.creating(integrationTestConfig)
+val testTrino by configurations.creating(integrationTestConfig)
 
 dependencies {
     api(project(":linq4j"))
@@ -95,6 +96,7 @@ dependencies {
     testMysql("mysql:mysql-connector-java")
     testOracle("com.oracle.ojdbc:ojdbc8")
     testPostgresql("org.postgresql:postgresql")
+    testTrino("io.trino:trino-jdbc:${property("trino.version")}")
 
     testImplementation(project(":testkit"))
     testImplementation("net.bytebuddy:byte-buddy")
@@ -309,4 +311,23 @@ for (db in listOf("h2", "mysql", "oracle", "postgresql")) {
     integTestAll {
         dependsOn(task)
     }
+}
+
+// TrinoDialectLiveTest starts a trinodb/trino container with the docker CLI,
+// so it needs a Linux container runtime; the default test task leaves it to
+// this task, which CI runs on Linux.
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("trino")
+    }
+}
+
+val integTestTrino by tasks.registering(Test::class) {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Runs the Trino dialect against a Trino server in Docker"
+    useJUnitPlatform {
+        includeTags("trino")
+    }
+    include("org/apache/calcite/test/TrinoDialectLiveTest.class")
+    classpath += configurations.getAt("testTrino")
 }
