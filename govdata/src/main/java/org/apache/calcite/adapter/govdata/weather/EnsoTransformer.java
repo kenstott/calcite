@@ -175,7 +175,7 @@ public final class EnsoTransformer {
           continue;
         }
         if (!sawHeader) {
-          if (line.trim().startsWith("Week")) {
+          if (line.trim().startsWith("Week ")) {
             sawHeader = true;
           }
           continue;
