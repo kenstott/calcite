@@ -3498,6 +3498,106 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS MORTGAGE STATUS - Owner-occupied units with / without a mortgage
+  # ---------------------------------------------------------------------------
+  - name: acs_mortgage_status
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Owner-occupied housing units by mortgage status from ACS 5-year table B25081
+      ("Mortgage Status"), at state and county levels: total owner-occupied units, units
+      with a mortgage (or contract to purchase or similar debt), and units without a
+      mortgage, each with its 90% margin of error. Computes the mortgage-free (owned free
+      and clear) homeowner share by geography as units_without_mortgage / owner_occupied_units
+      (the mortgage_free_share_pct column). Vintages 2020 onward: the B25081 variable layout
+      changed in the 2020 5-year release (units without a mortgage moved from B25081_008 to
+      B25081_009), and earlier vintages are not mapped here.
+
+    dimensions:
+      type:
+        - acs
+      # B25081_009 (units without a mortgage) exists only from the 2020 5-year vintage; 2017-2019
+      # return 400 "unknown variable 'B25081_009E'" and 2011-2016 carry the old layout where the
+      # same count is B25081_008. minYear floors at 2020.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2020
+        dataLag: 2
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: owner_occupied_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25081_001E" AS BIGINT)'
+        comment: Owner-occupied housing units (B25081 total)
+      - name: owner_occupied_units_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25081_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25081_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_occupied_units (Census variable B25081_001M; negative sentinels normalized to null)
+      - name: units_with_mortgage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25081_002E" AS BIGINT)'
+        comment: Owner-occupied units with a mortgage, contract to purchase, or similar debt
+      - name: units_with_mortgage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25081_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25081_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for units_with_mortgage (Census variable B25081_002M; negative sentinels normalized to null)
+      - name: units_without_mortgage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25081_009E" AS BIGINT)'
+        comment: Owner-occupied units without a mortgage (owned free and clear)
+      - name: units_without_mortgage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25081_009M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25081_009M" AS BIGINT) END'
+        comment: 90% CI margin of error for units_without_mortgage (Census variable B25081_009M; negative sentinels normalized to null)
+      - name: mortgage_free_share_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25081_001E" AS BIGINT) > 0 THEN 100.0 * TRY_CAST(src."B25081_009E" AS BIGINT) / TRY_CAST(src."B25081_001E" AS BIGINT) END'
+        comment: Percent of owner-occupied units with no mortgage (B25081_009 / B25081_001)
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B25081_001E,B25081_001M,B25081_002E,B25081_002M,B25081_009E,B25081_009M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_mortgage_status
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS HOUSING TENURE BY AGE OF HOUSEHOLDER - Owner/renter counts by age band
   # ---------------------------------------------------------------------------
   - name: acs_housing_tenure_by_age
