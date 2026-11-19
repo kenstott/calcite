@@ -31,6 +31,7 @@ import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.prepare.Prepare;
 import org.apache.calcite.rel.InvalidRelException;
 import org.apache.calcite.rel.RelCollation;
+import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.SingleRel;
@@ -53,6 +54,7 @@ import org.apache.calcite.rel.metadata.RelMdUtil;
 import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.rel2sql.SqlImplementor;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
@@ -248,6 +250,7 @@ public class JdbcRules {
     consumer.accept(JdbcJoinRule.create(out));
     consumer.accept(JdbcProjectRule.create(out));
     consumer.accept(JdbcFilterRule.create(out));
+    consumer.accept(JdbcFilterSplitRule.create(out));
     consumer.accept(JdbcAggregateRule.create(out));
     consumer.accept(JdbcSortRule.create(out));
     consumer.accept(JdbcUnionRule.create(out));
@@ -634,8 +637,9 @@ public class JdbcRules {
     /** Creates a JdbcAggregateRule. */
     public static JdbcAggregateRule create(JdbcConvention out) {
       return Config.INSTANCE
-          .withConversion(Aggregate.class, Convention.NONE, out,
-              "JdbcAggregateRule")
+          .withConversion(Aggregate.class,
+              agg -> canPushTextOrdering(agg, out.dialect),
+              Convention.NONE, out, "JdbcAggregateRule")
           .withRuleFactory(JdbcAggregateRule::new)
           .toRule(JdbcAggregateRule.class);
     }
@@ -663,6 +667,66 @@ public class JdbcRules {
         return null;
       }
     }
+  }
+
+  /** Returns whether a source with the given dialect can group by the
+   * aggregate's keys and compute its MIN and MAX calls as Calcite does.
+   *
+   * <p>Grouping by a character value, or taking its MIN or MAX, is pushed
+   * only to a dialect whose
+   * {@link SqlDialect#getTextComparisonPushdown() text comparison level} is
+   * {@link SqlDialect.TextComparisonPushdown#ALL ALL}. */
+  static boolean canPushTextOrdering(Aggregate aggregate, SqlDialect dialect) {
+    if (dialect.getTextComparisonPushdown()
+        == SqlDialect.TextComparisonPushdown.ALL) {
+      return true;
+    }
+    final List<RelDataTypeField> fields =
+        aggregate.getInput().getRowType().getFieldList();
+    for (int key : aggregate.getGroupSet()) {
+      if (SqlTypeUtil.inCharFamily(fields.get(key).getType())) {
+        return false;
+      }
+    }
+    for (AggregateCall aggCall : aggregate.getAggCallList()) {
+      switch (aggCall.getAggregation().getKind()) {
+      case MIN:
+      case MAX:
+        for (int arg : aggCall.getArgList()) {
+          if (SqlTypeUtil.inCharFamily(fields.get(arg).getType())) {
+            return false;
+          }
+        }
+        break;
+      default:
+        break;
+      }
+    }
+    return true;
+  }
+
+  /** Returns whether a source with the given dialect can sort by the sort's
+   * keys as Calcite does.
+   *
+   * <p>Sorting by a character value is pushed only to a dialect whose
+   * {@link SqlDialect#getTextComparisonPushdown() text comparison level} is
+   * {@link SqlDialect.TextComparisonPushdown#ALL ALL}; a sort with no keys
+   * (OFFSET and FETCH only) is always pushed. */
+  static boolean canPushTextOrdering(Sort sort, SqlDialect dialect) {
+    if (dialect.getTextComparisonPushdown()
+        == SqlDialect.TextComparisonPushdown.ALL) {
+      return true;
+    }
+    final List<RelDataTypeField> fields =
+        sort.getInput().getRowType().getFieldList();
+    for (RelFieldCollation fieldCollation
+        : sort.getCollation().getFieldCollations()) {
+      if (SqlTypeUtil.inCharFamily(
+          fields.get(fieldCollation.getFieldIndex()).getType())) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /** Returns whether this JDBC data source can implement a given aggregate
@@ -735,7 +799,9 @@ public class JdbcRules {
     /** Creates a JdbcSortRule. */
     public static JdbcSortRule create(JdbcConvention out) {
       return Config.INSTANCE
-          .withConversion(Sort.class, Convention.NONE, out, "JdbcSortRule")
+          .withConversion(Sort.class,
+              sort -> canPushTextOrdering(sort, out.dialect),
+              Convention.NONE, out, "JdbcSortRule")
           .withRuleFactory(JdbcSortRule::new)
           .toRule(JdbcSortRule.class);
     }

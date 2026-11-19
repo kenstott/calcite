@@ -1652,6 +1652,150 @@ class JdbcAdapterTest {
         .returns("ENAME=WARD\n");
   }
 
+  /** A filter whose conjuncts are only partly pushable is split: the safe
+   * conjunct goes to the source and the text comparison stays in Calcite
+   * (REQ-2256). */
+  @Test void testPartlyPushableFilterIsSplit() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select ename from scott.emp\n"
+            + "where ename = 'WARD' and deptno = 30")
+        .explainContains("  JdbcToEnumerableConverter\n"
+            + "    JdbcFilter(condition=[=(CAST($7):INTEGER, 30)])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .planHasSql("SELECT *\n"
+            + "FROM \"SCOTT\".\"EMP\"\n"
+            + "WHERE CAST(\"DEPTNO\" AS INTEGER) = 30")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=WARD\n");
+  }
+
+  /** ORDER BY on text is withheld from a source whose text level is below
+   * ALL; ORDER BY on a number is still pushed (REQ-2256). */
+  @Test void testTextOrderByWithheldBelowAll() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select ename from scott.emp where deptno = 10 order by ename")
+        .explainContains("PLAN=EnumerableSort(sort0=[$0], dir0=[ASC])\n"
+            + "  JdbcToEnumerableConverter\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=CLARK\nENAME=KING\nENAME=MILLER\n");
+  }
+
+  @Test void testTextOrderByPushedAtAll() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .query("select ename from scott.emp where deptno = 10 order by ename")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcSort(sort0=[$0], dir0=[ASC])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=CLARK\nENAME=KING\nENAME=MILLER\n");
+  }
+
+  @Test void testNumericOrderByPushedBelowAll() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select empno from scott.emp where deptno = 10 order by empno")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcSort(sort0=[$0], dir0=[ASC])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("EMPNO=7782\nEMPNO=7839\nEMPNO=7934\n");
+  }
+
+  /** GROUP BY on text is withheld from a source whose text level is below
+   * ALL (REQ-2256). */
+  @Test void testTextGroupByWithheldBelowAll() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select job, count(*) as c from scott.emp group by job")
+        .explainContains("PLAN=EnumerableAggregate(group=[{2}], C=[COUNT()])\n"
+            + "  JdbcToEnumerableConverter\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("JOB=ANALYST; C=2", "JOB=CLERK; C=4",
+            "JOB=MANAGER; C=3", "JOB=PRESIDENT; C=1", "JOB=SALESMAN; C=4");
+  }
+
+  @Test void testTextGroupByPushedAtAll() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .query("select job, count(*) as c from scott.emp group by job")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{2}], C=[COUNT()])\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("JOB=ANALYST; C=2", "JOB=CLERK; C=4",
+            "JOB=MANAGER; C=3", "JOB=PRESIDENT; C=1", "JOB=SALESMAN; C=4");
+  }
+
+  /** MIN and MAX on text are withheld from a source whose text level is
+   * below ALL; MAX on a number is still pushed (REQ-2256). */
+  @Test void testTextMinMaxWithheldBelowAll() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select deptno, min(ename) as lo, max(ename) as hi\n"
+            + "from scott.emp group by deptno")
+        .explainContains("PLAN=EnumerableAggregate(group=[{7}], "
+            + "LO=[MIN($1)], HI=[MAX($1)])\n"
+            + "  JdbcToEnumerableConverter\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("DEPTNO=10; LO=CLARK; HI=MILLER",
+            "DEPTNO=20; LO=ADAMS; HI=SMITH",
+            "DEPTNO=30; LO=ALLEN; HI=WARD");
+  }
+
+  @Test void testTextMinMaxPushedAtAll() {
+    CalciteAssert.model(JdbcTest.SCOTT_MODEL)
+        .query("select deptno, min(ename) as lo, max(ename) as hi\n"
+            + "from scott.emp group by deptno")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{7}], LO=[MIN($1)], HI=[MAX($1)])\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("DEPTNO=10; LO=CLARK; HI=MILLER",
+            "DEPTNO=20; LO=ADAMS; HI=SMITH",
+            "DEPTNO=30; LO=ALLEN; HI=WARD");
+  }
+
+  @Test void testNumericMaxPushedBelowAll() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select deptno, max(sal) as m from scott.emp group by deptno")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{7}], M=[MAX($5)])\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("DEPTNO=10; M=5000.00",
+            "DEPTNO=20; M=3000.00",
+            "DEPTNO=30; M=2850.00");
+  }
+
+  /** LIKE follows the equality rule: pushed under EQUALITY, withheld under
+   * NONE (REQ-2256). */
+  @Test void testLikePushedUnderEquality() {
+    CalciteAssert.model(scottModel(TextEqualityOnlyDialectFactory.class))
+        .query("select ename from scott.emp where ename like 'W%'")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1])\n"
+            + "    JdbcFilter(condition=[LIKE($1, 'W%')])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=WARD\n");
+  }
+
+  @Test void testLikeWithheldUnderNone() {
+    CalciteAssert.model(scottModel(NoTextComparisonDialectFactory.class))
+        .query("select ename from scott.emp where ename like 'W%'")
+        .explainContains("  JdbcToEnumerableConverter\n"
+            + "    JdbcTableScan(table=[[SCOTT, EMP]])\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("ENAME=WARD\n");
+  }
+
   /** HSQLDB dialect that does not support UPPER. */
   public static class NoUpperDialectFactory implements SqlDialectFactory {
     @Override public SqlDialect create(DatabaseMetaData metaData) {
