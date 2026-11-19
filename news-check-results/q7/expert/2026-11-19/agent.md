@@ -1,0 +1,5 @@
+# Fact-check: Paubox HIPAA Breach Report, November 2026
+**Rating: 1 Pinocchio.** All figures match the HHS data (via Paubox's Google Sheet): 34 breaches, 10,116,362 people; network server 27 / 10,106,558; EMR 64,728; Other 34,828; Email 4; iRhythm 8,179,772; COPC 1,351,650. Prior-year comps verified (2025: 1,419,860 / 22 network server, EMR 20,081, email 6; 2024 email 15).
+**Misleading framing:** categories overlap (27+5+4 plus 3 EMR > 34 total) and not disclosed; "network server" is a location, not an attack vector; EMR called "second most common" though only 3 breaches; headline driven by iRhythm (81%) - excluding it network server = 1,926,786, excluding COPC too 575,136; "accessed" overstates "affected".
+**Caveats:** HHS portal not directly queryable (sheet is a copy); "highest in five years" verified vs 2023-2025 only (2022 report unavailable). No attributed quotes in piece.
+Confidence: high on figures, medium on five-year claim. Board: agent-dashboard.png; report: agent-report.html.

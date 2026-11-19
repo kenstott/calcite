@@ -1635,5 +1635,145 @@
       "everyman": 3
     },
     "note": "hog record confirmed; COT combined series gap #1329"
+  },
+  {
+    "topic_slug": "cnbc-nahb-builder-sentiment-lowest-since-2012",
+    "headline": "Homebuilder sentiment plunges to 14-year low, leading more builders to drop prices",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q1/askamerica/2026-11-19",
+    "pinocchios": 1,
+    "source_url": "https://www.cnbc.com/2026/11/17/homebuilder-sentiment-plunges-to-14-year-low-leading-more-builders-to-drop-prices.html",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 1,
+      "everyman": 3
+    },
+    "note": "accurate; October rate-pullback partially false on Freddie Mac; tie askamerica/expert"
+  },
+  {
+    "topic_slug": "townhall-moreno-ev-prices-down-3-percent",
+    "headline": "Republican Senator Obliterates the Dems' Affordability Narrative in Under Four Minutes",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q2/askamerica/2026-11-19",
+    "pinocchios": 0,
+    "source_url": "https://townhall.com/news/mattvespa/2026/11/18/republican-senator-obliterates-the-dems-affordability-narrative-in-under-four-minutes-n2686659",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "EV -3% holds (KBB/Cox); causal claim mostly false; CPI new vehicles +0.74%; engine badge 0 (unsupported claims excluded)"
+  },
+  {
+    "topic_slug": "newsweek-mortgage-free-homeowners-west-virginia",
+    "headline": "Map Shows States Where Homeowners Are Most Likely to Be Mortgage-Free",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q3/askamerica/2026-11-19",
+    "pinocchios": 1,
+    "source_url": "https://newsweek.com/map-shows-states-where-homeowners-are-most-likely-to-be-mortgage-free-12725543",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "national trend + rates true; percent/point slip, MD-vs-DC contradiction; 2025 state shares unverifiable; gap #1357"
+  },
+  {
+    "topic_slug": "stateline-gallup-crime-perception-vs-fbi-2025",
+    "headline": "Americans increasingly see crime declining, but fears of scams persist, survey finds",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q4/askamerica/2026-11-19",
+    "pinocchios": 0,
+    "source_url": "https://yournews.com/2026/11/16/7270231/americans-increasingly-see-crime-declining-but-fears-of-scams-persist/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "accurate; murder 18.1 not 18.5; NCVS 25% excludes simple assault (expert only)"
+  },
+  {
+    "topic_slug": "crfb-cea-projections-vs-actual-gdp-debt-deficit",
+    "headline": "Trump CEA Projections Tracker",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q5/askamerica/2026-11-19",
+    "pinocchios": 0,
+    "source_url": "https://www.crfb.org/blogs/trump-cea-projections-tracker",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "actuals verified from warehouse (deficit, GDP, debt, primary deficit, revenue); revenue gap overstated; CEA scenario unnamed"
+  },
+  {
+    "topic_slug": "grist-strongest-el-nino-on-record-midwest-september-warmest",
+    "headline": "A monstrous El Nino has arrived. Here's what it means for where you live.",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q6/askamerica/2026-11-19",
+    "pinocchios": 1,
+    "source_url": "https://grist.org/extreme-weather/a-monstrous-el-nino-has-arrived-what-it-means-for-where-you-live/",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "strongest on record: daily Nino3.4 yes, RONI/monthly no; IL/MO records true; Midwest 132-yr unsupported; gaps #1358 #1359"
+  },
+  {
+    "topic_slug": "paubox-hipaa-breach-report-october-2026-network-server-highest-five-years",
+    "headline": "HIPAA Breach Report for November 2026",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q7/askamerica/2026-11-19",
+    "pinocchios": 0,
+    "source_url": "https://www.paubox.com/blog/hipaa-breach-report-for-november-2026",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "figures reproduce from HHS-derived sheet; iRhythm 81%; sheet covers only Oct 1-16; gap #1360"
+  },
+  {
+    "topic_slug": "ipwatchdog-gao-uspto-backlog-attrition-7-6-percent",
+    "headline": "GAO Report: USPTO's Backlog Reduction Goals Unsustainable if Workforce Strain, Examiner Attrition Continue",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q8/askamerica/2026-11-19",
+    "pinocchios": 1,
+    "source_url": "https://ipwatchdog.com/2026/11/05/gao-report-usptos-backlog-reduction-goals-unsustainable-if-workforce-strain-examiner-attrition-continue/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "GAO figures match; House not Senate ranking members; statute cite wrong; pendency rise omitted; gap #1361"
+  },
+  {
+    "topic_slug": "wtkr-hampton-roads-state-of-transportation-bridges-air-travel",
+    "headline": "Hampton Roads bridges show improvement, air travel surges in 2026 transportation report",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q9/askamerica/2026-11-19",
+    "pinocchios": 1,
+    "source_url": "https://www.wtkr.com/transportation/hampton-roads-bridges-show-improvement-air-travel-surges-in-2026-transportation-report",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "bridges 2.7% and air +46% reproduced from NBI and T-100; Newport News fell; Nichols 4% partially false; gap #1362"
+  },
+  {
+    "topic_slug": "texas-tribune-fema-denies-july-2026-flood-individual-assistance",
+    "headline": "FEMA Won't Help Texas After July 2026 Floods",
+    "checked_date": "2026-11-19",
+    "run_subpath": "q10/askamerica/2026-11-19",
+    "pinocchios": 2,
+    "source_url": "https://www.insurancejournal.com/magazines/mag-features/2026/11/09/891557.htm",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "headline false at publication: FEMA approved IA for 20 counties Oct 30 after Oct 27 appeal; reprint of Oct 21 Tribune piece"
   }
 ]

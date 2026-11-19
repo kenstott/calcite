@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The WTKR article's claims about Hampton Roads bridges, air travel and congestion are somewhat biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The WTKR article's claims about Hampton Roads bridges, air travel and congestion are somewhat biased and mostly accurate.</h1>
+<p class="subtitle">HRTPO State of Transportation in Hampton Roads (2025 ed.); FHWA NBI and BTS T-100 via AskAmerica</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.wtkr.com/transportation/hampton-roads-bridges-show-improvement-air-travel-surges-in-2026-transportation-report">https://www.wtkr.com/transportation/hampton-roads-bridges-show-improvement-air-travel-surges-in-2026-transportation-report</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Hampton Roads: article vs data</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="237" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="273" fill="#6b7280">Poor bridges 2025 (NBI, my calc)</text>
+  <text class="stat-value" x="36" y="303" fill="#1f2328">2.68%</text>
+  <text class="stat-delta" x="36" y="323" fill="#6b7280">34 of 1,271; article 2.7%</text>
+  </g>
+  <rect class="panel-edge" x="448" y="64" width="412" height="454" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="64" width="412" height="454" viewBox="0 0 412 454" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="454" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="13" style="font-size:13px" font-weight="600" text-anchor="middle">ORF+PHF departing domestic passengers (T-100)</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="91" y1="400" x2="390" y2="400" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="83" y="404" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="91" y1="342.67" x2="390" y2="342.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="83" y="346.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">500,000</text>
+      <line class="grid" x1="91" y1="285.33" x2="390" y2="285.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="83" y="289.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1M</text>
+      <line class="grid" x1="91" y1="228" x2="390" y2="228" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="83" y="232" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1.5M</text>
+      <line class="grid" x1="91" y1="170.67" x2="390" y2="170.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="83" y="174.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2M</text>
+      <line class="grid" x1="91" y1="113.33" x2="390" y2="113.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="83" y="117.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2.5M</text>
+      <line class="grid" x1="91" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-6" class="tick" x="83" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3M</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="91" y1="56" x2="91" y2="400" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="91" y1="400" x2="390" y2="400" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-y-axis-title" class="axis-title" x="14" y="228" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 228)">Passengers</text>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-2015" class="tick" x="140.83" y="418" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2015</text>
+      <text id="p2-xtick-2019" class="tick" x="240.50" y="418" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p2-xtick-2024" class="tick" x="340.17" y="418" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+    </g>
+    <g id="p2-series-passengers" class="series">
+      <g class="hover">
+        <title>2015 — Passengers: 1,733,373</title>
+        <rect id="p2-mark-passengers-2015" class="bar" x="108.94" y="201.24" width="62.79" height="198.76" fill="#2563eb"/>
+        <rect class="hit" x="108.94" y="56" width="62.79" height="344" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2019 — Passengers: 2,231,484</title>
+        <rect id="p2-mark-passengers-2019" class="bar" x="208.61" y="144.12" width="62.79" height="255.88" fill="#2563eb"/>
+        <rect class="hit" x="208.61" y="56" width="62.79" height="344" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Passengers: 2,541,047</title>
+        <rect id="p2-mark-passengers-2024" class="bar" x="308.27" y="108.63" width="62.79" height="291.37" fill="#2563eb"/>
+        <rect class="hit" x="308.27" y="56" width="62.79" height="344" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:61637/a/27a4b62facbd2a3dc24e1dc47e9cd969.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: 1 Pinocchio. The core numbers are accurate: poor-condition bridges 2.7% (my NBI calc 2.68%, 34 of 1,271) versus 5.0-5.5% in 2017, and regional air passengers +46% 2015-2024 (my BTS T-100 calc +46.6%). Flaws: the 17 hours of congestion delay is a 2024 figure labeled 2023; an engineer quote that traffic is still 4% below pre-pandemic conflicts with the report, which says travel has returned to pre-pandemic levels; the third Amtrak train is to be replaced by a bus during construction.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 89/100 — mostly honest</strong> &middot; <strong>Bias +33/100 — somewhat biased</strong></p><p>7 claims graded, 0 not gradable, 3 fell short. In this article only.</p></div>
+<p><strong>4</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>7</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>just 2.7% of bridges in Hampton Roads are currently classified as being in poor condition, a significant improvement from 2017, when more than 5% fell into that category.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO State of Transportation</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>travelers lost an average of 17 hours</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Rail travel has also expanded, with the Norfolk Amtrak station adding a third daily train in recent years</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>including the addition of international flights to destinations like Cancun</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>2</td><td>With roughly 1,300 bridges across the region</td><td><strong>true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>3</td><td>From 2015 to 2024, air travel out of Hampton Roads rose by 46%</td><td><strong>true</strong></td><td>Checked against: <code>transport.t100_segments</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>5</td><td>Traffic fatalities in the region remain higher than they were a decade ago, though recent trends offer some cautious optimism.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>7</td><td>including the addition of international flights to destinations like Cancun</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Rail travel has also expanded, with the Norfolk Amtrak station adding a third daily train in recent years</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>5</td><td>Traffic fatalities in the region remain higher than they were a decade ago, though recent trends offer some cautious optimism.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>travelers lost an average of 17 hours</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>3</td><td>From 2015 to 2024, air travel out of Hampton Roads rose by 46%</td><td><strong>true</strong></td><td>Checked against: <code>transport.t100_segments</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>2</td><td>With roughly 1,300 bridges across the region</td><td><strong>true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>1</td><td>just 2.7% of bridges in Hampton Roads are currently classified as being in poor condition, a significant improvement from 2017, when more than 5% fell into that category.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO State of Transportation</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>3</td><td>From 2015 to 2024, air travel out of Hampton Roads rose by 46%</td><td><strong>true</strong></td><td>Checked against: <code>transport.t100_segments</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>including the addition of international flights to destinations like Cancun</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>1</td><td>just 2.7% of bridges in Hampton Roads are currently classified as being in poor condition, a significant improvement from 2017, when more than 5% fell into that category.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO State of Transportation</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Rail travel has also expanded, with the Norfolk Amtrak station adding a third daily train in recent years</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>5</td><td>Traffic fatalities in the region remain higher than they were a decade ago, though recent trends offer some cautious optimism.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>travelers lost an average of 17 hours</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>2</td><td>With roughly 1,300 bridges across the region</td><td><strong>true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>travelers lost an average of 17 hours</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Rail travel has also expanded, with the Norfolk Amtrak station adding a third daily train in recent years</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>including the addition of international flights to destinations like Cancun</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>2</td><td>With roughly 1,300 bridges across the region</td><td><strong>true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>3</td><td>From 2015 to 2024, air travel out of Hampton Roads rose by 46%</td><td><strong>true</strong></td><td>Checked against: <code>transport.t100_segments</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>5</td><td>Traffic fatalities in the region remain higher than they were a decade ago, though recent trends offer some cautious optimism.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>1</td><td>just 2.7% of bridges in Hampton Roads are currently classified as being in poor condition, a significant improvement from 2017, when more than 5% fell into that category.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO State of Transportation</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>4</td><td>travelers lost an average of 17 hours</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Rail travel has also expanded, with the Norfolk Amtrak station adding a third daily train in recent years</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>including the addition of international flights to destinations like Cancun</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>5</td><td>Traffic fatalities in the region remain higher than they were a decade ago, though recent trends offer some cautious optimism.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>2</td><td>With roughly 1,300 bridges across the region</td><td><strong>true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr><tr class="verdict-true"><td>1</td><td>just 2.7% of bridges in Hampton Roads are currently classified as being in poor condition, a significant improvement from 2017, when more than 5% fell into that category.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO State of Transportation</a></td></tr><tr class="verdict-true"><td>3</td><td>From 2015 to 2024, air travel out of Hampton Roads rose by 46%</td><td><strong>true</strong></td><td>Checked against: <code>transport.t100_segments</code>; <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Keith Nichols — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 50/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> partially false &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-partially-false"><td>8</td><td>the amount of traffic we have on our roadways is still about 4% lower than what we saw prior to the pandemic.</td><td><strong>partially false</strong> &middot; central claim</td><td>Checked against: <a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; just 2.7% of bridges in Hampton Roads are currently classified as being in poor condition, a significant improvement from 2017, when more than 5% fell into that category.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2025: 34 of 1,271 NBI record_type=1 bridges in 16 Hampton Roads localities = 2.68%; 2017: 62 of 1,240 = 5.0% <code>transport.bridges</code></dd>
+<dt>Independent evidence</dt><dd>HRTPO report p.22: 34 bridges (2.7%) Aug 2025; 69 (5.5%) in 2017<ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO State of Transportation</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, COUNT(*), SUM(CASE WHEN bridge_condition IN ('Poor','P') THEN 1 ELSE 0 END) FROM transport.bridges WHERE state_code='51' AND record_type='1' AND county_code IN ('550','650','700','710','740','800','810','830','735','073','093','095','199','181','175','620') GROUP BY year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; With roughly 1,300 bridges across the region</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>1,271 primary bridge records in 2025 <code>transport.bridges</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>same as above</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; From 2015 to 2024, air travel out of Hampton Roads rose by 46%</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>T-100 domestic departing passengers ORF+PHF: 1,733,373 (2015) to 2,541,047 (2024) = +46.6%; 2019-2024 +13.9%. PHF fell 202,509 to 69,342 while ORF grew 61% <code>transport.t100_segments</code></dd>
+<dt>Independent evidence</dt><dd>HRTPO p.11: +46% 2015-2024, +14% 2019-2024<ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, origin, SUM(passengers) FROM transport.t100_segments WHERE origin IN ('ORF','PHF') AND year IN (2015,2019,2024) GROUP BY year, origin</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; travelers lost an average of 17 hours</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>HRTPO p.32: 17 hours lost in 2024, slightly below comparable metros (27th of 41)<ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>HRTPO (TomTom) gives 17 hours for 2024, not 2023 as the article states</dd>
+<dt>Warehouse searched for</dt><dd>Hampton Roads hours lost to congestion</dd>
+<dt>Web searches run</dt><dd>Hampton Roads hours lost to congestion TomTom</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Traffic fatalities in the region remain higher than they were a decade ago, though recent trends offer some cautious optimism.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>HRTPO p.37: 153 deaths in 2024, down from record 179 in 2021, up 26% over decade<ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>Hampton Roads traffic fatalities</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; Rail travel has also expanded, with the Norfolk Amtrak station adding a third daily train in recent years</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>HRTPO p.20<ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>Report says the third Norfolk-DC train is to be temporarily replaced by a bus because of construction constraints</dd>
+<dt>Warehouse searched for</dt><dd>Amtrak Norfolk service frequency</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; including the addition of international flights to destinations like Cancun</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>HRTPO p.14; WTKR related story on first nonstop international flight in 25 years<ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Report: Breeze weekly Norfolk-Cancun begins January 2026; one destination named</dd>
+<dt>Warehouse searched for</dt><dd>Norfolk international flights</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#8 &middot; <strong>partially false</strong> &mdash; the amount of traffic we have on our roadways is still about 4% lower than what we saw prior to the pandemic.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Keith Nichols — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>HRTPO pp.26-28<ul class="claim-sources"><li><a href="https://www.hrpdcva.gov/DocumentCenter/View/15070/T26-01-State-of-Transportation-in-Hampton-Roads-2025-">HRTPO report</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>HRTPO report says regional VMT has returned to pre-pandemic levels (VDOT) and VMT per capita is -0.4% vs 2019; count-station volumes fell 0.6% in 2023-24. The 4% found in the report is unrelated.</dd>
+<dt>Evidence found and set aside because</dt><dd>The '4%' hit on report page 13 refers to airport passengers, not roadway traffic; roadway pages 26-28 say VMT returned to pre-pandemic levels.</dd>
+<dt>Windows tested</dt><dd>VMT 2019 vs 2024: returned to pre-pandemic level; VMT per capita 2019 vs 2024: -0.4%</dd>
+<dt>Warehouse searched for</dt><dd>Hampton Roads vehicle miles traveled traffic volume</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Misleading framing</h2>
+<p>The headline says air travel 'surges in 2026' but all data end in 2024 (the report is the 2025 edition released in 2026). The 46% growth is entirely Norfolk: PHF departures fell from 202,509 to 69,342 (T-100), while ORF grew 61%. The report puts fatalities 26% above 2015 and the fatality rate up 20%; 'cautious optimism' is fair given the decline from the 2021 peak. Cancun service started January 2026, after the data period.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Quotes verbatim spoken, arrivals terminal construction, state of good repair program history</strong>: Whether quotes were spoken is not under test; terminal construction and program history not checked against a primary source.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>3 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 8 rows — 4885 ms</summary><pre><code>SELECT &quot;year&quot;, origin, SUM(passengers) AS pax FROM transport.t100_segments WHERE origin IN ('ORF','PHF') AND &quot;year&quot; IN (2015,2019,2024,2025) GROUP BY &quot;year&quot;, origin ORDER BY &quot;year&quot;, origin</code></pre></details>
+<details class="sqltoggle"><summary>query — 6 rows — 2437 ms</summary><pre><code>SELECT &quot;year&quot;, COUNT(*) AS n, SUM(CASE WHEN bridge_condition='Poor' OR bridge_condition='P' THEN 1 ELSE 0 END) AS poor, 100.0*SUM(CASE WHEN bridge_condition IN ('Poor','P') THEN 1 ELSE 0 END)/COUNT(*) AS pct FROM transport.bridges WHERE state_code='51' AND county_code IN ('550','650','700','710','740','800','810','830','735','073','093','095','199','181','175','620','735') AND record_type IN ('1','2') AND &quot;year&quot; IN (2017,2019,2021,2023,2024,2025) GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 820 ms</summary><pre><code>SELECT &quot;year&quot;, COUNT(*) AS n, SUM(CASE WHEN bridge_condition IN ('Poor','P') THEN 1 ELSE 0 END) AS poor, 100.0*SUM(CASE WHEN bridge_condition IN ('Poor','P') THEN 1 ELSE 0 END)/COUNT(*) AS pct FROM transport.bridges WHERE state_code='51' AND county_code IN ('550','650','700','710','740','800','810','830','735','073','093','095','199','181','175','620') AND record_type='1' AND &quot;year&quot; IN (2017,2019,2023,2025) GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

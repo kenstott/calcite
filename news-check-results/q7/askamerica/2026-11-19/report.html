@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Paubox HIPAA Breach Report for November 2026 article's claims about October 2026 breach counts, people affected and year-over-year comparisons are balanced and accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Paubox HIPAA Breach Report for November 2026 article's claims about October 2026 breach counts, people affected and year-over-year comparisons are balanced and accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2026">https://www.paubox.com/blog/hipaa-breach-report-for-november-2026</a></p>
+</header>
+<section>
+<h2>Summary</h2>
+<p>Rating: 0 Pinocchios on factual accuracy. Every figure in the piece reproduces exactly from the HHS-derived sheet Paubox links, and every year-over-year comparison matches Paubox's own prior reports. The headline (network server people affected, 10.1M, highest of five Octobers) is arithmetically right. Context a reader needs is missing: iRhythm alone is 80.9% of the 10.1M, and the sheet's submission dates stop at 10/16/2026, so the month looks partial.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — honest</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>13 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>13</strong> true &middot; <strong>13</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>6</td><td>The number of people affected by network server breaches was the highest in five years, up from 1,419,860 in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr><tr class="verdict-true"><td>1</td><td>Network server breaches affected the most people. 10,106,558 individuals had their data breached.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet (HHS data), CSV export</a></td></tr><tr class="verdict-true"><td>2</td><td>Electronic medical record breaches were the second most common breach, with 64,728 people affected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>3</td><td>Other breaches affected 34,828 people, the third most impactful breach type.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>4</td><td>There were 27 network server breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>5</td><td>Other breaches were the second most common attack vector, with 5 breaches. Email breaches were the third most common attack vector, with 4 breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>7</td><td>Electronic medical record breaches rose to 64,728, up from 20,081 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></td></tr><tr class="verdict-true"><td>8</td><td>Network server breaches continue to be the most frequent attack vector, accounting for 27 incidents in October 2026, up from 22 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>9</td><td>Email breaches dropped to 4 incidents, down from 6 in 2025, continuing a decline from 15 in 2024.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>10</td><td>iRhythm Technologies, Inc. had the most significant breach, which affected 8,179,772 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://securityweek.com/hhs-filing-puts-irhythm-data-breach-toll-at-8-2-million">SecurityWeek (403 on fetch; search summary only)</a></td></tr><tr class="verdict-true"><td>11</td><td>Central Ohio Primary Care Physicians, Inc. (COPC) had the second-largest breach, affecting 1,351,650 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>12</td><td>Overall, 10,116,362 individuals had their data accessed via 34 breaches reported in October 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>13</td><td>The yearly comparison shows that network server breaches remain the most popular attack vector for bad actors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-november-2022">Paubox Nov 2022 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>13</td><td>The yearly comparison shows that network server breaches remain the most popular attack vector for bad actors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-november-2022">Paubox Nov 2022 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr><tr class="verdict-true"><td>12</td><td>Overall, 10,116,362 individuals had their data accessed via 34 breaches reported in October 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>11</td><td>Central Ohio Primary Care Physicians, Inc. (COPC) had the second-largest breach, affecting 1,351,650 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>10</td><td>iRhythm Technologies, Inc. had the most significant breach, which affected 8,179,772 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://securityweek.com/hhs-filing-puts-irhythm-data-breach-toll-at-8-2-million">SecurityWeek (403 on fetch; search summary only)</a></td></tr><tr class="verdict-true"><td>9</td><td>Email breaches dropped to 4 incidents, down from 6 in 2025, continuing a decline from 15 in 2024.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>8</td><td>Network server breaches continue to be the most frequent attack vector, accounting for 27 incidents in October 2026, up from 22 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>7</td><td>Electronic medical record breaches rose to 64,728, up from 20,081 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></td></tr><tr class="verdict-true"><td>6</td><td>The number of people affected by network server breaches was the highest in five years, up from 1,419,860 in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr><tr class="verdict-true"><td>5</td><td>Other breaches were the second most common attack vector, with 5 breaches. Email breaches were the third most common attack vector, with 4 breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>4</td><td>There were 27 network server breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>3</td><td>Other breaches affected 34,828 people, the third most impactful breach type.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>2</td><td>Electronic medical record breaches were the second most common breach, with 64,728 people affected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>1</td><td>Network server breaches affected the most people. 10,106,558 individuals had their data breached.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet (HHS data), CSV export</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>7</td><td>Electronic medical record breaches rose to 64,728, up from 20,081 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></td></tr><tr class="verdict-true"><td>12</td><td>Overall, 10,116,362 individuals had their data accessed via 34 breaches reported in October 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>9</td><td>Email breaches dropped to 4 incidents, down from 6 in 2025, continuing a decline from 15 in 2024.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>8</td><td>Network server breaches continue to be the most frequent attack vector, accounting for 27 incidents in October 2026, up from 22 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>6</td><td>The number of people affected by network server breaches was the highest in five years, up from 1,419,860 in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr><tr class="verdict-true"><td>2</td><td>Electronic medical record breaches were the second most common breach, with 64,728 people affected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>3</td><td>Other breaches affected 34,828 people, the third most impactful breach type.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>4</td><td>There were 27 network server breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>1</td><td>Network server breaches affected the most people. 10,106,558 individuals had their data breached.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet (HHS data), CSV export</a></td></tr><tr class="verdict-true"><td>5</td><td>Other breaches were the second most common attack vector, with 5 breaches. Email breaches were the third most common attack vector, with 4 breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>10</td><td>iRhythm Technologies, Inc. had the most significant breach, which affected 8,179,772 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://securityweek.com/hhs-filing-puts-irhythm-data-breach-toll-at-8-2-million">SecurityWeek (403 on fetch; search summary only)</a></td></tr><tr class="verdict-true"><td>11</td><td>Central Ohio Primary Care Physicians, Inc. (COPC) had the second-largest breach, affecting 1,351,650 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>13</td><td>The yearly comparison shows that network server breaches remain the most popular attack vector for bad actors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-november-2022">Paubox Nov 2022 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-true"><td>1</td><td>Network server breaches affected the most people. 10,106,558 individuals had their data breached.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet (HHS data), CSV export</a></td></tr><tr class="verdict-true"><td>2</td><td>Electronic medical record breaches were the second most common breach, with 64,728 people affected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>3</td><td>Other breaches affected 34,828 people, the third most impactful breach type.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>4</td><td>There were 27 network server breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>5</td><td>Other breaches were the second most common attack vector, with 5 breaches. Email breaches were the third most common attack vector, with 4 breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>7</td><td>Electronic medical record breaches rose to 64,728, up from 20,081 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></td></tr><tr class="verdict-true"><td>8</td><td>Network server breaches continue to be the most frequent attack vector, accounting for 27 incidents in October 2026, up from 22 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>9</td><td>Email breaches dropped to 4 incidents, down from 6 in 2025, continuing a decline from 15 in 2024.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>10</td><td>iRhythm Technologies, Inc. had the most significant breach, which affected 8,179,772 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://securityweek.com/hhs-filing-puts-irhythm-data-breach-toll-at-8-2-million">SecurityWeek (403 on fetch; search summary only)</a></td></tr><tr class="verdict-true"><td>11</td><td>Central Ohio Primary Care Physicians, Inc. (COPC) had the second-largest breach, affecting 1,351,650 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>12</td><td>Overall, 10,116,362 individuals had their data accessed via 34 breaches reported in October 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>13</td><td>The yearly comparison shows that network server breaches remain the most popular attack vector for bad actors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-november-2022">Paubox Nov 2022 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr><tr class="verdict-true"><td>6</td><td>The number of people affected by network server breaches was the highest in five years, up from 1,419,860 in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>11</td><td>Central Ohio Primary Care Physicians, Inc. (COPC) had the second-largest breach, affecting 1,351,650 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>2</td><td>Electronic medical record breaches were the second most common breach, with 64,728 people affected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>3</td><td>Other breaches affected 34,828 people, the third most impactful breach type.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>4</td><td>There were 27 network server breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>5</td><td>Other breaches were the second most common attack vector, with 5 breaches. Email breaches were the third most common attack vector, with 4 breaches.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></td></tr><tr class="verdict-true"><td>1</td><td>Network server breaches affected the most people. 10,106,558 individuals had their data breached.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet (HHS data), CSV export</a></td></tr><tr class="verdict-true"><td>12</td><td>Overall, 10,116,362 individuals had their data accessed via 34 breaches reported in October 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></td></tr><tr class="verdict-true"><td>10</td><td>iRhythm Technologies, Inc. had the most significant breach, which affected 8,179,772 people.</td><td><strong>true</strong></td><td>Checked against: <a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a>; <a href="https://securityweek.com/hhs-filing-puts-irhythm-data-breach-toll-at-8-2-million">SecurityWeek (403 on fetch; search summary only)</a></td></tr><tr class="verdict-true"><td>13</td><td>The yearly comparison shows that network server breaches remain the most popular attack vector for bad actors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-november-2022">Paubox Nov 2022 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr><tr class="verdict-true"><td>7</td><td>Electronic medical record breaches rose to 64,728, up from 20,081 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></td></tr><tr class="verdict-true"><td>8</td><td>Network server breaches continue to be the most frequent attack vector, accounting for 27 incidents in October 2026, up from 22 in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>9</td><td>Email breaches dropped to 4 incidents, down from 6 in 2025, continuing a decline from 15 in 2024.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></td></tr><tr class="verdict-true"><td>6</td><td>The number of people affected by network server breaches was the highest in five years, up from 1,419,860 in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a>; <a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Network server breaches affected the most people. 10,106,558 individuals had their data breached.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>10,106,558</dd>
+<dt>Independent evidence</dt><dd>Recomputed from the 34 rows of Paubox's linked HHS-data sheet: sum of individuals for rows listing Network Server = 10,106,558 (next largest category, EMR, 64,728).<ul class="claim-sources"><li><a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet (HHS data), CSV export</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Electronic medical record breaches were the second most common breach, with 64,728 people affected.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>64,728</dd>
+<dt>Independent evidence</dt><dd>Recomputed sum for rows listing Electronic Medical Record = 64,728 (Dorsata 58,249 + Hospice of Murray County 800 + Bay Area Psychological 5,679). Second by people affected; the heading wording 'most common' is loose, since by count EMR has 3 incidents.<ul class="claim-sources"><li><a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Other breaches affected 34,828 people, the third most impactful breach type.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>34,828</dd>
+<dt>Independent evidence</dt><dd>Recomputed from sheet: Other = 34,828, third behind Network Server and EMR; Email is only 7,649.<ul class="claim-sources"><li><a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; There were 27 network server breaches.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>27</dd>
+<dt>Independent evidence</dt><dd>27 of the 34 sheet rows list Network Server (Hood River Dental appears twice as two separate entries).<ul class="claim-sources"><li><a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Other breaches were the second most common attack vector, with 5 breaches. Email breaches were the third most common attack vector, with 4 breaches.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>Other 5; Email 4</dd>
+<dt>Independent evidence</dt><dd>Sheet: Other = 5 rows (Adornetto, Allswell, AllCare, Nabi, Photon); Email = 4 rows. Strictly these are breach locations, not attack vectors.<ul class="claim-sources"><li><a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; The number of people affected by network server breaches was the highest in five years, up from 1,419,860 in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>Highest of five Octobers; 2025 = 1,419,860</dd>
+<dt>Independent evidence</dt><dd>Paubox's own prior reports give network server people affected: Oct 2022 1,981,877; Oct 2023 1,152,858; Oct 2024 5,131,453; Oct 2025 1,419,860; Oct 2026 10,106,558. The 2026 figure is the highest of the five and about 2x the prior high. Caveat: the sheet's submission dates stop at 10/16/2026, and iRhythm alone is 8.18M.<ul class="claim-sources"><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></li><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></li><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></li><li><a href="https://www.paubox.com/blog/hipaa-breach-report-november-2022">Paubox Nov 2022 report</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Electronic medical record breaches rose to 64,728, up from 20,081 in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>20,081 in 2025</dd>
+<dt>Independent evidence</dt><dd>Paubox Nov 2025 report: EMR breaches affected 20,081 people.<ul class="claim-sources"><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; Network server breaches continue to be the most frequent attack vector, accounting for 27 incidents in October 2026, up from 22 in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>27 vs 22</dd>
+<dt>Independent evidence</dt><dd>Paubox 2025 report: 22 network server breaches. Prior reports: 42 (2022), 28 (2023), 35 (2024), so 27 is up from 2025 but below 2022-2024; network server was the most frequent each year.<ul class="claim-sources"><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></li><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; Email breaches dropped to 4 incidents, down from 6 in 2025, continuing a decline from 15 in 2024.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>4; 6; 15</dd>
+<dt>Independent evidence</dt><dd>Paubox 2025 report: 6 email breaches; 2024 report: 15; sheet: 4. Series 16 (2022), 8 (2023), 15 (2024), 6, 4: 2024 was a spike, so the decline is real from 2024 on but not a long-run trend.<ul class="claim-sources"><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2025">Paubox Nov 2025 report</a></li><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2024">Paubox Nov 2024 report</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; iRhythm Technologies, Inc. had the most significant breach, which affected 8,179,772 people.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>8,179,772</dd>
+<dt>Independent evidence</dt><dd>Sheet row: iRhythm 8,179,772. Search summaries (SecurityWeek headline 'HHS filing puts iRhythm data breach toll at 8.2 million'; direct fetch returned 403) say the HHS portal lists 8,179,772. One summary dates the portal listing Oct 29, 2026, versus 10/03/2026 in the sheet: an unresolved date discrepancy.<ul class="claim-sources"><li><a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></li><li><a href="https://securityweek.com/hhs-filing-puts-irhythm-data-breach-toll-at-8-2-million">SecurityWeek (403 on fetch; search summary only)</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; Central Ohio Primary Care Physicians, Inc. (COPC) had the second-largest breach, affecting 1,351,650 people.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>1,351,650</dd>
+<dt>Independent evidence</dt><dd>HIPAA Journal (fetched) update of Nov 12, 2026: COPC was added to the HHS OCR portal at 1,351,650 individuals. Sheet agrees. Second largest in the sheet (Denver Health Medical Plan 238,083 is third).<ul class="claim-sources"><li><a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; Overall, 10,116,362 individuals had their data accessed via 34 breaches reported in October 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>10,116,362 via 34 breaches in October 2026</dd>
+<dt>Independent evidence</dt><dd>The sheet has exactly 34 rows summing to 10,116,362 (recomputed). Caveat: all submission dates fall 10/01-10/16/2026 and COPC reached the portal only around Nov 12 per HIPAA Journal, so 'October' may be a partial or lagged snapshot.<ul class="claim-sources"><li><a href="https://docs.google.com/spreadsheets/d/1fZ6AjyegRYj50k17MLB0xMjn5OjXCOaR9cMJ87tpRMY/export?format=csv&amp;gid=0">Paubox linked Google Sheet</a></li><li><a href="https://www.hipaajournal.com/central-ohio-primary-care-physicians-data-breach/">HIPAA Journal on COPC</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#13 &middot; <strong>true</strong> &mdash; The yearly comparison shows that network server breaches remain the most popular attack vector for bad actors.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>Network server most common vector</dd>
+<dt>Independent evidence</dt><dd>Network server was the most frequent location in each Paubox October report 2022-2026 (42, 28, 35, 22, 27).<ul class="claim-sources"><li><a href="https://www.paubox.com/blog/hipaa-breach-report-november-2022">Paubox Nov 2022 report</a></li><li><a href="https://www.paubox.com/blog/hipaa-breach-report-for-november-2023">Paubox Nov 2023 report</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>HIPAA breach reports OCR healthcare data breaches</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>500 or more people</strong> &mdash; Definition of the HHS reporting threshold, not a finding.</li><li><strong>November 15, 2026; October 2026 and prior-year report names (November 2022 to November 2025)</strong> &mdash; Dates and links, not factual assertions.</li></ul>
+</section>
+<section>
+<h2>Method and sourcing</h2>
+<p>search_catalog found no HIPAA or OCR breach table in the warehouse, so claims were checked against independent sources. The HHS OCR portal itself did not render (JavaScript), so totals were recomputed from the Paubox-linked sheet (a derivative copy of HHS data), prior Paubox reports, and HIPAA Journal. The iRhythm figure rests on search summaries because SecurityWeek returned 403. The article's other links (Paubox email guide and inbound-security product page) were fetched; they are promotional and make no claim tested here.</p>
+</section>
+<section>
+<h2>Materially misleading context (not counted against the factual rating)</h2>
+<ul><li><strong>Two breaches drive everything.</strong> iRhythm (8,179,772) is 80.9% of the total; with COPC the pair is 94%. Without iRhythm, network server people affected would be about 1.93M, well below October 2024's 5.13M. The article names both firms but never says the 'highest in five years' result is a single-incident story.</li><li><strong>Partial-month data.</strong> All 34 submission dates fall 10/01-10/16/2026, yet the data is compared with full-month prior years and labeled 'October 2026'.</li><li><strong>Date discrepancy.</strong> The sheet dates iRhythm at 10/03/2026; one search summary says the portal listed it Oct 29. Unresolved.</li><li><strong>Reporting month is not breach month.</strong> iRhythm's intrusion was June 2026 and COPC's August 2026; counts reflect HHS posting dates, not when attacks occurred.</li><li><strong>Loose terms.</strong> 'Most common' is used for rankings by people affected; categories overlap (multi-location breaches counted in each), and 'attack vector' is really breach location.</li><li><strong>Commercial context.</strong> The publisher sells inbound email security and closes with a pitch, while the data shows email is a minor vector this month (4 incidents, 7,649 people).</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Verify against primary source (HHS OCR portal)</strong>: ocrportal.hhs.gov is JavaScript-rendered and returned no data. Graded against Paubox's linked Google Sheet of the HHS data (recomputed independently), prior-year Paubox reports, and HIPAA Journal for COPC. The iRhythm figure rests on a search summary because SecurityWeek returned HTTP 403.</li></ul>
+</section>
+<footer>
+<p class="footnote">HHS OCR portal not machine-readable here; figures recomputed from Paubox's linked sheet and corroborated for COPC via HIPAA Journal. iRhythm corroboration is from search summaries only.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

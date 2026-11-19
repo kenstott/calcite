@@ -1378,6 +1378,45 @@
         "over the last twenty years by category"
       ],
       "body": "A question asking how much money, people or output has SHIFTED between categories over a long window is easy to answer by taking each category's share in the first and last year and differencing them. That is correct only if the categories mean the same thing in both years. Agencies revise taxonomies (NSF's fields of research in FY2021, NAICS and SOC every few years, race and ethnicity categories, CBSA delineations), and a revision moves money between categories on paper in a single year. An endpoint-to-endpoint difference then reports the reclassification as if it were a shift, and a caveat that says only 'the list was revised in 2021' leaves the reader unable to tell how much of the headline is real.\n\nMeasured 2026-11-16 (federal research obligations by field, research.nsf_rd_by_field): the connector run reported life sciences falling from 52.3% to 39.2% of research obligations between FY2005 and FY2025 and noted the 2021 revision in one clause. An unaided analyst on the same NSF survey split the window: the total shift is 14.5 points FY2004-FY2024, only 5.0 points inside the old taxonomy (FY2004-FY2020), and life sciences drops 5.4 points across the FY2020/FY2021 boundary alone. Roughly a third of the headline decline sits in one reclassification year. The connector run had already queried FY2019-FY2022 and had the numbers to say so; it did not compute it. It also ended on a preliminary year (FY2025) where the last final year was available.\n\nFIX: (1) Before differencing shares, find out whether the category list changed inside the window - describe_table, the table comment, a category that appears or vanishes, or a one-year jump in an 'Other' bucket are the tells. (2) If it did, report three numbers, not one: the shift from the start to the last year under the old definition, the one-year change across the break, and the shift from the first year under the new definition to the end. State the total points shifted as half the sum of absolute share changes, for each segment. (3) Say which categories can be carried across the break by combining them (computer sciences with mathematics, for the NSF fields) and which cannot. (4) End the window on the last final year and give a preliminary year separately, labelled. (5) As a robustness check, drop the largest category, renormalise the rest and say whether a shift remains."
+    },
+    {
+      "id": "unspecified-place-pick-by-measurement",
+      "title": "The question says 'a state' (or 'a county', 'a city', 'an industry') without naming one - pick the instance by measuring every candidate, and say why",
+      "triggers": [
+        "in a state",
+        "which state",
+        "in some state",
+        "pick a state",
+        "for example a state",
+        "worked example",
+        "nursing homes in a state",
+        "facilities in a state",
+        "worst in a state",
+        "most violations",
+        "still operating",
+        "still open",
+        "are they still open"
+      ],
+      "body": "A question that leaves the place open ('which nursing homes in a state have the most violations') invites picking a familiar example and answering for it. That answers the question, but leaves out the more useful finding: which place stands out, and by how much. When the table you are already querying covers every state (or county, city, industry), one more GROUP BY gives you that finding for free.\n\nMeasured in this harness (q233, 2026-11-19): askamerica queried the national CMS Health Deficiencies table, then called Texas 'a worked example' with no reason. The unaided expert ran the same file grouped by state. Texas held 2,010 of 8,160 immediate-jeopardy citations (25%), or 170.8 per 100 homes against 141.7 for the next state. That made Texas the answer, not an arbitrary example, and the expert ranked first.\n\nFIX: before choosing the instance, aggregate the measure across all candidates from the same table. Normalize by a denominator from the warehouse (facility count from the provider table, population from census, establishments from QCEW), not a raw count, so large states do not win by size. Then pick the leader (or the place the user's context implies) and state the rule you used, with the top three for context. If you deliberately pick something other than the leader, say so and why.\n\nSECOND TRAP, for 'are they still operating/open' questions: a federal certification or provider file (CMS provider information, FDIC institution lists, EPA facility registries) usually drops closed entities. So 'present in the current file' means 'currently certified', and closures inside the window are invisible (survivor bias). Say that plainly. Then check the state licensing registry or the agency's own termination/closure list through web_fetch for the top entities, and report how many you confirmed active."
+    },
+    {
+      "id": "teacher-pay-from-f33-instruction-salaries-per-teacher-fte",
+      "title": "Teacher pay versus hiring (or any 'average teacher salary' question) - measure pay as payroll per teacher FTE, never total instruction spending, and compare the two levers at equal cost",
+      "triggers": [
+        "teacher pay",
+        "teacher salary",
+        "teacher salaries",
+        "average teacher salary",
+        "raise pay or hire",
+        "pay teachers more",
+        "hire more teachers",
+        "class size vs pay",
+        "student-teacher ratio",
+        "pupil-teacher ratio",
+        "teacher compensation",
+        "marginal dollar on teachers"
+      ],
+      "body": "The warehouse has no column named 'average teacher salary', which makes it easy to fall back on instruction_expenditure_thousand per teacher. That proxy mixes salaries with supplies, purchased services and benefits, so its coefficient says little about pay.\n\nMeasured in this harness (q134, 2026-11-19): askamerica's first run used instruction spending per teacher and ranked behind the unaided expert, which used published NCES average salaries and compared the levers per 1%.\n\nPAY MEASURE: edu.f33_district_finance declares instruction_salaries_thousand (F-33 E13) and instruction_employee_benefits_thousand. Their backfill is govdata-ops#1326. Run a COUNT on them first; if the query says the column is not found or every value is null, they are not loaded yet. Once loaded, average instructional pay = SUM(instruction_salaries_thousand) * 1000 / SUM(edu.ccd_districts.teachers_total_fte), joined on leaid and year and summed to the state (never average district ratios). E13 also covers aides, so it runs above a pure teacher average. Until then, use econ.state_wages average annual pay for NAICS 611 with own_code 3 (local government education, QCEW). It includes administrators and aides, so say that.\n\nEQUAL-COST FRAMING for 'one more dollar: raise pay or hire': a 1% raise and 1% more teachers cost about the same share of the salary bill. Put both levers in percent terms (log pay, log teachers per pupil) and compare the outcome change per 1%, not per $1K against per extra pupil. Control for child poverty (census SAIPE or ACS), and test the reverse direction: do earlier scores predict later pay? Higher-scoring, wealthier states can pay more, which biases the pay coefficient."
     }
   ]
 }

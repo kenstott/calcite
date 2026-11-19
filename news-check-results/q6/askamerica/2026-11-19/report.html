@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Grist article's claims about the 2026 El Nino, Midwest September heat and the 450,000 heat-death estimate are balanced and mostly accurate; 1 claim could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+#s2-t4-s1:checked ~ table tbody.s0{display:none}
+#s2-t4-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"]{color:var(--link)}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"] .srtcue{opacity:1}
+#s2-t4-s1:checked ~ .srtreset{display:inline-block}
+#s2-t4-s2:checked ~ table tbody.s0{display:none}
+#s2-t4-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"]{color:var(--link)}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"] .srtcue{opacity:1}
+#s2-t4-s2:checked ~ .srtreset{display:inline-block}
+#s2-t4-s3:checked ~ table tbody.s0{display:none}
+#s2-t4-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"]{color:var(--link)}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"] .srtcue{opacity:1}
+#s2-t4-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Grist article's claims about the 2026 El Nino, Midwest September heat and the 450,000 heat-death estimate are balanced and mostly accurate; 1 claim could not be confirmed.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://grist.org/extreme-weather/a-monstrous-el-nino-has-arrived-what-it-means-for-where-you-live/">https://grist.org/extreme-weather/a-monstrous-el-nino-has-arrived-what-it-means-for-where-you-live/</a></p>
+</header>
+<section>
+<h2>Summary</h2>
+<p>Grade: 1 Pinocchio (mostly accurate, with framing omissions). The headline claim (strongest El Nino on record) holds on the daily Nino 3.4 measure that Carbon Brief reports, but the article omits that the relative index and monthly comparisons were still below the 1982 and 2015-16 peaks. The AskAmerica warehouse carries no ENSO index or state temperature-rank table, so claims were graded against NCEI, Carbon Brief, Climate Impact Lab, USGS and the California governor's office, all fetched.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 88/100 — mostly honest</strong> &middot; <strong>Bias +20/100 — no consistent lean</strong></p><p>5 claims graded, 0 not gradable, 3 fell short. In this article only.</p></div>
+<p><strong>2</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>1</strong> unsupported &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>1</td><td>It’s already the strongest El Niño on record, and it might not even peak for about another month or two.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.carbonbrief.org/analysis-super-el-nino-reaches-remarkable-all-time-record">Carbon Brief analysis</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Average September temperatures across the region were the highest in the National Oceanic and Atmospheric Administration’s 132-year record.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>El Niño is a natural phenomenon in which a band of warm water forms every three to five years off the coast of South America.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.imperial.ac.uk/grantham/publications/climate-change-faqs/what-is-el-nino/">Imperial Grantham Institute</a></td></tr><tr class="verdict-true"><td>3</td><td>Illinois and Missouri had their warmest September on record.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-true"><td>7</td><td>Elsewhere in the region, super-typhoons like Sinlaku made landfall, causing 17 deaths in the western Pacific.</td><td><strong>true</strong></td><td>Checked against: <a href="https://grist.org/indigenous/pacific-islanders-slowly-recover-from-the-strongest-storm-of-the-year/">Grist on Sinlaku recovery</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>10</td><td>El Niño is a natural phenomenon in which a band of warm water forms every three to five years off the coast of South America.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.imperial.ac.uk/grantham/publications/climate-change-faqs/what-is-el-nino/">Imperial Grantham Institute</a></td></tr><tr class="verdict-true"><td>7</td><td>Elsewhere in the region, super-typhoons like Sinlaku made landfall, causing 17 deaths in the western Pacific.</td><td><strong>true</strong></td><td>Checked against: <a href="https://grist.org/indigenous/pacific-islanders-slowly-recover-from-the-strongest-storm-of-the-year/">Grist on Sinlaku recovery</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Average September temperatures across the region were the highest in the National Oceanic and Atmospheric Administration’s 132-year record.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-true"><td>3</td><td>Illinois and Missouri had their warmest September on record.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>It’s already the strongest El Niño on record, and it might not even peak for about another month or two.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.carbonbrief.org/analysis-super-el-nino-reaches-remarkable-all-time-record">Carbon Brief analysis</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>4</td><td>Average September temperatures across the region were the highest in the National Oceanic and Atmospheric Administration’s 132-year record.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>El Niño is a natural phenomenon in which a band of warm water forms every three to five years off the coast of South America.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.imperial.ac.uk/grantham/publications/climate-change-faqs/what-is-el-nino/">Imperial Grantham Institute</a></td></tr><tr class="verdict-true"><td>7</td><td>Elsewhere in the region, super-typhoons like Sinlaku made landfall, causing 17 deaths in the western Pacific.</td><td><strong>true</strong></td><td>Checked against: <a href="https://grist.org/indigenous/pacific-islanders-slowly-recover-from-the-strongest-storm-of-the-year/">Grist on Sinlaku recovery</a></td></tr><tr class="verdict-true"><td>3</td><td>Illinois and Missouri had their warmest September on record.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>It’s already the strongest El Niño on record, and it might not even peak for about another month or two.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.carbonbrief.org/analysis-super-el-nino-reaches-remarkable-all-time-record">Carbon Brief analysis</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>10</td><td>El Niño is a natural phenomenon in which a band of warm water forms every three to five years off the coast of South America.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.imperial.ac.uk/grantham/publications/climate-change-faqs/what-is-el-nino/">Imperial Grantham Institute</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>It’s already the strongest El Niño on record, and it might not even peak for about another month or two.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.carbonbrief.org/analysis-super-el-nino-reaches-remarkable-all-time-record">Carbon Brief analysis</a></td></tr><tr class="verdict-true"><td>3</td><td>Illinois and Missouri had their warmest September on record.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-true"><td>7</td><td>Elsewhere in the region, super-typhoons like Sinlaku made landfall, causing 17 deaths in the western Pacific.</td><td><strong>true</strong></td><td>Checked against: <a href="https://grist.org/indigenous/pacific-islanders-slowly-recover-from-the-strongest-storm-of-the-year/">Grist on Sinlaku recovery</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Average September temperatures across the region were the highest in the National Oceanic and Atmospheric Administration’s 132-year record.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>1</td><td>It’s already the strongest El Niño on record, and it might not even peak for about another month or two.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.carbonbrief.org/analysis-super-el-nino-reaches-remarkable-all-time-record">Carbon Brief analysis</a></td></tr><tr class="verdict-true"><td>7</td><td>Elsewhere in the region, super-typhoons like Sinlaku made landfall, causing 17 deaths in the western Pacific.</td><td><strong>true</strong></td><td>Checked against: <a href="https://grist.org/indigenous/pacific-islanders-slowly-recover-from-the-strongest-storm-of-the-year/">Grist on Sinlaku recovery</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>El Niño is a natural phenomenon in which a band of warm water forms every three to five years off the coast of South America.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.imperial.ac.uk/grantham/publications/climate-change-faqs/what-is-el-nino/">Imperial Grantham Institute</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Average September temperatures across the region were the highest in the National Oceanic and Atmospheric Administration’s 132-year record.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr><tr class="verdict-true"><td>3</td><td>Illinois and Missouri had their warmest September on record.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Art Miller — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>8</td><td>The ocean has a lot of heat content — 1,000 times more ability to hold heat than the atmosphere</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://scripps.ucsd.edu/news/how-does-el-nino-impact-weather">Scripps El Nino page (no figure found)</a>; <a href="https://grist.org/extreme-weather/why-havent-we-had-an-atlantic-hurricane-yet-thank-el-nino/">Grist Atlantic hurricane story (source of the quote)</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>3</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s0" checked><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s1"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s2"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s3"><table><thead><tr><th><label class="srth" for="s2-t4-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t4-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t4-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>2</td><td>Scientists have estimated that the additional heat alone could kill around 450,000 people worldwide.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>During recent strong El Niño events, winter temperatures ranged from 3 degrees Fahrenheit to more than 8 degrees F warmer than the 20th-century average, according to the U.S. Geological Survey.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Governor Gavin Newsom has declared a state of emergency to prepare the state to fight coastal flooding and erosion</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>9</td><td>the city captured enough stormwater to supply 106,000 households for a year</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>9</td><td>the city captured enough stormwater to supply 106,000 households for a year</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Governor Gavin Newsom has declared a state of emergency to prepare the state to fight coastal flooding and erosion</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>During recent strong El Niño events, winter temperatures ranged from 3 degrees Fahrenheit to more than 8 degrees F warmer than the 20th-century average, according to the U.S. Geological Survey.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>2</td><td>Scientists have estimated that the additional heat alone could kill around 450,000 people worldwide.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>5</td><td>During recent strong El Niño events, winter temperatures ranged from 3 degrees Fahrenheit to more than 8 degrees F warmer than the 20th-century average, according to the U.S. Geological Survey.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Governor Gavin Newsom has declared a state of emergency to prepare the state to fight coastal flooding and erosion</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>Scientists have estimated that the additional heat alone could kill around 450,000 people worldwide.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>9</td><td>the city captured enough stormwater to supply 106,000 households for a year</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>5</td><td>During recent strong El Niño events, winter temperatures ranged from 3 degrees Fahrenheit to more than 8 degrees F warmer than the 20th-century average, according to the U.S. Geological Survey.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>2</td><td>Scientists have estimated that the additional heat alone could kill around 450,000 people worldwide.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Governor Gavin Newsom has declared a state of emergency to prepare the state to fight coastal flooding and erosion</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>9</td><td>the city captured enough stormwater to supply 106,000 households for a year</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t4-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-mostly-true"><summary>#1 &middot; <strong>mostly true</strong> &mdash; It’s already the strongest El Niño on record, and it might not even peak for about another month or two.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Daily Nino 3.4 record 3.11C; RONI below 1982 record; models project peak about 4.1C<ul class="claim-sources"><li><a href="https://www.carbonbrief.org/analysis-super-el-nino-reaches-remarkable-all-time-record">Carbon Brief analysis</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says strongest on record without qualification; the evidence shows a record only on the daily Nino 3.4 anomaly (3.11C on 21 Sept vs 3.08C in 2015, ONI convention). On the relative index (RONI) it was about 0.7C below the 1982 record in mid-September, and the August monthly value (about 2.45C) was below the 2015-16 peak (2.75C).</dd>
+<dt>Warehouse searched for</dt><dd>El Nino ENSO oceanic nino index sea surface temperature</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Scientists have estimated that the additional heat alone could kill around 450,000 people worldwide.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>451,000<ul class="claim-sources"><li><a href="https://impactlab.org/research/451000-at-risk/">Climate Impact Lab</a></li><li><a href="https://www.aljazeera.com/features/2026/9/23/scientists-warn-super-el-nino-could-cause-450000-deaths-should-we-worry">Al Jazeera</a></li></ul></dd>
+<dt>Why</dt><dd>Climate Impact Lab projection of 451,000 extra heat deaths June-February vs a normal year; it is an estimate, not peer reviewed.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Illinois and Missouri had their warmest September on record.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NCEI: Arkansas, Illinois, Kansas, Missouri and Oklahoma set September records; CONUS warmest September in 132 years (69.4F)<ul class="claim-sources"><li><a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>Midwest September 2026 temperature record state climate</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#4 &middot; <strong>unsupported</strong> &mdash; Average September temperatures across the region were the highest in the National Oceanic and Atmospheric Administration’s 132-year record.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.ncei.noaa.gov/news/national-climate-202609">NCEI September 2026 national report</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>The NCEI release fetched gives the CONUS record and state records but no Midwest-region rank; plausible given the IL and MO records but not confirmed.</dd>
+<dt>Warehouse searched for</dt><dd>Midwest September 2026 temperature record state climate</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; During recent strong El Niño events, winter temperatures ranged from 3 degrees Fahrenheit to more than 8 degrees F warmer than the 20th-century average, according to the U.S. Geological Survey.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>USGS: 3F to more than 8F warmer<ul class="claim-sources"><li><a href="https://www.usgs.gov/programs/climate-adaptation-science-centers/regional-super-el-nino-impacts-midwest-us">USGS</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim applies the range to the Midwest generally; USGS says the response is strongest in MN/WI and weaker toward Missouri and Michigan, and most models call for near-to-below-normal temperatures in Missouri.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Governor Gavin Newsom has declared a state of emergency to prepare the state to fight coastal flooding and erosion</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Proclamation 21 Sept 2026 cites flooding, landslides and coastal flooding<ul class="claim-sources"><li><a href="https://www.gov.ca.gov/2026/09/21/governor-newsom-proclaims-state-of-emergency-to-bolster-statewide-el-nino-preparedness-protect-california/">Governor's release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Elsewhere in the region, super-typhoons like Sinlaku made landfall, causing 17 deaths in the western Pacific.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>17 region-wide deaths (Chuuk 9, Guam including a couple and six ship crew)<ul class="claim-sources"><li><a href="https://grist.org/indigenous/pacific-islanders-slowly-recover-from-the-strongest-storm-of-the-year/">Grist on Sinlaku recovery</a></li></ul></dd>
+<dt>Why</dt><dd>Region-wide tally of 17 (Guam plus Micronesia) per Grist's own earlier reporting citing the Pacific Daily News; the Pacific Daily News page itself was not opened. Sinlaku struck in April, before the El Nino-driven period the paragraph describes (context, not an error).</dd>
+<dt>Web searches run</dt><dd>Typhoon Sinlaku 2026 landfall deaths</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#8 &middot; <strong>unsupported</strong> &mdash; The ocean has a lot of heat content — 1,000 times more ability to hold heat than the atmosphere</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Art Miller — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://scripps.ucsd.edu/news/how-does-el-nino-impact-weather">Scripps El Nino page (no figure found)</a></li><li><a href="https://grist.org/extreme-weather/why-havent-we-had-an-atlantic-hurricane-yet-thank-el-nino/">Grist Atlantic hurricane story (source of the quote)</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>The quote is confirmed in Grist's earlier article, but that is the same outlet, not independent evidence of the 1,000x factor. The Scripps page was opened and does not contain the figure; no independent source found.</dd>
+<dt>Evidence found and set aside because</dt><dd>The fetched Grist page only shows Miller said it; it is not independent confirmation of the physics, so the grade stays unsupported.</dd>
+<dt>Warehouse searched for</dt><dd>ocean heat capacity relative to atmosphere sea surface temperature</dd>
+<dt>Web searches run</dt><dd>ocean heat capacity 1,000 times atmosphere Scripps how does El Niño impact weather</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; the city captured enough stormwater to supply 106,000 households for a year</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Grist's linked story: Feb 4-7, 8.6 billion gallons, enough for 106,000 households for a year<ul class="claim-sources"><li><a href="https://grist.org/extreme-weather/los-angeles-just-showed-how-spongy-a-city-can-be/">Grist LA stormwater</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; El Niño is a natural phenomenon in which a band of warm water forms every three to five years off the coast of South America.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>2 to 7 years<ul class="claim-sources"><li><a href="https://www.imperial.ac.uk/grantham/publications/climate-change-faqs/what-is-el-nino/">Imperial Grantham Institute</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says every three to five years; Imperial's Grantham Institute says every two to seven years on average.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Findings and framing</h2>
+<ul><li>450,000 deaths matches Climate Impact Lab (451,000, a projection for June-February, not peer reviewed).</li><li>Illinois and Missouri September records confirmed by NCEI; a Midwest-wide record was not confirmed in the text read.</li><li>USGS 3F-8F warmer range is real but the source says the signal is weaker toward Missouri and Michigan.</li><li>Internal tension: the intro says the Southeast could get 'colder and wetter' while its own map says Arkansas to Virginia leans warm; the Midwest is 'milder, drier' yet Midwest text says winter 'might not be' dry.</li><li>Ungraded: Washington Post 'coldest winter in a decade' (timeout); KTOO, AccuWeather, Stanford, PPIC (403).</li></ul>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
