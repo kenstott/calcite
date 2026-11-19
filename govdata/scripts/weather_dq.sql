@@ -988,7 +988,7 @@ SELECT 'weather', 'climate_area_monthly', 'existence', CASE WHEN n > 0 THEN 'pas
 FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_area_monthly', allow_moved_paths=true) LIMIT 1));
 
 INSERT INTO dq_results
-SELECT 'weather', 'climate_area_monthly', 'row_count', CASE WHEN n >= 1000000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1000000', '4 elements x 97 areas x ~130 years x 12 months, less unpublished months'
+SELECT 'weather', 'climate_area_monthly', 'row_count', CASE WHEN n >= 600000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '600000', '4 elements x 97 areas x 132 years x 12 months, less unpublished months and Alaska/Hawaii pre-record'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_area_monthly', allow_moved_paths=true));
 
 SELECT 'climate_area_monthly' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_area_monthly', allow_moved_paths=true) LIMIT 3;
