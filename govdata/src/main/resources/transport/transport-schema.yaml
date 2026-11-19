@@ -3446,7 +3446,7 @@ partitionedTables:
       - name: sent_time_utc
         type: timestamp
         nullable: false
-        comment: Time the advisory was sent, as shown on the FAA list page
+        comment: Time the advisory was sent, in UTC exactly as shown on the FAA list page (a zone-less timestamp; no offset is applied)
 
     source:
       type: http
