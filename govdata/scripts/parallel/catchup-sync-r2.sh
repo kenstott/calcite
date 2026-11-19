@@ -46,8 +46,16 @@ load_env
 # Carry a signal through to the in-flight rclone. Without this the shell exits on TERM
 # while its foreground rclone keeps running as an orphan, so a copy to R2 continues
 # after the scheduler that owns it is gone.
+_kill_descendants() {
+  local pid
+  for pid in $(pgrep -P "$1" 2>/dev/null || true); do
+    _kill_descendants "$pid"
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+}
 _term_children() {
-  pkill -TERM -P $$ 2>/dev/null || true
+  trap '' TERM INT
+  _kill_descendants $$
   exit 143
 }
 trap _term_children TERM INT

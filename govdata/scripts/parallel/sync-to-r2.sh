@@ -66,20 +66,31 @@ load_env
 # instead of relying on operators to never run two copies.
 _LOCK_FILE="${HOME}/.r2-sync-state/.sync-to-r2.lock"
 mkdir -p "$(dirname "$_LOCK_FILE")"
-exec 200>"$_LOCK_FILE"
-if ! flock -n 200; then
-  log_error "sync-to-r2: another instance already holds the lock — exiting"
-  exit 0
+# The lock is held by a flock wrapper process, NOT by this script: `flock -o` closes the lock
+# fd in the wrapped command, so no rclone/sed descendant can inherit it and keep the lock after
+# the pass is gone. The wrapper re-runs this script (marked by _SYNC_LOCK_HELD) and exits 75
+# when another pass holds the lock.
+if [ -z "${_SYNC_LOCK_HELD:-}" ]; then
+  # The pass runs in its own session, and a TERM to this wrapper stops the whole session
+  # (listings and copies included). A trap inside the pass cannot do that: bash defers a
+  # trap until its foreground child (a long rclone) finishes. The session id is used rather than
+  # the process group or a parent walk because `timeout` moves its child into a group of its
+  # own, and a pass that is TERMed too (pkill -f matches both) orphans its descendants.
+  _SYNC_LOCK_HELD=1 setsid flock -n -o -E 75 "$_LOCK_FILE" "$0" "$@" &
+  _pass_pid=$!
+  trap 'pkill -TERM -s "$_pass_pid" 2>/dev/null; wait "$_pass_pid" 2>/dev/null; exit 143' TERM INT
+  _rc=0
+  wait "$_pass_pid" || _rc=$?
+  if [ "$_rc" -eq 75 ]; then
+    _holders="unknown"
+    if command -v fuser >/dev/null 2>&1; then
+      _holders="$(fuser "$_LOCK_FILE" 2>/dev/null | tr -s ' ' || true)"
+      [ -n "$_holders" ] || _holders="none visible"
+    fi
+    log_error "sync-to-r2: SKIPPED — another instance holds the lock (holder pids: $_holders)"
+  fi
+  exit "$_rc"
 fi
-
-# Carry a signal through to the in-flight rclone. Without this the shell exits on TERM
-# while its foreground rclone keeps running as an orphan, so a copy to R2 continues
-# after the scheduler that owns it is gone.
-_term_children() {
-  pkill -TERM -P $$ 2>/dev/null || true
-  exit 143
-}
-trap _term_children TERM INT
 
 # R2 destination is built from the PROD_* creds in .env.prod (no .env.preprod, no rclone.conf).
 configure_r2_remote
