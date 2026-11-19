@@ -187,6 +187,8 @@ ONCE_MODE_GROUPS=(
   "health-aca-once|aca_effectuated_enrollment_monthly,aca_effectuated_enrollment_annual"
   # CMS Medicaid/CHIP Performance Indicator enrollment (data.medicaid.gov datastore) — hash-gated, no year dimension.
   "health-medicaid-enrollment-once|medicaid_chip_enrollment_monthly,medicaid_expenditures_by_state_quarter,medicaid_enrollment_by_eligibility_group"
+  # HHS OCR HIPAA breach portal — own group: a single JSF-session source (ocrportal.hhs.gov), full snapshot, no year dimension.
+  "health-hhs-ocr|hhs_ocr_breaches"
 )
 
 run_year_health_tables() {

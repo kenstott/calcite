@@ -3512,6 +3512,125 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ==========================================================================
+  # HHS OCR HIPAA BREACH PORTAL — breaches of unsecured PHI affecting 500+ individuals (2009-)
+  # ==========================================================================
+  - name: hhs_ocr_breaches
+    timeColumn: breach_submission_date  # observation time: when the breach was reported to OCR (not when it occurred)
+    pattern: "type=hhs_ocr_breaches"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      HHS Office for Civil Rights HIPAA Breach Portal (the public "wall of shame"): one row
+      per reported breach of unsecured protected health information affecting 500 or more
+      individuals, Oct 2009 to present. Required by section 13402(e)(4) of the HITECH Act.
+      Carries the reporting entity, its state and covered-entity type (Healthcare Provider,
+      Health Plan, Business Associate, Healthcare Clearing House), individuals_affected,
+      breach_submission_date, breach_type (Hacking/IT Incident, Unauthorized Access/
+      Disclosure, Theft, Loss, Improper Disposal, Other, or a comma-joined combination),
+      breach_location (Network Server, Email, Paper/Films, Laptop, Electronic Medical
+      Record, ...), whether a business associate was present, and for closed cases OCR's
+      web_description. report_status is "Under Investigation" (open cases, about the last
+      three years) or "Archive" (closed cases, back to 2009); a case moves between them
+      over time so the table is a full snapshot rewritten each run. The portal publishes no
+      case id, so there is no unique key: entity_name + breach_submission_date repeats for
+      ~70 rows (an entity reporting two breaches on one day) and a few exact-duplicate
+      rows exist in the source itself — see the DQ T6 warn, not a pipeline defect.
+      Totals computed here will not match monthly roundups by third parties exactly:
+      those count by calendar month of posting and revise as OCR amends records.
+      Source is the portal's own CSV export, fetched through its JSF session.
+
+    columns:
+      - name: entity_name
+        type: string
+        nullable: true
+        comment: Covered entity or business associate that reported the breach (text only, no structural FK)
+      - name: state
+        type: string
+        nullable: true
+        comment: Two-letter state/territory of the reporting entity
+      - name: covered_entity_type
+        type: string
+        nullable: true
+        comment: Healthcare Provider, Health Plan, Business Associate or Healthcare Clearing House
+      - name: individuals_affected
+        type: bigint
+        nullable: true
+        comment: Number of individuals affected as reported (500 or more; OCR may revise later)
+      - name: breach_submission_date
+        type: date
+        nullable: false
+        comment: Date the breach was submitted to OCR (parsed from the portal's MM/DD/YYYY)
+      - name: breach_year
+        type: integer
+        nullable: false
+        comment: Calendar year of breach_submission_date
+      - name: breach_type
+        type: string
+        nullable: true
+        comment: Hacking/IT Incident, Unauthorized Access/Disclosure, Theft, Loss, Improper Disposal, Other, or a comma-joined combination
+      - name: breach_location
+        type: string
+        nullable: true
+        comment: Where the breached information was held — Network Server, Email, Paper/Films, Laptop, Electronic Medical Record, Desktop Computer, Other Portable Electronic Device, Other
+      - name: business_associate_present
+        type: boolean
+        nullable: false
+        comment: Whether a business associate was involved in the breach (portal "Yes"/"No")
+      - name: web_description
+        type: string
+        nullable: true
+        comment: OCR's narrative summary; populated for closed (Archive) cases only
+      - name: report_status
+        type: string
+        nullable: false
+        comment: '"Under Investigation" (open) or "Archive" (closed) — the portal tab the row came from'
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "hhs_ocr_breaches"'
+
+    source:
+      type: http
+      # Front page of the JSF portal. HhsOcrBreachProvider drives the session (link click,
+      # tab change, CSV export) itself; the portal has no static download URL.
+      url: "https://ocrportal.hhs.gov/ocr/breach/breach_frontpage.jsf"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+      response:
+        format: TEXT  # ignored: HhsOcrBreachProvider fetches and parses the exports itself
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.health.HhsOcrBreachProvider"
+
+    dimensions:
+      type:
+        - hhs_ocr_breaches
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # HRSA AREA HEALTH RESOURCES FILE — county-level physician supply (annual snapshot)
   # ==========================================================================
   - name: ahrf_physician_supply
