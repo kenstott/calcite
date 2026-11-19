@@ -78,7 +78,7 @@ public class FhwaVehicleRegistrationsTransformer implements ResponseTransformer 
   /** Strips a trailing footnote marker such as " (2)" from a state name. */
   private static final Pattern FOOTNOTE = Pattern.compile("\\s*\\(\\d+\\)\\s*$");
 
-  private static final Map<String, String> STATE_FIPS = buildStateFips();
+  static final Map<String, String> STATE_FIPS = buildStateFips();
 
   @Override public String transform(String response, RequestContext context) {
     String url = context.getUrl();

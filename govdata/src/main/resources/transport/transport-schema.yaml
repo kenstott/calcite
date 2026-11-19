@@ -152,6 +152,29 @@ dimension_values:
     dataLag: 2
     descending: true
 
+  # FHWA Traffic Volume Trends: one workbook per month, posted about 2.5 months after the month
+  # (verified 2026-11-19: 26aug.xlsx 200, 26sep 404). The .xlsx layout with Table 5 is confirmed
+  # from 2022; 2020 and earlier are legacy .xls and were not checked, so minYear stays at 2022.
+  tvt_year_range: &tvt_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2022}"
+    minYear: 2022
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataMonthLag: 3
+    descending: true
+
+  # FHWA Highway Statistics HM-71 (urbanized areas): the newest year is posted about a year
+  # after year end (verified 2026-11-19: 2024 -> 200, 2025 -> 404), so dataLag 2 never
+  # 404-poisons. Workbooks parse identically 2017-2024 (every year's rows sum to the
+  # published TOTAL row); 2016 and earlier were not checked, so minYear stays at 2017.
+  hm71_year_range: &hm71_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2017}"
+    minYear: 2017
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 2
+    descending: true
+
   # TSA checkpoint volumes: published from 2019-01-01 (pre-2019 daily counts are not public).
   # Current year is served at the unsuffixed page; the transformer resolves prior years.
   tsa_year_range: &tsa_year_range
@@ -1631,6 +1654,240 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
         tableName: vehicle_registrations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FHWA TRAFFIC VOLUME TRENDS — state monthly vehicle-miles (Table 5, delta by month)
+  # ---------------------------------------------------------------------------
+  - name: tvt_state_monthly
+    freshness:
+      type: last_modified
+    pattern: "type=tvt_state_monthly/year=*/month=*/*.parquet"
+    partitions: *month_partitions
+    comment: >
+      FHWA Traffic Volume Trends (TVT) Table 5 — estimated vehicle-miles of travel on all
+      roads (rural and urban, all functional systems) by state for one month, with the same
+      month a year earlier and the percent change, so regional "traffic is back to / below
+      pre-pandemic levels" claims can be checked state by state. One row per (year, month,
+      state); vmt_millions is the preliminary figure from that month's own release (FHWA
+      revises it in the following month's release, which this table does not re-read).
+      Built from continuous traffic-count stations, so it is an estimate; the national total
+      is in bts_tsi_monthly.vmt_d11 (seasonally adjusted). Covers 2022 forward; FHWA posts a
+      month about 2.5 months later. Joins to geo.state_ref via state_fips. Source:
+      fhwa.dot.gov/policyinformation/travel_monitoring/{yy}{mon}tvt/{yy}{mon}tvt.xlsx.
+
+    dimensions:
+      type:
+        - tvt_state_monthly
+      year: *tvt_year_range
+      month: *all_months
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name as printed in the TVT table
+      - name: stations
+        type: long
+        nullable: true
+        comment: Number of continuous count stations behind the state's estimate for the month
+      - name: vmt_millions
+        type: long
+        nullable: true
+        comment: Estimated vehicle-miles traveled on all roads in the state for the month, in millions (preliminary)
+      - name: prior_year_vmt_millions
+        type: long
+        nullable: true
+        comment: Same month one year earlier, in millions of vehicle-miles
+      - name: pct_change
+        type: double
+        nullable: true
+        comment: Percent change in vehicle-miles versus the same month a year earlier, as published (one decimal)
+
+    source:
+      type: http
+      # Placeholder request: the transformer builds the real workbook URL from year and month
+      # (two-digit year is not renderable here) and ignores this body; this page only has to
+      # answer 200 and carry the dimensions so the raw cache is keyed per (year, month).
+      url: "https://www.fhwa.dot.gov/policyinformation/statistics/2022/vm2.cfm?tvt_year={effective_year}&tvt_month={month:02d}"
+      method: GET
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FhwaTvtStateMonthlyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=tvt_state_monthly/year=*/month=*/"
+      partition:
+        columns: [type, year, month]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: tvt_state_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
+        overwritePartitions: true
+
+  - name: urbanized_area_vmt
+    freshness:
+      type: last_modified
+    pattern: "type=urbanized_area_vmt/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      FHWA Highway Statistics table HM-71 — lane-miles and average daily vehicle-miles
+      traveled (thousands) for every urbanized area (about 490 per year, 454 from 2024 when
+      the 2020-census areas replaced the 2010 ones), split by functional class: interstate,
+      other freeways and expressways, other principal arterial, minor arterial, major
+      collector, minor collector, local, and the total. Lets a regional claim such as
+      "Hampton Roads traffic is back to pre-pandemic levels" be checked per area across
+      years (2020 is the pandemic dip). One row per (year, urbanized area, state list);
+      urbanized_area is the name without the state list and states holds the state
+      abbreviations as printed ("VA", or "NY--NJ--CT" for a multi-state area). The
+      population is the decennial census count FHWA assigns the area. Daily VMT is an annual
+      average per day, not a monthly figure; the state-by-month series is tvt_state_monthly.
+      Source: fhwa.dot.gov/policyinformation/statistics/{year}/xls/hm71.xls (.xlsx from 2023).
+
+    dimensions:
+      type:
+        - urbanized_area_vmt
+      year: *hm71_year_range
+
+    columns:
+      - name: urbanized_area
+        type: string
+        nullable: false
+        comment: Urbanized-area name without the trailing state list, as printed by FHWA
+      - name: states
+        type: string
+        nullable: false
+        comment: State abbreviations the area spans, double-dash separated, as printed
+      - name: population
+        type: long
+        nullable: true
+        comment: Census population of the urbanized area
+      - name: miles_interstate
+        type: double
+        nullable: true
+        comment: Lane-miles of interstate in the urbanized area
+      - name: miles_freeways_expressways
+        type: double
+        nullable: true
+        comment: Lane-miles of other freeways and expressways in the urbanized area
+      - name: miles_other_principal_arterial
+        type: double
+        nullable: true
+        comment: Lane-miles of other principal arterial in the urbanized area
+      - name: miles_minor_arterial
+        type: double
+        nullable: true
+        comment: Lane-miles of minor arterial in the urbanized area
+      - name: miles_major_collector
+        type: double
+        nullable: true
+        comment: Lane-miles of major collector in the urbanized area
+      - name: miles_minor_collector
+        type: double
+        nullable: true
+        comment: Lane-miles of minor collector in the urbanized area
+      - name: miles_local
+        type: double
+        nullable: true
+        comment: Lane-miles of local roads in the urbanized area
+      - name: miles_total
+        type: double
+        nullable: true
+        comment: Lane-miles of all federal-aid classes (total) in the urbanized area
+      - name: dvmt_thousands_interstate
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on interstate in the urbanized area, in thousands
+      - name: dvmt_thousands_freeways_expressways
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on other freeways and expressways in the urbanized area, in thousands
+      - name: dvmt_thousands_other_principal_arterial
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on other principal arterial in the urbanized area, in thousands
+      - name: dvmt_thousands_minor_arterial
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on minor arterial in the urbanized area, in thousands
+      - name: dvmt_thousands_major_collector
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on major collector in the urbanized area, in thousands
+      - name: dvmt_thousands_minor_collector
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on minor collector in the urbanized area, in thousands
+      - name: dvmt_thousands_local
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on local roads in the urbanized area, in thousands
+      - name: dvmt_thousands_total
+        type: double
+        nullable: true
+        comment: Average daily vehicle-miles traveled on all federal-aid classes (total) in the urbanized area, in thousands
+
+    source:
+      type: http
+      # Placeholder request: the transformer builds the real workbook URL (the extension
+      # changes from .xls to .xlsx at 2023) and ignores this body; this page only has to
+      # answer 200 and carry the year dimension so the raw cache is keyed per year.
+      url: "https://www.fhwa.dot.gov/policyinformation/statistics/{effective_year}/hm71.cfm"
+      method: GET
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FhwaUrbanizedAreaVmtTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=urbanized_area_vmt/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: urbanized_area_vmt
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
@@ -5660,6 +5917,17 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+
+  tvt_state_monthly:
+    primaryKey: [year, month, state_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  urbanized_area_vmt:
+    primaryKey: [year, urbanized_area, states]
 
   pavement_roughness:
     primaryKey: [year, state_fips, area_type, road_class]

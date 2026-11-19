@@ -384,6 +384,107 @@ SELECT 'transport', 'vehicle_registrations', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/vehicle_registrations', allow_moved_paths := true) WHERE state_fips IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: tvt_state_monthly (FHWA Traffic Volume Trends Table 5; partition cols: type, year, month)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'tvt_state_monthly', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'tvt_state_monthly', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END, n, 50, 'Expected >=50 state rows for at least one month'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true) ORDER BY year DESC, month DESC LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'tvt_state_monthly', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'month')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'tvt_state_monthly', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'month')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'tvt_state_monthly', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true) WHERE state_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'tvt_state_monthly', 'T7_vmt_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'vmt_millions outside 100..40000 (largest state ~30k/month)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true) WHERE vmt_millions IS NULL OR vmt_millions < 100 OR vmt_millions > 40000);
+
+INSERT INTO dq_results
+SELECT 'transport', 'tvt_state_monthly', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, month, state_fips) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, month, state_fips FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tvt_state_monthly', allow_moved_paths := true) GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: urbanized_area_vmt (FHWA HM-71 urbanized-area miles and daily VMT; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'urbanized_area_vmt', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'urbanized_area_vmt', 'T2_row_count',
+  CASE WHEN n >= 400 THEN 'pass' ELSE 'fail' END, n, 400, 'Expected >=400 urbanized areas in the smallest year'
+FROM (SELECT MIN(c) AS n FROM (SELECT year, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true) GROUP BY year));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true) ORDER BY year DESC, population DESC LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'urbanized_area_vmt', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'urbanized_area_vmt', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'urbanized_area_vmt', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL urbanized_area or states rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true) WHERE urbanized_area IS NULL OR states IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'urbanized_area_vmt', 'T7_total_consistent',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows whose class VMT does not sum to the published total (tolerance 1 thousand) or whose total is outside 0..300000'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true)
+  WHERE dvmt_thousands_total IS NULL OR dvmt_thousands_total < 0 OR dvmt_thousands_total > 300000
+     OR ABS(dvmt_thousands_total - (dvmt_thousands_interstate + dvmt_thousands_freeways_expressways
+        + dvmt_thousands_other_principal_arterial + dvmt_thousands_minor_arterial
+        + dvmt_thousands_major_collector + dvmt_thousands_minor_collector + dvmt_thousands_local)) > 1);
+
+INSERT INTO dq_results
+SELECT 'transport', 'urbanized_area_vmt', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, urbanized_area, states) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, urbanized_area, states FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true) GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: tsa_checkpoint_daily (TSA checkpoint passenger volumes; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
