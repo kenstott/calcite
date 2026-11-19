@@ -225,6 +225,8 @@ EXIT_CI_GATE=3
 CI_WAIT_SECS="${CI_WAIT_SECS:-5400}"
 CI_NONE_GRACE_SECS="${CI_NONE_GRACE_SECS:-300}"
 CI_POLL_SECS="${CI_POLL_SECS:-60}"
+CI_RERUN_START_SECS="${CI_RERUN_START_SECS:-300}"
+CI_RERUN_SETTLE_SECS="${CI_RERUN_SETTLE_SECS:-30}"
 GENERATED_SUBJECTS='^(chore\(govdata\): rebuild the DuckDB seed for changed schema models|chore\(govdata\): refresh observed-coverage metadata)'
 
 # ci_query <sha>: prints "<status>\t<conclusion>\t<url>" for the newest CI run of <sha>
@@ -247,7 +249,9 @@ else:
 }
 
 # ci_setup_failure <run-url>: 0 when the run's failed jobs died resolving a build dependency or
-# plugin (before any code compiled), which says nothing about the code under test.
+# plugin (before any code compiled), which says nothing about the code under test. The pattern is
+# matched over the failed logs of all jobs, so a run with one setup failure and one real failure
+# is rerun once and then refuses on the second red; that is intended.
 ci_setup_failure() {
   local id="${1##*/}" log
   [[ "$id" =~ ^[0-9]+$ ]] || return 1
@@ -262,7 +266,7 @@ ci_setup_failure() {
 # in progress is waited for, up to CI_WAIT_SECS; a head with no run yet gets CI_NONE_GRACE_SECS
 # for GitHub to start one. --dry-run never waits.
 ci_gate() {
-  local code_sha subject head state waited=0 rerun_done=false limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
+  local code_sha subject head state waited=0 rerun_done=false rerun_pending=false rerun_waited=0 limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
   code_sha=""
   while IFS=$'\t' read -r sha subject; do
     if ! grep -qE "$GENERATED_SUBJECTS" <<<"$subject"; then code_sha="$sha"; break; fi
@@ -285,14 +289,25 @@ ci_gate() {
         if [ "$run_conclusion" = success ]; then
           ci_reason="CI green for $head, covering code commit $code_sha ($run_url)"; return 0
         fi
+        # Right after a rerun GitHub may still report the old attempt as completed/failure; wait
+        # (bounded) for the run to leave completed before judging it.
+        if $rerun_pending; then
+          if [ "$rerun_waited" -lt "$CI_RERUN_START_SECS" ]; then
+            log "CI gate: $head still reports the failed attempt after the rerun; waiting ${CI_POLL_SECS}s (${rerun_waited}s since rerun)"
+            sleep "$CI_POLL_SECS"; waited=$((waited + CI_POLL_SECS)); rerun_waited=$((rerun_waited + CI_POLL_SECS)); continue
+          fi
+          ci_reason="CI rerun for $head (code commit $code_sha) did not start within ${CI_RERUN_START_SECS}s; run still completed/${run_conclusion:-none} $run_url"
+          return 1
+        fi
         # A run that failed only while resolving dependencies is rerun once (failed jobs only) and
         # waited for again; any other failure, or a second one, refuses.
         if ! $DRY_RUN && ! $rerun_done && [ "$run_conclusion" = failure ] && ci_setup_failure "$run_url"; then
           if gh run rerun "${run_url##*/}" --failed --repo "$FORK" >/dev/null 2>&1; then
-            rerun_done=true
+            rerun_done=true; rerun_pending=true
             log "CI gate: $head failed resolving dependencies (no code compiled); reran the failed jobs once $run_url"
-            sleep 30; waited=$((waited + 30)); continue
+            sleep "$CI_RERUN_SETTLE_SECS"; waited=$((waited + CI_RERUN_SETTLE_SECS)); rerun_waited=$CI_RERUN_SETTLE_SECS; continue
           fi
+          log "ERROR: CI gate: gh run rerun failed for $run_url; not waiting for a rerun"
         fi
         ci_reason="CI not green for $head (code commit $code_sha): status=completed conclusion=${run_conclusion:-none} $run_url"
         return 1 ;;
@@ -301,6 +316,7 @@ ci_gate() {
           ci_reason="no $CI_WORKFLOW run for $head (code commit $code_sha)"; return 1
         fi ;;
       *)
+        rerun_pending=false
         if [ "$waited" -ge "$limit" ]; then
           ci_reason="CI not green for $head (code commit $code_sha): status=$run_status conclusion=${run_conclusion:-none} after waiting ${waited}s $run_url"
           return 1
