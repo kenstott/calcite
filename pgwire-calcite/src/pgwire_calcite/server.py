@@ -47,6 +47,7 @@ import weakref
 from typing import TYPE_CHECKING, Iterator, Optional, Tuple
 
 from buenavista.core import BVType, Connection, QueryResult as BVQueryResult, Session
+from buenavista.pg_array import array_text
 from buenavista.postgres import (
     BVBuffer,
     BVContext,
@@ -197,29 +198,107 @@ def _authenticate_credential(provider, username: str, password: str) -> Optional
 
 
 def _pg_literal(v) -> str:
-    """Render a Python value as a safe PG literal string."""
+    """Render a bound value as a typed SQL literal (REQ-2255): a decimal as its exact digits, a
+    date, time or timestamp as a typed literal, an array in array_out's text form, anything else
+    as a string. An aware timestamp is the UTC instant, as a timestamptz column reaches the wire
+    normalized (normalize.py: TIMESTAMP WITH LOCAL TIME ZONE)."""
     if v is None:
         return "NULL"
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
     if isinstance(v, (int, float)):
         return str(v)
+    if isinstance(v, decimal.Decimal) and v.is_finite():
+        return format(v, "f")
+    if isinstance(v, datetime.datetime):
+        if v.tzinfo is not None:
+            v = v.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return f"TIMESTAMP '{v.isoformat(sep=' ')}'"
+    if isinstance(v, datetime.date):
+        return f"DATE '{v.isoformat()}'"
+    if isinstance(v, datetime.time):
+        return f"TIME '{v.replace(tzinfo=None).isoformat()}'"
     if isinstance(v, (bytes, bytearray)):
         return "E'\\\\x" + v.hex() + "'"
     if isinstance(v, (list, tuple)):
-        return "'{" + ",".join(str(x) for x in v) + "}'"
+        return "'" + array_text(list(v)).replace("'", "''") + "'"
     s = str(v)
     return "'" + s.replace("'", "''") + "'"
 
 
 def _substitute_params(sql: str, params: list | None) -> str:
-    """Replace $1, $2, ... with literal values (highest index first to avoid $1 matching $10)."""
+    """Replace each ``$N`` placeholder with its value as a literal. A ``$N`` inside a string, an
+    escape string, a quoted identifier, a comment or a dollar-quoted body is text, not a
+    placeholder, and is left as written; so is a ``$N`` past the last parameter."""
     if not params:
         return sql
-    result = sql
-    for i in range(len(params), 0, -1):
-        result = result.replace(f"${i}", _pg_literal(params[i - 1]))
-    return result
+    out: list = []
+    i, n = 0, len(sql)
+    while i < n:
+        c = sql[i]
+        if c == "'":
+            escape = i > 0 and sql[i - 1] in "eE" and (i < 2 or not sql[i - 2].isalnum())
+            j = i + 1
+            while j < n:
+                if escape and sql[j] == "\\":
+                    j += 2
+                    continue
+                if sql[j] == "'":
+                    if j + 1 < n and sql[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            out.append(sql[i : j + 1])
+            i = j + 1
+        elif c == '"':
+            j = sql.find('"', i + 1)
+            while j != -1 and j + 1 < n and sql[j + 1] == '"':
+                j = sql.find('"', j + 2)
+            j = n - 1 if j == -1 else j
+            out.append(sql[i : j + 1])
+            i = j + 1
+        elif sql.startswith("--", i):
+            j = sql.find("\n", i)
+            j = n if j == -1 else j
+            out.append(sql[i:j])
+            i = j
+        elif sql.startswith("/*", i):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if sql.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif sql.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
+            out.append(sql[i:j])
+            i = j
+        elif c == "$":
+            m = _PLACEHOLDER_RE.match(sql, i)
+            if m is not None:
+                index = int(m.group(1))
+                out.append(_pg_literal(params[index - 1]) if index <= len(params) else m.group(0))
+                i = m.end()
+                continue
+            tag = _DOLLAR_TAG_RE.match(sql, i)
+            if tag is not None:
+                close = sql.find(tag.group(0), tag.end())
+                j = n if close == -1 else close + len(tag.group(0))
+                out.append(sql[i:j])
+                i = j
+                continue
+            out.append(c)
+            i += 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+_PLACEHOLDER_RE = re.compile(r"\$(\d+)")
+#: A dollar-quote opener: ``$$`` or ``$tag$`` (a tag never starts with a digit).
+_DOLLAR_TAG_RE = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
 
 
 def _example_sql(sql: str, param_oids: list) -> str:
@@ -636,7 +715,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             return
 
     def in_transaction(self) -> bool:
-        return False
+        """Whether BEGIN opened a transaction that has not ended: what ReadyForQuery reports
+        ('T', or 'E' once a statement in it failed) (REQ-2255)."""
+        return self._in_transaction
 
     def load_df_function(self, table: str):
         del table
@@ -1543,7 +1624,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 return
         elif ba[0] == ord("S"):
             stmt = ba[1 : len(ba) - 1].decode("utf-8")
-            sql = ctx.stmts[stmt][0]
+            try:
+                sql = ctx.statement(stmt)[0]
+            except Exception as e:  # UnknownStatement: 26000, and the connection carries on
+                self.send_error(e, ctx)
+                return
             if not sql.strip():
                 self.send_paramter_description([])
                 self.send_no_data()

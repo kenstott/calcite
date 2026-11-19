@@ -17,12 +17,14 @@ import json
 import logging
 import os
 import random
+import re
 import socket
 import socketserver
 import struct
 from typing import Dict, List, Optional
 
 from .core import BVType, Connection, Extension, Session, QueryResult
+from .pg_array import array_elements
 from .rewrite import Rewriter
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,106 @@ def _decode_numeric(v: bytes) -> decimal.Decimal:
 _PG_EPOCH = datetime.datetime(2000, 1, 1)
 _PG_EPOCH_UTC = datetime.datetime(2000, 1, 1, tzinfo=datetime.timezone.utc)
 _PG_DATE_EPOCH = datetime.date(2000, 1, 1)
+
+def _text_bool(s: str) -> bool:
+    v = s.strip().lower()
+    if v in ("t", "true", "1", "y", "yes", "on"):
+        return True
+    if v in ("f", "false", "0", "n", "no", "off"):
+        return False
+    raise ValueError(f"invalid boolean parameter {s!r}")
+
+
+# Text-format Bind values, decoded by the parameter's declared type OID (REQ-2255, ported from
+# Provisa's REQ-589), so the value reaches the statement as the type the client declared. An OID
+# not listed (0 = unspecified, the text types) keeps the string: the engine casts it by context,
+# as it casts an untyped string literal.
+TEXT_PARAM_DECODERS = {
+    16: _text_bool,
+    20: int,
+    21: int,
+    23: int,
+    700: float,
+    701: float,
+    1700: decimal.Decimal,
+    1082: datetime.date.fromisoformat,
+    1083: datetime.time.fromisoformat,
+    1114: datetime.datetime.fromisoformat,
+    1184: datetime.datetime.fromisoformat,
+    2950: _uuid_mod.UUID,
+}
+
+# The array types (pg_type's typcategory 'A' with a '_' element-type name) a client binds. A
+# text-format value is array_in's text form only for one of these: any other value starting with
+# "{" -- a brace-form uuid, a json object -- is the string it was sent as.
+_ARRAY_OIDS = frozenset({
+    1000,  # _bool
+    1001,  # _bytea
+    1005,  # _int2
+    1007,  # _int4
+    1009,  # _text
+    1014,  # _bpchar
+    1015,  # _varchar
+    1016,  # _int8
+    1021,  # _float4
+    1022,  # _float8
+    1028,  # _oid
+    1115,  # _timestamp
+    1182,  # _date
+    1183,  # _time
+    1185,  # _timestamptz
+    1231,  # _numeric
+    2951,  # _uuid
+    3807,  # _jsonb
+    199,   # _json
+})
+
+# An unspecified (OID 0) parameter is the type the statement casts it to, as PostgreSQL resolves an
+# unknown-typed parameter: ``$1::text[]``, ``$1::_text``, ``CAST($1 AS int ARRAY)``.
+_SQL_STRING = re.compile(r"'(?:[^']|'')*'")
+_TYPE_NAME = (
+    r'(?:(?:"[^"]+"|\w+)\s*\.\s*)?'
+    r"(?:character\s+varying|double\s+precision|bit\s+varying"
+    r'|(?:timestamp|time)(?:\s*\(\s*\d+\s*\))?\s+with(?:out)?\s+time\s+zone|"[^"]+"|\w+)'
+    r"(?:\s*\(\s*\d+(?:\s*,\s*\d+)?\s*\))?"
+)
+
+
+def _cast_to_an_array(sql: str, index: int) -> bool:
+    """Whether the statement casts its placeholder ``$index`` to an array type."""
+    placeholder = rf"\${index}(?!\d)"
+    cast = re.compile(
+        rf"(?:{placeholder}\s*::\s*|\bCAST\s*\(\s*{placeholder}\s+AS\s+)"
+        rf'(?:(?:(?:"[^"]+"|\w+)\s*\.\s*)?"?_|{_TYPE_NAME}\s*(?:\[|\bARRAY\b))',
+        re.IGNORECASE,
+    )
+    return cast.search(_SQL_STRING.sub("''", sql)) is not None
+
+
+class InvalidParameter(ValueError):
+    """A Bind value that is not text of its declared type."""
+
+    sqlstate = "22P02"  # invalid_text_representation
+
+
+class UnknownStatement(Exception):
+    """A message named a prepared statement this connection does not hold."""
+
+    sqlstate = "26000"  # invalid_sql_statement_name
+
+    def __init__(self, name: str):
+        said = f'prepared statement "{name}"' if name else "unnamed prepared statement"
+        super().__init__(f"{said} does not exist")
+
+
+class UnknownPortal(Exception):
+    """A message named a portal this connection does not hold."""
+
+    sqlstate = "34000"  # invalid_cursor_name
+
+    def __init__(self, name: str):
+        super().__init__(f'portal "{name}" does not exist')
+
 
 TYPE_OIDS = {
     # see Postgres pg_type_d.h — values are (name, decoder_callable, example)
@@ -324,12 +426,17 @@ class BVContext:
         self.session = session
         self.rewriter = rewriter
         self.params = params
-        self.process_id = random.randint(0, 2**32 - 1)
+        # Below 2**31: PostgreSQL's backend pid is an int4 (pg_backend_pid, pg_stat_activity.pid).
+        self.process_id = random.randint(1, 2**31 - 1)
         self.secret_key = random.randint(0, 2**32 - 1)
         self.stmts = {}
         self.portals = {}
         self.result_cache = {}
+        # has_error: the cycle failed, and its later Executes are skipped up to its Sync.
+        # transaction_failed: a statement failed in the open transaction, reported 'E' by
+        # ReadyForQuery until the transaction ends (REQ-2255).
         self.has_error = False
+        self.transaction_failed = False
         self.authenticated = False
         self.salt: bytes | None = None
 
@@ -342,14 +449,31 @@ class BVContext:
 
     def mark_error(self):
         self.has_error = True
+        if self.session.in_transaction():
+            self.transaction_failed = True
 
     def transaction_status(self):
         if self.session.in_transaction():
-            if self.has_error:
+            if self.has_error or self.transaction_failed:
                 return TransactionStatus.IN_FAILED_TRANSACTION
             else:
                 return TransactionStatus.IN_TRANSACTION
+        self.transaction_failed = False
         return TransactionStatus.IDLE
+
+    def statement(self, name: str):
+        """The (sql, parameter OIDs) of a prepared statement this connection holds."""
+        held = self.stmts.get(name)
+        if held is None:
+            raise UnknownStatement(name)
+        return held
+
+    def portal(self, name: str):
+        """The (statement, parameters, result formats) of a portal this connection holds."""
+        held = self.portals.get(name)
+        if held is None:
+            raise UnknownPortal(name)
+        return held
 
     def execute_sql(self, sql: str, params=None, result_fmt=None) -> QueryResult:
         logger.info("Input SQL: " + sql)
@@ -365,14 +489,14 @@ class BVContext:
         return qr
 
     def describe_portal(self, name: str) -> QueryResult:
-        stmt, params, result_fmt = self.portals[name]
-        sql, _ = self.stmts[stmt]
+        stmt, params, result_fmt = self.portal(name)
+        sql, _ = self.statement(stmt)
         query_result = self.execute_sql(sql=sql, params=params, result_fmt=result_fmt)
         self.result_cache[name] = query_result
         return query_result
 
     def describe_statement(self, name: str) -> QueryResult:
-        sql, param_oids = self.stmts[name]
+        sql, param_oids = self.statement(name)
         params = []
         for typeoid in param_oids:
             type = TYPE_OIDS.get(typeoid)
@@ -388,16 +512,23 @@ class BVContext:
             del self.result_cache[name]
             return query_result
         else:
-            stmt, params, result_fmt = self.portals[name]
-            sql, _ = self.stmts[stmt]
+            stmt, params, result_fmt = self.portal(name)
+            sql, _ = self.statement(stmt)
             qr = self.execute_sql(sql=sql, params=params, result_fmt=result_fmt)
             return qr
 
     def add_statement(self, name: str, sql: str, param_oids: List[int]):
+        # asyncpg re-Parses the same statement with unspecified (0) parameter types after its
+        # Describe; the types that Describe resolved (and told the client, which encodes its Bind
+        # values in them) survive, or a binary int8 value is decoded as if untyped.
+        prior = self.stmts.get(name)
+        if prior is not None and prior[0] == sql and all(o == 0 for o in param_oids):
+            param_oids = prior[1]
         self.stmts[name] = (sql, param_oids)
 
     def close_statement(self, name: str):
-        del self.stmts[name]
+        # Closing a name that does not exist is no error (the protocol says so).
+        self.stmts.pop(name, None)
 
     def add_portal(self, name: str, stmt: str, params: List, result_formats: List[int]):
         # Binding a portal replaces the one of that name, and with it any result that one was
@@ -408,8 +539,19 @@ class BVContext:
         self.portals[name] = (stmt, params, result_formats)
 
     def close_portal(self, name: str):
+        # Closing a name that does not exist is no error (the protocol says so).
         self._drop_result(name)
-        del self.portals[name]
+        self.portals.pop(name, None)
+
+    def release_results(self) -> None:
+        """Close every result this connection still holds (suspended portals): each may hold a
+        live engine statement and its lock."""
+        held = list(self.result_cache.values())
+        self.result_cache.clear()
+        for qr in held:
+            close = getattr(qr, "close", None)
+            if close is not None:
+                close()
 
     def _drop_result(self, name: str) -> None:
         """Forget the result ``name``'s portal was suspended on, releasing what it holds."""
@@ -480,6 +622,7 @@ class BuenaVistaHandler(socketserver.StreamRequestHandler):
             self.send_error(e)
 
         if ctx:
+            ctx.release_results()
             self.server.conn.close_session(ctx.session)  # type: ignore[attr-defined]
             del self.server.ctxts[ctx.process_id]  # type: ignore[attr-defined]
             ctx = None
@@ -591,6 +734,9 @@ class BuenaVistaHandler(socketserver.StreamRequestHandler):
         portal = ba[:portal_idx].decode("utf-8")
         stmt_idx = ba.index(NULL_BYTE, portal_idx + 1)
         stmt = ba[portal_idx + 1 : stmt_idx].decode("utf-8")
+        if stmt not in ctx.stmts:
+            self.send_error(UnknownStatement(stmt), ctx)
+            return
         buf = BVBuffer(io.BytesIO(ba[stmt_idx + 1 :]))
         num_formats = buf.read_int16()
         formats = []
@@ -617,17 +763,20 @@ class BuenaVistaHandler(socketserver.StreamRequestHandler):
             logger.debug("Format: %d, Type: %d", formats[i], typeoid)
             if formats[i] == 0:
                 decoded = v.decode("utf-8")
-                if typeoid == 0:
-                    # Unspecified type — store raw string; do not date-parse
-                    if decoded.startswith("{") and decoded.endswith("}"):
-                        params.append(decoded[1:-1].split(","))
+                try:
+                    if typeoid in TEXT_PARAM_DECODERS:
+                        params.append(TEXT_PARAM_DECODERS[typeoid](decoded))
+                    elif typeoid in _ARRAY_OIDS or (
+                        typeoid == 0 and _cast_to_an_array(ctx.stmts[stmt][0], i + 1)
+                    ):
+                        params.append(array_elements(decoded))
                     else:
                         params.append(decoded)
-                else:
-                    if decoded.startswith("{") and decoded.endswith("}"):
-                        params.append(decoded[1:-1].split(","))
-                    else:
-                        params.append(decoded)
+                except ValueError as exc:
+                    self.send_error(
+                        InvalidParameter(f"parameter ${i + 1} (type {typeoid}): {exc}"), ctx
+                    )
+                    return
             else:
                 type = TYPE_OIDS.get(typeoid)
                 if type:
