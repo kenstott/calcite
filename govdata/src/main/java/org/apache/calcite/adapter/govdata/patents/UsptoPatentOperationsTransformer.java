@@ -80,9 +80,9 @@ public class UsptoPatentOperationsTransformer implements ResponseTransformer {
   private static final List<String> SECTION_LABELS = new ArrayList<>();
 
   static {
-    m("Serialized Filings", "serialized_filings", COUNT);
-    m("RCE Filings", "rce_filings", COUNT);
-    m("Design Filings ~", "design_filings", COUNT);
+    m("Serialized Filings", "serialized_filings_fytd", COUNT);
+    m("RCE Filings", "rce_filings_fytd", COUNT);
+    m("Design Filings ~", "design_filings_fytd", COUNT);
     m("UPR Allowance rate *", "upr_allowance_rate_fytd", RATIO);
     m("Allowance rate without RCE abandonments *", "allowance_rate_ex_rce_abandonments_fytd", RATIO);
     m("Actions per disposal", "actions_per_disposal", PER_DISPOSAL);

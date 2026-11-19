@@ -1639,8 +1639,8 @@ partitionedTables:
       divisional_pendency, rce_filing_to_next_action_pendency. Workforce: examiner_staff,
       examiner_hires and examiner_attritions (monthly counts), examiner_attrition_rate_12mo (ratio,
       12-month average; the source stopped tracking it for some months and those months have no
-      row). Filings, allowances, final_rejections, restrictions, disposals, production_units and
-      first_actions_on_merits carry the suffix _fytd where the source reports them cumulatively
+      row). Filings (serialized, rce, design), allowances, final_rejections, restrictions, disposals,
+      production_units and first_actions_on_merits carry the suffix _fytd where the source reports them cumulatively
       from October 1 of the fiscal year (they reset each October, so do not sum across months).
       tech_center is 'all' for the national figure, or a technology center number (1600, 1700,
       2100, 2400, 2600, 2800, 3600, 3700, plus 4100 for staff) for the tc_* measures
