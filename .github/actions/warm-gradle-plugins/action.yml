@@ -26,6 +26,16 @@ inputs:
 runs:
   using: composite
   steps:
+  # A job whose key hits needs no download from Maven Central, the Plugin Portal or services.gradle.org, so
+  # an outage of those hosts that outlasts the retries below only affects runs that miss (#1350).
+  - name: 'Restore Gradle plugin and wrapper cache'
+    id: plugin-cache
+    uses: actions/cache/restore@v4
+    with:
+      path: |
+        ~/.gradle/caches/modules-2
+        ~/.gradle/wrapper/dists
+      key: gradle-plugins-${{ runner.os }}-${{ hashFiles('**/buildSrc/*.kts', '**/buildSrc/*.properties', '**/buildSrc/subprojects/*/*.kts', '**/gradle/wrapper/gradle-wrapper.properties') }}
   - name: 'Resolve buildSrc plugins (retry)'
     shell: bash
     working-directory: ${{ inputs.working-directory }}
@@ -48,3 +58,11 @@ runs:
       done
       echo "::error::Gradle plugin resolution failed on all $attempts attempts"
       exit 1
+  - name: 'Save Gradle plugin and wrapper cache'
+    if: steps.plugin-cache.outputs.cache-hit != 'true'
+    uses: actions/cache/save@v4
+    with:
+      path: |
+        ~/.gradle/caches/modules-2
+        ~/.gradle/wrapper/dists
+      key: ${{ steps.plugin-cache.outputs.cache-primary-key }}
