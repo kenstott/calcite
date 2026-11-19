@@ -705,7 +705,116 @@ run_closure_resolver() {
   rm -f "$out" "$err"
 }
 
+# ── Per-table pause marker (R2 sync) ───────────────────────────────────────────
+# A remediation that must delete on R2 reserves ONE table without stopping the sync:
+#   <state>/pause.d/<schema>__<table>   lines: created_at=<epoch>  expires_at=<epoch>  owner=<text>
+# Every R2 sync pass (sync-to-r2.sh bulk copy and pointer publish, catchup-sync-r2.sh) skips a
+# paused table at unit start: no copy, no pointer publish, no cursor change, not a failure.
+# A marker past expires_at is ignored (logged loudly and removed); a marker whose content cannot
+# be read is honoured until its file mtime + GOVDATA_R2_PAUSE_TTL (default 8h), logged at error level.
+# In-flight tracking: a pass registers every unit it works on in <state>/inflight.d/<pid>.<n>
+# ("schema<TAB>table<TAB>start_epoch"; table "*" = a whole-schema bulk slice) BEFORE it checks
+# the marker, and removes it when the unit ends. r2_pause_wait_idle returns once no live pass
+# holds a unit on the table that started at or before the marker was created; a unit started
+# later has already seen the marker. A bulk slice can run up to GOVDATA_R2_SYNC_SLICE_MAX (60m).
+_r2_state_dir() { echo "${GOVDATA_R2_SYNC_STATE_DIR:-$HOME/.r2-sync-state}"; }
+
+# r2_pause_create <schema> <table> [ttl_seconds] [owner]
+r2_pause_create() {
+  local schema=$1 table=$2 ttl=${3:-${GOVDATA_R2_PAUSE_TTL:-28800}} owner=${4:-unknown}
+  local d; d="$(_r2_state_dir)/pause.d"
+  mkdir -p "$d"
+  local now; now=$(date +%s)
+  printf 'created_at=%s\nexpires_at=%s\nowner=%s\n' "$now" "$(( now + ttl ))" "$owner" > "$d/${schema}__${table}.tmp.$$"
+  mv "$d/${schema}__${table}.tmp.$$" "$d/${schema}__${table}"
+  log_info "r2-pause: [$schema/$table] pause marker created, expires in ${ttl}s (owner: $owner)"
+}
+
+r2_pause_remove() {
+  rm -f "$(_r2_state_dir)/pause.d/${1}__${2}"
+  log_info "r2-pause: [$1/$2] pause marker removed"
+}
+
+# r2_pause_created_at <schema> <table> → prints created_at epoch when the table is paused and the
+# marker is unexpired; returns 1 when it is not paused. Logs loudly when it honours or expires one.
+r2_pause_created_at() {
+  local schema=$1 table=$2
+  local f; f="$(_r2_state_dir)/pause.d/${schema}__${table}"
+  [ -e "$f" ] || return 1
+  local created expires now; now=$(date +%s)
+  created=$(sed -n 's/^created_at=//p' "$f" | tr -dc '0-9')
+  expires=$(sed -n 's/^expires_at=//p' "$f" | tr -dc '0-9')
+  if [ -z "$created" ] || [ -z "$expires" ]; then
+    created=$(stat -c %Y "$f")
+    expires=$(( created + ${GOVDATA_R2_PAUSE_TTL:-28800} ))
+    log_error "r2-pause: [$schema/$table] marker $f is unreadable; honouring it until mtime+${GOVDATA_R2_PAUSE_TTL:-28800}s"
+  fi
+  if [ "$now" -ge "$expires" ]; then
+    log_error "r2-pause: [$schema/$table] pause marker EXPIRED at $(date -u -d "@$expires" +%Y-%m-%dT%H:%MZ) — ignored and removed; the table is synced again"
+    rm -f "$f"
+    return 1
+  fi
+  log_error "r2-pause: [$schema/$table] PAUSED by marker (created $(date -u -d "@$created" +%Y-%m-%dT%H:%MZ), expires $(date -u -d "@$expires" +%Y-%m-%dT%H:%MZ)) — skipped: no copy, no pointer publish"
+  echo "$created"
+}
+
+# r2_paused_tables <schema> → table names with an active marker, one per line.
+r2_paused_tables() {
+  local schema=$1 f t
+  for f in "$(_r2_state_dir)"/pause.d/"${schema}"__*; do
+    [ -e "$f" ] || continue
+    t=${f##*/"${schema}"__}
+    r2_pause_created_at "$schema" "$t" >/dev/null && echo "$t"
+  done
+}
+
+# r2_inflight_begin <schema> <table|*> → prints the registration path (pass to r2_inflight_end)
+r2_inflight_begin() {
+  local d; d="$(_r2_state_dir)/inflight.d"
+  mkdir -p "$d"
+  local f; f=$(mktemp "$d/$$.XXXXXX")
+  printf '%s\t%s\t%s\n' "$1" "$2" "$(date +%s)" > "$f"
+  echo "$f"
+}
+r2_inflight_end() { rm -f "$1"; }
+
+# r2_pause_wait_idle <schema> <table> <created_at> [timeout_seconds]
+# Returns 0 once no live pass has a unit on the table that started at or before created_at.
+r2_pause_wait_idle() {
+  local schema=$1 table=$2 created=$3 timeout=${4:-${GOVDATA_R2_SYNC_SLICE_MAX_SECS:-4200}}
+  local deadline=$(( $(date +%s) + timeout )) busy f s t st pid
+  while :; do
+    busy=0
+    for f in "$(_r2_state_dir)"/inflight.d/*; do
+      [ -e "$f" ] || continue
+      IFS=$'\t' read -r s t st < "$f" || continue
+      pid=${f##*/}; pid=${pid%%.*}
+      [ "$s" = "$schema" ] && { [ "$t" = "*" ] || [ "$t" = "$table" ]; } && [ "$st" -le "$created" ] || continue
+      if kill -0 "$pid" 2>/dev/null; then busy=1; else rm -f "$f"; fi
+    done
+    [ "$busy" -eq 0 ] && return 0
+    local left=$(( deadline - $(date +%s) ))
+    [ "$left" -le 0 ] && return 1
+    sleep "$(( left < 5 ? left : 5 ))"
+  done
+}
+
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
+# Returns 3 (nothing copied or published, not a failure) when the table carries a pause marker.
+# Registers the unit as in-flight before it reads the marker. Wraps the sync unit described below.
+sync_iceberg_table_closure() {
+  local reg rc
+  reg=$(r2_inflight_begin "$4" "$5")
+  if r2_pause_created_at "$4" "$5" >/dev/null; then
+    r2_inflight_end "$reg"
+    return 3
+  fi
+  _sync_iceberg_table_closure_body "$@"; rc=$?
+  r2_inflight_end "$reg"
+  return $rc
+}
+
+# _sync_iceberg_table_closure_body <minio_remote> <r2_remote> <bucket> <schema> <table>
 # The single sync unit for one Iceberg table, used by the continuous sync and the true-up:
 # resolves exactly the files the table's CURRENT version depends on (ClosureResolver: one read
 # of version-hint.text, then metadata.json + manifest list + every manifest + every data/delete
@@ -715,7 +824,7 @@ run_closure_resolver() {
 # it reports what would be copied and published and writes nothing.
 # Prints the resolved version to stdout on success; returns nonzero (nothing published) on any
 # failure, so R2's pointer is left at whatever it already named.
-sync_iceberg_table_closure() {
+_sync_iceberg_table_closure_body() {
   local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5
   local tag="sync-to-r2: [$schema/$table]"
   local jar; jar=$(resolve_classpath) || return 1

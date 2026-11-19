@@ -194,7 +194,7 @@ _capture_pins() {
 
 # _apply_pins <schema> <pins> → 0 if every pointer was published, 1 if any was held back.
 _apply_pins() {
-  local s=$1 pins=$2 t v rc=0 cur resolved _pub=0 _same=0 _held=0
+  local s=$1 pins=$2 t v rc=0 cur resolved _pub=0 _same=0 _held=0 _paused=0 _crc
   if [ -z "$pins" ]; then
     log_info "sync-to-r2: [$s] no Iceberg pointers to publish"
     return 0
@@ -227,7 +227,14 @@ _apply_pins() {
     # govdata-ops#299); this closure copy bypasses that window entirely for exactly the files
     # the pointer we're about to advertise depends on, the same way the old metadata.json/
     # manifest-list explicit-copy fallback did for the two levels it covered.
-    if ! resolved=$(sync_iceberg_table_closure "$MINIO_REMOTE" "$R2_REMOTE" "${BUCKETS[0]}" "$s" "$t"); then
+    # A table with a pause marker is skipped by the closure unit itself (rc 3): no copy, no pointer
+    # publish, and neither a held pointer nor a failure.
+    resolved=$(sync_iceberg_table_closure "$MINIO_REMOTE" "$R2_REMOTE" "${BUCKETS[0]}" "$s" "$t") && _crc=0 || _crc=$?
+    if [ "$_crc" -eq 3 ]; then
+      _paused=$(( _paused + 1 ))
+      continue
+    fi
+    if [ "$_crc" -ne 0 ]; then
       log_error "sync-to-r2: [$s/$t] closure verify/copy failed — pointer HELD at its previous value (v${cur:-none})"
       rc=1
       _held=$(( _held + 1 ))
@@ -237,7 +244,7 @@ _apply_pins() {
     log_info "sync-to-r2: [$s/$t] pointer published: v$resolved (was v${cur:-none})"
     _pub=$(( _pub + 1 ))
   done <<< "$pins"
-  log_info "sync-to-r2: [$s] pointers: $_pub published, $_same already current, $_held held"
+  log_info "sync-to-r2: [$s] pointers: $_pub published, $_same already current, $_held held, $_paused paused"
   return $rc
 }
 
@@ -280,7 +287,7 @@ _ukey() { echo "${1//\//__}"; }
 # Returns 0 if every unit reached slice_end; 124 if no unit made progress; 1 if some did.
 _copy_split_schema() {
   local s=$1 floor=$2 slice_end=$3 now=$4 u cur lo src dst extra rc
-  local started copied=0 failed=0 skipped=0 remaining=0 units=()
+  local started copied=0 failed=0 skipped=0 paused=0 remaining=0 units=() reg
   started=$(date +%s)
   local deadline=$(( started + $(_secs "$SLICE_MAX") ))
   local d c
@@ -313,6 +320,12 @@ _copy_split_schema() {
     [ "$cur" -lt "$floor" ] && cur=$floor
     [ "$cur" -ge "$slice_end" ] && continue
     if [ "$(date +%s)" -ge "$deadline" ]; then skipped=$((skipped + 1)); continue; fi
+    # A paused table's unit is skipped at unit start: nothing copied, cursor untouched, not a failure.
+    # The unit is registered in-flight BEFORE the marker is read (see r2_pause_wait_idle).
+    reg=$(r2_inflight_begin "$s" "${u%%/*}")
+    if r2_pause_created_at "$s" "${u%%/*}" >/dev/null; then
+      r2_inflight_end "$reg"; paused=$((paused + 1)); continue
+    fi
     $DRY_RUN || touch "$STATE_DIR/.unit-try-$s-$k"
     lo=$(( cur - BUFFER )); [ "$lo" -lt 0 ] && lo=0
     src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$u"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$u"; extra=""
@@ -339,14 +352,18 @@ _copy_split_schema() {
         log_error "sync-to-r2: [$s/$u] hit the unit cap — will be copied by subdirectory from the next pass"
       fi
     fi
+    r2_inflight_end "$reg"
   done
 
   for u in "${units[@]}"; do
     cur=$(cat "$STATE_DIR/.unit-cursor-$s-$(_ukey "$u")" 2>/dev/null | tr -dc 0-9 || true)
     [ -z "$cur" ] && cur=$floor
-    [ "$cur" -lt "$slice_end" ] && remaining=$((remaining + 1))
+    [ "$cur" -lt "$slice_end" ] || continue
+    # A paused table's units stay short of the slice by design; they do not make the pass incomplete.
+    [ -e "$(_r2_state_dir)/pause.d/${s}__${u%%/*}" ] && continue
+    remaining=$((remaining + 1))
   done
-  log_info "sync-to-r2: [$s] unit pass: $copied copied, $failed failed, $skipped not started (schema cap ${SLICE_MAX}); $remaining of ${#units[@]} unit(s) still short of this slice"
+  log_info "sync-to-r2: [$s] unit pass: $copied copied, $failed failed, $paused paused, $skipped not started (schema cap ${SLICE_MAX}); $remaining of ${#units[@]} unit(s) still short of this slice"
   [ "$remaining" -eq 0 ] && return 0
   [ "$copied" -eq 0 ] && return 124
   return 1
@@ -506,11 +523,19 @@ for s in "${_schemas[@]}"; do
       _copy_split_schema "$s" "$_cursor" "$_slice_end" "$_now"
       _rc_data=$?
     else
+      # Register the slice in-flight, THEN read the pause markers: each paused table is excluded from
+      # this copy (a marker created after this point waits for the slice to end, see r2_pause_wait_idle).
+      _reg=$(r2_inflight_begin "$s" "*")
+      _pause_ex=()
+      while IFS= read -r _pt; do
+        [ -n "$_pt" ] && _pause_ex+=(--exclude "/${_pt}/**")
+      done < <(r2_paused_tables "$s")
       timeout --kill-after=60 "$SLICE_MAX" rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
-        --exclude "version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
+        --exclude "version-hint.text" ${_pause_ex[@]+"${_pause_ex[@]}"} $_slice_flags 2>&1 | while IFS= read -r line; do
         log_info "sync-to-r2: [$s] $line"
       done
       _rc_data=${PIPESTATUS[0]}
+      r2_inflight_end "$_reg"
     fi
     if [ "$_rc_data" -eq 0 ]; then
       if $_is_final; then

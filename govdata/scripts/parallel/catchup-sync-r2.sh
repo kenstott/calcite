@@ -76,7 +76,13 @@ BUCKET="govdata-parquet-v1"
 # ── Table sync (Iceberg-aware, version-pinned) ─────────────────────────────────
 sync_iceberg_table() {
   local schema=$1 table=$2 version
-  if ! version=$(sync_iceberg_table_closure "$MINIO_REMOTE" "$R2_REMOTE" "$BUCKET" "$schema" "$table"); then
+  local rc=0
+  version=$(sync_iceberg_table_closure "$MINIO_REMOTE" "$R2_REMOTE" "$BUCKET" "$schema" "$table") || rc=$?
+  if [ "$rc" -eq 3 ]; then
+    log_info "catchup-sync-r2: [$schema/$table] skipped: paused by marker"
+    return 0
+  fi
+  if [ "$rc" -ne 0 ]; then
     log_error "catchup-sync-r2: [$schema/$table] NOT caught up — version-hint.text not advanced"
     return 1
   fi
