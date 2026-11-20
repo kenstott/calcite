@@ -65,6 +65,8 @@ public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
   private static final long REQUEST_SPACING_MS = 45000L;
   private static final long THROTTLE_WAIT_MS = 300000L;
   private static final int THROTTLE_RETRIES = 5;
+  private static final int OPEN_ATTEMPTS = 5;
+  private static final long OPEN_BACKOFF_MS = 15000L;
   /** Serializes download requests across the pipeline's worker threads. */
   private static final Object GATE = new Object();
   private static long lastRequestAt;
@@ -117,7 +119,7 @@ public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
       String key = ENDPOINT + "fy=" + fy + "/period=" + p + "?asof=" + stamp;
       InputStream in = rawCache.openStream(key, new RawCache.ContentSupplier() {
         @Override public InputStream open() throws IOException {
-          return AbstractBulkCsvProvider.openUrl(generate(fy, p));
+          return openFile(generate(fy, p), fy, p);
         }
       });
       int before = rows.size();
@@ -130,6 +132,33 @@ public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
           rows.size() - before);
     }
     return rows.iterator();
+  }
+
+  /**
+   * Opens the built file. files.usaspending.gov sometimes closes the first connection to a
+   * freshly built file without a response; the same URL is opened again after a pause, and the
+   * failure is thrown once the attempts are used up.
+   */
+  private static InputStream openFile(String url, int fy, int period) throws IOException {
+    IOException failure = null;
+    for (int attempt = 1; attempt <= OPEN_ATTEMPTS; attempt++) {
+      try {
+        return AbstractBulkCsvProvider.openUrl(url);
+      } catch (IOException e) {
+        failure = e;
+        LOGGER.warn("usaspending_account_balances: FY{} period {} file open failed (attempt "
+            + "{}/{}): {}", fy, period, attempt, OPEN_ATTEMPTS, e.toString());
+        if (attempt < OPEN_ATTEMPTS) {
+          try {
+            Thread.sleep(OPEN_BACKOFF_MS * attempt);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted opening FY" + fy + " period " + period, ie);
+          }
+        }
+      }
+    }
+    throw failure;
   }
 
   /** Requests the file for one period, waits for it to be built and returns its URL. */
