@@ -6334,6 +6334,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0  # Debt to the Penny is published daily; no publication lag
 
     # Materialization configuration
     materialize:
