@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -45,45 +47,83 @@ class GovDataCatalogServedTest {
   }
 
   @Test void yamlTableMissingFromSeedIsNotServed() {
-    Set<String> seed = GovDataCatalog.seedTables();
-    for (JsonNode sc : GovDataCatalog.build(Arrays.asList("disasters", "econ", "sec"))) {
-      String schema = sc.path("schema").asText();
+    List<String> schemas = Arrays.asList("econ");
+    Set<String> seedColumns = allYamlColumns(schemas);
+    String absent = firstTable(schemas);
+    seedColumns.removeIf(c -> c.startsWith(absent + "."));
+    Set<String> seedTables = new HashSet<>();
+    for (String c : seedColumns) {
+      seedTables.add(c.substring(0, c.lastIndexOf('.')));
+    }
+    assertFalse(seedTables.contains(absent), "fixture must leave " + absent + " out of the seed");
+    int served = 0;
+    for (JsonNode sc : GovDataCatalog.buildServed(schemas, seedTables, seedColumns)) {
       for (JsonNode t : sc.path("tables")) {
-        String name = schema + "." + t.path("name").asText();
-        if (!seed.contains(name)) {
-          for (JsonNode s : GovDataCatalog.buildServed(Arrays.asList(schema))) {
-            for (JsonNode st : s.path("tables")) {
-              assertFalse(name.equals(schema + "." + st.path("name").asText()),
-                  name + " served though absent from seed");
-            }
-          }
-          return;
-        }
+        String name = sc.path("schema").asText() + "." + t.path("name").asText();
+        assertFalse(absent.equals(name), name + " served though absent from seed");
+        served++;
       }
     }
-    throw new AssertionError("no YAML table missing from the seed found to exercise the filter");
+    assertTrue(served > 0, "tables present in the seed must still be served");
   }
 
   @Test void servedCatalogListsOnlySeedColumns() {
-    Set<String> seedColumns = GovDataCatalog.seedColumns();
-    boolean trimmed = false;
-    for (JsonNode sc : GovDataCatalog.buildServed(Arrays.asList("edu"))) {
+    List<String> schemas = Arrays.asList("edu");
+    Set<String> seedColumns = allYamlColumns(schemas);
+    String absent = firstColumn(schemas);
+    seedColumns.remove(absent);
+    String table = absent.substring(0, absent.lastIndexOf('.'));
+    Set<String> seedTables = new HashSet<>();
+    for (String c : seedColumns) {
+      seedTables.add(c.substring(0, c.lastIndexOf('.')));
+    }
+    boolean tableServed = false;
+    for (JsonNode sc : GovDataCatalog.buildServed(schemas, seedTables, seedColumns)) {
+      for (JsonNode t : sc.path("tables")) {
+        String tableName = sc.path("schema").asText() + "." + t.path("name").asText();
+        tableServed |= tableName.equals(table);
+        for (JsonNode c : t.path("columns")) {
+          String col = tableName + "." + c.path("name").asText();
+          assertTrue(seedColumns.contains(col), col + " is listed but not in the seed");
+          assertFalse(absent.equals(col), col + " listed though absent from seed");
+        }
+      }
+    }
+    assertTrue(tableServed, table + " must still be served with its remaining columns");
+  }
+
+  private static Set<String> allYamlColumns(List<String> schemas) {
+    Set<String> cols = new HashSet<>();
+    for (JsonNode sc : GovDataCatalog.build(schemas)) {
+      for (JsonNode t : sc.path("tables")) {
+        for (JsonNode c : t.path("columns")) {
+          cols.add(sc.path("schema").asText() + "." + t.path("name").asText() + "."
+              + c.path("name").asText());
+        }
+      }
+    }
+    return cols;
+  }
+
+  /** First table, in YAML order, that has at least one column. */
+  private static String firstTable(List<String> schemas) {
+    return firstColumn(schemas, false);
+  }
+
+  /** First column of a table that has at least two columns, so the table survives its removal. */
+  private static String firstColumn(List<String> schemas) {
+    return firstColumn(schemas, true);
+  }
+
+  private static String firstColumn(List<String> schemas, boolean column) {
+    for (JsonNode sc : GovDataCatalog.build(schemas)) {
       for (JsonNode t : sc.path("tables")) {
         String table = sc.path("schema").asText() + "." + t.path("name").asText();
-        for (JsonNode c : t.path("columns")) {
-          assertTrue(seedColumns.contains(table + "." + c.path("name").asText()),
-              table + "." + c.path("name").asText() + " is listed but not in the seed");
+        if (t.path("columns").size() >= 2) {
+          return column ? table + "." + t.path("columns").get(0).path("name").asText() : table;
         }
       }
     }
-    for (JsonNode sc : GovDataCatalog.build(Arrays.asList("edu"))) {
-      for (JsonNode t : sc.path("tables")) {
-        for (JsonNode c : t.path("columns")) {
-          String col = "edu." + t.path("name").asText() + "." + c.path("name").asText();
-          trimmed |= !seedColumns.contains(col);
-        }
-      }
-    }
-    assertTrue(trimmed, "no edu YAML column missing from the seed found to exercise the filter");
+    throw new AssertionError("no YAML table with columns in " + schemas);
   }
 }

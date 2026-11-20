@@ -120,8 +120,13 @@ public final class GovDataCatalog {
    * entry are dropped.
    */
   public static ArrayNode buildServed(Collection<String> schemas) {
-    Set<String> served = seedTables();
     Set<String> servedColumns = seedColumns();
+    return buildServed(schemas, tablesOf(servedColumns), servedColumns);
+  }
+
+  /** {@link #buildServed(Collection)} against the given seed listing instead of the jar's. */
+  static ArrayNode buildServed(Collection<String> schemas, Set<String> served,
+      Set<String> servedColumns) {
     ArrayNode out = MAPPER.createArrayNode();
     for (JsonNode sc : build(schemas)) {
       String schema = sc.path("schema").asText();
@@ -149,8 +154,12 @@ public final class GovDataCatalog {
 
   /** {@code schema.table} for every table and view in the seed's schema listing. */
   static Set<String> seedTables() {
+    return tablesOf(seedColumns());
+  }
+
+  private static Set<String> tablesOf(Set<String> columns) {
     Set<String> names = new HashSet<>();
-    for (String col : seedColumns()) {
+    for (String col : columns) {
       names.add(col.substring(0, col.lastIndexOf('.')));
     }
     return names;
