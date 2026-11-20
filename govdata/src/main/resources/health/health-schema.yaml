@@ -6297,6 +6297,109 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: cdc_state_injury_mortality
+    timeColumn: year  # observation year, derived by the transformer from period / ttm_date_range
+    freshness:
+      type: etag
+    comment: >
+      State-level death counts and rates per 100,000 for homicide, suicide, firearm deaths and drug
+      overdose, by state of residence (50 states and DC), from CDC's Mapping Injury, Overdose, and
+      Violence (MIOV) tool (data.cdc.gov fpsi-y8tj), which CDC/NCIPC builds from final NCHS NVSS
+      mortality files. Yearly rows cover 2019 onward; TTM rows are trailing-twelve-month windows.
+      This is the only state-grain cause-specific mortality in the warehouse: cdc_wonder_cause_of_death
+      is national-only and cdc_mortality's state series is all-cause/COVID (annual leading causes end
+      2017, with no homicide or firearm cause). intent is one of All_Homicide, All_Suicide,
+      FA_Deaths (all firearm deaths), FA_Homicide, FA_Suicide, Drug_OD. Example: California
+      All_Homicide is 5.1 per 100,000 in 2023 and 4.5 in 2024. Counts of 1-9 are suppressed
+      (count_sup = '1-9') and their rate is NULL because CDC publishes no estimate. Companion to
+      cdc_county_injury_mortality (same source family, county grain). year is the calendar year for
+      a yearly row and the year the window ends for a TTM row, so filter period to the four-digit
+      rows for like-for-like annual comparisons.
+    columns:
+      - name: geoid
+        comment: "State FIPS code"
+        type: VARCHAR
+        nullable: true
+      - name: name
+        comment: "State name"
+        type: VARCHAR
+        nullable: true
+      - name: intent
+        comment: "Death category: All_Homicide, All_Suicide, Drug_OD, FA_Deaths (all firearm deaths), FA_Homicide, FA_Suicide"
+        type: VARCHAR
+        nullable: true
+      - name: year
+        comment: "Observation year: the four-digit period for a yearly row, the year the window ends for a trailing-twelve-months row (from ttm_date_range)"
+        type: INTEGER
+        nullable: true
+      - name: period
+        comment: "Yearly (a four-digit year) or TTM (trailing-twelve-months) reporting period"
+        type: VARCHAR
+        nullable: true
+      - name: count_sup
+        comment: "Death count; the literal '1-9' when suppressed for privacy"
+        type: VARCHAR
+        nullable: true
+      - name: rate
+        comment: "Deaths per 100,000 population as published by CDC. NULL where the count is suppressed (the source's -999 sentinel is mapped to NULL)"
+        type: DOUBLE
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."rate" AS DOUBLE) <= -900 THEN NULL ELSE TRY_CAST(src."rate" AS DOUBLE) END'
+      - name: ttm_date_range
+        comment: "Date range covered when period is trailing-twelve-months"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_state_injury_mortality"
+        type: VARCHAR
+        nullable: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcCountyInjuryMortalityResponseTransformer"
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/fpsi-y8tj.json"
+      method: GET
+      parameters:
+        # Offset paging needs a total order: without one Socrata may repeat a row on a later page
+        # and skip another, so :id (the row's stable system id) fixes the order.
+        "$order": ":id"
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_state_injury_mortality
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: cdc_state_vital_provisional
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
