@@ -94,6 +94,13 @@ class MemberRollCallVotesProviderTest {
     assertEquals("Not Voting", second.get("vote_cast"));
   }
 
+  @Test void houseDateWithCapitalisedMonthParses() throws Exception {
+    Deque<Map<String, Object>> out = new ArrayDeque<Map<String, Object>>();
+    MemberRollCallVotesProvider.parseHouse(
+        in(HOUSE.replace("21-Mar-2024", "3-JAN-2001")), "u", 2001, 107, 1, 2, out);
+    assertEquals("2001-01-03", out.removeFirst().get("vote_date"));
+  }
+
   @Test void fileWithNoMembersThrows() {
     String empty = "<rollcall-vote><vote-metadata><action-date>1-Jan-2000</action-date>"
         + "</vote-metadata><vote-data/></rollcall-vote>";

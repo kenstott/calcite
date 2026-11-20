@@ -30,6 +30,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -78,8 +79,10 @@ public class MemberRollCallVotesProvider implements DataProvider {
   private static final String HOUSE_SITE = "https://clerk.house.gov/evs";
   private static final String SENATE_SITE = "https://www.senate.gov/legislative/LIS";
 
+  /** The House Clerk prints the month in capitals in its older files ("3-JAN-2001"). */
   private static final DateTimeFormatter HOUSE_DATE =
-      DateTimeFormatter.ofPattern("d-MMM-uuuu", Locale.US);
+      new DateTimeFormatterBuilder().parseCaseInsensitive()
+          .appendPattern("d-MMM-uuuu").toFormatter(Locale.US);
   private static final DateTimeFormatter SENATE_DATE =
       DateTimeFormatter.ofPattern("MMMM d, uuuu", Locale.US);
 
