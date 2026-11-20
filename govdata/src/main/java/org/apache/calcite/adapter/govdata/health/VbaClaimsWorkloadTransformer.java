@@ -75,6 +75,9 @@ public class VbaClaimsWorkloadTransformer implements ResponseTransformer {
   /** Offset from the "# Pending" column back to the line-label column. */
   private static final int LABEL_OFFSET = 6;
   private static final int MAX_HEADER_SCAN_ROWS = 10;
+  private static final Pattern TWO_DIGIT_YEAR_NAME =
+      Pattern.compile("^(.*/MMWR[-_]\\d{2}[-_]\\d{2}[-_])(\\d{2})(\\.xls[xm])$",
+          Pattern.CASE_INSENSITIVE);
 
   @Override public String transform(String response, RequestContext context) {
     Map<String, String> dims = context.getDimensionValues();
@@ -93,7 +96,7 @@ public class VbaClaimsWorkloadTransformer implements ResponseTransformer {
     for (String path : files) {
       String url = SITE + path;
       ArrayNode rows = MAPPER.createArrayNode();
-      try (InputStream in = open(url); Workbook wb = WorkbookFactory.create(in)) {
+      try (InputStream in = openWorkbook(url); Workbook wb = WorkbookFactory.create(in)) {
         Sheet sheet = wb.getSheet(SHEET);
         if (sheet == null) {
           throw new IllegalStateException("va_claims_workload: no '" + SHEET + "' sheet in " + url);
@@ -242,7 +245,36 @@ public class VbaClaimsWorkloadTransformer implements ResponseTransformer {
     return type == CellType.NUMERIC ? Long.valueOf((long) cell.getNumericCellValue()) : null;
   }
 
-  private static InputStream open(String url) throws IOException {
+  /**
+   * The index page links a few weeks under a two-digit-year name ({@code MMWR_08-20-18.xlsx})
+   * that the server answers with HTTP 200 and an HTML "Not Found" page, while the workbook
+   * itself is stored under a four-digit-year name ({@code MMWR_08-20-2018.xlsx}). The linked
+   * name is used when it serves a spreadsheet; otherwise the four-digit-year name is the only
+   * alternative, and neither serving a spreadsheet fails the run.
+   */
+  private static InputStream openWorkbook(String linked) throws IOException {
+    HttpURLConnection conn = connect(linked);
+    if (isSpreadsheet(conn)) {
+      return conn.getInputStream();
+    }
+    conn.disconnect();
+    Matcher m = TWO_DIGIT_YEAR_NAME.matcher(linked);
+    if (m.matches()) {
+      HttpURLConnection alt = connect(m.group(1) + "20" + m.group(2) + m.group(3));
+      if (isSpreadsheet(alt)) {
+        return alt.getInputStream();
+      }
+      alt.disconnect();
+    }
+    throw new IOException("does not serve a spreadsheet: " + linked);
+  }
+
+  private static boolean isSpreadsheet(HttpURLConnection conn) {
+    String type = conn.getContentType();
+    return type != null && !type.toLowerCase(Locale.ROOT).startsWith("text/html");
+  }
+
+  private static HttpURLConnection connect(String url) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
@@ -250,8 +282,9 @@ public class VbaClaimsWorkloadTransformer implements ResponseTransformer {
     NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
+      conn.disconnect();
       throw new IOException("HTTP " + status + " from " + url);
     }
-    return conn.getInputStream();
+    return conn;
   }
 }
