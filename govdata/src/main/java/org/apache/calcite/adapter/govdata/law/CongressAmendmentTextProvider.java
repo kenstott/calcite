@@ -98,8 +98,30 @@ public class CongressAmendmentTextProvider implements StorageAwareDataProvider {
         headers.put(e.getKey(), value);
       }
     }
+    // dq_record_limit is this provider's own knob, not an API parameter: in a DQ run it caps the
+    // amendments read per type, so a DQ crawl does not read a whole Congress.
+    int recordLimit = 0;
+    String limit = source.getParameters() == null ? null
+        : source.getParameters().get("dq_record_limit");
+    if (limit != null && isDqSampleMode()) {
+      try {
+        recordLimit = Integer.parseInt(limit.trim());
+      } catch (NumberFormatException e) {
+        throw new GovDataException("CongressAmendmentTextProvider: dq_record_limit must be an "
+            + "integer but is '" + limit + "'", e);
+      }
+    }
     return new RowIterator(baseUrl, congress, headers, source.getRateLimit(), storageProvider(),
-        cacheBaseDir);
+        cacheBaseDir, recordLimit);
+  }
+
+  /** True when DQ sample mode is active; GOVDATA_DQ is an allowed global run flag. */
+  private static boolean isDqSampleMode() {
+    String v = System.getProperty("GOVDATA_DQ");
+    if (v == null) {
+      v = System.getenv("GOVDATA_DQ");
+    }
+    return "true".equalsIgnoreCase(v);
   }
 
   /**
@@ -185,10 +207,14 @@ public class CongressAmendmentTextProvider implements StorageAwareDataProvider {
     private final Deque<JsonNode> items = new ArrayDeque<JsonNode>();
     private int typeIndex;
     private String typeSlug;
+    private final int recordLimit;
+    private int readInType;
     private String nextPageUrl;
 
     RowIterator(String baseUrl, String congress, Map<String, String> headers,
-        HttpSourceConfig.RateLimitConfig rateLimit, StorageProvider sp, String cacheBaseDir) {
+        HttpSourceConfig.RateLimitConfig rateLimit, StorageProvider sp, String cacheBaseDir,
+        int recordLimit) {
+      this.recordLimit = recordLimit;
       this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
       this.congress = congress;
       this.headers = headers;
@@ -220,12 +246,17 @@ public class CongressAmendmentTextProvider implements StorageAwareDataProvider {
 
     /** Reads the next amendment, loading listing pages and types as needed. */
     private boolean advance() throws IOException {
-      while (items.isEmpty()) {
+      while (items.isEmpty() || (recordLimit > 0 && readInType >= recordLimit)) {
+        if (recordLimit > 0 && readInType >= recordLimit) {
+          items.clear();
+          nextPageUrl = null;
+        }
         if (nextPageUrl == null) {
           if (typeIndex >= TYPE_SLUGS.length) {
             return false;
           }
           typeSlug = TYPE_SLUGS[typeIndex++];
+          readInType = 0;
           nextPageUrl = baseUrl + "/" + typeSlug + "?format=json&limit=" + PAGE_SIZE;
         }
         JsonNode page = get(nextPageUrl, headers, rateLimit);
@@ -240,6 +271,7 @@ public class CongressAmendmentTextProvider implements StorageAwareDataProvider {
         nextPageUrl = next == null || next.isNull() ? null : next.asText();
       }
       JsonNode item = items.poll();
+      readInType++;
       JsonNode number = item.get("number");
       JsonNode updated = item.get("updateDate");
       if (number == null || updated == null) {
