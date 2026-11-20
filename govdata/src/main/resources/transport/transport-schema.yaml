@@ -175,6 +175,17 @@ dimension_values:
     dataLag: 2
     descending: true
 
+  # USACE WTLUS Vessel Inventory: one workbook per calendar year, 2013 (earliest on the library)
+  # to 2023 (latest posted as of 2026-11-20). dataLag 2 keeps the current and prior year out of
+  # the range; a year the library has not posted yet is reported as unavailable, not failed.
+  usace_vessel_year_range: &usace_vessel_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2013}"
+    minYear: 2013
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 2
+    descending: true
+
   # TSA checkpoint volumes: published from 2019-01-01 (pre-2019 daily counts are not public).
   # Current year is served at the unsuffixed page; the transformer resolves prior years.
   tsa_year_range: &tsa_year_range
@@ -3719,6 +3730,167 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
 
+  - name: usace_vessel_inventory
+    freshness:
+      type: last_modified
+    pattern: "type=usace_vessel_inventory/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Every US-flag commercial vessel on the inland and coastal waterways, one row per vessel
+      per annual inventory (2013 to 2023 so far), from the USACE Waterborne Commerce Statistics
+      Center "T.S. Vessel File" (Waterborne Transportation Lines of the United States, Volume
+      3, series "WTLUS Vessel Inventory"). About 46,000 vessels a year: towboats and
+      pushboats, self-propelled dry cargo and tanker vessels, and the barge fleet (dry open
+      hopper, covered hopper, deck and tank barges). This is the fleet-size, fleet-age and
+      barge-type source: count rows by vessel_class / vessel_subtype and year, and age the
+      fleet with year (file year) minus year_built; year_rebuilt and year_vessel (most recent
+      build or rebuild) are carried alongside. cap_tons is the full-load capacity in short
+      tons for cargo vessels and barges. vtcc is the WCSC Vessel Type, Construction and
+      Characteristics code (type digit, construction letter, two-digit characteristic, e.g.
+      4A48 = steel covered dry cargo barge); vessel_class, construction and vessel_subtype
+      decode it using the WCSC data dictionary appendix. Reported by vessel operators and
+      compiled by WCSC, so a vessel retired during the year may still be listed; counts are
+      not a census of hulls in service on a single date. year is the inventory year (the
+      file's FL_YR). Joins across years on vessel_id. Source: publibrary.sec.usace.army.mil
+      (public search + download API), series WTLUS Vessel Inventory.
+
+    dimensions:
+      type:
+        - usace_vessel_inventory
+      year: *usace_vessel_year_range
+
+    columns:
+      - name: vessel_id
+        type: string
+        nullable: false
+        comment: WCSC vessel record number from the VESSEL field; unique within a file year
+      - name: vessel_name
+        type: string
+        nullable: true
+        comment: Vessel name as reported by the operator
+      - name: cg_number
+        type: string
+        nullable: true
+        comment: US Coast Guard official number, retained by a vessel for life
+      - name: vtcc
+        type: string
+        nullable: true
+        comment: WCSC Vessel Type, Construction and Characteristics code (e.g. 4A48)
+      - name: icst
+        type: string
+        nullable: true
+        comment: International Classification of Ships by Type code
+      - name: vessel_class
+        type: string
+        nullable: true
+        comment: Coarse class decoded from the first VTCC digit - SELF_PROPELLED_DRY, SELF_PROPELLED_TANKER, TOWBOAT, DRY_BARGE, TANK_BARGE or OTHER
+      - name: construction
+        type: string
+        nullable: true
+        comment: Hull construction decoded from the VTCC letter (Steel, Wood, Aluminum, Fiberglass, Other, Unknown)
+      - name: vessel_subtype
+        type: string
+        nullable: true
+        comment: Barge type (open hopper, covered hopper, deck, tank single/double hull, etc.) or towboat type (Pushboat, Tugboat); NULL for other vessel classes
+      - name: nrt
+        type: long
+        nullable: true
+        comment: Net registered tonnage (100 cubic feet per ton); a volume measure, not cargo capacity
+      - name: horsepower
+        type: long
+        nullable: true
+        comment: Installed horsepower (source HP, named HRP in older files); 99999 is a WCSC placeholder for unknown on some records
+      - name: reg_length_ft
+        type: double
+        nullable: true
+        comment: Registered length in feet
+      - name: reg_breadth_ft
+        type: double
+        nullable: true
+        comment: Registered breadth in feet
+      - name: cap_tons
+        type: long
+        nullable: true
+        comment: Full-load cargo capacity in short tons (2,000 lb); blank for towboats
+      - name: year_built
+        type: long
+        nullable: true
+        comment: Calendar year the vessel was built (source YEAR)
+      - name: year_rebuilt
+        type: long
+        nullable: true
+        comment: Calendar year the vessel was rebuilt; NULL when never rebuilt
+      - name: year_vessel
+        type: long
+        nullable: true
+        comment: Most recent year the vessel was built or rebuilt
+      - name: load_draft_ft
+        type: double
+        nullable: true
+        comment: Draft fully loaded, in feet
+      - name: light_draft_ft
+        type: double
+        nullable: true
+        comment: Draft empty, in feet
+      - name: state
+        type: string
+        nullable: true
+        comment: State abbreviation of the operating headquarters
+      - name: base1
+        type: string
+        nullable: true
+        comment: Operating headquarters city or locality, first line
+      - name: base2
+        type: string
+        nullable: true
+        comment: Operating headquarters city or locality, second line
+      - name: operating_area
+        type: string
+        nullable: true
+        comment: Primary area of operation code (3 Great Lakes, 4 Mississippi River System and Gulf Intracoastal Waterway, 5 Atlantic/Gulf/Pacific coasts; source field SERIES in older files, REGION in newer ones)
+      - name: operator_code
+        type: string
+        nullable: true
+        comment: Seven-digit WCSC transportation-series operator code; the first two digits are the Corps engineer district
+
+    source:
+      type: http
+      # Placeholder request: the transformer finds the year's workbook through the library's
+      # search API and ignores this body; the page only has to answer 200 and carry the year
+      # dimension so the raw cache is keyed per year.
+      url: "https://publibrary.sec.usace.army.mil/api/searchlists/Series?year={effective_year}"
+      method: GET
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.UsaceVesselInventoryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usace_vessel_inventory/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: usace_vessel_inventory
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
   - name: tsa_checkpoint_daily
     pattern: "type=tsa_checkpoint_daily/year=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
@@ -5969,6 +6141,9 @@ partitionedTables:
 # ============================================================================
 
 constraints:
+
+  usace_vessel_inventory:
+    primaryKey: [year, vessel_id]
 
   barge_rates_weekly:
     primaryKey: [rate_date, river_system_location]

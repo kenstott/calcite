@@ -1034,6 +1034,59 @@ SELECT 'transport', 'barge_lock_movements_monthly', 'T7_tonnage_plausible',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true) WHERE tonnage IS NULL OR tonnage < 0 OR tonnage > 5000000);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: usace_vessel_inventory (USACE WTLUS Vessel Inventory, one row per vessel per year, 2013-2023)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T2_row_count',
+  CASE WHEN n >= 400000 THEN 'pass' ELSE 'fail' END, n, 400000,
+  'Expected >=400,000 vessel-years (about 46,000 a year over 2013-2023)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T6_pk_duplicates',
+  CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (year, vessel_id) rows'
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true)) - (SELECT COUNT(*) FROM (SELECT DISTINCT year, vessel_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true))) AS d);
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL year or vessel_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true) WHERE year IS NULL OR vessel_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T7_year_coverage',
+  CASE WHEN miny = 2013 AND maxy >= 2023 AND yrs >= 11 THEN 'pass' ELSE 'fail' END, yrs, 11,
+  'Expected inventory years 2013 through at least 2023: got ' || miny || ' to ' || maxy
+FROM (SELECT MIN(year) AS miny, MAX(year) AS maxy, COUNT(DISTINCT year) AS yrs FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T7_barges_present',
+  CASE WHEN n >= 15000 THEN 'pass' ELSE 'fail' END, n, 15000,
+  'Expected >=15,000 dry barges in the 2023 inventory (cross-check: CoBank cites 19,668 barges; this count is dry-cargo barges only)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true) WHERE year = 2023 AND vessel_class = 'DRY_BARGE');
+
+INSERT INTO dq_results
+SELECT 'transport', 'usace_vessel_inventory', 'T7_build_year_plausible',
+  CASE WHEN bad * 200 <= total THEN 'pass' ELSE 'warn' END, bad, 0,
+  'year_built outside [1800, file year] for non-NULL values; source files carry a few (766 of 471,309 on 20 Nov 2026: newbuilds listed a year early, one typo 192), pass while under 0.5%'
+FROM (SELECT COUNT(*) FILTER (WHERE year_built IS NOT NULL AND (year_built < 1800 OR year_built > year)) AS bad, COUNT(*) AS total FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/usace_vessel_inventory', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: phmsa_hazardous_liquid_incidents (PHMSA F 7000-1 accident reports, 2010-present, snapshot)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
