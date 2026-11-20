@@ -244,7 +244,7 @@ jobs:
           # "--auth askamerica-key" (ASKAM-010) is baked in, so nothing starts an open govdata
           # server by omission; the caller's arguments follow and win.
           python3 pgwire-calcite/packaging/runtime_packs.py pack "$PK" "${{ matrix.adapter.name }}" "$VERSION" \
-            "${{ matrix.os.variant }}" --database "${{ matrix.adapter.name }}" ${{ matrix.adapter.flags }}
+            "${{ matrix.os.variant }}" runtime-jars/jars --database "${{ matrix.adapter.name }}" ${{ matrix.adapter.flags }}
 
       - name: Pack tarball + sha256
         run: |
