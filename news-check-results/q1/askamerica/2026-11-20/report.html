@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Construction Dive/Yahoo article's claims about New York's ASCE 'C-' infrastructure grade, bridge conditions and IIJA funding are somewhat biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Construction Dive/Yahoo article's claims about New York's ASCE 'C-' infrastructure grade, bridge conditions and IIJA funding are somewhat biased and mostly accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://yahoo.com/news/us/articles/asce-gives-york-infrastructure-c-190900349.html">https://yahoo.com/news/us/articles/asce-gives-york-infrastructure-c-190900349.html</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Poor-condition bridge share</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Poor bridges, % of NBI primary records</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="59" y1="252" x2="390" y2="252" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="51" y="256" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0.0%</text>
+      <line class="grid" x1="59" y1="212.80" x2="390" y2="212.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="51" y="216.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2.0%</text>
+      <line class="grid" x1="59" y1="173.60" x2="390" y2="173.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="51" y="177.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4.0%</text>
+      <line class="grid" x1="59" y1="134.40" x2="390" y2="134.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="51" y="138.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6.0%</text>
+      <line class="grid" x1="59" y1="95.20" x2="390" y2="95.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="51" y="99.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8.0%</text>
+      <line class="grid" x1="59" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="51" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10.0%</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="59" y1="56" x2="59" y2="252" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="59" y1="252" x2="390" y2="252" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-ny-2022" class="tick" x="114.17" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">NY 2022</text>
+      <text id="p1-xtick-ny-2025" class="tick" x="224.50" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">NY 2025</text>
+      <text id="p1-xtick-us-2025" class="tick" x="334.83" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">US 2025</text>
+    </g>
+    <g id="p1-series-warehouse" class="series">
+      <g class="hover">
+        <title>NY 2022 — Warehouse: 9.2%</title>
+        <rect id="p1-mark-warehouse-ny-2022" class="bar" x="78.86" y="71.68" width="34.31" height="180.32" fill="#2563eb"/>
+        <rect class="hit" x="78.86" y="56" width="34.31" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>NY 2025 — Warehouse: 9.8%</title>
+        <rect id="p1-mark-warehouse-ny-2025" class="bar" x="189.19" y="59.92" width="34.31" height="192.08" fill="#2563eb"/>
+        <rect class="hit" x="189.19" y="56" width="34.31" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>US 2025 — Warehouse: 6.7%</title>
+        <rect id="p1-mark-warehouse-us-2025" class="bar" x="299.53" y="120.68" width="34.31" height="131.32" fill="#2563eb"/>
+        <rect class="hit" x="299.53" y="56" width="34.31" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-asce" class="series">
+      <g class="hover">
+        <title>NY 2022 — ASCE: 9.5%</title>
+        <rect id="p1-mark-asce-ny-2022" class="bar" x="114.17" y="65.80" width="34.31" height="186.20" fill="#ea580c"/>
+        <rect class="hit" x="114.17" y="56" width="34.31" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>NY 2025 — ASCE: 9.9%</title>
+        <rect id="p1-mark-asce-ny-2025" class="bar" x="224.50" y="57.96" width="34.31" height="194.04" fill="#ea580c"/>
+        <rect class="hit" x="224.50" y="56" width="34.31" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>US 2025 — ASCE: 6.7%</title>
+        <rect id="p1-mark-asce-us-2025" class="bar" x="334.83" y="120.68" width="34.31" height="131.32" fill="#ea580c"/>
+        <rect class="hit" x="334.83" y="56" width="34.31" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-warehouse" x="138.50" y="296" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-warehouse" class="legend-label" x="154.50" y="305" fill="#1f2328" font-size="11" style="font-size:11px">Warehouse</text>
+      <rect id="p1-legend-swatch-asce" x="229.50" y="296" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-asce" class="legend-label" x="245.50" y="305" fill="#1f2328" font-size="11" style="font-size:11px">ASCE</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:56400/a/00256f82bc5deff799b55202a4f9d43e.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>1 Pinocchio: facts accurate, one framing flaw. Every figure matches ASCE's 11/16/2026 release; the FHWA bridge inventory reproduces the bridge figures within about 0.3 points. The lede omits that the overall grade fell from C.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 89/100 — mostly honest</strong> &middot; <strong>Bias +25/100 — somewhat biased</strong></p><p>9 claims graded, 0 not gradable, 4 fell short. In this article only.</p></div>
+<p><strong>5</strong> true &middot; <strong>4</strong> mostly true &middot; <strong>9</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>The state of New York received a 'C-' grade on its 2026 infrastructure report card issued by the American Society Civil Engineers' New York State Council.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Since 2022, the rate of poor-condition bridges grew from 9.5% to 9.9%, per ASCE. The national rate was 6.7%.</td><td><strong>mostly true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>The state has invested $18 billion in bridges in the last four years, which includes funds from the Infrastructure Investment and Jobs Act. However, ASCE says it would take an estimated $74.5 billion to bring all of the state's bridges into good condition.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>8</td><td>The IIJA put $30 billion into New York projects.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>A 'C-' grade indicates adequate, stable performance with the need to invest further to ensure infrastructure holds up in the future.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>4</td><td>State-owned roads have improved, with excellent-condition roads growing from 17% in 2022 to 24% in 2024, according to the report card. Meanwhile, poor-condition roads owned by the state DOT decreased from 10% to 8% in the same timeframe.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>5</td><td>Transit ridership rebounded to 85% of pre-pandemic levels on the back of New York City, which has the highest transit ridership in the nation, per ASCE. Meanwhile, transit agencies have $50 billion in state-of-good-repair investments planned over the next five years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>6</td><td>About 40% of the state's water pipes were installed before the 1940s. Other water systems lose up to 40% of treated water in part due to leaky pipes, per ASCE.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>7</td><td>The U.S. as a whole earned a grade of 'C' in 2025, the most recent nationwide scoring.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.constructiondive.com/news/infrastructure-report-card-2025-asce/743424/">Construction Dive</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>9</td><td>A 'C-' grade indicates adequate, stable performance with the need to invest further to ensure infrastructure holds up in the future.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>8</td><td>The IIJA put $30 billion into New York projects.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>7</td><td>The U.S. as a whole earned a grade of 'C' in 2025, the most recent nationwide scoring.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.constructiondive.com/news/infrastructure-report-card-2025-asce/743424/">Construction Dive</a></td></tr><tr class="verdict-true"><td>6</td><td>About 40% of the state's water pipes were installed before the 1940s. Other water systems lose up to 40% of treated water in part due to leaky pipes, per ASCE.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>5</td><td>Transit ridership rebounded to 85% of pre-pandemic levels on the back of New York City, which has the highest transit ridership in the nation, per ASCE. Meanwhile, transit agencies have $50 billion in state-of-good-repair investments planned over the next five years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>4</td><td>State-owned roads have improved, with excellent-condition roads growing from 17% in 2022 to 24% in 2024, according to the report card. Meanwhile, poor-condition roads owned by the state DOT decreased from 10% to 8% in the same timeframe.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>The state has invested $18 billion in bridges in the last four years, which includes funds from the Infrastructure Investment and Jobs Act. However, ASCE says it would take an estimated $74.5 billion to bring all of the state's bridges into good condition.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Since 2022, the rate of poor-condition bridges grew from 9.5% to 9.9%, per ASCE. The national rate was 6.7%.</td><td><strong>mostly true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>1</td><td>The state of New York received a 'C-' grade on its 2026 infrastructure report card issued by the American Society Civil Engineers' New York State Council.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>9</td><td>A 'C-' grade indicates adequate, stable performance with the need to invest further to ensure infrastructure holds up in the future.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>6</td><td>About 40% of the state's water pipes were installed before the 1940s. Other water systems lose up to 40% of treated water in part due to leaky pipes, per ASCE.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Since 2022, the rate of poor-condition bridges grew from 9.5% to 9.9%, per ASCE. The national rate was 6.7%.</td><td><strong>mostly true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>4</td><td>State-owned roads have improved, with excellent-condition roads growing from 17% in 2022 to 24% in 2024, according to the report card. Meanwhile, poor-condition roads owned by the state DOT decreased from 10% to 8% in the same timeframe.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>8</td><td>The IIJA put $30 billion into New York projects.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>The state has invested $18 billion in bridges in the last four years, which includes funds from the Infrastructure Investment and Jobs Act. However, ASCE says it would take an estimated $74.5 billion to bring all of the state's bridges into good condition.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>1</td><td>The state of New York received a 'C-' grade on its 2026 infrastructure report card issued by the American Society Civil Engineers' New York State Council.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>7</td><td>The U.S. as a whole earned a grade of 'C' in 2025, the most recent nationwide scoring.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.constructiondive.com/news/infrastructure-report-card-2025-asce/743424/">Construction Dive</a></td></tr><tr class="verdict-true"><td>5</td><td>Transit ridership rebounded to 85% of pre-pandemic levels on the back of New York City, which has the highest transit ridership in the nation, per ASCE. Meanwhile, transit agencies have $50 billion in state-of-good-repair investments planned over the next five years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>2</td><td>Since 2022, the rate of poor-condition bridges grew from 9.5% to 9.9%, per ASCE. The national rate was 6.7%.</td><td><strong>mostly true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>The state has invested $18 billion in bridges in the last four years, which includes funds from the Infrastructure Investment and Jobs Act. However, ASCE says it would take an estimated $74.5 billion to bring all of the state's bridges into good condition.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>8</td><td>The IIJA put $30 billion into New York projects.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>A 'C-' grade indicates adequate, stable performance with the need to invest further to ensure infrastructure holds up in the future.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>4</td><td>State-owned roads have improved, with excellent-condition roads growing from 17% in 2022 to 24% in 2024, according to the report card. Meanwhile, poor-condition roads owned by the state DOT decreased from 10% to 8% in the same timeframe.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>5</td><td>Transit ridership rebounded to 85% of pre-pandemic levels on the back of New York City, which has the highest transit ridership in the nation, per ASCE. Meanwhile, transit agencies have $50 billion in state-of-good-repair investments planned over the next five years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>7</td><td>The U.S. as a whole earned a grade of 'C' in 2025, the most recent nationwide scoring.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.constructiondive.com/news/infrastructure-report-card-2025-asce/743424/">Construction Dive</a></td></tr><tr class="verdict-true"><td>6</td><td>About 40% of the state's water pipes were installed before the 1940s. Other water systems lose up to 40% of treated water in part due to leaky pipes, per ASCE.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>1</td><td>The state of New York received a 'C-' grade on its 2026 infrastructure report card issued by the American Society Civil Engineers' New York State Council.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>1</td><td>The state of New York received a 'C-' grade on its 2026 infrastructure report card issued by the American Society Civil Engineers' New York State Council.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>The state has invested $18 billion in bridges in the last four years, which includes funds from the Infrastructure Investment and Jobs Act. However, ASCE says it would take an estimated $74.5 billion to bring all of the state's bridges into good condition.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>8</td><td>The IIJA put $30 billion into New York projects.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>A 'C-' grade indicates adequate, stable performance with the need to invest further to ensure infrastructure holds up in the future.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>4</td><td>State-owned roads have improved, with excellent-condition roads growing from 17% in 2022 to 24% in 2024, according to the report card. Meanwhile, poor-condition roads owned by the state DOT decreased from 10% to 8% in the same timeframe.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>5</td><td>Transit ridership rebounded to 85% of pre-pandemic levels on the back of New York City, which has the highest transit ridership in the nation, per ASCE. Meanwhile, transit agencies have $50 billion in state-of-good-repair investments planned over the next five years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>6</td><td>About 40% of the state's water pipes were installed before the 1940s. Other water systems lose up to 40% of treated water in part due to leaky pipes, per ASCE.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr><tr class="verdict-true"><td>7</td><td>The U.S. as a whole earned a grade of 'C' in 2025, the most recent nationwide scoring.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.constructiondive.com/news/infrastructure-report-card-2025-asce/743424/">Construction Dive</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Since 2022, the rate of poor-condition bridges grew from 9.5% to 9.9%, per ASCE. The national rate was 6.7%.</td><td><strong>mostly true</strong></td><td>Checked against: <code>transport.bridges</code>; <a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The state of New York received a 'C-' grade on its 2026 infrastructure report card issued by the American Society Civil Engineers' New York State Council.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>ASCE release: C-<ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>ASCE state infrastructure report card New York grade</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#2 &middot; <strong>mostly true</strong> &mdash; Since 2022, the rate of poor-condition bridges grew from 9.5% to 9.9%, per ASCE. The national rate was 6.7%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>NY 9.2% (2022), 9.8% (2025); US 6.7% (2025) <code>transport.bridges</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>ASCE's 2022 figure is about 0.3 points above the NBI count</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, bridge_condition, COUNT(*) FROM transport.bridges WHERE record_type='1' AND state_code='36' GROUP BY year, bridge_condition</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#3 &middot; <strong>mostly true</strong> &mdash; The state has invested $18 billion in bridges in the last four years, which includes funds from the Infrastructure Investment and Jobs Act. However, ASCE says it would take an estimated $74.5 billion to bring all of the state's bridges into good condition.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>more than $18 billion; $74.5 billion<ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>ASCE says 'more than $18 billion'</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; State-owned roads have improved, with excellent-condition roads growing from 17% in 2022 to 24% in 2024, according to the report card. Meanwhile, poor-condition roads owned by the state DOT decreased from 10% to 8% in the same timeframe.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>17% to 24%; 10% to 8%<ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Transit ridership rebounded to 85% of pre-pandemic levels on the back of New York City, which has the highest transit ridership in the nation, per ASCE. Meanwhile, transit agencies have $50 billion in state-of-good-repair investments planned over the next five years.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>85%; $50 billion<ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; About 40% of the state's water pipes were installed before the 1940s. Other water systems lose up to 40% of treated water in part due to leaky pipes, per ASCE.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>40%; up to 40%, in part due to leaky pipes (ASCE wording)<ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; The U.S. as a whole earned a grade of 'C' in 2025, the most recent nationwide scoring.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>ASCE 2025 national grade C<ul class="claim-sources"><li><a href="https://www.constructiondive.com/news/infrastructure-report-card-2025-asce/743424/">Construction Dive</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#8 &middot; <strong>mostly true</strong> &mdash; The IIJA put $30 billion into New York projects.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>more than $30 billion<ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>ASCE says 'more than $30 billion'</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#9 &middot; <strong>mostly true</strong> &mdash; A 'C-' grade indicates adequate, stable performance with the need to invest further to ensure infrastructure holds up in the future.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>ASCE: fair condition, serving adequately for now<ul class="claim-sources"><li><a href="https://www.asce.org/publications-and-news/civil-engineering-source/society-news/article/2026/11/16/new-yorks-infrastructure-drops-to-c-minus-grade">ASCE</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>ASCE says 'fair condition' and the overall grade fell from C; 'stable' is misleading</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Framing</h2>
+<p>Lede and the 'adequate, stable' definition omit the drop from C in 2022 (ASCE calls C- 'fair'). The expiry of IIJA at end of September is omitted. Warehouse: NY poor 1,611/17,579 (2022), 1,741/17,690 (2025); US 41,685/624,862 (2025). ASCE grades themselves are not in the warehouse (search found no match for 'asce').</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>ASCE full report card page not fetched</strong>: The press release carrying every figure was read; the full report page was not, so road/transit figures rest on the release.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>4 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 5 rows — 4562 ms</summary><pre><code>SELECT &quot;year&quot;, COUNT(*) AS n, SUM(CASE WHEN bridge_condition='Poor' THEN 1 ELSE 0 END) AS poor, 100.0*SUM(CASE WHEN bridge_condition='Poor' THEN 1 ELSE 0 END)/COUNT(*) AS pct_poor, SUM(CASE WHEN bridge_condition='Poor' THEN 1 ELSE 0 END)*1.0 AS p FROM transport.bridges WHERE record_type='1' AND state_code='36' AND &quot;year&quot; IN (2021,2022,2023,2024,2025) GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1315 ms</summary><pre><code>SELECT &quot;year&quot;, COUNT(*) AS n, 100.0*SUM(CASE WHEN bridge_condition='Poor' THEN 1 ELSE 0 END)/COUNT(*) AS pct_poor FROM transport.bridges WHERE record_type='1' AND &quot;year&quot; IN (2022,2024,2025) GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 8 rows — 721 ms</summary><pre><code>SELECT &quot;year&quot;, bridge_condition, COUNT(*) AS n FROM transport.bridges WHERE record_type='1' AND state_code='36' AND &quot;year&quot; IN (2022,2025) GROUP BY &quot;year&quot;, bridge_condition ORDER BY &quot;year&quot;, bridge_condition</code></pre></details>
+<details class="sqltoggle"><summary>query — 8 rows — 636 ms</summary><pre><code>SELECT &quot;year&quot;, bridge_condition, COUNT(*) AS n FROM transport.bridges WHERE record_type='1' AND &quot;year&quot; IN (2022,2025) GROUP BY &quot;year&quot;, bridge_condition ORDER BY &quot;year&quot;, bridge_condition</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

@@ -1775,5 +1775,145 @@
       "everyman": 3
     },
     "note": "headline false at publication: FEMA approved IA for 20 counties Oct 30 after Oct 27 appeal; reprint of Oct 21 Tribune piece"
+  },
+  {
+    "topic_slug": "constructiondive-asce-new-york-infrastructure-c-minus",
+    "headline": "ASCE gives New York infrastructure a 'C-' grade",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q1/askamerica/2026-11-20",
+    "pinocchios": 1,
+    "source_url": "https://yahoo.com/news/us/articles/asce-gives-york-infrastructure-c-190900349.html",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 1 Pinocchio; NBI bridge count 9.2->9.8% vs ASCE 9.5->9.9%; expert 0, everyman 0"
+  },
+  {
+    "topic_slug": "yankee-institute-ct-electric-bills-lawmaker-claims",
+    "headline": "Connecticut Candidates Promised Lower Electric Bills. Now Comes the Hard Part",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q2/askamerica/2026-11-20",
+    "pinocchios": 1,
+    "source_url": "https://www.yankeeinstitute.org/2026/11/13/connecticut-candidates-promised-lower-electric-bills-now-comes-the-hard-part/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "all 1 Pinocchio; EIA CT bill $206.44 #2 behind HI; RPS 'ratcheting' partially false"
+  },
+  {
+    "topic_slug": "newsom-california-record-low-crime-rates",
+    "headline": "RECORD LOW CRIME RATES: Crime drops again in major cities across California",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q3/askamerica/2026-11-20",
+    "pinocchios": 2,
+    "source_url": "https://www.gov.ca.gov/2026/11/17/record-low-crime-rates-crime-drops-again-in-major-cities-across-california/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "all 2 Pinocchios; askamerica: since-office % need 2018 baseline, omitted SD/Fresno/LB homicide rises; filed #1374 state cause-of-death"
+  },
+  {
+    "topic_slug": "wwno-march-of-dimes-gulf-south-preterm-births",
+    "headline": "Gulf South ranks last in the U.S. for premature births as Medicaid cuts loom, report finds",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q4/askamerica/2026-11-20",
+    "pinocchios": 0,
+    "source_url": "https://www.wwno.org/public-health/2026-11-18/gulf-south-ranks-last-in-the-u-s-for-premature-births-as-medicaid-cuts-loom-report-finds",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0, expert 1, everyman 1; RHTP is 5-year not 10; filed #1375 state natality"
+  },
+  {
+    "topic_slug": "epochtimes-realtor-rents-first-annual-increase",
+    "headline": "US Rents Post First Annual Increase in More Than Three Years: Report",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q5/askamerica/2026-11-20",
+    "pinocchios": 0,
+    "source_url": "https://www.theepochtimes.com/business/us-rents-post-first-annual-increase-in-more-than-three-years-report-6126751",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine), expert 1, everyman 1; FRED confirms 7.28%; 'highest in four weeks' loose"
+  },
+  {
+    "topic_slug": "housingwire-mba-mortgage-delinquencies-q3-2026",
+    "headline": "Mortgage delinquencies rise to 4.42% in Q3 2026",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q6/askamerica/2026-11-20",
+    "pinocchios": 0,
+    "source_url": "https://www.housingwire.com/articles/mortgage-delinquencies-q3-2026/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (footnote fixed via resume), expert 1, everyman 1; Walsh 'tracks unemployment' partially false"
+  },
+  {
+    "topic_slug": "foxbusiness-edmunds-new-vehicle-price-50k",
+    "headline": "New vehicle affordability squeezed as record prices and high interest rates hit buyers",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q7/askamerica/2026-11-20",
+    "pinocchios": 0,
+    "source_url": "https://www.foxbusiness.com/economy/new-vehicle-affordability-squeezed-record-prices-high-interest-rates-hit-buyers",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine), expert 1, everyman 1; national APR flat 7.0%, new-vehicle CPI +0.74%"
+  },
+  {
+    "topic_slug": "fortune-oxford-economics-recession-warning",
+    "headline": "Oxford Economics sees 'deep and painful' recession ahead for the US economy",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q8/askamerica/2026-11-20",
+    "pinocchios": 0,
+    "source_url": "https://fortune.com/2026/11/18/recession-vulnerabilities-oxford-economics-ai-debt-hiring/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine), expert 1, everyman 1; Goldman $420B is hyperscaler-only; transient R2 SSL error on SP500"
+  },
+  {
+    "topic_slug": "politicalwire-nyt-federal-workforce-17-percent",
+    "headline": "Federal Employees Look to Democrats for a Lifeline",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q9/askamerica/2026-11-20",
+    "pinocchios": 0,
+    "source_url": "https://politicalwire.com/2026/11/15/federal-employees-look-to-democrats-for-a-lifeline/",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine), expert 2, everyman 2; 17% = gross departures, net ~11%; askamerica missed officials.federal_workforce_by_agency -> filed #1376"
+  },
+  {
+    "topic_slug": "farmpolicynews-cobank-barge-fleet-shrinking",
+    "headline": "Shrinking US Barge Fleet Could Strain Grain Exports, Farm Margins",
+    "checked_date": "2026-11-20",
+    "run_subpath": "q10/askamerica/2026-11-20",
+    "pinocchios": 0,
+    "source_url": "https://farmpolicynews.illinois.edu/2026/11/shrinking-us-barge-fleet-could-strain-grain-exports-farm-margins/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine), expert 1, everyman 1; $650k not in CoBank report; filed #1377 barge fleet"
   }
 ]
