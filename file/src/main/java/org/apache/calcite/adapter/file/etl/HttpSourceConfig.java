@@ -1497,15 +1497,17 @@ public class HttpSourceConfig {
     private final int maxRetries;
     private final long retryBackoffMs;
     private final long readTimeoutMs;
+    private final boolean skipArchived;
 
     private RateLimitConfig(int requestsPerSecond, int[] retryOn, int[] skipOn, int maxRetries,
-        long retryBackoffMs, long readTimeoutMs) {
+        long retryBackoffMs, long readTimeoutMs, boolean skipArchived) {
       this.requestsPerSecond = requestsPerSecond;
       this.retryOn = retryOn;
       this.skipOn = skipOn;
       this.maxRetries = maxRetries;
       this.retryBackoffMs = retryBackoffMs;
       this.readTimeoutMs = readTimeoutMs;
+      this.skipArchived = skipArchived;
     }
 
     /** Default wait for response headers, milliseconds. */
@@ -1513,7 +1515,7 @@ public class HttpSourceConfig {
 
     public static RateLimitConfig defaults() {
       return new RateLimitConfig(10, new int[]{429, 503}, new int[0], 3, 1000,
-          DEFAULT_READ_TIMEOUT_MS);
+          DEFAULT_READ_TIMEOUT_MS, false);
     }
 
     public int getRequestsPerSecond() {
@@ -1535,6 +1537,15 @@ public class HttpSourceConfig {
 
     public long getRetryBackoffMs() {
       return retryBackoffMs;
+    }
+
+    /**
+     * True when an S3 {@code InvalidObjectState} 403 (object in Glacier/Deep Archive, unreadable
+     * without a restore only the bucket owner can request) is an upstream limit to skip with a
+     * warning instead of failing the batch. Default false: archived objects fail loudly.
+     */
+    public boolean isSkipArchived() {
+      return skipArchived;
     }
 
     /** Milliseconds to wait for response headers on a data request (default 120000). */
@@ -1592,7 +1603,10 @@ public class HttpSourceConfig {
         readTimeout = ((Number) readTimeoutObj).longValue();
       }
 
-      return new RateLimitConfig(rps, retryOn, skipOn, maxRetries, backoff, readTimeout);
+      boolean skipArchived = Boolean.parseBoolean(String.valueOf(map.get("skipArchived")));
+
+      return new RateLimitConfig(rps, retryOn, skipOn, maxRetries, backoff, readTimeout,
+          skipArchived);
     }
   }
 

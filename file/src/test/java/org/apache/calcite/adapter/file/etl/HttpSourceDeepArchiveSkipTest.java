@@ -77,6 +77,10 @@ class HttpSourceDeepArchiveSkipTest {
   }
 
   private HttpSourceConfig csvStreamConfig(String url, int... skipOn) {
+    return csvStreamConfig(url, false, skipOn);
+  }
+
+  private HttpSourceConfig csvStreamConfig(String url, boolean skipArchived, int... skipOn) {
     Map<String, Object> paginationMap = new LinkedHashMap<>();
     paginationMap.put("type", "CSV_STREAM");
     paginationMap.put("pageSize", 2000);
@@ -90,6 +94,7 @@ class HttpSourceDeepArchiveSkipTest {
       skipOnList.add(code);
     }
     rateLimitMap.put("skipOn", skipOnList);
+    rateLimitMap.put("skipArchived", skipArchived);
 
     return HttpSourceConfig.builder()
         .url(url)
@@ -122,6 +127,16 @@ class HttpSourceDeepArchiveSkipTest {
         "an archived object must not be silently treated as an empty period");
     assertTrue(thrown.getMessage().contains("InvalidObjectState"),
         "the failure must name the real cause: " + thrown.getMessage());
+  }
+
+  @Test void archivedObjectSkipsWhenSkipArchivedEnabled() throws IOException {
+    addResponseHandler("/archived-skip.zip", 403,
+        "<Error><Code>InvalidObjectState</Code><StorageClass>DEEP_ARCHIVE</StorageClass></Error>");
+
+    HttpSourceConfig config = csvStreamConfig(baseUrl + "/archived-skip.zip", true, 403, 404);
+    HttpSource src = sourceWithRawCache(config, "archived-skip");
+
+    assertEquals(0, drain(src.fetch(Collections.<String, String>emptyMap())));
   }
 
   @Test void genuineGapStillSkipsCleanly() throws IOException {

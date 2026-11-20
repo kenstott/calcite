@@ -1125,6 +1125,10 @@ partitionedTables:
         requestsPerSecond: 5.0
         maxRetries: 2
         skipOn: [403, 404]    # weekends, holidays, future dates, invalid day combos
+        # DTCC's bucket moves EOD files older than about two years to S3 Deep Archive; reading
+        # one returns 403 InvalidObjectState and needs a restore only the bucket owner can run.
+        # Skipped with a warning rather than failed, since a retry can never succeed.
+        skipArchived: true
       rawCache:
         enabled: true
 

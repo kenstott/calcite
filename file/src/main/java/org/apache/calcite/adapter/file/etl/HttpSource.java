@@ -1113,11 +1113,17 @@ public class HttpSource implements DataSource {
       // confirmed live against DTCC's cftc/eod bucket, where files older than ~2 years silently
       // 403 this way. Surface it as a real failure instead of a clean skip so it stays visible and
       // retry-eligible, rather than being recorded as an empty period indistinguishable from a
-      // genuine gap.
+      // genuine gap. A source whose archived tail is a known upstream limit opts in with
+      // rateLimit.skipArchived, which skips the period with a warning.
       if (status == 403) {
         String errorBody = readResponse(conn.getErrorStream());
         if (errorBody.contains("InvalidObjectState")) {
           conn.disconnect();
+          if (config.getRateLimit().isSkipArchived()) {
+            LOGGER.warn("CSV_STREAM skip: object archived (InvalidObjectState), unretrievable "
+                + "without a restore: {}", SecretRedaction.redact(fullUrl));
+            return null;
+          }
           throw new IOException("HTTP 403 InvalidObjectState (object archived, not a genuine "
               + "gap) for CSV_STREAM: " + SecretRedaction.redact(fullUrl));
         }
