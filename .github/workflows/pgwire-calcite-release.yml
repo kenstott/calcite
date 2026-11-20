@@ -110,6 +110,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      # A Plugin Portal not-found answer fails gradle at once and is not retried (#1350): resolve the
+      # plugins first, with retries and the shared plugin cache.
+      - name: Warm Gradle plugins
+        uses: ./.github/actions/warm-gradle-plugins
       - name: Build adapter jars + resolve runtime classpath
         run: |
           ./gradlew :${{ matrix.adapter.module }}:jar :core:jar :linq4j:jar \

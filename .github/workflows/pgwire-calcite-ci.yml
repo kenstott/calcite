@@ -24,6 +24,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # A Plugin Portal not-found answer fails gradle at once and is not retried (#1350).
+      - name: Warm Gradle plugins
+        uses: ./.github/actions/warm-gradle-plugins
+
       - name: Build Calcite file-adapter runtime classpath
         run: |
           # What the release bundles (pgwire-calcite-release.yml): the file adapter's runtime
