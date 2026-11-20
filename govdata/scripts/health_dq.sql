@@ -3972,3 +3972,37 @@ FROM (
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+-- ============================================================
+-- TABLE: rhtp_state_awards (new 20 Nov 2026) — issue #1391
+-- ============================================================
+
+SELECT 'health', 'rhtp_state_awards', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true));
+
+SELECT 'health', 'rhtp_state_awards', 'T2_row_count', CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END, n, 100, '2 fiscal years x 50 states'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true) LIMIT 3;
+
+SELECT 'health', 'rhtp_state_awards', 'T4_all_null_cols', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'award_amount/state_abbr/announced_date entirely NULL'
+FROM (SELECT CASE WHEN COUNT(award_amount)=0 OR COUNT(state_abbr)=0 OR COUNT(announced_date)=0 THEN 1 ELSE 0 END AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true));
+
+SELECT 'health', 'rhtp_state_awards', 'T5_all_same_value', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'fiscal_year/state_abbr/award_amount has a single distinct value'
+FROM (SELECT (CASE WHEN COUNT(DISTINCT fiscal_year)<2 THEN 1 ELSE 0 END)+(CASE WHEN COUNT(DISTINCT state_abbr)<2 THEN 1 ELSE 0 END)+(CASE WHEN COUNT(DISTINCT award_amount)<2 THEN 1 ELSE 0 END) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true));
+
+SELECT 'health', 'rhtp_state_awards', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null fiscal_year/state_abbr/award_amount'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true) WHERE fiscal_year IS NULL OR state_abbr IS NULL OR award_amount IS NULL);
+
+SELECT 'health', 'rhtp_state_awards', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (fiscal_year, state_abbr) keys'
+FROM (SELECT COUNT(*) AS d FROM (SELECT fiscal_year, state_abbr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+SELECT 'health', 'rhtp_state_awards', 'T7_states_per_year', CASE WHEN n = 50 THEN 'pass' ELSE 'fail' END, n, 50, 'Fifty states in every year'
+FROM (SELECT MIN(c) AS n FROM (SELECT COUNT(DISTINCT state_abbr) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true) GROUP BY fiscal_year));
+
+SELECT 'health', 'rhtp_state_awards', 'T7_known_values', CASE WHEN n = 3 THEN 'pass' ELSE 'fail' END, n, 3, 'CMS-published FY26 Wyoming 205004743, New Jersey 147250806, Texas 281319361'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true) WHERE fiscal_year=2026 AND ((state_abbr='WY' AND award_amount=205004743) OR (state_abbr='NJ' AND award_amount=147250806) OR (state_abbr='TX' AND award_amount=281319361)));
+
+SELECT 'health', 'rhtp_state_awards', 'T7_total_range', CASE WHEN n BETWEEN 9500000000 AND 10500000000 THEN 'pass' ELSE 'fail' END, n, 10000000000, 'Each year totals about $10B'
+FROM (SELECT MIN(tot) AS n FROM (SELECT SUM(award_amount) AS tot FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true) GROUP BY fiscal_year));
+

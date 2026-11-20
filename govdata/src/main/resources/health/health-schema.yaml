@@ -9331,6 +9331,95 @@ partitionedTables:
         incrementalKeys: [year, table_id]
         overwritePartitions: true
 
+  - name: rhtp_state_awards
+    timeColumn: fiscal_year
+    freshness:
+      type: hash
+    pattern: "type=rhtp_state_awards/fiscal_year=*/*.parquet"
+    comment: >
+      CMS Rural Health Transformation Program (RHTP) awards by state and fiscal year: one row
+      per state per year, the dollar amount CMS announced for that state. The program is the
+      $50 billion fund created by the 2025 reconciliation law, $10 billion a year for FY2026
+      through FY2030. Half of each year's money is split equally among approved states and
+      half is set by rural-health metrics, state policy actions and application scale; from
+      FY2027 awards also reflect each state's annual progress report. Use it for questions such
+      as how much Wyoming, Texas or New Jersey received, the range across states, or how a
+      state's second-year award moved from its first.
+
+      **Coverage**: FY2026 (announced 2025-12-29) and FY2027 (announced 2026-11-09), all 50
+      states each. Taken from the state table in each CMS press release; no other source
+      publishes the amounts as data. Not loaded: territories and DC (not in the program),
+      later fiscal years until CMS announces them (a year is added in
+      RhtpStateAwardsTransformer when announced), spending or drawdown by state, and the
+      per-state project abstracts. Amounts are awards, not payments made.
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: "Federal fiscal year of the award (2026 or 2027)"
+      - name: state_name
+        type: string
+        nullable: false
+        comment: "State name as CMS prints it"
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: "Two-letter USPS state code"
+      - name: award_amount
+        type: bigint
+        nullable: false
+        comment: "Award announced for the state in that fiscal year, in whole US dollars"
+      - name: announced_date
+        type: date
+        nullable: false
+        comment: "Date of the CMS press release announcing the year's awards"
+      - name: source_url
+        type: string
+        nullable: false
+        comment: "CMS press release the row was read from"
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "rhtp_state_awards"'
+
+    dimensions:
+      type:
+        - rhtp_state_awards
+      fiscal_year:
+        type: list
+        values: ["2026", "2027"]
+
+    source:
+      type: http
+      url: "https://www.cms.gov/newsroom/press-releases"
+      method: GET
+      response:
+        format: TEXT   # RhtpStateAwardsTransformer fetches the release for {fiscal_year} and parses the HTML itself
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.RhtpStateAwardsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rhtp_state_awards/fiscal_year=*/"
+      partition:
+        columns: [type, fiscal_year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: rhtp_state_awards
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [fiscal_year]
+        incrementalKeys: [fiscal_year]
+        overwritePartitions: true
+
   - name: aca_effectuated_enrollment_monthly
     timeColumn: benefit_year  # observation year; this table has no column named 'year'
     # data-api dataset has no Last-Modified; hash the response body so an unchanged CMS
