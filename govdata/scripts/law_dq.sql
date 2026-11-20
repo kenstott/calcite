@@ -4,6 +4,7 @@
 -- Tables: usc_sections, lobbying_* (17 tables from LDA.gov, listed in law-schema.yaml), bills, bill_actions, bill_cosponsors, bill_committees,
 --         bill_committee_activities, bill_subjects, bill_text_versions, bill_related_bills,
 --         bill_amendments, bill_amendment_actions, bill_amendment_cosponsors,
+--         bill_amendment_text_versions,
 --         bill_action_committees, bill_recorded_votes, bill_titles, bill_summaries,
 --         bill_cbo_cost_estimates, bill_committee_reports, bill_notes, scotus_reports_cases,
 --         scotus_slip_opinions, scotus_dockets, scotus_docket_entries, member_stock_transactions,
@@ -1260,6 +1261,91 @@ SELECT 'law', 'bill_amendment_cosponsors', 'T7_bioguide_format',
   bad, 0, 'bioguide_id not matching ^[A-Z][0-9]{6}$'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_cosponsors', allow_moved_paths := true)
       WHERE NOT regexp_matches(bioguide_id, '^[A-Z][0-9]{6}$'));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: bill_amendment_text_versions
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'bill_amendment_text_versions', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'bill_amendment_text_versions', 'T2_row_count',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Expected at least 1 rows in a scoped run'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'bill_amendment_text_versions', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'bill_amendment_text_versions', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+-- T6: key nulls (no primary key: one row per amendment, version and format)
+INSERT INTO dq_results
+SELECT 'law', 'bill_amendment_text_versions', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL congress, amendment_type, amendment_number, url rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true)
+      WHERE congress IS NULL OR amendment_type IS NULL OR amendment_number IS NULL OR url IS NULL);
+
+-- T6: duplicates of (amendment, version, format)
+INSERT INTO dq_results
+SELECT 'law', 'bill_amendment_text_versions', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (congress, amendment_type, amendment_number, version_type, version_date, format_type) keys'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT congress, amendment_type, amendment_number, version_type, version_date, format_type, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true)
+    GROUP BY congress, amendment_type, amendment_number, version_type, version_date, format_type
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: expected values
+INSERT INTO dq_results
+SELECT 'law', 'bill_amendment_text_versions', 'T7_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with amendment_type not SAMDT/HAMDT, format_type not HTML/PDF, or a url outside congress.gov'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/bill_amendment_text_versions', allow_moved_paths := true)
+      WHERE amendment_type NOT IN ('SAMDT', 'HAMDT')
+         OR format_type NOT IN ('HTML', 'PDF')
+         OR url NOT LIKE 'https://www.congress.gov/%');
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: bill_action_committees
