@@ -4,7 +4,7 @@
   "lede": [
     "Nov. 19 and 20 brought Senate passage of a bipartisan permitting bill, a Senate vote on ending the war in Iran, President Trump's three-way summit with Xi Jinping and Vladimir Putin in Shenzhen, and a House Homeland Security Committee hearing with Secretary Markwayne Mullin. On the House floor, members spoke on the federal debt and spending, the Epstein files and the record of the outgoing Congress; senators also spoke on rural health funding, the defense authorization bill, prediction markets and lithium-ion battery fires.",
     "This page lists what officeholders in scope were quoted saying in that coverage and in the day's Congressional Record: 344 statements from 50 speakers. Most come from floor speeches, which are printed verbatim in the Record.",
-    "Statements that make a checkable factual claim, or rest on a stated factual premise, are checked one at a time against AskAmerica's warehouse and primary sources. Checks still queued are marked \"not yet checked\" and the page is updated as results return. Each checked statement's test, finding and sources are shown with it."
+    "244 statements made a checkable factual claim or rested on a stated factual premise, and each was checked against AskAmerica's warehouse and primary sources: 121 were supported, 102 could not be decided from the evidence found, 9 were contradicted by a primary source read directly, and for 12 no evidence was found. Checks drew on the warehouse's roll-call votes, U.S. Code, Treasury debt and spending, energy prices, Census and FEC records, among others. Each statement's test, finding and sources are shown with it."
   ],
   "stories": [
     {
@@ -13139,16 +13139,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an obituary or official notice reports Holden died on Sunday, Nov. 15, 2026, at his home. False if he died on a different date or is not reported to have died.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A local obituary reports Holden died on Sunday, and the Pennsylvania Liquor Control Board's statement on his death is dated Nov. 15, 2026; that he died at home rests on secondary accounts.",
+      "evidence": [
+        {
+          "label": "Yahoo News, local obituary of Tim Holden",
+          "url": "https://www.yahoo.com/news/politics/articles/tim-holden-10-term-congressman-234600648.html"
+        },
+        {
+          "label": "Pennsylvania Liquor Control Board statement, Nov. 15, 2026",
+          "url": "https://www.pa.gov/agencies/lcb/about-us/press-room/plcb-chairman-clarke-s-statement-on-the-passing-of-former-chairm"
+        }
+      ],
+      "check_run": "q284/askamerica/2026-11-20"
     },
     {
       "id": 349,
@@ -13207,16 +13216,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Holden's official biography shows him first elected to the House in 1992 and serving as Schuylkill County Sheriff before that. False if either fact differs.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's member record shows Holden's House service beginning in 1993, after the 1992 election, and his obituary says he was Schuylkill County sheriff from 1985 until he was sworn in.",
+      "evidence": [
+        {
+          "label": "officials.members (Tim Holden, House service 1993-2013)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#members-table",
+          "askamerica": true,
+          "sql": "SELECT bioguide_id, congress, name_last_first, terms_json FROM officials.members WHERE bioguide_id='H000671' OR name_last_first ILIKE 'Holden,%'"
+        },
+        {
+          "label": "Yahoo News, local obituary of Tim Holden",
+          "url": "https://www.yahoo.com/news/politics/articles/tim-holden-10-term-congressman-234600648.html"
+        }
+      ],
+      "check_run": "q284/askamerica/2026-11-20"
     },
     {
       "id": 351,
