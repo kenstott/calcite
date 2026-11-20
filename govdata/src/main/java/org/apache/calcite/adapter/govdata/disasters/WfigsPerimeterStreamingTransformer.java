@@ -55,9 +55,14 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
-  private static final int PAGE_SIZE = 2000;
+  private static final int INITIAL_PAGE_SIZE = 500;
+  // A page's byte size follows polygon vertex counts, not feature count: late OBJECTID ranges hold
+  // large fire perimeters, and the server cuts oversized responses short at a power-of-two size.
+  // A failed page is retried with half as many features, so retrying the same oversized request
+  // cannot repeat the same truncation.
+  private static final int MIN_PAGE_SIZE = 50;
   private static final int CONNECT_TIMEOUT_MS = 60_000;
-  // A healthy page (2000 features with full polygon geometry) completes in single-digit
+  // A healthy page (500 features with full polygon geometry) completes in single-digit
   // seconds, confirmed live. 300s was generous enough that a genuinely hung connection ate
   // a full 5 minutes before the retry loop below even got a chance to react - with up to
   // MAX_PAGE_RETRIES attempts, a single bad page could stall the whole multi-page fetch for
@@ -91,6 +96,7 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
   private static final class PerimeterIterator implements Iterator<Map<String, Object>> {
     private final String baseUrl;
     private int offset;
+    private int pageSize = INITIAL_PAGE_SIZE;
     private JsonNode features;
     private int featureIdx;
     private boolean exhausted;
@@ -118,6 +124,7 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
           return;
         } catch (IOException e) {
           last = e;
+          pageSize = Math.max(MIN_PAGE_SIZE, pageSize / 2);
         }
       }
       throw last;
@@ -130,7 +137,7 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
           + "&outFields=" + enc(OUT_FIELDS)
           + "&returnGeometry=true&outSR=4326&f=json"
           + "&orderByFields=" + enc("OBJECTID")
-          + "&resultRecordCount=" + PAGE_SIZE
+          + "&resultRecordCount=" + pageSize
           + "&resultOffset=" + offset;
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
@@ -171,10 +178,10 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
       Map<String, Object> row = mapFeature(feature);
       if (featureIdx >= features.size()) {
         // Page consumed; a full page implies there may be more.
-        if (features.size() < PAGE_SIZE) {
+        if (features.size() < pageSize) {
           exhausted = true;
         } else {
-          offset += PAGE_SIZE;
+          offset += pageSize;
           try {
             fetchPage();
           } catch (IOException e) {
