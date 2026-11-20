@@ -2268,6 +2268,47 @@ INSERT INTO dq_results
 SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T7_interim_from_1998',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'interim_crs null for FY>=1998 or non-null before'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true) WHERE (fiscal_year >= 1998 AND interim_crs IS NULL) OR (fiscal_year < 1998 AND interim_crs IS NOT NULL));
+-- cbo_budget_projections
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'cbo_budget_projections', 'T1_row_count',
+  CASE WHEN n >= 22000 THEN 'pass' ELSE 'fail' END, n, 22000,
+  '8 vintage files across 3 datasets: 22,658 rows at the 2026-02 release'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/cbo_budget_projections', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'cbo_budget_projections', 'T2_dataset_vintages',
+  CASE WHEN n >= 8 THEN 'pass' ELSE 'fail' END, n, 8, 'Distinct (dataset, vintage) pairs'
+FROM (SELECT COUNT(*) AS n FROM (SELECT DISTINCT dataset, vintage FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/cbo_budget_projections', allow_moved_paths := true)));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'cbo_budget_projections', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null dataset/vintage/fiscal_year/variable/value'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/cbo_budget_projections', allow_moved_paths := true)
+  WHERE dataset IS NULL OR vintage IS NULL OR fiscal_year IS NULL OR variable IS NULL OR value IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'cbo_budget_projections', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (dataset, vintage, fiscal_year, variable) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT dataset, vintage, fiscal_year, variable FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/cbo_budget_projections', allow_moved_paths := true)
+  GROUP BY dataset, vintage, fiscal_year, variable HAVING COUNT(*) > 1));
+
+-- Known values (CBO 2026-02 outlook): FY2025 actuals and a 10-year / 30-year endpoint.
+INSERT INTO dq_results
+SELECT 'fiscal', 'cbo_budget_projections', 'T7_' || chk,
+  CASE WHEN ABS(v - expected) <= 0.5 THEN 'pass' ELSE 'fail' END, v, expected,
+  'CBO value for ' || chk || ' (expect ' || expected || ' within 0.5)'
+FROM (SELECT e.chk, MAX(a.value) AS v, e.expected
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/cbo_budget_projections', allow_moved_paths := true) a
+  JOIN (VALUES
+    ('hist_2026-02_FY2025_deficit_total', 'historical_budget', '2026-02', 2025, 'deficit_total', -1775.37),
+    ('hist_2026-02_FY2025_net_interest', 'historical_budget', '2026-02', 2025, 'outlays_net_interest', 969.938),
+    ('hist_2026-02_FY2025_debt_gdp', 'historical_budget', '2026-02', 2025, 'debt_held_by_public_gdp_share', 99.375),
+    ('tenyr_2026-02_FY2036_net_interest', 'ten_year_budget', '2026-02', 2036, 'proj_outlays_net_interest', 2144.336),
+    ('longterm_2026-02_FY2056_debt_gdp', 'long_term_budget', '2026-02', 2056, 'lt_debt_held_by_public_gdp_share', 175.076)
+  ) e(chk, dataset, vintage, fiscal_year, variable, expected)
+    ON a.dataset = e.dataset AND a.vintage = e.vintage AND a.fiscal_year = e.fiscal_year AND a.variable = e.variable
+  GROUP BY e.chk, e.expected);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

@@ -8222,6 +8222,109 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # CBO BUDGET PROJECTIONS — US-CBO/cbo-data (CBO's own open data repository)
+  # ---------------------------------------------------------------------------
+  - name: cbo_budget_projections
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=cbo_budget_projections/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Congressional Budget Office budget data in long format, one row per dataset x vintage x
+      fiscal_year x variable: revenues, outlays by category and program, deficits, debt held by
+      the public, net interest, and each as a share of GDP. dataset is ten_year_budget (the
+      10-year baseline projections), long_term_budget (30-year projections, mostly % of GDP) or
+      historical_budget (actuals from FY1962). vintage is the CBO release (for example 2026-02
+      is the February 2026 Budget and Economic Outlook); the same fiscal_year appears once per
+      vintage, so filter to one vintage (normally the latest) to read a single projection path
+      and compare vintages to see how CBO's outlook moved. In a projection vintage the first
+      fiscal_year is an estimated or actual year and later years are projections. unit gives
+      billions_of_dollars or % of GDP (long-term adds trillions of dollars and percentage
+      points); category groups variables (summary, revenues, outlays, ...); the 10-year dataset
+      also carries chg_* variables for changes since the prior baseline. Examples: variable
+      debt_held_by_public_gdp_share (debt-to-GDP) in historical_budget, proj_* in
+      ten_year_budget, lt_debt_held_by_public_gdp_share in long_term_budget. Federal fiscal year
+      (Oct 1 - Sep 30). Source: CBO's repository github.com/US-CBO/cbo-data (public domain, 17
+      USC 105), a standardized copy of the publications at cbo.gov/data/budget-economic-data;
+      cbo.gov itself blocks non-browser clients. Vintages: 10-year 2024-06, 2025-01, 2026-02;
+      long-term 2025-03, 2026-02; historical 2024-02, 2025-01, 2026-02. New releases are picked
+      up from the repository catalog.
+    dqRowLimit: 50000
+
+    columns:
+      - name: dataset
+        type: string
+        nullable: false
+        comment: ten_year_budget, long_term_budget or historical_budget; PK.
+      - name: vintage
+        type: string
+        nullable: false
+        comment: CBO release as YYYY-MM (for example 2026-02); PK.
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (Oct 1 - Sep 30); PK.
+      - name: variable
+        type: string
+        nullable: false
+        comment: CBO snake_case variable name from the dataset's schema.json (for example outlays_net_interest); PK.
+      - name: value
+        type: double
+        nullable: false
+        comment: Value in the unit named by the unit column (billions of dollars or % of GDP)
+      - name: unit
+        type: string
+        nullable: true
+        comment: Unit from CBO's schema.json (billions_of_dollars, % of GDP, Trillions of $, Percentage points)
+      - name: category
+        type: string
+        nullable: true
+        comment: CBO's thematic grouping of the variable (summary, revenues, outlays, ...)
+      - name: description
+        type: string
+        nullable: true
+        comment: CBO's description of the variable
+
+    source:
+      type: http
+      # The provider reads catalog.json uncached (so new releases appear) and each vintage CSV
+      # through the raw cache (a released vintage file does not change).
+      url: "https://raw.githubusercontent.com/US-CBO/cbo-data/main/catalog.json"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.CboBaselineProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=cbo_budget_projections/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 5000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: cbo_budget_projections
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
