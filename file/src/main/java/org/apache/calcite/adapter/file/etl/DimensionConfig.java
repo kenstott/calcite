@@ -294,6 +294,10 @@ public class DimensionConfig {
    *
    * @return true if weekends are skipped during day expansion
    */
+  public boolean isSkipWeekends() {
+    return skipWeekends;
+  }
+
   /**
    * On a DAY dimension, the retention window in days: dates older than today minus this many
    * days are not generated. 0 means unbounded. For sources whose publisher moves files past a
@@ -301,10 +305,6 @@ public class DimensionConfig {
    */
   public int getMaxAgeDays() {
     return maxAgeDays;
-  }
-
-  public boolean isSkipWeekends() {
-    return skipWeekends;
   }
 
   /**
