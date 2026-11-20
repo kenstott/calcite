@@ -473,16 +473,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Judge Ana C. Reyes of the U.S. District Court for D.C. was nominated by President Biden. False if she was nominated by a different president. Cannot be determined if her appointment record cannot be found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Federal Judicial Center record in AskAmerica's warehouse lists Ana Cecilia Reyes, U.S. District Court for the District of Columbia, as appointed by Joseph R. Biden (nominated Jan. 3, 2023; commissioned Feb. 21, 2023). Only the appointment claim was tested, not the description of her decision.",
+      "evidence": [
+        {
+          "label": "officials.federal_judges (FJC record for Ana C. Reyes)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#federal_judges-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM officials.federal_judges WHERE last_name='Reyes' AND first_name LIKE 'Ana%'"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-20"
     },
     {
       "id": 6,
@@ -541,16 +548,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the arch plans approved in November 2026 include a military facility or use. Contradicted if the approved plans, read directly, describe the arch with no military facility or use. Cannot be determined if the approved plans cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The National Capital Planning Commission's Nov. 6 release on its Nov. 5 final approval describes a 250-foot arch with statuary, lighting and circulation and mentions no military use, and the July 9 staff presentation for the project has no military, drone or defense content; the November approved plan set itself was not read. NPR reports a Defense Department declaration saying military uses are still being planned without changing the approved plans, so whether the arch will have a military use remains open.",
+      "evidence": [
+        {
+          "label": "NCPC media release on final approval, Nov. 6, 2026",
+          "url": "https://www.ncpc.gov/news/item/271/1/"
+        },
+        {
+          "label": "NCPC staff presentation, File 8778 (July 9, 2026)",
+          "url": "https://www.ncpc.gov/files/download.php?id=7856"
+        },
+        {
+          "label": "NPR, Sept. 22, 2026, on Trump's military-complex post",
+          "url": "https://www.npr.org/2026/09/22/nx-s1-5977646/trump-dc-arch-military-complex-questions"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-20"
     },
     {
       "id": 8,
@@ -662,14 +682,14 @@
         "url": null,
         "note": ""
       },
-      "kind": "factual",
+      "kind": "opinion_or_prediction",
       "test": null,
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
+      "result": null,
       "finding": null,
       "evidence": [],
       "check_run": null
@@ -1607,7 +1627,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Constitution, the War Powers Resolution and binding rulings plainly place continuing the Iran war within the President's own authority without congressional authorization. False if they plainly place it outside that authority. Cannot be determined if it turns on a contested legal reading with no binding ruling on this war.",
       "premise": null,
       "counter_statements": [
         270
@@ -1615,10 +1635,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The War Powers Resolution, as held in AskAmerica's U.S. Code table, conditions the President's use of forces on a declaration of war, specific authorization or an attack on the United States (50 U.S.C. 1541(c)) and requires withdrawal within 60 days without authorization (1544(b)), but 1547(d) leaves each branch's constitutional authority unchanged. Congress has not authorized the war, the administration says hostilities have terminated and the resolution is unconstitutional, and no binding ruling on this war has settled the question.",
+      "evidence": [
+        {
+          "label": "law.usc_subsections (50 U.S.C. 1541, 1544, 1547)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#usc_subsections-table",
+          "askamerica": true,
+          "sql": "SELECT section_number, unit_path, unit_text FROM law.usc_subsections WHERE title_number='50' AND section_number IN ('1541','1544','1547') ORDER BY section_number, unit_path"
+        },
+        {
+          "label": "Lawfare, Law and the Iran War After the First 60 Days",
+          "url": "https://www.lawfaremedia.org/article/law-and-the-iran-war--after-the-first-60-days"
+        }
+      ],
+      "check_run": "q215/askamerica/2026-11-20"
     },
     {
       "id": 36,
@@ -1835,16 +1866,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if no official finding or published agency information available as of Nov. 17, 2026 linked the outages to each other or to a malicious actor. Contradicted if an official source published by then, read directly, linked them to each other or to a malicious actor. Cannot be determined if the official record on the outages' causes cannot be found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The FAA's Nov. 15 Q&A attributes the Nov. 13 ground stop to network equipment flooded with data after a router deployment and says there is no indication of a cyberattack or outside actor. Microsoft, Chase, the NSA and the DNI gave separate non-malicious causes, as reported by AP; no official source found links the outages to each other or to a malicious actor.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/faa-statement-nationwide-ground-stop"
+        },
+        {
+          "label": "AP via OPB, Rubio remarks on the outages",
+          "url": "https://www.opb.org/article/2026/11/18/rubio-says-there-s-zero-information-that-outages-caused-by-malign-actor/"
+        }
+      ],
+      "check_run": "q216/askamerica/2026-11-20"
     },
     {
       "id": 43,
@@ -1964,14 +2004,14 @@
         "url": null,
         "note": ""
       },
-      "kind": "factual",
+      "kind": "opinion_or_prediction",
       "test": null,
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
+      "result": null,
       "finding": null,
       "evidence": [],
       "check_run": null
@@ -2060,14 +2100,14 @@
         "url": null,
         "note": ""
       },
-      "kind": "factual",
+      "kind": "opinion_or_prediction",
       "test": null,
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
+      "result": null,
       "finding": null,
       "evidence": [],
       "check_run": null
@@ -2156,14 +2196,14 @@
         "url": "https://www.whitehouse.gov/briefings-statements/2026/11/presidential-message-on-national-rural-health-day/",
         "note": ""
       },
-      "kind": "factual",
+      "kind": "opinion_or_prediction",
       "test": null,
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
+      "result": null,
       "finding": null,
       "evidence": [],
       "check_run": null
