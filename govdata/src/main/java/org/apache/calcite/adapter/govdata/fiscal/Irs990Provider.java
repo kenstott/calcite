@@ -190,7 +190,7 @@ public class Irs990Provider implements CachingDataProvider {
    * 2019-2023 indexes have no XML_BATCH_ID column, and the 2025 index labels every filing of
    * 2025_TEOS_XML_05A although the IRS split that batch into 05A and 05B. The IRS naming
    * conventions are probed instead: {@code {Y}_TEOS_XML_{MM}{A,B,...}} (each month's suffixes
-   * until the first absent one), {@code {Y}_TEOS_XML_CT1}, and the older
+   * until the first absent one), {@code {Y}_TEOS_XML_CT1..n} (2018 publishes CT1-CT3), and the older
    * {@code download990xml_{Y}_{n}} series. A year with no monthly zip is the legacy layout (see
    * {@link ZipSet#legacy}) and also takes the previous year's CT1 and numbered series, because
    * the index of year Y lists filings whose object id starts with Y-1. Completeness is not
@@ -228,7 +228,7 @@ public class Irs990Provider implements CachingDataProvider {
     return set;
   }
 
-  /** Adds a year's CT1 zip and its download990xml numbered series, whichever exist. */
+  /** Adds a year's CT1, CT2, ... zips (each until the first absent one) and its download990xml numbered series, whichever exist. */
   private static void addSeries(String base, String year, Probe probe, List<String> out)
       throws IOException {
     for (int n = 1; ; n++) {
@@ -238,9 +238,12 @@ public class Irs990Provider implements CachingDataProvider {
       }
       out.add(path);
     }
-    String ct1 = year + "/" + year + "_TEOS_XML_CT1";
-    if (probe.exists(base + ct1 + ".zip")) {
-      out.add(ct1);
+    for (int n = 1; ; n++) {
+      String ct = year + "/" + year + "_TEOS_XML_CT" + n;
+      if (!probe.exists(base + ct + ".zip")) {
+        break;
+      }
+      out.add(ct);
     }
   }
 

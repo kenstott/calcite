@@ -1,3 +1,4 @@
 # Public roots added to the JRE trust store for web_fetch (one file per line)
 globalsign-root-r46.pem
 sectigo-public-server-authentication-root-r46.pem
+cfca-ev-root.pem

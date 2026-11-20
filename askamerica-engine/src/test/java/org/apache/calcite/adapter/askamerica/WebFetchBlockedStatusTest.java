@@ -21,7 +21,8 @@ import java.net.InetSocketAddress;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** A refused web_fetch (401/403/429/451) tells the model to retry with the client's fetch. */
+/** A refused web_fetch (401/403/429/451) tells the model to find another primary source, not
+ *  to fall back to a summarizing client fetch. */
 @Tag("unit")
 class WebFetchBlockedStatusTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -45,17 +46,19 @@ class WebFetchBlockedStatusTest {
         }
     }
 
-    @Test void blockedStatusesPointToClientFetch() throws Exception {
+    @Test void blockedStatusesPointToAnotherPrimarySource() throws Exception {
         for (int status : new int[] {401, 403, 429, 451}) {
             String msg = fetchStatus(status);
             assertTrue(msg.contains("HTTP " + status), msg);
-            assertTrue(msg.contains("client-side web fetch"), msg);
+            assertTrue(msg.contains("another primary source"), msg);
+            assertTrue(msg.contains("govinfo.gov"), msg);
+            assertFalse(msg.contains("WebFetch"), msg);
         }
     }
 
-    @Test void otherErrorStatusDoesNotPointToClientFetch() throws Exception {
+    @Test void otherErrorStatusDoesNotPointToAnotherSource() throws Exception {
         String msg = fetchStatus(404);
         assertTrue(msg.contains("HTTP 404"), msg);
-        assertFalse(msg.contains("client-side web fetch"), msg);
+        assertFalse(msg.contains("another primary source"), msg);
     }
 }

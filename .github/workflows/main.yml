@@ -23,8 +23,12 @@ name: CI
 
 on:
   push:
+    # The daily eval pipeline commits only its result files straight to main; a CI run (or the
+    # cancellation of the previous one by the concurrency group) for those pushes is wasted.
     paths-ignore:
       - 'site/**'
+      - 'said-and-checked-results/**'
+      - 'news-check-results/**'
     branches:
       - '*'
   pull_request:
@@ -153,6 +157,8 @@ jobs:
           25
           11
         distribution: 'zulu'
+    - name: 'Warm Gradle plugins'
+      uses: ./.github/actions/warm-gradle-plugins
     - uses: burrunan/gradle-cache-action@v1
       name: Test
       with:
@@ -216,6 +222,8 @@ jobs:
             25
             17
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -279,6 +287,8 @@ jobs:
             25
             21
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -327,6 +337,8 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -350,6 +362,8 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -373,6 +387,8 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -394,6 +410,8 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -415,6 +433,8 @@ jobs:
         with:
           java-version: 21
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -436,6 +456,8 @@ jobs:
         with:
           java-version: 21
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -466,6 +488,8 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -488,6 +512,8 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - name: 'Run CheckerFramework'
         uses: burrunan/gradle-cache-action@v1
         with:
@@ -509,6 +535,8 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - name: 'Run CheckerFramework'
         uses: burrunan/gradle-cache-action@v1
         with:
@@ -531,6 +559,8 @@ jobs:
         with:
           java-version: 11
           distribution: 'zulu'
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
@@ -594,6 +624,10 @@ jobs:
     - name: 'Index Foodmart/Wikipedia datasets'
       working-directory: ./druid-dataset
       run: ./index.sh 30s
+    - name: 'Warm Gradle plugins'
+      uses: ./calcite/.github/actions/warm-gradle-plugins
+      with:
+        working-directory: ./calcite
     - uses: burrunan/gradle-cache-action@v1
       name: 'Run Druid tests'
       timeout-minutes: 10
@@ -651,6 +685,8 @@ jobs:
         exit 1
     # The tests tagged splunk-data need the CIM data models and indexed events, which a new
     # container does not have; see splunk/build.gradle.kts
+    - name: 'Warm Gradle plugins'
+      uses: ./.github/actions/warm-gradle-plugins
     - uses: burrunan/gradle-cache-action@v1
       name: 'Run Splunk tests'
       timeout-minutes: 20

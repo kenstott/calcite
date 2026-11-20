@@ -35,7 +35,7 @@ def no_engine(monkeypatch):
     monkeypatch.setattr(arrow_bridge._ArrowClasses, "get", staticmethod(lambda: classes))
     monkeypatch.setattr(arrow_bridge, "_consumer_factory", lambda C: None)
     monkeypatch.setattr(
-        arrow_bridge, "_columns_from_metadata", lambda rs: (["id"], ["INTEGER"])
+        arrow_bridge, "_columns_from_metadata", lambda rs: (["id"], ["INTEGER"], [-1])
     )
 
 
@@ -60,7 +60,7 @@ def _free_for_another_thread(lock) -> bool:
 )
 def test_closing_an_unread_stream_releases_the_lock(no_engine, stream):
     lock = threading.RLock()
-    _names, _labels, batches = stream(MagicMock(), lock, "SELECT 1")
+    _names, _labels, _typmods, batches = stream(MagicMock(), lock, "SELECT 1")
     assert not _free_for_another_thread(lock)  # held while the stream is open
     batches.close()
     assert _free_for_another_thread(lock)
@@ -68,7 +68,9 @@ def test_closing_an_unread_stream_releases_the_lock(no_engine, stream):
 
 def test_exhausting_a_stream_releases_the_lock(no_engine):
     lock = threading.RLock()
-    _names, _labels, batches = arrow_bridge.stream_query_batches(MagicMock(), lock, "SELECT 1")
+    _names, _labels, _typmods, batches = arrow_bridge.stream_query_batches(
+        MagicMock(), lock, "SELECT 1"
+    )
     assert list(batches) == []
     assert _free_for_another_thread(lock)
     batches.close()  # idempotent after exhaustion
@@ -80,7 +82,9 @@ def test_a_described_result_closed_unread_frees_the_engine_for_other_connections
     from pgwire_calcite.server import CalciteQueryResult
 
     lock = threading.RLock()
-    names, labels, batches = arrow_bridge.stream_query_batches(MagicMock(), lock, "SELECT 1")
+    names, labels, _typmods, batches = arrow_bridge.stream_query_batches(
+        MagicMock(), lock, "SELECT 1"
+    )
     result = CalciteQueryResult(
         QueryResult(column_names=names, column_types=labels, row_batches=batches), "SELECT 1"
     )

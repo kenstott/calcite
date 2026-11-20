@@ -851,6 +851,12 @@
         "is the difference significant",
         "confound",
         "wildfire acreage by ownership",
+        "burned acres by land ownership",
+        "wildfire burned acres federal vs private",
+        "federal vs private land",
+        "state and private land",
+        "federally managed land burn",
+        "per acre burned",
         "burn rate comparison",
         "veterans vs nonveterans",
         "composition adjusted",
@@ -1395,9 +1401,16 @@
         "most violations",
         "still operating",
         "still open",
-        "are they still open"
+        "are they still open",
+        "across US counties",
+        "which counties",
+        "where is it landing",
+        "where is new capacity",
+        "new plants by county",
+        "investment by county",
+        "county-level siting"
       ],
-      "body": "A question that leaves the place open ('which nursing homes in a state have the most violations') invites picking a familiar example and answering for it. That answers the question, but leaves out the more useful finding: which place stands out, and by how much. When the table you are already querying covers every state (or county, city, industry), one more GROUP BY gives you that finding for free.\n\nMeasured in this harness (q233, 2026-11-19): askamerica queried the national CMS Health Deficiencies table, then called Texas 'a worked example' with no reason. The unaided expert ran the same file grouped by state. Texas held 2,010 of 8,160 immediate-jeopardy citations (25%), or 170.8 per 100 homes against 141.7 for the next state. That made Texas the answer, not an arbitrary example, and the expert ranked first.\n\nFIX: before choosing the instance, aggregate the measure across all candidates from the same table. Normalize by a denominator from the warehouse (facility count from the provider table, population from census, establishments from QCEW), not a raw count, so large states do not win by size. Then pick the leader (or the place the user's context implies) and state the rule you used, with the top three for context. If you deliberately pick something other than the leader, say so and why.\n\nSECOND TRAP, for 'are they still operating/open' questions: a federal certification or provider file (CMS provider information, FDIC institution lists, EPA facility registries) usually drops closed entities. So 'present in the current file' means 'currently certified', and closures inside the window are invisible (survivor bias). Say that plainly. Then check the state licensing registry or the agency's own termination/closure list through web_fetch for the top entities, and report how many you confirmed active."
+      "body": "A question that leaves the place open ('which nursing homes in a state have the most violations') invites picking a familiar example and answering for it. That answers the question, but leaves out the more useful finding: which place stands out, and by how much. When the table you are already querying covers every state (or county, city, industry), one more GROUP BY gives you that finding for free.\n\nMeasured in this harness (q233, 2026-11-19): askamerica queried the national CMS Health Deficiencies table, then called Texas 'a worked example' with no reason. The unaided expert ran the same file grouped by state. Texas held 2,010 of 8,160 immediate-jeopardy citations (25%), or 170.8 per 100 homes against 141.7 for the next state. That made Texas the answer, not an arbitrary example, and the expert ranked first.\n\nSecond measured case (q207, 2026-11-20, 'where is new semiconductor capacity landing across US counties'): askamerica picked seven counties from announced projects and said it had not scanned every county, though econ.county_qcew, the table it was already querying, covers every county. The expert mapped all 49 CHIPS tracker entries to 41 counties and ranked first on coverage. For a 'where is X landing' question, rank every county by growth in the relevant NAICS (e.g. 3344 jobs and establishments, 2362 nonresidential building construction) from county_qcew first, then name the announced projects that explain the leaders, and say which leaders no announcement explains.\n\nFIX: before choosing the instance, aggregate the measure across all candidates from the same table. Normalize by a denominator from the warehouse (facility count from the provider table, population from census, establishments from QCEW), not a raw count, so large states do not win by size. Then pick the leader (or the place the user's context implies) and state the rule you used, with the top three for context. If you deliberately pick something other than the leader, say so and why.\n\nSECOND TRAP, for 'are they still operating/open' questions: a federal certification or provider file (CMS provider information, FDIC institution lists, EPA facility registries) usually drops closed entities. So 'present in the current file' means 'currently certified', and closures inside the window are invisible (survivor bias). Say that plainly. Then check the state licensing registry or the agency's own termination/closure list through web_fetch for the top entities, and report how many you confirmed active."
     },
     {
       "id": "teacher-pay-from-f33-instruction-salaries-per-teacher-fte",

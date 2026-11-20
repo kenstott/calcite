@@ -25,6 +25,7 @@ import re
 import threading
 from datetime import datetime, timezone
 
+from pgwire_calcite import normalize
 from pgwire_calcite.bulk_insert import insert_rows
 
 log = logging.getLogger(__name__)
@@ -76,7 +77,9 @@ _PG_TYPE_DISPLAY_NAMES: dict[str, str] = {
     "float8": "double precision",
     "varchar": "character varying",
     "bpchar": "character",
+    "timestamp": "timestamp without time zone",
     "timestamptz": "timestamp with time zone",
+    "time": "time without time zone",
     "timetz": "time with time zone",
 }
 
@@ -1521,6 +1524,8 @@ def _handle_typeinfo_tree(oids: list[int]):
 _KNOWN_SETTINGS = {
     "server_version": "14.0",
     "server_version_num": "140000",
+    # NAMEDATALEN - 1; SQLAlchemy reads it at connect (REQ-2255).
+    "max_identifier_length": "63",
     "server_encoding": "UTF8",
     "client_encoding": "UTF8",
     "datestyle": "ISO, MDY",
@@ -1554,6 +1559,8 @@ class _SessionSettings(threading.local):
     """
 
     values: dict = {}
+    #: The connection's backend pid (BVContext.process_id), what pg_backend_pid() answers.
+    backend_pid: int = 0
 
 
 _SESSION_SETTINGS = _SessionSettings()
@@ -1562,6 +1569,11 @@ _SESSION_SETTINGS = _SessionSettings()
 def publish_session_settings(values: dict) -> None:
     """Bind this thread's session SET values for the duration of a statement."""
     _SESSION_SETTINGS.values = values
+
+
+def publish_backend_pid(pid: int) -> None:
+    """Bind this thread's connection pid for pg_backend_pid() (REQ-2255)."""
+    _SESSION_SETTINGS.backend_pid = pid
 
 
 def setting_value(key: str) -> str:
@@ -1732,6 +1744,7 @@ class CatalogIndex:  # REQ-532
         "table_type",
         "table_comment",
         "col_comment",
+        "col_typmod",
         "schema_comment",
     )
 
@@ -1746,6 +1759,8 @@ class CatalogIndex:  # REQ-532
         self.table_type: dict[int, str] = {}
         self.table_comment: dict[int, str | None] = {}
         self.col_comment: dict[tuple[int, str], str | None] = {}
+        #: (table oid, column) -> PostgreSQL atttypmod (REQ-2255; ColumnMeta.typmod)
+        self.col_typmod: dict[tuple[int, str], int] = {}
         #: every listed schema (SQL name) -> its comment or None, for information_schema.schemata
         self.schema_comment: dict[str, str | None] = {}
 
@@ -1800,6 +1815,7 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
             exposed = _p2s.get((tm.table_id, phys)) or apply_sql_name(phys)
             idx.all_cols.append((toid, exposed, col.data_type, col.is_nullable, i))
             idx.col_comment[(toid, exposed)] = col.comment
+            idx.col_typmod[(toid, exposed)] = col.typmod
             idx.col_attnum[(toid, exposed)] = i
             idx.attnum_to_col[(toid, i)] = exposed
 
@@ -1807,6 +1823,7 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
         for j, vcol in enumerate(virtual, len(real_cols) + 1):
             idx.all_cols.append((toid, vcol, "varchar", True, j))
             idx.col_comment[(toid, vcol)] = None
+            idx.col_typmod[(toid, vcol)] = -1
             idx.col_attnum[(toid, vcol)] = j
             idx.attnum_to_col[(toid, j)] = vcol
 
@@ -1868,6 +1885,9 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
         c, s, t = idx.toid_to_table.get(toid, (_DATABASE_NAME, "public", ""))
         pg_type = _trino_to_pg_name(col_type)
         null_str = "YES" if is_nullable else "NO"
+        char_len, num_prec, num_radix, num_scale, dt_prec = normalize.information_schema_sizes(
+            _trino_to_pg_oid(col_type), idx.col_typmod[(toid, col_name)]
+        )
         col_rows.append(
             (
                 c,
@@ -1878,12 +1898,12 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
                 None,
                 null_str,
                 pg_type,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
+                char_len,
+                None if char_len is None else char_len * 4,
+                num_prec,
+                num_radix,
+                num_scale,
+                dt_prec,
                 None,
                 None,
                 None,
@@ -2170,7 +2190,7 @@ def _populate_pg_attribute(db, idx: CatalogIndex, pk_notnull_cols: set = None) -
                 ordinal,
                 0,
                 -1,
-                -1,
+                idx.col_typmod[(toid, col_name)],
                 attbyval,
                 attalign,
                 attstorage,
@@ -2656,6 +2676,25 @@ _PG_SETTINGS_ROWS: list[tuple] = [
         None,
         "14.0",
         "14.0",
+        None,
+        None,
+        False,
+    ),
+    (
+        "max_identifier_length",
+        "63",
+        None,
+        "Preset Options",
+        "Shows the maximum identifier length.",
+        None,
+        "internal",
+        "integer",
+        "default",
+        "63",
+        "63",
+        None,
+        "63",
+        "63",
         None,
         None,
         False,
@@ -3434,6 +3473,17 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         )
 
 
+def _populate_pg_keywords(db) -> None:
+    """pg_get_keywords()'s rows, PostgreSQL 17's keyword list (REQ-2255)."""
+    from pgwire_calcite.pg_keywords import PG_KEYWORDS
+
+    db.execute(
+        "CREATE TABLE _pg_keywords (word VARCHAR, catcode VARCHAR, barelabel BOOLEAN, "
+        "catdesc VARCHAR, baredesc VARCHAR)"
+    )
+    insert_rows(db, "INSERT INTO _pg_keywords VALUES (?,?,?,?,?)", list(PG_KEYWORDS))
+
+
 def _populate_pg_extension(db, state) -> None:
     """Advertise the backend's enabled extension surfaces in pg_extension (PGW-046/051).
 
@@ -3556,6 +3606,7 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     raw_domains = state.schema_build_cache.get("domains", []) if state else []
     _populate_pg_description(db, idx, raw_tables, raw_domains)
     _populate_pg_extension(db, state)  # PGW-046: advertise enabled extension surfaces
+    _populate_pg_keywords(db)  # REQ-2255: pg_get_keywords()
     _populate_function_catalog(db, state)  # PGW-051: pg_proc / routines / parameters
     constraint_rows = _populate_pg_constraint(db, ctx, idx)
     _populate_pg_roles_and_database(db, role_id, state)
@@ -3590,10 +3641,10 @@ SELECT CASE
         THEN 'numeric(' || CAST((((({mod}) - 4) >> 16) & 65535) AS VARCHAR)
              || ',' || CAST(((({mod}) - 4) & 65535) AS VARCHAR) || ')'
     WHEN _ft.typname IN ('timestamp', 'timestamptz', 'time', 'timetz') AND ({mod}) >= 0
-        THEN replace({display}, ' with time zone', '')
+        THEN CASE WHEN _ft.typname IN ('timestamp', 'timestamptz') THEN 'timestamp' ELSE 'time' END
              || '(' || CAST(({mod}) AS VARCHAR) || ')'
              || CASE WHEN _ft.typname IN ('timestamptz', 'timetz')
-                     THEN ' with time zone' ELSE '' END
+                     THEN ' with time zone' ELSE ' without time zone' END
     ELSE {display}
 END
 FROM _pg_type AS _ft WHERE _ft.oid = ({typid})
@@ -3611,6 +3662,106 @@ def _format_type_subquery(typid_expr, typmod_expr):
         typid=typid_expr.sql(dialect="duckdb"),
     )
     return sqlglot.parse_one(sql, read="duckdb")
+
+
+#: A type name as a client writes it -> pg_type.typname (regtypein reads both).
+_TYPE_NAME_ALIASES = {
+    "integer": "int4",
+    "int": "int4",
+    "bigint": "int8",
+    "smallint": "int2",
+    "boolean": "bool",
+    "real": "float4",
+    "double precision": "float8",
+    "float": "float8",
+    "character varying": "varchar",
+    "character": "bpchar",
+    "char": "bpchar",
+    "decimal": "numeric",
+    "timestamp without time zone": "timestamp",
+    "timestamp with time zone": "timestamptz",
+    "time without time zone": "time",
+    "time with time zone": "timetz",
+}
+
+#: The object identifier types a name literal resolves to an oid for (REQ-2255).
+_RESOLVED_REG_TYPES = frozenset({"regclass", "regtype", "regnamespace"})
+
+
+def _name_parts(text: str) -> list:
+    """A possibly qualified name's parts as PostgreSQL reads them: a quoted part as written, an
+    unquoted one folded to lower case."""
+    parts = re.findall(r'"((?:[^"]|"")*)"|([^.]+)', text.strip())
+    return [q.replace('""', '"') if q else u.strip().lower() for q, u in parts]
+
+
+def _sql_text(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _reg_oid(kind: str, text: str, _transform):
+    """``'text'::kind`` as the oid of the object the name names, read from the catalog; a name
+    naming none raises the error regclassin / regtypein / regnamespacein raise (REQ-2255)."""
+    import sqlglot
+
+    if kind == "regclass":
+        parts = _name_parts(text)
+        name = parts[-1]
+        where = f"c.relname = {_sql_text(name)}"
+        if len(parts) > 1:
+            where += f" AND n.nspname = {_sql_text(parts[-2])}"
+        lookup = (
+            "SELECT c.oid FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n "
+            f"ON c.relnamespace = n.oid WHERE {where} LIMIT 1"
+        )
+        error = f'relation "{text}" does not exist'
+    elif kind == "regtype":
+        name = " ".join(text.strip().lower().removeprefix("pg_catalog.").split())
+        name = _TYPE_NAME_ALIASES.get(name, name)
+        lookup = f"SELECT oid FROM pg_catalog.pg_type WHERE typname = {_sql_text(name)} LIMIT 1"
+        error = f'type "{text}" does not exist'
+    else:
+        name = _name_parts(text)[-1]
+        lookup = f"SELECT oid FROM pg_catalog.pg_namespace WHERE nspname = {_sql_text(name)}"
+        error = f'schema "{text}" does not exist'
+    expr = sqlglot.parse_one(
+        f"CASE WHEN ({lookup}) IS NULL THEN error({_sql_text(error)}) ELSE ({lookup}) END",
+        read="postgres",
+    )
+    return expr.transform(_transform)
+
+
+def _current_schemas(include_implicit: bool):
+    """current_schemas(include_implicit): the schemas of search_path that exist, in order,
+    after pg_catalog when the implicit schemas are asked for, as PostgreSQL answers (REQ-2255)."""
+    import sqlglot
+
+    path = [
+        p.strip().strip('"')
+        for p in setting_value("search_path").split(",")
+        if p.strip() and p.strip().strip('"') != "$user"
+    ]
+    if include_implicit and "pg_catalog" not in path:
+        path.insert(0, "pg_catalog")
+    if not path:
+        return sqlglot.parse_one("CAST([] AS VARCHAR[])", read="duckdb")
+    values = ", ".join(f"({_sql_text(name)}, {i})" for i, name in enumerate(path))
+    return sqlglot.parse_one(
+        f"(SELECT list(v.n ORDER BY v.i) FROM (VALUES {values}) AS v(n, i) "
+        "WHERE v.n IN (SELECT nspname FROM _pg_namespace))",
+        read="duckdb",
+    )
+
+
+def _is_projection(node) -> bool:
+    """Whether ``node`` is a select-list item itself (bare or aliased): a reg value shown to the
+    client, not one compared or cast."""
+    import sqlglot.expressions as exp
+
+    parent = node.parent
+    if isinstance(parent, exp.Alias):
+        node, parent = parent, parent.parent
+    return isinstance(parent, exp.Select) and node in parent.expressions
 
 
 def _rewrite_pg_cast(node, _transform):
@@ -3635,8 +3786,11 @@ def _rewrite_pg_cast(node, _transform):
         if isinstance(inner, exp.Literal) and inner.is_string:
             short = inner.this.rsplit(".", 1)[-1]
             class_oid = _CATALOG_CLASS_OIDS.get(short)
-            if class_oid is not None:
+            if class_oid is not None and dtype_str == "regclass":
                 return exp.Literal.number(class_oid)
+            # Compared or cast, a name is the object's oid (REQ-2255); shown, it stays the name.
+            if dtype_str in _RESOLVED_REG_TYPES and not _is_projection(node):
+                return _reg_oid(dtype_str, inner.this, _transform)
             return exp.Literal.string(short)
         return inner.transform(_transform)
     if dtype_str in ("oid", "xid", "xid8", "tid", "cid"):
@@ -3650,6 +3804,18 @@ def _rewrite_pg_cast(node, _transform):
             # before the inner one, and sqlglot's exp.cast() builder raises on the not-yet-
             # rewritten reg type. Rewrite the inner cast first; the return paths below are
             # already fully transformed, so no further transform is needed.
+            inner_type = str(inner.args.get("to") or "").lower()
+            literal = inner.this
+            if (
+                inner_type in _RESOLVED_REG_TYPES
+                and isinstance(literal, exp.Literal)
+                and literal.is_string
+                and not (
+                    inner_type == "regclass"
+                    and literal.this.rsplit(".", 1)[-1] in _CATALOG_CLASS_OIDS
+                )
+            ):
+                return exp.cast(_reg_oid(inner_type, literal.this, _transform), "BIGINT")
             inner = _rewrite_pg_cast(inner, _transform) or inner.transform(_transform)
         elif isinstance(inner, exp.Literal) and inner.is_string:
             class_oid = _CATALOG_CLASS_OIDS.get(inner.this.rsplit(".", 1)[-1])
@@ -3715,6 +3881,13 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             # Rewrite to a lateral subquery so DuckDB can parse it.
             if isinstance(node.this, exp.Anonymous):
                 _tvf_name = node.this.name.lower()
+                if _tvf_name == "pg_get_keywords":
+                    return exp.Table(
+                        this=exp.Identifier(this="_pg_keywords", quoted=False),
+                        alias=exp.TableAlias(
+                            this=exp.Identifier(this=node.alias or _tvf_name, quoted=False)
+                        ),
+                    )
                 if _tvf_name in (
                     "pg_available_extension_versions",
                     "pg_available_extensions",
@@ -3785,6 +3958,10 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                         "alias", exp.TableAlias(this=exp.Identifier(this=name, quoted=False))
                     )
                 return new_tbl
+        if type(node).__name__ == "CurrentSchemas":
+            # sqlglot parses current_schemas(...) as its own node, not an anonymous call.
+            flag = node.args.get("this")
+            return _current_schemas(not (isinstance(flag, exp.Boolean) and not flag.this))
         if isinstance(node, exp.Anonymous):
             fn = node.name.lower()
             if fn == "json_build_object":
@@ -3797,19 +3974,12 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             if fn == "array_length":
                 args = node.args.get("expressions", [])
                 return exp.Anonymous(this="len", expressions=[args[0]] if args else [exp.null()])
+            if fn == "pg_backend_pid":
+                return exp.Literal.number(_SESSION_SETTINGS.backend_pid)
             if fn == "current_schemas":
                 args = node.args.get("expressions", [])
-                include_implicit = True
-                if args and isinstance(args[0], exp.Boolean):
-                    include_implicit = args[0].this
-                elif args and isinstance(args[0], exp.false().__class__):
-                    include_implicit = False
-                base = exp.select(
-                    exp.Anonymous(this="list", expressions=[exp.column("nspname")])
-                ).from_("_pg_namespace")
-                if not include_implicit:
-                    base = base.where("nspname NOT IN ('pg_catalog', 'information_schema')")
-                return exp.Subquery(this=base)
+                return _current_schemas(not (args and isinstance(args[0], exp.Boolean)
+                                             and not args[0].this))
             if "pg_get_userbyid" in fn or "pg_get_role_name" in fn:
                 return exp.Literal.string(_DATABASE_NAME)
             if "pg_get_constraintdef" in fn:
@@ -3879,7 +4049,9 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 # PG returns a real timestamptz (server start / config-load time); clients
                 # use it for restart detection, so answer with a stable per-process value
                 # instead of NULL.
-                return exp.cast(exp.Literal.string(_SERVER_START_ISO), "TIMESTAMPTZ")
+                # As a UTC timestamp: DuckDB returns a TIMESTAMPTZ to Python only through pytz,
+                # which the bundles do not carry, so a timestamptz here failed every caller.
+                return exp.cast(exp.Literal.string(_SERVER_START_ISO[:-3]), "TIMESTAMP")
             if "pg_is_in_recovery" in fn:
                 # We are never a standby/replica in recovery.
                 return exp.false()
@@ -4054,7 +4226,7 @@ def _handle_scalar(sql: str, role_id: str):
     if "current_schema()" in s:
         return QueryResult(rows=[("public",)], column_names=["current_schema"])
     if "pg_backend_pid()" in s:
-        return QueryResult(rows=[(0,)], column_names=["pg_backend_pid"])
+        return QueryResult(rows=[(_SESSION_SETTINGS.backend_pid,)], column_names=["pg_backend_pid"])
     if "pg_is_in_recovery()" in s:
         # We are never a standby/replica in recovery.
         return QueryResult(rows=[(False,)], column_names=["pg_is_in_recovery"])
@@ -4247,11 +4419,6 @@ def answer(sql: str, role_id: str, state):  # REQ-532
                 rows=[], column_names=_TYPEINFO_COLS, column_types=_TYPEINFO_COL_TYPES
             )
         return _handle_typeinfo_tree(oids)
-
-    if "pg_get_keywords" in stripped.lower():
-        # pg_get_keywords() is a SRF — rewriter turns it into scalar NULL, breaking FROM clause.
-        # DBeaver uses it only for SQL autocomplete keyword exclusion; return empty string.
-        return QueryResult(rows=[(None,)], column_names=["string_agg"], column_types=["VARCHAR"])
 
     # to_regclass/to_regtype/... : object-existence probes (DuckDB ATTACH handshake
     # asks e.g. to_regclass('duckdb_secrets')). We own no such objects -> NULL, so

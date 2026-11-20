@@ -241,6 +241,16 @@ class Irs990ProviderTest {
     assertEquals(3, drain(Irs990Provider.rows(BASE, found, idx, cache, "2020")).size());
   }
 
+  /** 2018 publishes CT1, CT2 and CT3; every one of them must be discovered (#1381). */
+  @Test void legacyYearDiscoversEveryCtZip() throws IOException {
+    Irs990Provider.Index idx = noBatchIndex("2018", "201800000000000001");
+    Irs990Provider.ZipSet found = Irs990Provider.discoverZips(BASE, "2018", idx,
+        probe(BASE + "2018/download990xml_2018_1.zip", BASE + "2018/2018_TEOS_XML_CT1.zip",
+            BASE + "2018/2018_TEOS_XML_CT2.zip", BASE + "2018/2018_TEOS_XML_CT3.zip"));
+    assertEquals(java.util.Arrays.asList("2018/download990xml_2018_1", "2018/2018_TEOS_XML_CT1",
+        "2018/2018_TEOS_XML_CT2", "2018/2018_TEOS_XML_CT3"), found.paths);
+  }
+
   @Test void legacyYearStillFailsWhenAnIndexedFilingIsInNoZip() throws IOException {
     StubCache cache = new StubCache();
     cache.zips.put(BASE + "2020/download990xml_2020_1.zip", zip("202000000000000001", xml("2")));

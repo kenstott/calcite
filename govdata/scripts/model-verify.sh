@@ -93,6 +93,8 @@ while [[ $# -gt 0 ]]; do
         --publish-schema-cache) PUBLISH_ARGS+=(--publish-schema-cache); shift ;;
         # Read every declared base table so the schema cache holds all of them (seed generation).
         --read-all-tables) PUBLISH_ARGS+=(--read-all-tables); shift ;;
+        # Write the declared base tables that could not be read (schema.table<TAB>reason) here.
+        --unreadable-out) PUBLISH_ARGS+=(--unreadable-out "$2"); shift 2 ;;
         --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
         --mode)
             MODE="$2"

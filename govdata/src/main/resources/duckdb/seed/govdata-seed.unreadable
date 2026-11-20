@@ -1,0 +1,7 @@
+health.hhs_ocr_breaches	read as no columns
+health.meps_ic_employer_coverage	read as no columns
+patents.patent_publication_cpc	read as no columns
+patents.patent_publication_applicants	read as no columns
+patents.patent_operations_monthly	read as no columns
+transport.tvt_state_monthly	read as no columns
+transport.urbanized_area_vmt	read as no columns

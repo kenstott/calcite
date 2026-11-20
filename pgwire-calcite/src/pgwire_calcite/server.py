@@ -47,6 +47,7 @@ import weakref
 from typing import TYPE_CHECKING, Iterator, Optional, Tuple
 
 from buenavista.core import BVType, Connection, QueryResult as BVQueryResult, Session
+from buenavista.pg_array import array_text
 from buenavista.postgres import (
     BVBuffer,
     BVContext,
@@ -142,6 +143,42 @@ _SET_STMT_RE = re.compile(
     r"^\s*SET\s+(?:SESSION\s+|LOCAL\s+)?([A-Za-z_][A-Za-z0-9_.]*)\s*(?:=|\bTO\b)\s*(.+?)\s*;?\s*$",
     re.IGNORECASE,
 )
+_SET_TIME_ZONE_RE = re.compile(
+    r"^\s*SET\s+(?:SESSION\s+|LOCAL\s+)?TIME\s+ZONE\s+(.+?)\s*;?\s*$", re.IGNORECASE
+)
+#: The settings PostgreSQL reports to the client in ParameterStatus when they change
+#: (GUC_REPORT), by the name it reports them under (REQ-2255).
+_REPORTED_SETTINGS = {
+    "application_name": "application_name",
+    "client_encoding": "client_encoding",
+    "datestyle": "DateStyle",
+    "intervalstyle": "IntervalStyle",
+    "timezone": "TimeZone",
+    "standard_conforming_strings": "standard_conforming_strings",
+    "is_superuser": "is_superuser",
+    "session_authorization": "session_authorization",
+    "default_transaction_read_only": "default_transaction_read_only",
+    "integer_datetimes": "integer_datetimes",
+    "in_hot_standby": "in_hot_standby",
+    "server_encoding": "server_encoding",
+    "server_version": "server_version",
+}
+_UTC_OFFSET_RE = re.compile(r"^[+-]?\d{1,2}(?::\d{2}(?::\d{2})?)?$")
+
+
+def _checked_time_zone(value: str) -> str:
+    """A TimeZone value PostgreSQL accepts: an IANA zone name, UTC, or a numeric UTC offset;
+    anything else is 22023, as PostgreSQL refuses it (REQ-2255). The zone is reported and
+    answered; Calcite keeps computing in its connection's zone (REQ-2255, amended)."""
+    from dateutil import tz
+
+    if _UTC_OFFSET_RE.match(value) or tz.gettz(value) is not None:
+        return value
+    from pgwire_calcite.backend import PgProtocolError
+
+    raise PgProtocolError("22023", f'invalid value for parameter "TimeZone": "{value}"')
+
+
 _RESET_STMT_RE = re.compile(r"^\s*RESET\s+(ALL|[A-Za-z_][A-Za-z0-9_.]*)\s*;?\s*$", re.IGNORECASE)
 _DISCARD_STMT_RE = re.compile(
     r"^\s*DISCARD\s+(ALL|PLANS|SEQUENCES|TEMP|TEMPORARY)\s*;?\s*$", re.IGNORECASE
@@ -197,29 +234,107 @@ def _authenticate_credential(provider, username: str, password: str) -> Optional
 
 
 def _pg_literal(v) -> str:
-    """Render a Python value as a safe PG literal string."""
+    """Render a bound value as a typed SQL literal (REQ-2255): a decimal as its exact digits, a
+    date, time or timestamp as a typed literal, an array in array_out's text form, anything else
+    as a string. An aware timestamp is the UTC instant, as a timestamptz column reaches the wire
+    normalized (normalize.py: TIMESTAMP WITH LOCAL TIME ZONE)."""
     if v is None:
         return "NULL"
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
     if isinstance(v, (int, float)):
         return str(v)
+    if isinstance(v, decimal.Decimal) and v.is_finite():
+        return format(v, "f")
+    if isinstance(v, datetime.datetime):
+        if v.tzinfo is not None:
+            v = v.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return f"TIMESTAMP '{v.isoformat(sep=' ')}'"
+    if isinstance(v, datetime.date):
+        return f"DATE '{v.isoformat()}'"
+    if isinstance(v, datetime.time):
+        return f"TIME '{v.replace(tzinfo=None).isoformat()}'"
     if isinstance(v, (bytes, bytearray)):
         return "E'\\\\x" + v.hex() + "'"
     if isinstance(v, (list, tuple)):
-        return "'{" + ",".join(str(x) for x in v) + "}'"
+        return "'" + array_text(list(v)).replace("'", "''") + "'"
     s = str(v)
     return "'" + s.replace("'", "''") + "'"
 
 
 def _substitute_params(sql: str, params: list | None) -> str:
-    """Replace $1, $2, ... with literal values (highest index first to avoid $1 matching $10)."""
+    """Replace each ``$N`` placeholder with its value as a literal. A ``$N`` inside a string, an
+    escape string, a quoted identifier, a comment or a dollar-quoted body is text, not a
+    placeholder, and is left as written; so is a ``$N`` past the last parameter."""
     if not params:
         return sql
-    result = sql
-    for i in range(len(params), 0, -1):
-        result = result.replace(f"${i}", _pg_literal(params[i - 1]))
-    return result
+    out: list = []
+    i, n = 0, len(sql)
+    while i < n:
+        c = sql[i]
+        if c == "'":
+            escape = i > 0 and sql[i - 1] in "eE" and (i < 2 or not sql[i - 2].isalnum())
+            j = i + 1
+            while j < n:
+                if escape and sql[j] == "\\":
+                    j += 2
+                    continue
+                if sql[j] == "'":
+                    if j + 1 < n and sql[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            out.append(sql[i : j + 1])
+            i = j + 1
+        elif c == '"':
+            j = sql.find('"', i + 1)
+            while j != -1 and j + 1 < n and sql[j + 1] == '"':
+                j = sql.find('"', j + 2)
+            j = n - 1 if j == -1 else j
+            out.append(sql[i : j + 1])
+            i = j + 1
+        elif sql.startswith("--", i):
+            j = sql.find("\n", i)
+            j = n if j == -1 else j
+            out.append(sql[i:j])
+            i = j
+        elif sql.startswith("/*", i):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if sql.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif sql.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
+            out.append(sql[i:j])
+            i = j
+        elif c == "$":
+            m = _PLACEHOLDER_RE.match(sql, i)
+            if m is not None:
+                index = int(m.group(1))
+                out.append(_pg_literal(params[index - 1]) if index <= len(params) else m.group(0))
+                i = m.end()
+                continue
+            tag = _DOLLAR_TAG_RE.match(sql, i)
+            if tag is not None:
+                close = sql.find(tag.group(0), tag.end())
+                j = n if close == -1 else close + len(tag.group(0))
+                out.append(sql[i:j])
+                i = j
+                continue
+            out.append(c)
+            i += 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+_PLACEHOLDER_RE = re.compile(r"\$(\d+)")
+#: A dollar-quote opener: ``$$`` or ``$tag$`` (a tag never starts with a digit).
+_DOLLAR_TAG_RE = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
 
 
 def _example_sql(sql: str, param_oids: list) -> str:
@@ -274,6 +389,9 @@ def _tag_from_sql(sql: str) -> str:
         return m.group(1).upper().split()[0]
     return ""
 
+
+#: Wire types whose RowDescription OID takes a typmod: numeric(p,s), time(p), timestamp(p).
+_SIZED_WIRE_TYPES = frozenset({BVType.DECIMAL, BVType.TIME, BVType.TIMESTAMP})
 
 _DUCKDB_TYPE_TO_BVTYPE: dict[str, BVType] = {
     "INTEGER[]": BVType.INTEGERARRAY,
@@ -369,6 +487,7 @@ class CalciteQueryResult(BVQueryResult):
     def __init__(self, result: TrinoResult, original_sql: str = "", status: str | None = None):
         super().__init__()
         self._cols = result.column_names
+        self._typmods = result.column_typmods
         self._status = status if status is not None else _tag_from_sql(original_sql)
         #: Command-tag prefix for a result that carries rows but is not a SELECT (a DML
         #: statement with RETURNING): "INSERT 0", "UPDATE" or "DELETE". None = "SELECT".
@@ -412,6 +531,15 @@ class CalciteQueryResult(BVQueryResult):
 
     def column(self, index: int) -> Tuple[str, BVType]:
         return (self._cols[index], self._types[index])
+
+    def column_typmod(self, index: int) -> int:
+        """The column's declared size (REQ-2255); a result with no source metadata (catalog
+        intercept, session commands) has none -- PostgreSQL's -1. A character column goes
+        out as text (OID 25), which has no length, so only a numeric, time or timestamp
+        column carries its typmod on the wire."""
+        if self._typmods is None or self._types[index] not in _SIZED_WIRE_TYPES:
+            return -1
+        return self._typmods[index]
 
     def rows(self) -> Iterator[list]:
         """Yield rows one batch at a time, resumably.
@@ -471,6 +599,38 @@ def _peer_closed(sock) -> bool:
         return True
 
 
+class _CursorRowsResult(BVQueryResult):  # REQ-2255
+    """A FETCH's rows, under the columns of the cursor's query, tagged ``FETCH n``."""
+
+    row_tag_prefix = "FETCH"
+
+    def __init__(self, source: "CalciteQueryResult", rows: list):
+        super().__init__()
+        self._source = source
+        self._rows = rows
+
+    def has_results(self) -> bool:
+        return True
+
+    def column_count(self) -> int:
+        return self._source.column_count()
+
+    def column(self, index: int) -> Tuple[str, BVType]:
+        return self._source.column(index)
+
+    def column_typmod(self, index: int) -> int:
+        return self._source.column_typmod(index)
+
+    def rows(self) -> Iterator[list]:
+        return iter(self._rows)
+
+    def status(self) -> str:
+        return "FETCH"
+
+    def close(self) -> None:
+        """The rows are this result's own; the cursor keeps the engine stream."""
+
+
 class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def __init__(self) -> None:
         super().__init__()
@@ -486,6 +646,11 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         # (PGW-022). Portal suspension does not come through here: buenavista
         # replays the cached result without re-executing.
         self._open_result: CalciteQueryResult | None = None
+        #: name -> DECLAREd cursor (REQ-2255, cursors.py); each holds its query's stream.
+        self._cursors: dict = {}
+        #: (name, value) of each reported setting this statement changed, sent to the client
+        #: as ParameterStatus ahead of its CommandComplete (REQ-2255).
+        self.parameter_reports: list = []
         #: Weak reference to the connection's BVContext, bound at startup so
         #: DISCARD ALL can drop this session's prepared statements and portals
         #: (PGW-052). Weak on purpose: the context already owns the session, and a
@@ -525,9 +690,60 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
 
     def close(self):
         self._release_open_result()
+        self._close_cursors()
+        from pgwire_calcite import advisory_locks
+
+        advisory_locks.LOCKS.end_session(self)
         backend = _current_backend()
         if backend is not None:
             backend.discard_session(self.key)
+
+    def _close_cursors(self) -> None:
+        cursors, self._cursors = list(self._cursors.values()), {}
+        for cs in cursors:
+            cs.close()
+
+    def _cursor_command(self, stmt: str) -> "BVQueryResult | None":
+        """DECLARE / FETCH / MOVE / CLOSE (REQ-2255, cursors.py), or None for any other
+        statement."""
+        from pgwire_calcite import cursors
+
+        m = cursors.DECLARE_RE.match(stmt)
+        if m is not None:
+            name = cursors.normalize_name(m.group("name"))
+            if name in self._cursors:
+                raise cursors.DuplicateCursor(name)
+            result = self.execute_sql(m.group("sql"))
+            # The cursor owns the stream from here: the next statement must not release it.
+            if self._open_result is result:
+                self._open_result = None
+            scroll = (m.group("scroll") or "").upper().replace(" ", "")
+            self._cursors[name] = cursors.CursorState(
+                name=name, result=result, source=result.rows(), scrollable=scroll == "SCROLL"
+            )
+            return CalciteQueryResult(TrinoResult(), stmt, status="DECLARE CURSOR")
+        for keyword, pattern in (("FETCH", cursors.FETCH_RE), ("MOVE", cursors.MOVE_RE)):
+            if pattern.match(stmt):
+                direction, name, count = cursors.parse_navigation(stmt, keyword)
+                cs = self._cursors.get(name)
+                if cs is None:
+                    raise cursors.UnknownCursor(name)
+                rows = cursors.move(cs, direction, count)
+                if keyword == "MOVE":
+                    return CalciteQueryResult(TrinoResult(), stmt, status=f"MOVE {len(rows)}")
+                return _CursorRowsResult(cs.result, rows)
+        m = cursors.CLOSE_RE.match(stmt)
+        if m is not None:
+            if m.group("name").upper() == "ALL":
+                self._close_cursors()
+            else:
+                name = cursors.normalize_name(m.group("name"))
+                cs = self._cursors.pop(name, None)
+                if cs is None:
+                    raise cursors.UnknownCursor(name)
+                cs.close()
+            return CalciteQueryResult(TrinoResult(), stmt, status="CLOSE CURSOR")
+        return None
 
     def _release_open_result(self) -> None:
         result, self._open_result = self._open_result, None
@@ -572,20 +788,42 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         ctx.portals.clear()
         ctx.result_cache.clear()
 
+    def _report(self, name: str) -> None:
+        """Queue a reported setting's new value for ParameterStatus (REQ-2255)."""
+        reported = _REPORTED_SETTINGS.get(name)
+        if reported is None:
+            return
+        from pgwire_calcite import catalog as _catalog
+
+        _catalog.publish_session_settings(self.settings)
+        self.parameter_reports.append((reported, _catalog.setting_value(name)))
+
     def apply_session_command(self, sql: str) -> None:
         """Apply SET/RESET/DISCARD/DEALLOCATE to this session's own state.
 
         Transaction verbs (BEGIN/COMMIT/...) reach here too and are acknowledged
         without state, matching the existing no-isolation behaviour (PGW-004).
         """
+        m = _SET_TIME_ZONE_RE.match(sql)
+        if m is not None:
+            value = m.group(1).strip().strip("'\"")
+            if value.upper() in ("LOCAL", "DEFAULT"):
+                self.settings.pop("timezone", None)
+            else:
+                self.settings["timezone"] = _checked_time_zone(value)
+            self._report("timezone")
+            return
         m = _SET_STMT_RE.match(sql)
         if m is not None:
             name, value = m.group(1).lower(), m.group(2)
             if name == "statement_timeout":
                 self.statement_timeout_ms = _parse_statement_timeout(value)
                 self.settings[name] = _format_statement_timeout(self.statement_timeout_ms)
+            elif name == "timezone":
+                self.settings[name] = _checked_time_zone(value.strip().strip("'\""))
             else:
                 self.settings[name] = value.strip().strip("'\"")
+            self._report(name)
             return
 
         m = _RESET_STMT_RE.match(sql)
@@ -595,6 +833,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             else:
                 name = m.group(1).lower()
                 self.settings.pop(name, None)
+                self._report(name)
                 if name == "statement_timeout":
                     self.statement_timeout_ms = self._default_statement_timeout_ms()
                     self.settings[name] = _format_statement_timeout(self.statement_timeout_ms)
@@ -605,6 +844,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             if m.group(1).upper() == "ALL":
                 self._reset_settings()
                 self._forget_prepared()
+                self._close_cursors()
                 backend = _current_backend()
                 if backend is not None:
                     backend.discard_session(self.key)
@@ -623,7 +863,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             return
 
     def in_transaction(self) -> bool:
-        return False
+        """Whether BEGIN opened a transaction that has not ended: what ReadyForQuery reports
+        ('T', or 'E' once a statement in it failed) (REQ-2255)."""
+        return self._in_transaction
 
     def load_df_function(self, table: str):
         del table
@@ -637,10 +879,32 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         from pgwire_calcite import catalog as _catalog_settings
 
         _catalog_settings.publish_session_settings(self.settings)
+        ctx = self.ctx
+        _catalog_settings.publish_backend_pid(ctx.process_id if ctx is not None else 0)
 
         # Session / transaction commands: accepted and acknowledged, no real
         # transaction isolation (PGW-004). Empty result -> command tag from SQL.
         self._release_open_result()
+
+        cursor_result = self._cursor_command(stripped)
+        if cursor_result is not None:
+            return cursor_result  # type: ignore[return-value]
+
+        from pgwire_calcite import advisory_locks
+
+        advisory = advisory_locks.answer(
+            stripped,
+            self,
+            in_transaction=self._in_transaction,
+            timeout_ms=self.statement_timeout_ms,
+            client_gone=self.client_gone,
+        )
+        if advisory is not None:
+            column, value = advisory
+            kind = "BOOLEAN" if isinstance(value, bool) else "VARCHAR"
+            return CalciteQueryResult(
+                TrinoResult(rows=[(value,)], column_names=[column], column_types=[kind]), stripped
+            )
 
         if _TXN_TAG_RE.match(stripped):
             self._track_transaction(stripped)
@@ -722,6 +986,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             # Already carries its SQLSTATE (57014 cancel/timeout) — send as-is.
             raise
         except Exception as exc:
+            if getattr(exc, "sqlstate", None):
+                # A statement refused by name (a construct with no Calcite form): a refusal,
+                # logged as one by send_error, never as an engine failure (REQ-2255).
+                raise
             log.warning("[PGWIRE] EXCEPTION sql=%r", stripped[:300], exc_info=True)
             raise RuntimeError(str(exc)) from exc
 
@@ -742,6 +1010,9 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         if not to_savepoint:
             self._in_transaction = False
             self._wrote_in_transaction = False
+            from pgwire_calcite import advisory_locks
+
+            advisory_locks.LOCKS.end_transaction(self)
         if wrote and _TXN_ROLLBACK_RE.match(sql):
             from pgwire_calcite.backend import PgProtocolError
 
@@ -815,7 +1086,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         result = backend.execute_sql(pg_sql, self.role_id, None, **self._statement_args())
         rows = [tuple(r) for r in result.iter_rows()]
         return TrinoResult(
-            rows=rows, column_names=list(result.column_names), column_types=result.column_types
+            rows=rows,
+            column_names=list(result.column_names),
+            column_types=result.column_types,
+            column_typmods=result.column_typmods,
         )
 
     def _execute_returning(self, backend, plan) -> TrinoResult:
@@ -851,12 +1125,13 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         conditions = returning.key_conditions(key, keys) or ["1 = 0"]
         names: list = []
         types = None
+        typmods = None
         by_key: dict = {}
         for condition in conditions:
             chunk = self._select_rows(
                 backend, returning.select_sql(select_list, plan.table_sql, condition)
             )
-            names, types = chunk.column_names, chunk.column_types
+            names, types, typmods = chunk.column_names, chunk.column_types, chunk.column_typmods
             for row in chunk.rows:
                 by_key[str(row[-1])] = row[:-1]
         rows = [by_key[str(k)] for k in keys if str(k) in by_key]
@@ -864,6 +1139,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             rows=rows,
             column_names=names[:-1],
             column_types=types[:-1] if types else None,
+            column_typmods=typmods[:-1] if typmods else None,
         )
 
     def parameter_oids(self, sql: str, cast_map: dict, count: int) -> list:
@@ -1438,6 +1714,13 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         return super().send_data_rows(query_result, limit)
 
     def send_command_complete(self, tag: str) -> None:  # type: ignore[override]
+        ctx = getattr(self, "_ctx", None)
+        reports = getattr(getattr(ctx, "session", None), "parameter_reports", None)
+        if reports:
+            # A reported setting a statement changed reaches the client before its
+            # CommandComplete, as PostgreSQL sends it (REQ-2255).
+            self.send_parameter_status(dict(reports))
+            reports.clear()
         prefix = getattr(self, "_row_tag_prefix", None)
         self._row_tag_prefix = None
         if prefix is not None and tag.startswith("SELECT "):
@@ -1503,6 +1786,12 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         ba = bytearray(payload)
         if ba[0] == ord("P"):
             portal = ba[1 : len(ba) - 1].decode("utf-8")
+            # A DECLAREd cursor is also a portal of that name (PostgreSQL); psycopg describes
+            # its server-side cursor this way before it FETCHes (REQ-2255).
+            cursor = getattr(ctx.session, "_cursors", {}).get(portal)
+            if portal not in ctx.portals and cursor is not None:
+                self.send_row_description(cursor.result)
+                return
             stmt_name = ctx.portals.get(portal, (None,))[0] if portal in ctx.portals else None
             portal_sql = ctx.stmts.get(stmt_name, ("",))[0] if stmt_name is not None else ""
             if stmt_name is not None and not portal_sql.strip():
@@ -1525,7 +1814,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 return
         elif ba[0] == ord("S"):
             stmt = ba[1 : len(ba) - 1].decode("utf-8")
-            sql = ctx.stmts[stmt][0]
+            try:
+                sql = ctx.statement(stmt)[0]
+            except Exception as e:  # UnknownStatement: 26000, and the connection carries on
+                self.send_error(e, ctx)
+                return
             if not sql.strip():
                 self.send_paramter_description([])
                 self.send_no_data()

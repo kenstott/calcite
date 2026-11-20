@@ -193,9 +193,11 @@ else
     elif ! { MODEL_VERIFY_JAR="$seed_jar" timeout 7200 "$GOVDATA_ROOT/scripts/build-seed.sh" >"$seed_out" 2>&1; seed_build_rc=$?; \
              tail -n 40 "$seed_out" | sed 's/^/    /'; [ "$seed_build_rc" -eq 0 ]; }; then
       log "ERROR: build-seed.sh failed (rc=$seed_build_rc); continuing on the committed seed"
-      failed_tables="$(grep -E 'FAILED [A-Za-z0-9_]+\.[A-Za-z0-9_]+' "$seed_out" | sed 's/^/    /' || true)"
+      failed_tables="$(grep -E '(FAILED|UNREADABLE) [A-Za-z0-9_]+\.[A-Za-z0-9_]+' "$seed_out" | sed 's/^/    /' || true)"
       [ -z "$failed_tables" ] || { log "tables the seed could not be built for (no data yet, or other):"; echo "$failed_tables"; }
-    elif [ -z "$(git status --porcelain -- "$SEED_DIR_REL")" ]; then
+    elif { unreadable_tables="$(grep -E 'UNREADABLE [A-Za-z0-9_]+\.[A-Za-z0-9_]+' "$seed_out" | sed 's/^/    /' || true)"; \
+           [ -z "$unreadable_tables" ] || { log "seed published WITHOUT these declared tables (kept out of search until a later seed):"; echo "$unreadable_tables"; }; \
+           [ -z "$(git status --porcelain -- "$SEED_DIR_REL")" ]; }; then
       log "INFO: the rebuilt seed is identical to the committed one; nothing to commit"
     else
       git add -A -- "$SEED_DIR_REL"

@@ -26,7 +26,7 @@ pooling); correctness first.
 from __future__ import annotations
 
 import logging
-from typing import Iterator, List, Optional, Tuple
+from typing import Iterator, List, Tuple
 
 from pgwire_calcite import normalize
 
@@ -166,13 +166,19 @@ def _consumer_factory(C):
     return _FACTORY_CACHE
 
 
-def _columns_from_metadata(rs) -> Tuple[List[str], List[str]]:
-    """Read (column_names, duckdb_labels) from ResultSetMetaData without consuming rows."""
+def _columns_from_metadata(rs) -> Tuple[List[str], List[str], List[int]]:
+    """Read (column_names, duckdb_labels, typmods) from ResultSetMetaData without consuming
+    rows. A typmod is the column's declared size as RowDescription sends it (REQ-2255)."""
     md = rs.getMetaData()
     n = int(md.getColumnCount())
     names = [normalize.pg_column_label(str(md.getColumnLabel(i))) for i in range(1, n + 1)]
-    labels = [normalize.stream_type_label(str(md.getColumnTypeName(i))) for i in range(1, n + 1)]
-    return names, labels
+    type_names = [str(md.getColumnTypeName(i)) for i in range(1, n + 1)]
+    labels = [normalize.stream_type_label(t) for t in type_names]
+    typmods = [
+        normalize.pg_typmod(type_names[i - 1], str(md.getPrecision(i)), str(md.getScale(i)))
+        for i in range(1, n + 1)
+    ]
+    return names, labels, typmods
 
 
 def stream_ipc_batches(
@@ -181,8 +187,8 @@ def stream_ipc_batches(
     sql: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
     cancel_scope=None,
-) -> Tuple[List[str], List[str], Iterator[bytes]]:
-    """Execute ``sql``; return (column_names, duckdb_labels, ipc_batch_generator).
+) -> Tuple[List[str], List[str], List[int], Iterator[bytes]]:
+    """Execute ``sql``; return (column_names, duckdb_labels, typmods, ipc_batch_generator).
 
     Each yielded item is a self-contained Arrow IPC stream for one batch (schema +
     one record batch). The generator holds ``lock`` and the JVM/Arrow resources for
@@ -219,7 +225,7 @@ def stream_ipc_batches(
             if cancel_scope is not None:
                 cancel_scope.raise_if_canceled()
             raise
-        names, labels = _columns_from_metadata(rs)
+        names, labels, typmods = _columns_from_metadata(rs)
 
         allocator = C["RootAllocator"]()
         config = (
@@ -275,7 +281,7 @@ def stream_ipc_batches(
         finally:
             _release()
 
-    return names, labels, _ClosingIterator(_ipc_gen(), _release)
+    return names, labels, typmods, _ClosingIterator(_ipc_gen(), _release)
 
 
 def batches_from_ipc(ipc_batches: Iterator[bytes]) -> Iterator[List[tuple]]:
@@ -325,15 +331,17 @@ def stream_query_batches(
     sql: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
     cancel_scope=None,
-) -> Tuple[List[str], List[str], Iterator[List[tuple]]]:
-    """Execute ``sql`` and return (column_names, duckdb_labels, batch_generator).
+) -> Tuple[List[str], List[str], List[int], Iterator[List[tuple]]]:
+    """Execute ``sql`` and return (column_names, duckdb_labels, typmods, batch_generator).
 
     This is the shape the wire layer wants: one batch of at most ``batch_size`` rows
     is resident at a time, and the first batch can be peeked for type inference
     without draining the result.
     """
-    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size, cancel_scope=cancel_scope)
-    return names, labels, batches_from_ipc(ipc)
+    names, labels, typmods, ipc = stream_ipc_batches(
+        conn, lock, sql, batch_size, cancel_scope=cancel_scope
+    )
+    return names, labels, typmods, batches_from_ipc(ipc)
 
 
 def stream_query(
@@ -342,10 +350,12 @@ def stream_query(
     sql: str,
     batch_size: int = DEFAULT_BATCH_SIZE,
     cancel_scope=None,
-) -> Tuple[List[str], List[str], Iterator[tuple]]:
-    """Execute ``sql`` and return (column_names, duckdb_labels, row_generator)."""
-    names, labels, ipc = stream_ipc_batches(conn, lock, sql, batch_size, cancel_scope=cancel_scope)
-    return names, labels, rows_from_ipc(ipc)
+) -> Tuple[List[str], List[str], List[int], Iterator[tuple]]:
+    """Execute ``sql`` and return (column_names, duckdb_labels, typmods, row_generator)."""
+    names, labels, typmods, ipc = stream_ipc_batches(
+        conn, lock, sql, batch_size, cancel_scope=cancel_scope
+    )
+    return names, labels, typmods, rows_from_ipc(ipc)
 
 
 def _root_to_ipc_bytes(C, root) -> bytes:

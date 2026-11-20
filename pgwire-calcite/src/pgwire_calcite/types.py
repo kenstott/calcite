@@ -40,6 +40,10 @@ class QueryResult:
     rows: List[tuple] = field(default_factory=list)
     column_names: List[str] = field(default_factory=list)
     column_types: Optional[List[str]] = None
+    #: Each column's PostgreSQL typmod (normalize.pg_typmod) for RowDescription; absent for a
+    #: result with no source metadata (catalog intercept, session commands), whose columns
+    #: carry no declared size -- PostgreSQL's -1 (REQ-2255).
+    column_typmods: Optional[List[int]] = None
     row_batches: Optional[Iterator[List[tuple]]] = None
 
     def iter_rows(self) -> Iterator[tuple]:

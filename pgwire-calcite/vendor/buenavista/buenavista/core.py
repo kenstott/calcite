@@ -50,6 +50,11 @@ class QueryResult:
     def column(self, index: int) -> Tuple[str, BVType]:
         raise NotImplementedError
 
+    def column_typmod(self, index: int) -> int:
+        """The column's PostgreSQL type modifier for RowDescription. A result that knows its
+        columns' declared sizes overrides this; -1 is PostgreSQL's own "no modifier"."""
+        return -1
+
     def rows(self) -> Iterator[List]:
         raise NotImplementedError
 

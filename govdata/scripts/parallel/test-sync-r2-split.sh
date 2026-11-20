@@ -12,6 +12,8 @@ case "$1" in
   lsf)
     if [[ " $* " == *" -R "* ]]; then echo "2026-10-01 00:00:00"; exit 0; fi
     last="${@: -1}"
+    # every top-level directory is an Iceberg table: its metadata/ holds a metadata.json
+    if [[ "$last" == */metadata/ ]]; then echo v1.metadata.json; exit 0; fi
     if   [[ "$last" =~ ^[a-z0-9_]+:[A-Za-z0-9._-]+$ ]];        then printf 'bigone/\nfastone/\n'
     elif [[ "$last" =~ ^[a-z0-9_]+:[A-Za-z0-9._-]+/bigone$ ]]; then printf 'ok1/\nok2/\nstuck/\n'
     fi
@@ -24,6 +26,7 @@ case "$1" in
 esac
 STUB
 chmod +x "$T/bin/rclone"
+export PROD_AWS_ACCESS_KEY_ID=test PROD_AWS_SECRET_ACCESS_KEY=test PROD_AWS_ENDPOINT_OVERRIDE=http://127.0.0.1:1
 export STUB_LOG="$T/copies.log" HOME="$T/home" PATH="$T/bin:$PATH"
 export GOVDATA_R2_SYNC_SPLIT_SCHEMAS=bigone GOVDATA_R2_SYNC_UNIT_MAX=2s GOVDATA_R2_SYNC_PRIORITY_SCHEMAS=bigone
 S="$HOME/.r2-sync-state"

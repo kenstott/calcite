@@ -3855,6 +3855,120 @@ FROM (SELECT COUNT(*) AS bad FROM (
   SELECT report, COUNT(DISTINCT state_fips) AS j, COUNT(DISTINCT sex) AS sx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/life_table_state', allow_moved_paths := true)
   GROUP BY report HAVING COUNT(DISTINCT state_fips) <> 51 OR COUNT(DISTINCT sex) <> 3));
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: hhs_ocr_breaches
+-- (full snapshot of the HHS OCR portal: ~7.4K archive + ~0.7K under-investigation rows;
+-- the portal has no case id, so there is no unique key — see T8)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true));
+
+-- T2: row_count (portal held ~8.1K breaches on 2026-11-19; it only grows)
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T2_row_count',
+  CASE WHEN n >= 7500 THEN 'pass' ELSE 'fail' END,
+  n, 7500, 'Expected at least 7.5K breach rows (both tabs)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls (no unique key exists; entity_name + breach_submission_date are the natural pair)
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL entity_name or breach_submission_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true)
+      WHERE entity_name IS NULL OR breach_submission_date IS NULL);
+
+-- T7: both portal tabs loaded
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T7_both_tabs_loaded',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Distinct report_status values (Under Investigation + Archive)'
+FROM (SELECT COUNT(DISTINCT report_status) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true));
+
+-- T7: history reaches the portal's first year and the current one
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T7_year_range',
+  CASE WHEN lo = 2009 AND hi >= 2026 THEN 'pass' ELSE 'fail' END,
+  hi - lo, 17, 'Expected breach_year 2009 through at least 2026; got ' || lo || '-' || hi
+FROM (SELECT MIN(breach_year) AS lo, MAX(breach_year) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true));
+
+-- T7: individuals_affected is at least the 500-person reporting threshold wherever populated
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T7_threshold_500',
+  CASE WHEN n <= 50 THEN 'pass' ELSE 'warn' END,
+  n, 50, 'Rows with individuals_affected below 500 (OCR revises counts after the fact)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true) WHERE individuals_affected < 500);
+
+-- T7: state coverage (50 states + DC + territories)
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T7_state_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'warn' END,
+  n, 50, 'Distinct states with breach rows'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true) WHERE state IS NOT NULL);
+
+-- T7: known anchor row — Anthem, 78.8M individuals, the largest breach on the portal (2015)
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T7_anthem_2015_anchor',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Rows with individuals_affected >= 78,000,000 in 2015'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true)
+      WHERE breach_year = 2015 AND individuals_affected >= 78000000);
+
+-- T8: duplicate (entity_name, breach_submission_date, individuals_affected, breach_type, breach_location)
+-- Exact duplicates exist in OCR's own export (3 on 2026-11-19); warn on growth, not on presence.
+INSERT INTO dq_results
+SELECT 'health', 'hhs_ocr_breaches', 'T8_pk_duplication',
+  CASE WHEN n <= 10 THEN 'pass' ELSE 'warn' END,
+  n, 10, 'Exact-duplicate breach rows in the source feed (not a pipeline defect)'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT entity_name, breach_submission_date, state, individuals_affected, breach_type, breach_location
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/hhs_ocr_breaches', allow_moved_paths := true)
+    GROUP BY ALL
+    HAVING COUNT(*) > 1
+  )
+);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

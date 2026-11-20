@@ -1,0 +1,77 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to you under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+name: 'Warm Gradle plugins'
+description: >
+  Resolves the buildSrc plugins and the wrapper distribution with retries, so that a short outage of Maven
+  Central, the Gradle Plugin Portal or services.gradle.org does not fail the build step that follows.
+inputs:
+  working-directory:
+    description: 'Directory holding the gradlew wrapper'
+    required: false
+    default: '.'
+runs:
+  using: composite
+  steps:
+  # A job whose key hits needs no download from Maven Central, the Plugin Portal or services.gradle.org, so
+  # an outage of those hosts that outlasts the retries below only affects runs that miss (#1350).
+  - name: 'Restore Gradle plugin and wrapper cache'
+    id: plugin-cache
+    uses: actions/cache/restore@v4
+    with:
+      path: |
+        ~/.gradle/caches/modules-2
+        ~/.gradle/wrapper/dists
+      key: gradle-plugins-${{ runner.os }}-${{ hashFiles('**/buildSrc/*.kts', '**/buildSrc/*.properties', '**/buildSrc/subprojects/*/*.kts', '**/gradle/wrapper/gradle-wrapper.properties') }}
+  - name: 'Resolve buildSrc plugins (retry)'
+    shell: bash
+    working-directory: ${{ inputs.working-directory }}
+    run: |
+      # Gradle's own repository retry covers transient I/O errors, but a plugin lookup that gets a
+      # not-found answer from every repository fails at once (about 22 s) and is not retried (#1350).
+      # Run the resolution here, with a growing pause, and fail loudly only when every attempt failed.
+      # Each attempt is capped at 4 minutes: a runner that cannot reach the hosts keeps failing, so the
+      # step gives up in about 13 minutes and a job-level rerun lands on a different runner.
+      # macOS runners have no GNU timeout: use timeout, else gtimeout, else run each attempt uncapped.
+      if command -v timeout >/dev/null 2>&1; then
+        cap=(timeout 240)
+      elif command -v gtimeout >/dev/null 2>&1; then
+        cap=(gtimeout 240)
+      else
+        cap=()
+      fi
+      echo "Per-attempt cap: ${cap[*]:-none (no timeout or gtimeout on PATH)}"
+      attempts=3
+      for attempt in $(seq 1 "$attempts"); do
+        if "${cap[@]}" ./gradlew --no-daemon --console=plain -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 help; then
+          echo "Gradle plugins resolved on attempt $attempt"
+          exit 0
+        fi
+        echo "::warning::Gradle plugin resolution failed on attempt $attempt of $attempts"
+        if [ "$attempt" -lt "$attempts" ]; then
+          sleep $((attempt * 20))
+        fi
+      done
+      echo "::error::Gradle plugin resolution failed on all $attempts attempts"
+      exit 1
+  - name: 'Save Gradle plugin and wrapper cache'
+    if: steps.plugin-cache.outputs.cache-hit != 'true'
+    uses: actions/cache/save@v4
+    with:
+      path: |
+        ~/.gradle/caches/modules-2
+        ~/.gradle/wrapper/dists
+      key: ${{ steps.plugin-cache.outputs.cache-primary-key }}

@@ -143,7 +143,7 @@ class _Connection:
 
 
 def _read(values):
-    _, labels, batches = arrow_bridge.stream_ipc_batches(
+    _, labels, _typmods, batches = arrow_bridge.stream_ipc_batches(
         _Connection(values), threading.RLock(), "SELECT amount FROM t"
     )
     return labels, [row[0] for row in arrow_bridge.rows_from_ipc(batches)]

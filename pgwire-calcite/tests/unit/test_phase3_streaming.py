@@ -30,7 +30,7 @@ _LARGE_N = 10_000
 
 
 def test_stream_query_multi_batch_large_result(calcite_backend):
-    names, labels, gen = arrow_bridge.stream_query(
+    names, labels, _typmods, gen = arrow_bridge.stream_query(
         calcite_backend.connection, calcite_backend._lock, _LARGE_SQL, batch_size=256
     )
     # Drained before any assertion: an undrained generator holds the backend lock, and every
@@ -43,7 +43,7 @@ def test_stream_query_multi_batch_large_result(calcite_backend):
 def test_stream_types_match_materialized(calcite_backend):
     sql = "SELECT DNAME, DEPTNO FROM DEPTS ORDER BY DEPTNO"
     mat = calcite_backend.execute_sql(sql, "u")  # materialized path
-    names, labels, gen = arrow_bridge.stream_query(
+    names, labels, _typmods, gen = arrow_bridge.stream_query(
         calcite_backend.connection, calcite_backend._lock, sql, batch_size=1024
     )
     streamed = list(gen)
@@ -55,7 +55,7 @@ def test_stream_types_match_materialized(calcite_backend):
 def test_early_close_releases_lock_and_cancels(calcite_backend):
     """PGW-022: closing the generator early cancels the statement and releases the
     backend lock, so the next query proceeds (no deadlock, no leaked run)."""
-    _, _, gen = arrow_bridge.stream_query(
+    _, _, _, gen = arrow_bridge.stream_query(
         calcite_backend.connection, calcite_backend._lock, _LARGE_SQL, batch_size=256
     )
     assert next(gen) is not None  # pull one row, leaving the scan mid-flight
