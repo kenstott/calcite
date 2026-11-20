@@ -1724,6 +1724,8 @@ partitionedTables:
       method: GET
       headers:
         X-Api-Key: "${API_DATA_GOV}"
+      parameters:
+        dq_record_limit: "300"
       response:
         format: json
       # The key allows 5,000 requests an hour; one request per second stays under it.
