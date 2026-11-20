@@ -249,9 +249,8 @@ dimension_values:
     start: "${GOVDATA_START_YEAR:2012}"
     minYear: 2012
     end: "${GOVDATA_END_YEAR:2024}"
-    # Data ceiling: the 2025 landing page 404s (checked 2026-11-19, #1368) because
-    # GOVDATA_END_YEAR is the current year in the pool workers. Raise when Census
-    # posts the next vintage's page.
+    # Data ceiling: the year is part of the Census landing-page URL, so a vintage
+    # Census has not posted has no page to fetch. Raise when the next vintage posts.
     maxYear: 2024
 
   # Census STC (state_corporate_income_tax_collections) timeseries API: confirmed
