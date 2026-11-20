@@ -11725,16 +11725,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if ACP and ACORE, and conventional energy groups such as API, published statements supporting S. 5653. Unsettled if only some did. Unsupported if none found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The American Petroleum Institute published a statement supporting S. 5653 on Sept. 30, 2026, but no statement on this bill from the American Clean Power Association or the American Council on Renewable Energy was found.",
+      "evidence": [
+        {
+          "label": "API statement on S. 5653, Sept. 30, 2026",
+          "url": "https://www.api.org/news-policy-and-issues/news/2026/09/30/api-welcomes-bipartisan-american-affordability-and-jobs-act-to-modernize-permitt"
+        }
+      ],
+      "check_run": "q275/askamerica/2026-11-20"
     },
     {
       "id": 311,
@@ -11757,16 +11762,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if both the WSJ and NYT editorial boards published editorials urging passage of this permitting bill in 2026. Unsettled if only one did or the editorial supports permitting reform generally. Unsupported if neither.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No Wall Street Journal or New York Times editorial on the bill was found; the search covered web searches for both papers' editorials, and their sites were not fetched directly.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q275/askamerica/2026-11-20"
     },
     {
       "id": 312,
@@ -11789,16 +11794,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Senate's unanimous consent agreement or the Record lists 19 amendment votes (11 Democratic, 7 Republican, 1 managers'). Contradicted if the official record shows a different number.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsettled",
+      "finding": "Sen. Merkley objected to Capito's unanimous consent requests, so no agreement listing the amendment votes was adopted, and no official list of 19 amendments was found to confirm the breakdown.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q275/askamerica/2026-11-20"
     },
     {
       "id": 313,
@@ -11821,16 +11826,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if S. 5653's text was introduced or publicly released months before Nov. 19, 2026. Unsettled if the floor version was released only recently.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show S. 5653 was introduced on Sept. 30, 2026, about seven weeks before the debate; the managers' amendment was negotiated the week of the debate, and its release date was not checked.",
+      "evidence": [
+        {
+          "label": "law.bills (S. 5653, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "select * from law.bills where bill_type='s' and bill_number='5653' fetch first 5 rows only"
+        }
+      ],
+      "check_run": "q275/askamerica/2026-11-20"
     },
     {
       "id": 314,
@@ -11976,38 +11988,6 @@
       "speaker_state": "HI",
       "about_states": [],
       "quote": "As originally drafted, this bill excludes projects from consultation if the only Federal involvement was funding.",
-      "reported_by": {
-        "outlet": "Congressional Record",
-        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgS5797-2.htm"
-      },
-      "source": {
-        "status": "verbatim",
-        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgS5797-2.htm",
-        "note": ""
-      },
-      "kind": "factual",
-      "test": null,
-      "premise": null,
-      "counter_statements": [],
-      "counter_documents": [],
-      "self_contradictions": [],
-      "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
-    },
-    {
-      "id": 319,
-      "speaker": "Brian Schatz",
-      "office": "U.S. Senator",
-      "party": "D",
-      "context": "In a Nov. 19, 2026 Senate floor debate on the permitting bill, Schatz described the managers' amendment funding for historic preservation.",
-      "topic": "Energy permitting bill",
-      "broad_topic": "Environment and Climate",
-      "speaker_state": "HI",
-      "about_states": [],
-      "quote": "It also provides $100 million more for the Historic Preservation Fund.",
       "reported_by": {
         "outlet": "Congressional Record",
         "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgS5797-2.htm"
@@ -12551,7 +12531,13 @@
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
-      "also_said": [],
+      "also_said": [
+        {
+          "quote": "It also provides $100 million more for the Historic Preservation Fund.",
+          "outlet": "Congressional Record",
+          "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgS5797-2.htm"
+        }
+      ],
       "result": "not_checked",
       "finding": null,
       "evidence": [],
