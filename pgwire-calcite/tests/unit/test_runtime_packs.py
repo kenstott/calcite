@@ -122,7 +122,8 @@ def _stage_pack(root: pathlib.Path, build: pathlib.Path, adapter: str, args) -> 
     runtime_packs.pack_jars(root / "runtimes" / VERSION / "jars", build / adapter, home / "jars")
     (home / "model").mkdir(parents=True)
     (home / "model" / "model.json").write_text(json.dumps({"version": "1.0", "schemas": []}))
-    runtime_packs.write_pack(home, adapter, VERSION, LINE, VARIANT, list(args))
+    runtime_jars = sorted(j.name for j in (root / "runtimes" / VERSION / "jars").glob("*.jar"))
+    runtime_packs.write_pack(home, adapter, VERSION, LINE, VARIANT, runtime_jars, list(args))
     return home
 
 
@@ -221,8 +222,12 @@ def test_the_checked_in_line_is_what_the_cli_stamps(tmp_path):
     pack = tmp_path / "packs" / "file" / VERSION
     (pack / "model").mkdir(parents=True)
     (pack / "model" / "model.json").write_text("{}")
-    assert runtime_packs.main(["runtime_packs.py", "pack", str(pack), "file", VERSION, VARIANT]) == 0
-    assert json.loads((pack / "pack.json").read_text())["runtime_line"] == line
+    jars = _jar_dir(tmp_path / "runtime-jars", COMMON)
+    assert runtime_packs.main(["runtime_packs.py", "pack", str(pack), "file", VERSION, VARIANT,
+                               str(jars)]) == 0
+    manifest = json.loads((pack / "pack.json").read_text())
+    assert manifest["runtime_line"] == line
+    assert manifest["runtime_jars"] == sorted(COMMON)
 
 
 def test_a_pack_starts_the_newest_runtime_installed_on_its_line(installed, tmp_path):
@@ -308,6 +313,60 @@ def test_runtime_home_for_names_the_missing_line(installed):
         packs.runtime_home_for(pack)
 
 
+def test_the_pack_records_the_runtime_jar_names_it_was_built_against(installed):
+    runtime_jars = sorted(j.name for j in (installed / "runtimes" / VERSION / "jars").glob("*.jar"))
+    assert runtime_jars
+    for adapter in OWN:
+        manifest = json.loads((installed / "packs" / adapter / VERSION / "pack.json").read_text())
+        assert manifest["runtime_jars"] == runtime_jars
+
+
+def test_a_runtime_holding_every_recorded_jar_starts(installed):
+    for adapter in OWN:
+        assert _plan(installed / "packs" / adapter / VERSION)["runtime_home"] == str(
+            installed / "runtimes" / VERSION)
+
+
+def test_a_runtime_missing_a_recorded_jar_is_refused_at_start_naming_it(installed):
+    gone = COMMON[0]
+    (installed / "runtimes" / VERSION / "jars" / gone).unlink()
+    done = _start(installed / "packs" / "file" / VERSION)
+    assert done.returncode == 2
+    assert (f"was built against runtime jar {gone}, which the newest runtime on line {LINE} "
+            f"({VERSION}") in done.stderr
+    assert done.stdout == ""
+    pack = packs.load_pack(installed / "packs" / "file" / VERSION)
+    with pytest.raises(packs.PackError, match=f"runtime jar {gone}"):
+        packs.runtime_home_for(pack)
+
+
+def test_the_newest_runtime_missing_a_jar_starts_the_older_one_that_has_every_jar(installed, tmp_path):
+    newer = _stage_runtime(installed, tmp_path / "build", "0.130.1")
+    (newer / "jars" / COMMON[0]).unlink()
+    for adapter in OWN:
+        plan = _plan(installed / "packs" / adapter / VERSION)
+        assert plan["runtime_home"] == str(installed / "runtimes" / VERSION)
+    pack = packs.load_pack(installed / "packs" / "file" / VERSION)
+    assert packs.runtime_home_for(pack) == installed / "runtimes" / VERSION
+
+
+def test_the_python_side_refuses_a_runtime_missing_a_recorded_jar(installed, monkeypatch):
+    gone = COMMON[0]
+    (installed / "runtimes" / VERSION / "jars" / gone).unlink()
+    monkeypatch.setenv(packs.RUNTIME_HOME_ENV, str(installed / "runtimes" / VERSION))
+    with pytest.raises(packs.PackError, match=f"runtime jar {gone}, which runtime {VERSION}"):
+        packs.prepare(str(installed / "packs" / "file" / VERSION), [])
+
+
+def test_a_pack_manifest_without_runtime_jars_is_refused(installed):
+    pack = installed / "packs" / "file" / VERSION
+    manifest = json.loads((pack / "pack.json").read_text())
+    del manifest["runtime_jars"]
+    (pack / "pack.json").write_text(json.dumps(manifest))
+    with pytest.raises(packs.PackError, match="no 'runtime_jars'"):
+        packs.load_pack(pack)
+
+
 def test_a_pack_manifest_without_a_runtime_line_is_refused(installed):
     pack = installed / "packs" / "file" / VERSION
     manifest = json.loads((pack / "pack.json").read_text())
@@ -382,7 +441,7 @@ def test_a_pack_holding_a_runtime_part_is_refused(tmp_path):
     (pack / "model" / "model.json").write_text("{}")
     (pack / "jre").mkdir()
     with pytest.raises(SystemExit, match="holds jre, which belongs to the runtime"):
-        runtime_packs.write_pack(pack, "file", VERSION, LINE, VARIANT, [])
+        runtime_packs.write_pack(pack, "file", VERSION, LINE, VARIANT, ["a.jar"], [])
 
 
 @pytest.mark.parametrize("line", [0, -1, "1", True])
@@ -391,7 +450,7 @@ def test_a_line_that_is_not_a_positive_integer_is_refused(tmp_path, line):
     (pack / "model").mkdir(parents=True)
     (pack / "model" / "model.json").write_text("{}")
     with pytest.raises(SystemExit, match="is not a positive integer"):
-        runtime_packs.write_pack(pack, "file", VERSION, line, VARIANT, [])
+        runtime_packs.write_pack(pack, "file", VERSION, line, VARIANT, ["a.jar"], [])
 
 
 def test_a_runtime_version_that_is_not_major_minor_patch_is_refused(tmp_path):
@@ -408,12 +467,13 @@ def test_windows_launchers_are_batch_files_with_the_pack_values_filled(tmp_path)
     (pack / "model").mkdir(parents=True)
     (pack / "model" / "model.json").write_text("{}")
     runtime_packs.write_pack(pack, "govdata", VERSION, LINE, "windows-x86_64",
-                             ["--auth", "askamerica-key"])
+                             ["a.jar", "b.jar"], ["--auth", "askamerica-key"])
     bat = (pack / "bin" / "pgwire-govdata.bat").read_bytes().decode("ascii")
     assert "\r\n" in bat and "@" + "LINE@" not in bat
     assert f'findstr /L /C:"\\"line\\": {LINE}," ' in bat
     assert f"requires a pgwire-calcite runtime on line {LINE}, and none is installed" in bat
     assert "PGWIRE_CALCITE_RUNTIMES" in bat
+    assert 'set "JARS=a.jar b.jar"' in bat
 
 
 # --- package-manager formulas ------------------------------------------------------------

@@ -26,9 +26,10 @@ root::
 Each release tarball holds its part of that tree (``runtimes/<v>/...`` or
 ``packs/<adapter>/<v>/...``), so extracting a runtime and a pack into one directory installs them.
 
-The pack's launcher scans ``<root>/runtimes/`` and starts the newest installed runtime on its line,
-so a runtime release ships with the packs unchanged; with none on its line it refuses to start,
-naming the line. It then starts the runtime's launcher with ``--pack <pack-dir>``; the Python
+The pack's launcher scans ``<root>/runtimes/`` and starts the newest installed runtime on its line that holds every runtime jar name
+pack.json records (``runtime_jars``),
+so a runtime release ships with the packs unchanged; with none on its line, or none holding every jar, it refuses to
+start, naming the line or the missing jar. It then starts the runtime's launcher with ``--pack <pack-dir>``; the Python
 launcher calls :func:`prepare` to check the pairing again and to build the classpath (runtime jars
 then pack jars), the Python path (the pack's extras) and the server arguments the pack declares.
 """
@@ -84,6 +85,7 @@ class Pack:
     version: str
     runtime_line: int
     variant: str
+    runtime_jars: list[str]
     args: list[str]
 
     @property
@@ -152,12 +154,17 @@ def load_pack(home: pathlib.Path) -> Pack:
     args = data.get("args")
     if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
         raise PackError(f"{path} has no 'args' list of strings.")
+    runtime_jars = data.get("runtime_jars")
+    if (not isinstance(runtime_jars, list) or not runtime_jars
+            or not all(isinstance(j, str) and j for j in runtime_jars)):
+        raise PackError(f"{path} has no 'runtime_jars' list of jar names.")
     return Pack(
         home=home,
         name=_field(data, "name", path),
         version=_field(data, "version", path),
         runtime_line=_line(data, "runtime_line", path),
         variant=_field(data, "variant", path),
+        runtime_jars=list(runtime_jars),
         args=list(args),
     )
 
@@ -172,8 +179,15 @@ def runtimes_dir(pack: Pack) -> pathlib.Path:
     return pathlib.Path(named).resolve() if named else install_root(pack) / RUNTIMES_DIR
 
 
+def missing_jars(runtime: Runtime, pack: Pack) -> list[str]:
+    """The jars the pack was built against that the runtime does not hold."""
+    return [j for j in pack.runtime_jars if not (runtime.jars / j).is_file()]
+
+
 def runtime_home_for(pack: Pack) -> pathlib.Path:
-    """The newest installed runtime on the pack's line; refused, naming the line, when none is."""
+    """The newest installed runtime on the pack's line that holds every jar the pack was built
+    against. Refused when none is on the line (naming the line), or when none holds every jar
+    (naming a jar the newest on the line lacks)."""
     root = runtimes_dir(pack)
     on_line = []
     if root.is_dir():
@@ -186,7 +200,16 @@ def runtime_home_for(pack: Pack) -> pathlib.Path:
             f"pgwire-{pack.name} {pack.version} requires a pgwire-calcite runtime on line "
             f"{pack.runtime_line}, and none is installed under {root}."
         )
-    return max(on_line, key=lambda r: version_key(r.version)).home
+    on_line.sort(key=lambda r: version_key(r.version), reverse=True)
+    for runtime in on_line:
+        if not missing_jars(runtime, pack):
+            return runtime.home
+    newest = on_line[0]
+    raise PackError(
+        f"pgwire-{pack.name} {pack.version} was built against runtime jar "
+        f"{missing_jars(newest, pack)[0]}, which the newest runtime on line {pack.runtime_line} "
+        f"({newest.version}, {newest.home}) and every older one on the line lack."
+    )
 
 
 def check_pairing(runtime: Runtime, pack: Pack) -> None:
@@ -200,6 +223,12 @@ def check_pairing(runtime: Runtime, pack: Pack) -> None:
         raise PackError(
             f"pgwire-{pack.name} {pack.version} is built for {pack.variant}; runtime "
             f"{runtime.version} at {runtime.home} is {runtime.variant}."
+        )
+    lacking = missing_jars(runtime, pack)
+    if lacking:
+        raise PackError(
+            f"pgwire-{pack.name} {pack.version} was built against runtime jar {lacking[0]}, "
+            f"which runtime {runtime.version} at {runtime.home} lacks."
         )
     newest = runtime_home_for(pack)
     if newest != runtime.home:

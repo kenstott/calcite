@@ -22,8 +22,9 @@ Standard library only: the release workflows run it with the runner's python3.
       Writes runtime.json (with the runtime line in runtime-line) and bin/pgwire-calcite-runtime
       (.bat) into a staged runtime directory (jre/ python/ cpython/ jars/ pgwire-launcher.jar
       already in it).
-  runtime_packs.py pack <pack-dir> <adapter> <version> <variant> [arg...]
-      Writes pack.json (naming the runtime line in runtime-line) and bin/pgwire-<adapter>(.bat)
+  runtime_packs.py pack <pack-dir> <adapter> <version> <variant> <runtime-jars> [arg...]
+      Writes pack.json (naming the runtime line in runtime-line and the runtime's jar names, read
+      from <runtime-jars>, as built) and bin/pgwire-<adapter>(.bat)
       into a staged pack directory (jars/ and model/model.json already in it). The args are the
       server flags the pack's launcher passes.
   runtime_packs.py formulas <out> <version> <sums-dir> [adapter...]
@@ -164,18 +165,21 @@ def write_runtime(runtime_dir: Path, version: str, variant: str, line: int) -> N
 
 
 def write_pack(pack_dir: Path, adapter: str, version: str, line: int, variant: str,
-               args: list[str]) -> None:
+               runtime_jars: list[str], args: list[str]) -> None:
     _require(pack_dir, "model/model.json")
+    if not runtime_jars:
+        raise SystemExit("a pack records the runtime jars it was built against; none given")
     _check_version(version)
     _check_line(line)
     for shared in ("jre", "cpython", "python", "pgwire-launcher.jar"):
         if (pack_dir / shared).exists():
             raise SystemExit(f"{pack_dir} holds {shared}, which belongs to the runtime")
     manifest = {"format": FORMAT, "name": adapter, "version": version, "runtime_line": line,
-                "variant": variant, "args": args}
+                "variant": variant, "runtime_jars": sorted(runtime_jars), "args": args}
     (pack_dir / "pack.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     _write_launcher("pack", pack_dir / "bin" / f"pgwire-{adapter}", variant,
-                    {"ADAPTER": adapter, "VERSION": version, "LINE": str(line)})
+                    {"ADAPTER": adapter, "VERSION": version, "LINE": str(line),
+                     "JARS": " ".join(sorted(runtime_jars))})
 
 
 def _canonical(name: str) -> str:
@@ -435,8 +439,9 @@ def main(argv: list[str]) -> int:
         print(f"pack jars: {len(names)}")
     elif cmd == "runtime" and len(rest) == 3:
         write_runtime(Path(rest[0]), rest[1], rest[2], read_line())
-    elif cmd == "pack" and len(rest) >= 4:
-        write_pack(Path(rest[0]), rest[1], rest[2], read_line(), rest[3], rest[4:])
+    elif cmd == "pack" and len(rest) >= 5:
+        write_pack(Path(rest[0]), rest[1], rest[2], read_line(), rest[3], sorted(_jars(Path(rest[4]))),
+                   rest[5:])
     elif cmd == "formulas" and len(rest) >= 3:
         for path in write_formulas(Path(rest[0]), rest[1], Path(rest[2]), rest[3:]):
             print(path)

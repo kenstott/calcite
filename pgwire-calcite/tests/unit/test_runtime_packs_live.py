@@ -152,7 +152,9 @@ def installed(tmp_path_factory):
                      "operand": {"directory": str(FIXTURES / "filedata"), "ephemeralCache": True,
                                  "baseDirectory": str(tmp / "file-base"),
                                  "executionEngine": "linq4j"}}]}))
-    runtime_packs.write_pack(file_pack, "file", VERSION, LINE, VARIANT, ["--database", "file"])
+    runtime_jars = sorted(j.name for j in (runtime / "jars").glob("*.jar"))
+    runtime_packs.write_pack(file_pack, "file", VERSION, LINE, VARIANT, runtime_jars,
+                             ["--database", "file"])
 
     jdbc_pack = root / "packs" / "jdbc" / VERSION
     runtime_packs.pack_jars(runtime / "jars", jdbc_jars, jdbc_pack / "jars")
@@ -161,7 +163,8 @@ def installed(tmp_path_factory):
         "version": "1.0", "defaultSchema": "SCOTT",
         "schemas": [{"name": "SCOTT", "type": "jdbc", "jdbcUrl": "jdbc:hsqldb:res:scott",
                      "jdbcUser": "SCOTT", "jdbcPassword": "TIGER", "jdbcSchema": "SCOTT"}]}))
-    runtime_packs.write_pack(jdbc_pack, "jdbc", VERSION, LINE, VARIANT, ["--database", "jdbc"])
+    runtime_packs.write_pack(jdbc_pack, "jdbc", VERSION, LINE, VARIANT, runtime_jars,
+                             ["--database", "jdbc"])
     return {"root": root, "runtime": runtime, "site": site, "tmp": tmp,
             "packs": {"file": file_pack, "jdbc": jdbc_pack}}
 
@@ -257,7 +260,8 @@ def test_a_pack_with_no_runtime_on_its_line_fails_at_start_naming_it(installed):
     target = installed["root"] / "packs" / "jdbc" / "9.9.9"
     shutil.copytree(pack, target, symlinks=True)
     try:
-        runtime_packs.write_pack(target, "jdbc", "9.9.9", LINE + 1, VARIANT, manifest["args"])
+        runtime_packs.write_pack(target, "jdbc", "9.9.9", LINE + 1, VARIANT, manifest["runtime_jars"],
+                                 manifest["args"])
         done = subprocess.run([str(target / "bin" / "pgwire-jdbc"), "--port", str(_free_port())],
                               check=False, capture_output=True, text=True, timeout=60)
         assert done.returncode == 2

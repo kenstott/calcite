@@ -14,22 +14,38 @@ if defined PGWIRE_CALCITE_RUNTIMES (
 ) else (
   for %%i in ("%HERE%\..\..\..") do set "RUNTIMES=%%~fi\runtimes"
 )
+rem The runtime jars the pack was built against (by name): a runtime lacking one is not started.
+set "JARS=@JARS@"
 set "NEWEST="
+set "NEWEST_ANY="
+set "MISSING="
 set /a NEWEST_KEY=-1
+set /a ANY_KEY=-1
 for /d %%d in ("%RUNTIMES%\*") do (
   if exist "%%d\runtime.json" (
     findstr /L /C:"\"line\": @LINE@," "%%d\runtime.json" >nul 2>&1
     if not errorlevel 1 (
       for /f "tokens=1-3 delims=." %%a in ("%%~nxd") do set /a KEY=%%a*1000000+%%b*1000+%%c
-      if !KEY! gtr !NEWEST_KEY! (
+      set "LACKS="
+      for %%j in (!JARS!) do if not defined LACKS if not exist "%%d\jars\%%j" set "LACKS=%%j"
+      if !KEY! gtr !ANY_KEY! (
+        set /a ANY_KEY=!KEY!
+        set "NEWEST_ANY=%%~nxd"
+        set "MISSING=!LACKS!"
+      )
+      if not defined LACKS if !KEY! gtr !NEWEST_KEY! (
         set /a NEWEST_KEY=!KEY!
         set "NEWEST=%%d"
       )
     )
   )
 )
-if not defined NEWEST (
+if not defined NEWEST_ANY (
   echo pgwire-@ADAPTER@ @VERSION@ requires a pgwire-calcite runtime on line @LINE@, and none is installed under !RUNTIMES!. 1>&2
+  exit /b 2
+)
+if not defined NEWEST (
+  echo pgwire-@ADAPTER@ @VERSION@ was built against runtime jar !MISSING!, which the newest runtime on line @LINE@ ^(!NEWEST_ANY!^) and every older one on the line lack. 1>&2
   exit /b 2
 )
 rem The caller's arguments reach the runtime as given: a "!" in one is not expanded.
