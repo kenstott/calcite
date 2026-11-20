@@ -6329,16 +6329,33 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if House rules give the Speaker and majority leadership control of floor scheduling and a second discharge petition was filed in the 119th Congress on an Epstein-related measure. Unsettled if the causal claim cannot be established. Only the two factual elements are checked.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records hold a second Epstein files bill, H.R. 9694, introduced July 15, 2026, and Roll Call reported on Nov. 11, 2026 that Massie's discharge petition for it reached 218 signatures; the Speaker's control of the floor schedule is described in that reporting, but the House rules text was not read. The causal \"reason\" was not tested.",
+      "evidence": [
+        {
+          "label": "law.bills (Epstein-related bills, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT bill_type, bill_number, title, latest_action_text FROM law.bills WHERE congress=119 AND (title ILIKE '%Epstein%')"
+        },
+        {
+          "label": "law.bill_actions (H.R. 9694)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT action_date, text FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number=9694 ORDER BY action_seq"
+        },
+        {
+          "label": "Roll Call, Nov. 11, 2026, on the second Epstein bill",
+          "url": "https://www.rollcall.com/2026/11/11/another-bill-to-release-epstein-files-headed-to-house-floor"
+        }
+      ],
+      "check_run": "q240/askamerica/2026-11-20"
     },
     {
       "id": 160,
@@ -6361,16 +6378,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the record shows the House in recess for over a month while a Representative-elect waited to be sworn in. Contradicted if no such delay over a month is on record. Whether \"last Congress\" fits is stated.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's roll-call records show no House roll calls between Sept. 19 and Nov. 12, 2025, and NPR reported that Rep. Adelita Grijalva waited 50 days to be sworn in on Nov. 12, 2025. The delay is confirmed, but it occurred in the current 119th Congress, not the last one.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (House roll calls, Sept.-Nov. 2025)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT roll_number, MIN(action_date) d FROM law.bill_recorded_votes WHERE vote_chamber='House' AND vote_congress=119 AND session_number=1 AND action_date BETWEEN '2025-09-15' AND '2025-11-18' GROUP BY roll_number ORDER BY roll_number"
+        },
+        {
+          "label": "NPR, Nov. 12, 2025, on Grijalva's swearing-in",
+          "url": "https://www.npr.org/2025/11/12/nx-s1-5606350/adelita-grijalva-swearing-in"
+        }
+      ],
+      "check_run": "q240/askamerica/2026-11-20"
     },
     {
       "id": 161,
@@ -6393,16 +6421,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Justice Department or a court filing states the Epstein files total over 3 million documents, pages or files. Unsettled if counts differ by unit. Unsupported if no official count is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The Justice Department's Jan. 30, 2026 release says it published over 3 million additional pages, for a total production of nearly 3.5 million pages, plus more than 2,000 videos and 180,000 images. The count is of pages, not files, so the figure matches only if files is read loosely as pages.",
+      "evidence": [
+        {
+          "label": "Justice Department release, Jan. 30, 2026",
+          "url": "https://www.justice.gov/opa/pr/department-justice-publishes-35-million-responsive-pages-compliance-epstein-files"
+        }
+      ],
+      "check_run": "q240/askamerica/2026-11-20"
     },
     {
       "id": 162,
@@ -6425,16 +6458,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the House roll call on passage of H.R. 4405 shows Speaker Johnson voting yes. False if he voted no or did not vote.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's member-vote records and the Clerk's roll call 289 show the House passed H.R. 4405 on Nov. 18, 2025 by 427-1, with Johnson (LA) voting aye.",
+      "evidence": [
+        {
+          "label": "law.member_roll_call_votes (House roll call 289, 2025)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "SELECT member_last_name, party, state, vote_cast FROM law.member_roll_call_votes WHERE chamber='House' AND congress=119 AND session_number=1 AND roll_number=289 AND (member_last_name ILIKE 'Johnson%' OR vote_cast IN ('Nay','No','Not Voting','Present'))"
+        },
+        {
+          "label": "House Clerk, roll call 289 (2025)",
+          "url": "https://clerk.house.gov/evs/2025/roll289.xml"
+        }
+      ],
+      "check_run": "q240/askamerica/2026-11-20"
     },
     {
       "id": 163,
@@ -6457,16 +6501,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Clerk's record of the discharge petition lists Mace, Greene and Boebert among signers. False if any of them did not sign. Cannot be determined if the signer list cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The House Clerk's Discharge Petition No. 9 of the 119th Congress, filed by Massie on Sept. 2, 2025, lists Nancy Mace, Lauren Boebert and Marjorie Taylor Greene as signers on that date.",
+      "evidence": [
+        {
+          "label": "House Clerk, Discharge Petition No. 9, 119th Congress",
+          "url": "https://clerk.house.gov/DischargePetition/11909?Congress=119"
+        }
+      ],
+      "check_run": "q241/askamerica/2026-11-20"
     },
     {
       "id": 164,
@@ -6489,16 +6538,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a Justice Department or FBI memo or statement in July 2025 said no further charges or disclosures were warranted. Contradicted if DOJ issued no such statement then. Unsettled if the DOJ wording differs materially from \"closed\".",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Justice Department and FBI memo, dated July 7, 2025 in the House Judiciary hearing record, says \"no further disclosure would be appropriate or warranted\" and that no evidence was found to predicate an investigation of uncharged third parties; it does not use the word \"closed\".",
+      "evidence": [
+        {
+          "label": "Justice Department and FBI memo on the Epstein files",
+          "url": "https://www.justice.gov/opa/media/1407001/dl"
+        },
+        {
+          "label": "House Judiciary Committee FBI oversight hearing transcript, Sept. 17, 2025",
+          "url": "https://www.govinfo.gov/content/pkg/CHRG-119hhrg61655/pdf/CHRG-119hhrg61655.pdf"
+        }
+      ],
+      "check_run": "q241/askamerica/2026-11-20"
     },
     {
       "id": 165,
@@ -6521,16 +6579,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the transcript or official video of a House Judiciary Committee hearing with the FBI Director shows Massie asking about evidence of co-conspirators in the Epstein files. Unsupported if no record is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "In the Sept. 17, 2025 Judiciary hearing with FBI Director Kash Patel, Massie asked about men named in FBI interview records and whether investigations had been opened, but the quoted question about co-conspirators does not appear in his questioning in that transcript; other hearings were not read.",
+      "evidence": [
+        {
+          "label": "House Judiciary Committee FBI oversight hearing transcript, Sept. 17, 2025",
+          "url": "https://www.govinfo.gov/content/pkg/CHRG-119hhrg61655/pdf/CHRG-119hhrg61655.pdf"
+        }
+      ],
+      "check_run": "q241/askamerica/2026-11-20"
     },
     {
       "id": 166,
@@ -6553,16 +6616,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "Contradicted if any record shows Massie saying he is trying to cause chaos on his way out. Unsupported if no record either way is found. A denial cannot be confirmed by absence.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No record was found of Massie saying he is trying to cause chaos on his way out; the search covered web searches on the phrase and the Congressional Record, where he attributes the description to Speaker Johnson. An Axios article on the subject refused the fetch.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q241/askamerica/2026-11-20"
     },
     {
       "id": 167,
@@ -6585,16 +6648,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FEC independent-expenditure data or published totals show about $32 million spent opposing Massie in 2026. Unsettled if totals depend on what is counted. Contradicted if FEC data show materially less on every measure.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "FEC independent-expenditure filings in AskAmerica's warehouse show about $10.1 million spent opposing Massie in the 2026 cycle, led by MAGA KY ($6.2 million) and United Democracy Project ($3.6 million). Reported ad-spending totals near $32 million cover both sides of the race, and his opponent's own campaign spending was not counted, so the total depends on what is included; the FEC record could not be read directly outside the warehouse.",
+      "evidence": [
+        {
+          "label": "fec.independent_expenditures_current (spending for and against Massie, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/fec/#independent_expenditures_current-view",
+          "askamerica": true,
+          "sql": "SELECT support_oppose, COUNT(*) n, SUM(amount) total FROM fec.independent_expenditures_current WHERE candidate_name ILIKE '%MASSIE%' AND election_year=2026 AND superseded_by_amendment IS NOT TRUE AND amount_implausible IS NOT TRUE GROUP BY support_oppose"
+        }
+      ],
+      "check_run": "q243/askamerica/2026-11-20"
     },
     {
       "id": 168,
@@ -6617,16 +6687,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if published reporting or records show about 24 chief executives or similar senior executives resigning after the 2025-2026 Epstein file releases, with no new prosecutions. Unsettled if the count cannot be pinned down. Unsupported if no such count is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "NBC News's tracker and AP coverage list several senior executives who resigned or stepped back after the releases, including Hyatt's chairman and Goldman Sachs's chief legal officer, and no new U.S. charges, but no source read gives a count near two dozen chief executives.",
+      "evidence": [
+        {
+          "label": "NBC News, Epstein files fallout tracker",
+          "url": "https://www.nbcnews.com/politics/justice-department/epstein-files-fallout-resignations-firings-investigations-rcna259702"
+        },
+        {
+          "label": "NPR, Feb. 6, 2026, on the latest Epstein file release",
+          "url": "https://www.npr.org/2026/02/06/nx-s1-5702692/latest-release-of-epstein-files-puts-spotlight-on-prominent-names"
+        }
+      ],
+      "check_run": "q242/askamerica/2026-11-20"
     },
     {
       "id": 169,
@@ -6649,16 +6728,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Harvard's president resigned in connection with the Epstein file revelations. Contradicted if Harvard's president did not resign or resigned for unrelated reasons. A former president counts only if the statement can be read that way.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "No source read reports a sitting Harvard president resigning; AP reported on Feb. 25, 2026 that former president Larry Summers would retire from his Harvard teaching posts during the university's review of his Epstein ties. The statement fits only if it refers to a former president.",
+      "evidence": [
+        {
+          "label": "AP via PBS NewsHour, Feb. 25, 2026, on Larry Summers",
+          "url": "https://www.pbs.org/newshour/nation/larry-summers-will-resign-from-teaching-at-harvard-during-review-of-epstein-ties-university-says"
+        }
+      ],
+      "check_run": "q242/askamerica/2026-11-20"
     },
     {
       "id": 170,
@@ -6681,16 +6765,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if DOJ releases of Epstein files under Bondi and later Blanche exposed victims' personally identifiable information, per DOJ statements, court filings or contemporaneous reporting. Contradicted if DOJ records show no such exposure.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A Feb. 5, 2026 Justice Department letter to the federal court in Manhattan, signed by Attorney General Bondi and Deputy Attorney General Blanche, acknowledges inadvertent releases of personally identifying information of victims and says thousands of documents were pulled for further redaction. The description \"screwed that up\" was not assessed.",
+      "evidence": [
+        {
+          "label": "Justice Department letter to the court, S.D.N.Y. docket 851",
+          "url": "https://storage.courtlistener.com/recap/gov.uscourts.nysd.539612/gov.uscourts.nysd.539612.851.0.pdf"
+        },
+        {
+          "label": "NPR, Feb. 6, 2026, on the latest Epstein file release",
+          "url": "https://www.npr.org/2026/02/06/nx-s1-5702692/latest-release-of-epstein-files-puts-spotlight-on-prominent-names"
+        }
+      ],
+      "check_run": "q242/askamerica/2026-11-20"
     },
     {
       "id": 171,
@@ -6713,16 +6806,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if H.R. 4405 passed the House 427-1 and the Senate by unanimous consent. False if the official record shows a different House tally or a recorded Senate vote.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show H.R. 4405 passed the House 427-1 on Nov. 18, 2025 and the Senate by unanimous consent on Nov. 19, 2025, becoming Public Law 119-38; unanimous consent has no recorded tally, so \"100-0\" is not literal.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 4405 House vote)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT vote_chamber, roll_number, action_date, action_text, url FROM law.bill_recorded_votes WHERE vote_congress=119 AND bill_type='hr' AND bill_number=4405"
+        },
+        {
+          "label": "law.bill_actions (H.R. 4405 actions)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT action_date, text, source_system FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number=4405 ORDER BY action_seq"
+        }
+      ],
+      "check_run": "q242/askamerica/2026-11-20"
     },
     {
       "id": 172,
@@ -6747,16 +6853,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the text of H.R. 9694 provides state attorneys general access to the files or authority to use them for state prosecutions. Contradicted if the bill contains no state attorney general provision. Unsettled if it shares files but does not itself confer prosecutorial authority.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "H.R. 9694's introduced text lets state attorneys general and other authorized state officers obtain the unredacted Epstein records, sue to enforce that, and use them in any investigation or prosecution; it does not itself create state prosecutorial power, which states already have, so whether it \"gives the ability to prosecute\" is a legal reading. AskAmerica's records show it was referred to the Judiciary Committee on July 15, 2026.",
+      "evidence": [
+        {
+          "label": "law.bills (H.R. 9694, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT bill_type, bill_number, title, introduced_date, latest_action_date, latest_action_text, cosponsor_count FROM law.bills WHERE congress=119 AND bill_type='hr' AND bill_number='9694'"
+        },
+        {
+          "label": "H.R. 9694 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr9694ih/html/BILLS-119hr9694ih.htm"
+        }
+      ],
+      "check_run": "q243/askamerica/2026-11-20"
     },
     {
       "id": 173,
@@ -6779,16 +6896,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a DOJ statement or court filing says DOJ will withhold about 3 million files or pages. Contradicted if DOJ records show it released rather than withheld that volume. Unsettled if the figure refers to something else.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Reporting on a July 2026 Justice Department court filing says it had released 3.5 million pages and was withholding another 2.5 million, while January 2026 coverage put the withheld volume near 3 million pages; no DOJ document was read directly, and the counts are of pages rather than files.",
+      "evidence": [
+        {
+          "label": "Spokesman-Review (USA Today), July 2, 2026, on the DOJ filing",
+          "url": "https://www.spokesman.com/stories/2026/jul/02/doj-defends-decision-to-withhold-millions-of-epste/"
+        }
+      ],
+      "check_run": "q243/askamerica/2026-11-20"
     },
     {
       "id": 174,
@@ -6811,16 +6933,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Clerk's record of the discharge petition shows 218 signatures including 4 Republicans. False if the official count differs. Cannot be determined if the petition cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Roll Call reported on Nov. 11, 2026 that the petition reached its 218th signature and named Republicans who signed, consistent with four including Massie, but the Clerk's petition page returned no signature list, so the official count was not read.",
+      "evidence": [
+        {
+          "label": "Roll Call, Nov. 11, 2026",
+          "url": "https://rollcall.com/2026/11/11/another-bill-to-release-epstein-files-headed-to-house-floor/"
+        }
+      ],
+      "check_run": "q243/askamerica/2026-11-20"
     },
     {
       "id": 175,
@@ -6875,16 +7002,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Greene herself, on the record, has said Trump told her this. Unsettled if only secondhand accounts exist. Unsupported if nothing is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Greene recounted in a December 2025 New York Times profile, as relayed by PinkNews, that Trump called her and said \"My friends will get hurt\"; the wording differs slightly from the quote here, and the Times profile itself was not read.",
+      "evidence": [
+        {
+          "label": "PinkNews, Dec. 30, 2025, relaying Greene's account",
+          "url": "https://www.thepinknews.com/2025/12/30/marjorie-taylor-greene-trump-epstein-files"
+        }
+      ],
+      "check_run": "q243/askamerica/2026-11-20"
     },
     {
       "id": 177,
