@@ -8714,16 +8714,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the 2026 House seat swing against Republicans or the national House vote margin is the largest for any party in several decades. Unsettled if it depends on the measure. False if a larger loss occurred in recent decades on every measure.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Provisional figures reported by Newsweek put Democrats at 56.1% of the national House vote, their largest midterm share since 1974, and NBC's projection, as reported, gives them 259 seats; whether it is the largest loss in decades depends on whether vote share or seat change is measured, and certified results were not available.",
+      "evidence": [
+        {
+          "label": "Newsweek, Democrats' biggest midterm vote share since Watergate",
+          "url": "https://newsweek.com/democrats-win-biggest-midterm-vote-share-since-watergate-12715915"
+        },
+        {
+          "label": "Daily Beast, on Speaker Johnson's post-election remarks",
+          "url": "https://www.thedailybeast.com/maga-speaker-mike-johnson-lashes-out-at-voters-for-election-result"
+        }
+      ],
+      "check_run": "q255/askamerica/2026-11-20"
     },
     {
       "id": 230,
@@ -8746,16 +8755,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Speaker Johnson made public remarks after the election faulting voters' choice, and President Trump posted claims that the election was rigged or dishonest. Unsettled if only one part is documented.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Johnson told CNN after the election, \"I'm sorry that the voters made the wrong choice,\" as reported by the Daily Beast, and Trump posted on Nov. 9, \"Does anybody really believe that this 'Election' was honest,\" as reported by WJLA.",
+      "evidence": [
+        {
+          "label": "Daily Beast, on Speaker Johnson's post-election remarks",
+          "url": "https://www.thedailybeast.com/maga-speaker-mike-johnson-lashes-out-at-voters-for-election-result"
+        },
+        {
+          "label": "WJLA, on Trump's Truth Social post about the midterms",
+          "url": "https://wjla.com/news/nation-world/trump-says-hes-not-sure-that-the-midterm-elections-were-honest-truth-social-house-senate-jd-vance"
+        }
+      ],
+      "check_run": "q255/askamerica/2026-11-20"
     },
     {
       "id": 231,
@@ -8906,16 +8924,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Murray's official biography or earlier documented accounts say her family relied on food stamps when her father became ill. Unsupported if no such account is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Murray's official Senate biography says that when her father became ill with multiple sclerosis, her family had to rely on food stamps for several months.",
+      "evidence": [
+        {
+          "label": "Sen. Murray, official biography",
+          "url": "https://www.murray.senate.gov/biography"
+        }
+      ],
+      "check_run": "q255/askamerica/2026-11-20"
     },
     {
       "id": 236,
