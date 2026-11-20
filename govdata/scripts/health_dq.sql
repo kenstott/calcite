@@ -1159,6 +1159,142 @@ SELECT 'health', 'cdc_teen_birth_rates_county', 'T7_county_coverage',
 FROM (SELECT COUNT(DISTINCT combined_fips_code) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_teen_birth_rates_county', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: nchs_state_preterm_births (NCHS Stats of the States map JSON; state x year)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_preterm_births', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true));
+
+-- T2: row_count (12 years x 51 = 612 upstream at 2026-11-20)
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_preterm_births', 'T2_row_count',
+  CASE WHEN n >= 561 THEN 'pass' ELSE 'fail' END,
+  n, 561, 'Expected ~612 rows (51 states incl. DC x 12 data years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_preterm_births', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_preterm_births', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL year, state_abbr or preterm_birth_pct'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true)
+      WHERE year IS NULL OR state_abbr IS NULL OR preterm_birth_pct IS NULL);
+
+-- T7: value range (percent of births; every state well inside 3-25)
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_preterm_births', 'T7_value_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with preterm_birth_pct outside 3-25'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true)
+      WHERE preterm_birth_pct < 3 OR preterm_birth_pct > 25);
+
+-- T7b: state coverage
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_preterm_births', 'T7_state_coverage',
+  CASE WHEN n = 51 THEN 'pass' ELSE 'fail' END,
+  n, 51, 'Distinct state_abbr (50 states + DC)'
+FROM (SELECT COUNT(DISTINCT state_abbr) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true));
+
+-- T8: pk_duplication
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_preterm_births', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (year, state_abbr) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, state_abbr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_preterm_births', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nchs_state_low_birthweight (NCHS Stats of the States map JSON; state x year)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_low_birthweight', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true));
+
+-- T2: row_count (12 years x 51 = 612 upstream at 2026-11-20)
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_low_birthweight', 'T2_row_count',
+  CASE WHEN n >= 561 THEN 'pass' ELSE 'fail' END,
+  n, 561, 'Expected ~612 rows (51 states incl. DC x 12 data years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_low_birthweight', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_low_birthweight', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL year, state_abbr or low_birthweight_pct'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true)
+      WHERE year IS NULL OR state_abbr IS NULL OR low_birthweight_pct IS NULL);
+
+-- T7: value range (percent of births; every state well inside 3-25)
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_low_birthweight', 'T7_value_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with low_birthweight_pct outside 3-25'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true)
+      WHERE low_birthweight_pct < 3 OR low_birthweight_pct > 25);
+
+-- T7b: state coverage
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_low_birthweight', 'T7_state_coverage',
+  CASE WHEN n = 51 THEN 'pass' ELSE 'fail' END,
+  n, 51, 'Distinct state_abbr (50 states + DC)'
+FROM (SELECT COUNT(DISTINCT state_abbr) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true));
+
+-- T8: pk_duplication
+INSERT INTO dq_results
+SELECT 'health', 'nchs_state_low_birthweight', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (year, state_abbr) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, state_abbr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nchs_state_low_birthweight', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: fda_adverse_events
 -- ─────────────────────────────────────────────────────────────
 

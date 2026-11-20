@@ -6983,6 +6983,152 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: nchs_state_preterm_births
+    freshness:
+      type: etag
+    comment: >
+      State preterm birth rate: percent of live births that were preterm (gestational age under 37 weeks, obstetric estimate).
+      One row per state (50 states and DC, postal abbreviation) per data year, for 2014 onward plus
+      a 2005 baseline year, from NCHS "Stats of the States" (NVSS birth-certificate data; the 2024
+      year is drawn from CDC WONDER by NCHS). Residence-based, all races, no age or payer split.
+      Pair with nchs_state_low_birthweight. State Medicaid-paid birth share is NOT here: the public-use natality file carries no
+      state code and CDC WONDER rejects location grouping for NVSS data (see
+      cdc_wonder_natality), so no open machine-readable state series exists. State monthly birth
+      counts are in cdc_state_vital_provisional. The file is a static NCHS map-data JSON, not a
+      documented API; re-verify the URL if it starts returning 404. Rates are revised when NCHS
+      publishes final data.
+    columns:
+      - name: year
+        comment: "Birth year of the rate"
+        type: INTEGER
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR" AS INTEGER)'
+      - name: state_abbr
+        comment: "State postal abbreviation (50 states and DC)"
+        type: VARCHAR
+        nullable: true
+        source: STATE
+      - name: preterm_birth_pct
+        comment: "Percent of live births delivered before 37 completed weeks of gestation"
+        type: DOUBLE
+        nullable: true
+        expression: 'TRY_CAST(src."RATE" AS DOUBLE)'
+      - name: type
+        comment: "Constant record-type discriminator nchs_state_preterm_births"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://www.cdc.gov/nchs/pressroom/sosmap/preterm_births/preterm1_dfe.json"
+      method: GET
+      headers:
+        # www.cdc.gov (Akamai) returns 403 to the engine's default browser-style User-Agent here
+        # and 200 to a plain tool agent, as for the NVSR FTP table above.
+        User-Agent: "Wget/1.21.3"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - nchs_state_preterm_births
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: nchs_state_low_birthweight
+    freshness:
+      type: etag
+    comment: >
+      State low birthweight rate: percent of live births weighing less than 2,500 grams.
+      One row per state (50 states and DC, postal abbreviation) per data year, for 2014 onward plus
+      a 2005 baseline year, from NCHS "Stats of the States" (NVSS birth-certificate data; the 2024
+      year is drawn from CDC WONDER by NCHS). Residence-based, all races, no age or payer split.
+      Pair with nchs_state_preterm_births. State Medicaid-paid birth share is NOT here: the public-use natality file carries no
+      state code and CDC WONDER rejects location grouping for NVSS data (see
+      cdc_wonder_natality), so no open machine-readable state series exists. State monthly birth
+      counts are in cdc_state_vital_provisional. The file is a static NCHS map-data JSON, not a
+      documented API; re-verify the URL if it starts returning 404. Rates are revised when NCHS
+      publishes final data.
+    columns:
+      - name: year
+        comment: "Birth year of the rate"
+        type: INTEGER
+        nullable: true
+        expression: 'TRY_CAST(src."YEAR" AS INTEGER)'
+      - name: state_abbr
+        comment: "State postal abbreviation (50 states and DC)"
+        type: VARCHAR
+        nullable: true
+        source: STATE
+      - name: low_birthweight_pct
+        comment: "Percent of live births weighing under 2,500 grams (5 lb 8 oz)"
+        type: DOUBLE
+        nullable: true
+        expression: 'TRY_CAST(src."RATE" AS DOUBLE)'
+      - name: type
+        comment: "Constant record-type discriminator nchs_state_low_birthweight"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://www.cdc.gov/nchs/pressroom/sosmap/lbw_births/lbw_dfe.json"
+      method: GET
+      headers:
+        # www.cdc.gov (Akamai) returns 403 to the engine's default browser-style User-Agent here
+        # and 200 to a plain tool agent, as for the NVSR FTP table above.
+        User-Agent: "Wget/1.21.3"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - nchs_state_low_birthweight
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: cdc_wonder_multiple_cause_of_death
     # Freshness gate: CDC WONDER has no version/last-modified endpoint; hash the
     # response body and skip the materialize/commit when unchanged.
