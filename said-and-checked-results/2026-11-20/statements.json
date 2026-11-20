@@ -12015,16 +12015,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the introduced text of S. 5653 excludes from historic-preservation consultation, or from the definition of a federal undertaking, projects whose only federal involvement is federal funding. Contradicted if it contains no such exclusion. Unsettled if it is a legal reading of a narrower provision.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The introduced text of S. 5653 redefines a federal \"undertaking\" for historic-preservation review to exclude projects whose only federal involvement is a loan, grant, cost-share award or other financial assistance, with a qualifier on the assistance's primary purpose whose full text was not read.",
+      "evidence": [
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        }
+      ],
+      "check_run": "q277/askamerica/2026-11-20"
     },
     {
       "id": 320,
@@ -12145,14 +12150,14 @@
         "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgS5797-2.htm",
         "note": ""
       },
-      "kind": "factual",
+      "kind": "opinion_or_prediction",
       "test": null,
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
+      "result": null,
       "finding": null,
       "evidence": [],
       "check_run": null
@@ -12552,7 +12557,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the managers' amendment adds about $100 million for the Historic Preservation Fund and that is about a 50% increase over its current annual appropriation. Unsettled if the amount is confirmed but the baseline differs or the amendment text is not readable.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
@@ -12564,10 +12569,19 @@
           "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgS5797-2.htm"
         }
       ],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A C2ES summary of the managers' amendment says it keeps the Historic Preservation Fund's $200 million annual authorization from the introduced bill and describes no $100 million addition; the amendment text itself was not read, so the addition and the 50% figure are not settled.",
+      "evidence": [
+        {
+          "label": "C2ES, section-by-section summary of the managers' amendment",
+          "url": "https://www.c2es.org/wp-content/uploads/2026/10/Permitting-section-by-section-summary-Managers-Amendement.pdf"
+        },
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        }
+      ],
+      "check_run": "q277/askamerica/2026-11-20"
     },
     {
       "id": 336,
