@@ -2833,7 +2833,8 @@ partitionedTables:
       for example the FAA Facilities and Equipment account 069-1308, has been obligated versus
       actually outlaid so far in a year. Amounts are cumulative from the start of the fiscal year
       (Oct-Sep) through fiscal_period; use fiscal_period 12 for the full-year figure. FY2017-FY2019
-      carry quarterly periods (3, 6, 9, 12), FY2020 onward monthly (2-12). Unpublished periods
+      carry quarterly periods (3, 6, 9, 12), FY2020 onward monthly (2-12); agencies that report
+      quarterly have rows only at periods 3, 6, 9 and 12. Unpublished periods
       of the current year are absent. Source: USAspending Account Balances (DATA Act File A),
       api.usaspending.gov/api/v2/download/accounts/, account_level=federal_account.
 
