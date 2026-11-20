@@ -15511,9 +15511,13 @@ public class McpServer {
                     throw new FetchException("Could not fetch " + urlStr + " (HTTP " + code
                         + "). The server refused this engine's fetch (access control, bot"
                         + " protection or rate limit); that says nothing about the page's"
-                        + " content. Retry the SAME URL with your own client-side web fetch"
-                        + " tool (WebFetch/Fetch) before grading anything 'not checkable here'"
-                        + " or falling back to a secondary source.");
+                        + " content. Find the same document at another primary source and"
+                        + " fetch that: the publisher's own mirror or data file, govinfo.gov"
+                        + " for congress.gov bill text and the Congressional Record, the"
+                        + " agency's report PDF, or the dataset's API. Do not substitute a"
+                        + " summarizing fetch tool's paraphrase or a secondary write-up for"
+                        + " the primary text, and do not grade anything 'not checkable here'"
+                        + " until another primary source has been tried.");
                 }
                 throw new FetchException("Could not fetch " + urlStr + " (HTTP " + code + ").");
             }
