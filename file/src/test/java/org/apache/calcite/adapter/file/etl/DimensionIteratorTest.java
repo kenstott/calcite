@@ -477,4 +477,33 @@ public class DimensionIteratorTest {
     assertEquals("2", combinations.get(3).get("a"));
     assertEquals("y", combinations.get(3).get("b"));
   }
+
+  @Test void testDayMaxAgeDaysDropsDatesOlderThanWindow() {
+    LocalDate today = LocalDate.now(ZoneOffset.UTC);
+    LocalDate oldest = today.minusDays(10);
+    Map<String, DimensionConfig> dimensions = new LinkedHashMap<String, DimensionConfig>();
+    dimensions.put("year", DimensionConfig.builder()
+        .name("year").type(DimensionType.LIST)
+        .values(new java.util.ArrayList<String>(new java.util.LinkedHashSet<String>(
+            Arrays.asList(String.valueOf(oldest.getYear()),
+                String.valueOf(today.getYear())))))
+        .build());
+    dimensions.put("month", DimensionConfig.builder()
+        .name("month").type(DimensionType.LIST)
+        .values(Arrays.asList("01", "02", "03", "04", "05", "06",
+            "07", "08", "09", "10", "11", "12"))
+        .build());
+    dimensions.put("day", DimensionConfig.builder()
+        .name("day").type(DimensionType.DAY).maxAgeDays(10).build());
+
+    List<Map<String, String>> combos = new DimensionIterator().expand(dimensions);
+
+    assertTrue(!combos.isEmpty());
+    for (Map<String, String> c : combos) {
+      LocalDate d = LocalDate.of(Integer.parseInt(c.get("year")),
+          Integer.parseInt(c.get("month")), Integer.parseInt(c.get("day")));
+      assertTrue(!d.isBefore(oldest) && !d.isAfter(today), "out of window: " + d);
+    }
+    assertEquals(11, combos.size());
+  }
 }

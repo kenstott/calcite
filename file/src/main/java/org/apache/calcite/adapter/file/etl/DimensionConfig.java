@@ -72,6 +72,7 @@ public class DimensionConfig {
   private final boolean monthlyYtd;
   /** When true on a DAY dimension, Saturdays and Sundays are omitted (e.g. CFTC EOD feeds). */
   private final boolean skipWeekends;
+  private final int maxAgeDays;
   private final List<String> values;
   private final String sql;
   private final String source;
@@ -110,6 +111,7 @@ public class DimensionConfig {
         .releaseMonth(this.releaseMonth)
         .monthlyYtd(this.monthlyYtd)
         .skipWeekends(this.skipWeekends)
+        .maxAgeDays(this.maxAgeDays)
         .values(this.values)
         .sql(this.sql)
         .source(this.source)
@@ -138,6 +140,7 @@ public class DimensionConfig {
     this.releaseMonth = builder.releaseMonth;
     this.monthlyYtd = builder.monthlyYtd;
     this.skipWeekends = builder.skipWeekends;
+    this.maxAgeDays = builder.maxAgeDays;
     this.values = builder.values != null
         ? Collections.unmodifiableList(new ArrayList<String>(builder.values))
         : Collections.<String>emptyList();
@@ -291,6 +294,15 @@ public class DimensionConfig {
    *
    * @return true if weekends are skipped during day expansion
    */
+  /**
+   * On a DAY dimension, the retention window in days: dates older than today minus this many
+   * days are not generated. 0 means unbounded. For sources whose publisher moves files past a
+   * fixed age into unretrievable storage (e.g. CFTC EOD on S3 DEEP_ARCHIVE).
+   */
+  public int getMaxAgeDays() {
+    return maxAgeDays;
+  }
+
   public boolean isSkipWeekends() {
     return skipWeekends;
   }
@@ -616,6 +628,14 @@ public class DimensionConfig {
       builder.skipWeekends(Boolean.parseBoolean((String) skipWeekendsObj));
     }
 
+    // Parse maxAgeDays: rolling retention window for a DAY dimension.
+    Object maxAgeObj = map.get("maxAgeDays");
+    if (maxAgeObj instanceof Number) {
+      builder.maxAgeDays(((Number) maxAgeObj).intValue());
+    } else if (maxAgeObj instanceof String) {
+      builder.maxAgeDays(Integer.parseInt((String) maxAgeObj));
+    }
+
     // Parse list values
     Object valuesObj = map.get("values");
     if (valuesObj instanceof List) {
@@ -831,6 +851,7 @@ public class DimensionConfig {
     private Integer releaseMonth;
     private boolean monthlyYtd;
     private boolean skipWeekends;
+    private int maxAgeDays;
     private List<String> values;
     private String sql;
     private String source;
@@ -885,6 +906,11 @@ public class DimensionConfig {
 
     public Builder monthlyYtd(boolean monthlyYtd) {
       this.monthlyYtd = monthlyYtd;
+      return this;
+    }
+
+    public Builder maxAgeDays(int maxAgeDays) {
+      this.maxAgeDays = maxAgeDays;
       return this;
     }
 

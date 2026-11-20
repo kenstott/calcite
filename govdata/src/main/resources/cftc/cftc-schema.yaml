@@ -1106,6 +1106,11 @@ partitionedTables:
       day:
         type: day
         skipWeekends: true
+        # DTCC moves EOD files to S3 DEEP_ARCHIVE once ~2 years old (403 InvalidObjectState,
+        # unretrievable without a restore the bucket owner controls). Observed 2026-11-20:
+        # 2024-11-15 archived, 2024-11-18 readable. 700 days stays inside that window; days
+        # already loaded remain in the table.
+        maxAgeDays: 700
 
     source:
       type: http
