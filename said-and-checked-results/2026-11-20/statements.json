@@ -11897,7 +11897,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "Legal reading. True if the bill text contains a provision exempting data-center on-site generation from Clean Air Act or noise requirements. Contradicted if the bill text contains no such exemption. Unsettled if the provision is ambiguous or only in a version not read.",
       "premise": null,
       "counter_statements": [
         309,
@@ -11906,10 +11906,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The introduced text of S. 5653 contains no exemption of data-center turbines from Clean Air Act or noise requirements and only one Clean Air Act reference, a savings clause; the Senate-passed text with the managers' amendment, which the debate concerned, could not be read directly.",
+      "evidence": [
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        }
+      ],
+      "check_run": "q276/askamerica/2026-11-20"
     },
     {
       "id": 316,
@@ -11932,16 +11937,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if President Trump publicly described wind power or wind imports as a national emergency or national security threat. Unsettled if the action exists but not in emergency terms. Unsupported if nothing is found. Motive is not assessed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Trump's October 2026 Section 232 proclamation found that imported wind turbines and parts threaten to impair national security and opened 180 days of negotiations with tariffs possible later, but it does not use the term national emergency.",
+      "evidence": [
+        {
+          "label": "White House proclamation on wind turbine imports (Oct. 2026)",
+          "url": "https://whitehouse.gov/presidential-actions/2026/10/adjusting-imports-of-wind-turbines-and-their-parts-and-components-into-the-united-states"
+        }
+      ],
+      "check_run": "q276/askamerica/2026-11-20"
     },
     {
       "id": 317,
@@ -11966,16 +11976,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "Snowpack figure only: True if NRCS SNOTEL or peer-reviewed data show Oregon Cascades snowpack down about 40%. Unsettled if the figure depends on period or site. \"On fire\" is not assessed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's SNOTEL data show Oregon's April 1, 2026 snowpack far below median, from about 5% in the Willamette basin to 40% in the Hood basin, while the warehouse does not reach back far enough to test a long-term 40% decline; the figure depends on which period is meant.",
+      "evidence": [
+        {
+          "label": "weather.snotel_basin_daily (Oregon basins, April 1, 2022-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/weather/#snotel_basin_daily-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM weather.snotel_basin_daily WHERE state_abbr='OR' AND \"date\" IN ('2026-04-01','2025-04-01','2024-04-01','2023-04-01','2022-04-01') ORDER BY \"date\", huc6"
+        }
+      ],
+      "check_run": "q276/askamerica/2026-11-20"
     },
     {
       "id": 318,
@@ -12462,16 +12479,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the administration has proposed exempting data centers or their power sources from Clean Air Act requirements. Unsettled if it proposed streamlining or expedited permitting rather than exemption. Unsupported if nothing is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Reginfo.gov shows an EPA proposed \"Nonroad Combustion Turbines Rule\" under White House review since Oct. 15, 2026, which the Environmental Defense Fund says would regulate such turbines as mobile sources instead of under industrial standards; the proposal text was not read, and it covers turbines rather than data centers as such.",
+      "evidence": [
+        {
+          "label": "Reginfo.gov, RIN 2060-AX08 under review",
+          "url": "https://www.reginfo.gov/public/do/eoDetails?rrid=1540963"
+        },
+        {
+          "label": "Environmental Defense Fund, on the pending EPA turbine proposal",
+          "url": "https://www.edf.org/media/coming-soon-trump-epa-proposal-weaken-pollution-limits-turbines-power-data-centers"
+        }
+      ],
+      "check_run": "q276/askamerica/2026-11-20"
     },
     {
       "id": 334,
