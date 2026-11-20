@@ -7798,16 +7798,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if his official biography records about 24 years of orthopedic practice in Casper, Wyoming. False if the record shows a materially different span or place.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Barrasso's official Senate biography refers to his 24 years as an orthopedic surgeon and says he lives in Casper.",
+      "evidence": [
+        {
+          "label": "Sen. Barrasso, official biography",
+          "url": "https://www.barrasso.senate.gov/public/index.cfm/biography"
+        }
+      ],
+      "check_run": "q248/askamerica/2026-11-20"
     },
     {
       "id": 205,
@@ -7830,16 +7835,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the UNC Sheps Center tracker counts more than 100 rural hospital closures or conversions since 2010. False if the count is materially lower. The causal link is not assessed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The UNC Sheps Center counts 155 rural hospital closures and conversions since 2010, 87 of them complete closures. The link to the Affordable Care Act was not assessed.",
+      "evidence": [
+        {
+          "label": "UNC Sheps Center, rural hospital closures",
+          "url": "https://www.shepscenter.unc.edu/programs-projects/rural-health/rural-hospital-closures/"
+        }
+      ],
+      "check_run": "q248/askamerica/2026-11-20"
     },
     {
       "id": 206,
@@ -7862,16 +7872,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the 2025 reconciliation law (P.L. 119-21, Sec. 71401) provides $50 billion for the Rural Health Transformation Program. False if the amount differs materially.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Section 71401 of Public Law 119-21, enacted in 2025, appropriates $10 billion a year for fiscal years 2026 through 2030, $50 billion in all.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 71401",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
+      "check_run": "q248/askamerica/2026-11-20"
     },
     {
       "id": 207,
@@ -7894,16 +7909,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if no earlier single federal rural-health program or appropriation exceeded $50 billion (nominal), per official or published comparisons. Unsettled if comparisons depend on what counts as rural health. Unsupported if no comparison is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "KFF Health News quotes experts saying the $50 billion fund appears unrivaled among limited rural programs, but Medicare and Medicaid spending in rural areas far exceeds it, and the postwar Hill-Burton hospital program has been estimated at $47 billion to $109 billion in today's dollars, so the ranking depends on what is counted.",
+      "evidence": [
+        {
+          "label": "KFF Health News fact check on the Rural Health Transformation Program",
+          "url": "https://kffhealthnews.org/news/article/fact-check-rfk-jr-misses-mark-calling-rural-health-transformation-program-historic-cash-infusion/"
+        }
+      ],
+      "check_run": "q248/askamerica/2026-11-20"
     },
     {
       "id": 208,
@@ -7926,16 +7946,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if CMS awarded Rural Health Transformation funds to all 50 states for the current (second) year. False if any state received none. The reason given is not assessed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "HHS announced second-year awards on Nov. 9, 2026 to all 50 states, ranging from $142.3 million (New Jersey) to $282.0 million (Texas).",
+      "evidence": [
+        {
+          "label": "HHS, year-two Rural Health Transformation awards (Nov. 9, 2026)",
+          "url": "https://www.hhs.gov/press-room/trump-administration-awards-10-billion-rural-health-transformation-program-year-two.html"
+        }
+      ],
+      "check_run": "q249/askamerica/2026-11-20"
     },
     {
       "id": 209,
@@ -7960,16 +7985,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if CMS's first-year award to Wyoming was about $205 million and Wyoming announced its uses in October 2026 with Barrasso present. Unsettled if the amount is confirmed but the event is not. False if the award differs materially.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CMS's first-year award to Wyoming was $205.0 million, and a CMS release on Wyoming's plans quotes both Gov. Gordon and Sen. Barrasso, but no source read confirms that they announced it together or when.",
+      "evidence": [
+        {
+          "label": "CMS release on Wyoming's $205 million award",
+          "url": "https://www.cms.gov/newsroom/press-releases/trump-administration-announces-205-million-strengthen-emergency-care-expand-rural-health-workforce"
+        },
+        {
+          "label": "CMS first-year awards release, Dec. 29, 2025",
+          "url": "https://cms.gov/newsroom/press-releases/cms-announces-50-billion-awards-strengthen-rural-health-all-50-states"
+        }
+      ],
+      "check_run": "q249/askamerica/2026-11-20"
     },
     {
       "id": 210,
@@ -7994,16 +8028,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if CMS's second-year award to Wyoming is about $207 million. False if materially different.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "HHS's second-year award table shows $207.2 million for Wyoming.",
+      "evidence": [
+        {
+          "label": "HHS, year-two Rural Health Transformation awards (Nov. 9, 2026)",
+          "url": "https://www.hhs.gov/press-room/trump-administration-awards-10-billion-rural-health-transformation-program-year-two.html"
+        }
+      ],
+      "check_run": "q249/askamerica/2026-11-20"
     },
     {
       "id": 211,
@@ -8026,16 +8065,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the roll-call record shows Democrats voting more than once for measures that would repeal or rescind the program's funding. Unsettled if Democrats voted against the law creating it but not on measures to remove the funding. Unsupported if no such votes are found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Democrats voted against the 2025 law that created the program, but AskAmerica's amendment records show no Democratic amendment to repeal its funding (the one amendment on it would have added money). Republicans say a September 2025 Democratic funding bill would have eliminated the fund, but its text was not found.",
+      "evidence": [
+        {
+          "label": "law.bill_amendments (Senate amendments to H.R. 1 touching rural health)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_amendments-table",
+          "askamerica": true,
+          "sql": "SELECT amendment_type, amendment_number, sponsor_name, purpose, latest_action_text FROM law.bill_amendments WHERE congress=119 AND bill_type='hr' AND bill_number=5371 ORDER BY amendment_number"
+        }
+      ],
+      "check_run": "q249/askamerica/2026-11-20"
     },
     {
       "id": 212,
@@ -8058,16 +8104,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a Democratic bill or amendment would have eliminated the program's funding entirely. Unsupported if none is found; unsettled if proposals only cut or redirected part of it.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "No Democratic bill or amendment eliminating the program appears in AskAmerica's records; Republicans have said a September 2025 Democratic funding bill would have done so, but its text was not found to confirm whether it removed all or part of the money.",
+      "evidence": [
+        {
+          "label": "law.bill_amendments (Senate amendments to H.R. 1 touching rural health)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_amendments-table",
+          "askamerica": true,
+          "sql": "SELECT amendment_type, amendment_number, sponsor_name, purpose, latest_action_text FROM law.bill_amendments WHERE congress=119 AND bill_type='hr' AND bill_number=5371 ORDER BY amendment_number"
+        }
+      ],
+      "check_run": "q249/askamerica/2026-11-20"
     },
     {
       "id": 213,
@@ -8090,16 +8143,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the senator-elect he refers to has publicly endorsed a Medicare for All plan that would end employer-sponsored private insurance. Unsettled if the senator-elect supports a plan that keeps employer coverage, or the position is ambiguous. Unsupported if no position is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The speech does not name the senator-elect; the likely one, Michigan's Abdul El-Sayed, said in 2020 that Medicare for All does away with the private insurance market, but his campaign now says it need not ban employer or union plans, as reported by Fortune and Bridge Michigan, so his position on employer coverage is ambiguous.",
+      "evidence": [
+        {
+          "label": "Fortune, Nov. 4, 2026, on El-Sayed's Medicare for All plan",
+          "url": "https://fortune.com/2026/11/04/el-sayed-medicare-for-all-plan-senate-michigan/"
+        },
+        {
+          "label": "Bridge Michigan fact check, Sept. 25, 2026",
+          "url": "https://bridgemi.com/michigan-politics/fact-check-would-abdul-el-sayed-raise-taxes-to-pay-for-medicare-for-all/"
+        }
+      ],
+      "check_run": "q250/askamerica/2026-11-20"
     },
     {
       "id": 215,
