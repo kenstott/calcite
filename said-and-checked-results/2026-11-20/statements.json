@@ -2229,16 +2229,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if no Democratic member of the House or Senate voted yes on final passage of H.R. 1 (119th Congress) in either chamber. False if the official roll calls show any Democrat voting yes. Cannot be determined if the roll calls cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Roll calls in AskAmerica's warehouse show no Democrat voting yes on H.R. 1: House passage on May 22, 2025 had 212 Democrats voting no, the Senate's July 1, 2025 vote (51-50) had all 45 Democrats and 2 independents voting no, and the House's July 3 concurrence (218-214) had 0 Democratic ayes and 212 noes, as the Clerk's page confirms.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes and law.member_roll_call_votes (H.R. 1 passage votes, 2025)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "SELECT b.vote_chamber, b.roll_number, b.action_date, b.action_text, m.party, m.vote_cast, count(*) n FROM law.bill_recorded_votes b JOIN law.member_roll_call_votes m ON m.chamber=b.vote_chamber AND m.congress=b.vote_congress AND m.session_number=b.session_number AND m.roll_number=b.roll_number WHERE b.congress=119 AND b.bill_type='hr' AND b.bill_number=1 AND m.vote_question ILIKE '%passage%' OR (b.congress=119 AND b.bill_type='hr' AND b.bill_number=1 AND m.vote_question ILIKE '%concur%') GROUP BY b.vote_chamber, b.roll_number, b.action_date, b.action_text, m.party, m.vote_cast ORDER BY b.action_date, m.party, m.vote_cast"
+        },
+        {
+          "label": "House Clerk, roll call 190 (July 3, 2025)",
+          "url": "https://clerk.house.gov/Votes/2025190"
+        }
+      ],
+      "check_run": "q217/askamerica/2026-11-20"
     },
     {
       "id": 54,
@@ -2261,16 +2272,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the law appropriates $50 billion for the program over five fiscal years and CMS has awarded funding to all 50 states. False if the amount or term differs materially or some state received no award. Cannot be determined if the statute or award list cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Section 71401 of the enrolled H.R. 1 appropriates $10 billion for each of fiscal years 2026 through 2030, $50 billion in all, and CMS's Dec. 29, 2025 release lists first-year awards to all 50 states of $147.3 million to $281.3 million each.",
+      "evidence": [
+        {
+          "label": "H.R. 1 enrolled text, Sec. 71401",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr1enr/html/BILLS-119hr1enr.htm"
+        },
+        {
+          "label": "CMS press release, Dec. 29, 2025",
+          "url": "https://cms.gov/newsroom/press-releases/cms-announces-50-billion-awards-strengthen-rural-health-all-50-states"
+        },
+        {
+          "label": "CMS Rural Health Transformation Program overview",
+          "url": "https://www.cms.gov/priorities/rural-health-transformation-rht-program/overview"
+        }
+      ],
+      "check_run": "q217/askamerica/2026-11-20"
     },
     {
       "id": 55,
@@ -2293,16 +2317,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the statute's permitted uses or CMS's program documents include workforce, facility or technology modernization and telehealth or similar access uses. Contradicted if those documents exclude these uses. Cannot be determined if the documents cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Sec. 71401's permitted uses include recruiting and retaining rural clinical workforce, technology upgrades, remote monitoring and access to digital health tools, and CMS's program page lists workforce development and access to remote care; the word telehealth does not appear in the statute's list.",
+      "evidence": [
+        {
+          "label": "H.R. 1 enrolled text, Sec. 71401",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr1enr/html/BILLS-119hr1enr.htm"
+        },
+        {
+          "label": "CMS Rural Health Transformation Program overview",
+          "url": "https://www.cms.gov/priorities/rural-health-transformation-rht-program/overview"
+        }
+      ],
+      "check_run": "q218/askamerica/2026-11-20"
     },
     {
       "id": 56,
@@ -2325,16 +2358,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if funds go to states under state-written transformation plans chosen by the state from permitted uses. Contradicted if the statute or CMS documents show the federal government, not states, chooses the projects. Cannot be determined if the documents cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Only states are eligible; each submits a rural health transformation plan and must spend its allotment on three or more activities from the statutory list, while CMS approves applications and divides the $10 billion a year, half equally and half by CMS-set factors. The degree of flexibility was not assessed.",
+      "evidence": [
+        {
+          "label": "H.R. 1 enrolled text, Sec. 71401",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr1enr/html/BILLS-119hr1enr.htm"
+        },
+        {
+          "label": "CMS Rural Health Transformation Program overview",
+          "url": "https://www.cms.gov/priorities/rural-health-transformation-rht-program/overview"
+        }
+      ],
+      "check_run": "q218/askamerica/2026-11-20"
     },
     {
       "id": 57,
@@ -2357,16 +2399,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the permitted uses or CMS program documents include prevention and chronic-disease programs such as screenings, remote patient monitoring and nutrition or fitness programs. Contradicted if the documents exclude such uses. Cannot be determined if the documents cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The statute and CMS page list evidence-based interventions for prevention and chronic disease management, technology-driven chronic-disease solutions and remote monitoring; mobile clinics, screenings and nutrition programs are not named in those texts but fall under the general prevention uses.",
+      "evidence": [
+        {
+          "label": "H.R. 1 enrolled text, Sec. 71401",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr1enr/html/BILLS-119hr1enr.htm"
+        },
+        {
+          "label": "CMS Rural Health Transformation Program overview",
+          "url": "https://www.cms.gov/priorities/rural-health-transformation-rht-program/overview"
+        }
+      ],
+      "check_run": "q218/askamerica/2026-11-20"
     },
     {
       "id": 58,
