@@ -8184,16 +8184,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official or peer-reviewed comparison finds U.S. prices for the same drugs about four times those in Europe or Canada for a major category. Unsettled if ratios vary by category around that level. Contradicted if official comparisons show a materially different ratio for every category.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "HHS's December 2024 ASPE report finds U.S. prices for brand-name drugs at 422% of prices in its comparison countries, about 4.2 times, though U.S. generic prices were lower; the comparison set is not limited to Europe and Canada.",
+      "evidence": [
+        {
+          "label": "HHS ASPE, international market size and prices (Dec. 2024)",
+          "url": "https://aspe.hhs.gov/sites/default/files/documents/4326cc7fe43bc11770598cf2a13f478c/international-market-size-prices.pdf"
+        }
+      ],
+      "check_run": "q251/askamerica/2026-11-20"
     },
     {
       "id": 216,
@@ -8216,16 +8221,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if authoritative sources state the U.S. and New Zealand are the only countries allowing direct-to-consumer advertising of prescription drugs. Unsettled if sources say only with caveats.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Researchers writing in The Conversation (2024) say the U.S. and New Zealand are the only high-income countries allowing unrestricted direct-to-consumer advertising of branded medicines, while noting Canada permits limited reminder ads; no official source was read.",
+      "evidence": [
+        {
+          "label": "The Conversation via MedicalXpress, Aug. 8, 2024",
+          "url": "https://medicalxpress.com/news/2024-08-high-income-countries-advertising-prescription.pdf"
+        }
+      ],
+      "check_run": "q251/askamerica/2026-11-20"
     },
     {
       "id": 217,
@@ -8248,16 +8258,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a peer-reviewed study shows NIH funding contributed to research behind nearly all new drugs approved over a period. Unsettled if \"started with\" overstates the contribution.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Cleary and colleagues (PNAS 2018) found NIH funding contributed to published research associated with all 210 new drugs FDA approved in 2010-2016, but more than 90% of that funding was basic research on biological targets rather than on the drugs, so \"started with\" fits only in that broad sense.",
+      "evidence": [
+        {
+          "label": "Cleary et al., PNAS 2018",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5878010/"
+        }
+      ],
+      "check_run": "q251/askamerica/2026-11-20"
     },
     {
       "id": 218,
@@ -8280,16 +8295,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the ACA made mental health and substance use disorder services an essential health benefit required in individual and small-group plans, for the first time for those markets. Unsettled if earlier laws already mandated some coverage.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CMS says the 1996 and 2008 parity laws required equal treatment only for plans that chose to offer mental health benefits and did not require coverage, while the ACA made mental health and substance use disorder services one of ten essential health benefits in individual and small-group plans; large-group and grandfathered plans are not covered by that mandate.",
+      "evidence": [
+        {
+          "label": "CMS, Mental Health Parity and Addiction Equity Act fact sheet",
+          "url": "https://www.cms.gov/cciio/programs-and-initiatives/other-insurance-protections/mhpaea_factsheet"
+        },
+        {
+          "label": "HealthCare.gov, mental health and substance abuse coverage",
+          "url": "https://www.healthcare.gov/coverage/mental-health-substance-abuse-coverage/"
+        }
+      ],
+      "check_run": "q251/askamerica/2026-11-20"
     },
     {
       "id": 219,
@@ -8344,16 +8368,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if CDC surveys show about 29% of high school students smoking cigarettes at a past high point and about 2% in the latest year. False if the official figures are materially different.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CDC's youth tobacco survey shows 1.7% of high school students smoking cigarettes in 2024, matching the 2 percent figure, but CDC's earlier surveys show 27.5% in 1991, a 36.4% peak in 1997 and 28.5% in 2001, so the 29 percent starting figure fits only some years.",
+      "evidence": [
+        {
+          "label": "CDC MMWR, 2024 National Youth Tobacco Survey",
+          "url": "https://www.cdc.gov/mmwr/volumes/73/wr/mm7341a2.htm"
+        },
+        {
+          "label": "CDC MMWR, Youth Risk Behavior Surveillance 2001",
+          "url": "https://www.cdc.gov/mmwr/preview/mmwrhtml/ss5104a1.htm"
+        }
+      ],
+      "check_run": "q252/askamerica/2026-11-20"
     },
     {
       "id": 221,
@@ -8376,16 +8409,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Trump administration withdrew or declined to finalize the FDA proposed rule banning menthol cigarettes and flavored cigars, or otherwise took a documented position allowing flavored cigarettes. Unsettled if the record shows inaction without a stated position. Contradicted if the administration finalized a ban.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The FDA withdrew its proposed rules banning menthol cigarettes and flavored cigars in January 2025, and neither was finalized, as reported by the Tobacco Law Blog; the Federal Register notice itself was not read.",
+      "evidence": [
+        {
+          "label": "Tobacco Law Blog, FDA withdraws proposed menthol and flavored cigar bans",
+          "url": "https://www.tobaccolawblog.com/2025/02/fda-withdraws-proposed-bans-on-menthol-cigarettes-and-flavored-cigars/"
+        }
+      ],
+      "check_run": "q252/askamerica/2026-11-20"
     },
     {
       "id": 222,
@@ -8410,16 +8448,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if election results show Juliana Stratton won the Nov. 3, 2026 Illinois U.S. Senate election for Durbin's seat. False if someone else won.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Fox 32 Chicago reported the AP's projection that Lt. Gov. Juliana Stratton defeated Republican Don Tracy for the seat Durbin is leaving; certified results were not read.",
+      "evidence": [
+        {
+          "label": "Fox 32 Chicago, Stratton wins U.S. Senate race",
+          "url": "https://www.fox32chicago.com/news/stratton-wins-us-senate-race"
+        }
+      ],
+      "check_run": "q252/askamerica/2026-11-20"
     },
     {
       "id": 223,
