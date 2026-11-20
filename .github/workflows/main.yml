@@ -23,8 +23,12 @@ name: CI
 
 on:
   push:
+    # The daily eval pipeline commits only its result files straight to main; a CI run (or the
+    # cancellation of the previous one by the concurrency group) for those pushes is wasted.
     paths-ignore:
       - 'site/**'
+      - 'said-and-checked-results/**'
+      - 'news-check-results/**'
     branches:
       - '*'
   pull_request:
