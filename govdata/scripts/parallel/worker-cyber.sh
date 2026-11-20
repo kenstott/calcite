@@ -110,6 +110,7 @@ run_cyber_model() {
   # tables match", which would silently no-op this model on every single run.
   local enabled_tables=""
   if [ -n "$table_csv" ]; then
+    table_csv="$(drop_tables_unknown_to_jar "$schema" "$table_csv")" || return 1
     enabled_tables="$(filter_enabled_tables "$table_csv")"
     if [ -z "$enabled_tables" ]; then
       log_info "$WORKER_ID: skipping $model_name — none of its tables match GOVDATA_TABLES=${GOVDATA_TABLES:-}"

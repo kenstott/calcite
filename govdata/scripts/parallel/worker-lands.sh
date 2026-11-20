@@ -83,7 +83,8 @@ run_lands_model() {
 
   # Every group funnels through here, so GOVDATA_TABLES (force-reprocess.sh --tables) is
   # applied once: a group with none of the requested tables is skipped, not run.
-  enabled_tables="$(filter_enabled_tables "$(echo "$enabled_tables" | tr -d '" ')")"
+  enabled_tables="$(drop_tables_unknown_to_jar lands "$(echo "$enabled_tables" | tr -d '" ')")" || return 1
+  enabled_tables="$(filter_enabled_tables "$enabled_tables")"
   if [ -z "$enabled_tables" ]; then
     log_info "$WORKER_ID: skipping $model_name — no tables in GOVDATA_TABLES=${GOVDATA_TABLES:-}"
     return 0
