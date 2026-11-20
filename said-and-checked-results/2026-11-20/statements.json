@@ -10204,16 +10204,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if DoD counts show dozens of U.S. deaths and hundreds wounded, and credible counts show hundreds or more Iranian civilian deaths. Unsettled if one element cannot be confirmed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The Pentagon's count, as reported by Stars and Stripes, stands at 23 U.S. deaths and 865 wounded, but no UN or independent count of Iranian civilian deaths was read, so that part is unconfirmed.",
+      "evidence": [
+        {
+          "label": "Stars and Stripes, Oct. 29, 2026, Pentagon raises toll to 23",
+          "url": "https://www.stripes.com/theaters/middle_east/2026-10-29/pentagon-iran-war-troops-deaths-23299434.html"
+        }
+      ],
+      "check_run": "q264/askamerica/2026-11-20"
     },
     {
       "id": 270,
@@ -10236,7 +10241,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "This turns on legal interpretation: unsettled, with what the Constitution, the War Powers Resolution and any ruling say, unless a binding court ruling decided the war's constitutionality. Whether the President sought congressional authorization before the war began is checked as a fact.",
       "premise": null,
       "counter_statements": [
         35
@@ -10244,10 +10249,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "No binding court ruling on the war's constitutionality was found. The President notified Congress by letter on March 2, after strikes began Feb. 28, as reported by CBS, and no prior authorization was reported; whether the strikes met an imminent-defense standard is disputed.",
+      "evidence": [
+        {
+          "label": "CBS News, Trump tells Congress hostilities have terminated",
+          "url": "https://www.cbsnews.com/news/trump-iran-war-powers-act-hostilities-terminated/"
+        }
+      ],
+      "check_run": "q264/askamerica/2026-11-20"
     },
     {
       "id": 271,
@@ -10270,16 +10280,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if U.S. forces remained engaged in hostilities with Iran more than 60 days after the start through November 2026. Unsettled if the administration's position that hostilities terminated is the official record and later operations are disputed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The administration told Congress on May 1 that hostilities had terminated, citing no exchange of fire since April 7, while the Pentagon later counted casualties in a separate category of operations since July 7, as reported by Stars and Stripes; whether the war continued past the 60-day mark is disputed in the official record.",
+      "evidence": [
+        {
+          "label": "CBS News, Trump tells Congress hostilities have terminated",
+          "url": "https://www.cbsnews.com/news/trump-iran-war-powers-act-hostilities-terminated/"
+        },
+        {
+          "label": "Stars and Stripes, Oct. 29, 2026, Pentagon raises toll to 23",
+          "url": "https://www.stripes.com/theaters/middle_east/2026-10-29/pentagon-iran-war-troops-deaths-23299434.html"
+        }
+      ],
+      "check_run": "q264/askamerica/2026-11-20"
     },
     {
       "id": 272,
@@ -10302,16 +10321,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if both chambers of the 119th Congress passed the same concurrent resolution directing removal of forces or declaring the war unauthorized. Unsettled if each chamber passed different measures, or the text directs removal without saying illegal. False if no such measure passed both chambers.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's bill records show both chambers passed H.Con.Res. 86, the House 215-208 on June 3, 2026 and the Senate 50-48 on June 23. Its text directs the President to remove forces from hostilities against Iran unless Congress authorizes them, but it does not call the war illegal.",
+      "evidence": [
+        {
+          "label": "law.bill_actions (Iran concurrent resolutions, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT bill_number, action_date, text FROM law.bill_actions WHERE congress=119 AND bill_type='hconres' AND bill_number IN (38,40,75,86,87,93,104,110,117,126) AND action_type IN ('Floor','ResolvingDifferences','Discharge') ORDER BY bill_number, action_seq"
+        },
+        {
+          "label": "H.Con.Res. 86 (119th), engrossed text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119hconres86eh/html/BILLS-119hconres86eh.htm"
+        }
+      ],
+      "check_run": "q264/askamerica/2026-11-20"
     },
     {
       "id": 273,
@@ -10334,16 +10364,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official data show an average tariff rate of about 2% for most post-WWII decades and about 12% now. Unsettled if the post-war average depends on period or \"now\" depends on statutory vs. effective rate. False if both figures differ materially on every measure.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "USITC data in AskAmerica's warehouse show duties collected at about 1% to 2.4% of import value from 2008 to 2024, rising to 7.6% in 2025; earlier post-war decades are not covered, 2026 import totals are not yet loaded, and a 12% figure appears only in statutory-rate estimates that were not read.",
+      "evidence": [
+        {
+          "label": "econ.usitc_tariffs (duties as share of import value, 2008-2025)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#usitc_tariffs-table",
+          "askamerica": true,
+          "sql": "SELECT \"year\", SUM(calculated_duties_usd) d, SUM(customs_value_usd) v, SUM(calculated_duties_usd)/SUM(customs_value_usd) r FROM econ.usitc_tariffs GROUP BY \"year\" ORDER BY \"year\""
+        }
+      ],
+      "check_run": "q265/askamerica/2026-11-20"
     },
     {
       "id": 274,
@@ -10366,16 +10403,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the broad tariffs were imposed by executive order under the International Emergency Economic Powers Act or other presidential authority without a congressional vote. Unsettled if the authority shifted to statutes Congress previously delegated in a way that bears on \"not by vote of Congress\".",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The broad tariffs were imposed by executive orders under emergency declarations using the International Emergency Economic Powers Act, with no congressional vote, and the Supreme Court held in Learning Resources v. Trump (Feb. 20, 2026) that the law does not authorize tariffs; replacement tariffs reportedly rest on a trade statute Congress delegated earlier, which was not read.",
+      "evidence": [
+        {
+          "label": "Cornell Legal Information Institute, Learning Resources v. Trump (2026)",
+          "url": "https://www.law.cornell.edu/wex/Learning_Resources_v_Trump_2026"
+        }
+      ],
+      "check_run": "q265/askamerica/2026-11-20"
     },
     {
       "id": 275,
