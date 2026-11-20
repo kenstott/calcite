@@ -2737,16 +2737,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Senate's passage vote on H.R. 3684 (117th Congress) was 69-30. False if the official roll call shows a different tally. Cannot be determined if the roll call cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's roll-call records show the Senate passed H.R. 3684 with an amendment on Aug. 10, 2021 by 69-30 (Senate roll call 314). The phrase \"significant consensus\" was not assessed.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 3684 votes, 2021)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT vote_chamber, session_number, roll_number, action_date, action_text FROM law.bill_recorded_votes WHERE vote_congress=117 AND bill_number=3684 AND bill_type='hr' ORDER BY action_date"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-20"
     },
     {
       "id": 68,
@@ -2769,16 +2776,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the House's final vote on H.R. 3684 was 228-206 on Nov. 5, 2021. False if the official roll call shows a materially different tally or date. Cannot be determined if the roll call cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's roll-call records show the House agreed to the Senate amendment to H.R. 3684 on Nov. 5, 2021 by 228-206 (House roll call 369), its final vote on the bill.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 3684 votes, 2021)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT vote_chamber, session_number, roll_number, action_date, action_text FROM law.bill_recorded_votes WHERE vote_congress=117 AND bill_number=3684 AND bill_type='hr' ORDER BY action_date"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-20"
     },
     {
       "id": 69,
@@ -2801,16 +2815,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the House passed H.R. 5376 (117th) on Nov. 19, 2021 by 220-213 with exactly one Democrat voting no. False if the official roll call shows a different date, tally or Democratic split. Cannot be determined if the roll call cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's roll-call records show the House passed H.R. 5376 on Nov. 19, 2021 by 220-213 (House roll call 385), with 220 Democrats voting yes and one Democrat voting no.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 5376 passage, 2021)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT vote_chamber, vote_congress, session_number, roll_number, action_date, action_text, bill_type, bill_number FROM law.bill_recorded_votes WHERE vote_congress=117 AND bill_number IN (3684,5376) AND bill_type IN ('hr') AND (action_text ILIKE '%passage%' OR action_text ILIKE '%passed%' OR action_text ILIKE '%concur%') ORDER BY bill_number, action_date"
+        },
+        {
+          "label": "law.member_roll_call_votes (House roll call 385 by party)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "SELECT party, vote_cast, count(*) n FROM law.member_roll_call_votes WHERE chamber='House' AND congress=117 AND session_number=1 AND roll_number=385 GROUP BY party, vote_cast ORDER BY party, vote_cast"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-20"
     },
     {
       "id": 70,
@@ -2833,16 +2860,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Hoyer's House service, from his first swearing-in through the current 119th Congress, spans 23 Congresses. False if the official service record gives a different count. Cannot be determined if his service dates cannot be found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's member record for Hoyer (bioguide H000874) shows House service beginning in 1981 and continuing through the 119th Congress; the 97th through 119th Congresses are 23. The Bioguide page refused the fetch, so this rests on the warehouse record.",
+      "evidence": [
+        {
+          "label": "officials.members (Hoyer service terms)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#members-table",
+          "askamerica": true,
+          "sql": "SELECT congress, terms_json, party_name FROM officials.members WHERE bioguide_id='H000874' ORDER BY congress"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-20"
     },
     {
       "id": 71,
@@ -2850,7 +2884,7 @@
       "office": "U.S. Representative",
       "party": "D",
       "context": "In a House floor speech on Nov. 19, 2026 titled Lessons in Leadership, Hoyer listed what the 117th Congress enacted.",
-      "topic": "Federal budget and spending",
+      "topic": "Congressional leadership",
       "broad_topic": "Economy and Jobs",
       "speaker_state": "MD",
       "about_states": [],
@@ -2865,16 +2899,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the CHIPS and Science Act (H.R. 4346, 117th) was enacted with yes votes from members of both parties. False if it was not enacted or passed with one party's votes only. Cannot be determined if the votes cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's records show H.R. 4346 became Public Law 117-167; the final House vote on July 28, 2022 was 243-187 with 219 Democrats and 24 Republicans voting yes, and the Senate vote was 64-33. Its purpose was not assessed.",
+      "evidence": [
+        {
+          "label": "law.bills (H.R. 4346, 117th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "select congress, bill_type, bill_number, title, latest_action_text, law_type, law_number from law.bills where (congress=117 and bill_type='hr' and bill_number=4346) or (congress=117 and bill_type='s' and bill_number=2938) or (congress=111 and bill_type='hr' and bill_number in (2965,6520)) or (congress=113 and bill_type in ('hr','s') and lower(title) like '%export-import%')"
+        },
+        {
+          "label": "law.member_roll_call_votes (House roll call 404, 2022, by party)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "select roll_number, \"year\", vote_cast, party, count(*) n from law.member_roll_call_votes where chamber='House' and ((year=2022 and roll_number in (404,299) and session_number=2) or (year=2010 and roll_number=638 and session_number=2)) group by roll_number, \"year\", vote_cast, party order by \"year\", roll_number, party, vote_cast"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-20"
     },
     {
       "id": 72,
@@ -2897,16 +2944,35 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the 117th Congress enacted the Bipartisan Safer Communities Act with yes votes from both parties and the law expands background checks. False if no such law was enacted or it contains no background-check expansion. Cannot be determined if the law or votes cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's records show S. 2938 became Public Law 117-159; the House passed it 234-193 on June 24, 2022 with 220 Democrats and 14 Republicans voting yes, the Senate 65-33, and the official summary says it expands background check requirements.",
+      "evidence": [
+        {
+          "label": "law.bills (S. 2938, 117th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "select congress, bill_type, bill_number, title, latest_action_text, law_type, law_number from law.bills where (congress=117 and bill_type='hr' and bill_number=4346) or (congress=117 and bill_type='s' and bill_number=2938) or (congress=111 and bill_type='hr' and bill_number in (2965,6520)) or (congress=113 and bill_type in ('hr','s') and lower(title) like '%export-import%')"
+        },
+        {
+          "label": "law.member_roll_call_votes (House roll call 299, 2022, by party)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "select roll_number, \"year\", vote_cast, party, count(*) n from law.member_roll_call_votes where chamber='House' and ((year=2022 and roll_number in (404,299) and session_number=2) or (year=2010 and roll_number=638 and session_number=2)) group by roll_number, \"year\", vote_cast, party order by \"year\", roll_number, party, vote_cast"
+        },
+        {
+          "label": "law.bill_summaries (S. 2938 summary)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_summaries-table",
+          "askamerica": true,
+          "sql": "select substr(summary_text,1,1500) s from law.bill_summaries where congress=117 and bill_type='s' and bill_number=2938"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-20"
     },
     {
       "id": 73,
@@ -2928,14 +2994,14 @@
         "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgH6301-2.htm",
         "note": ""
       },
-      "kind": "factual",
+      "kind": "opinion_or_prediction",
       "test": null,
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
+      "result": null,
       "finding": null,
       "evidence": [],
       "check_run": null
@@ -2961,16 +3027,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the House vote passing the Don't Ask, Don't Tell repeal in December 2010 included yes votes from members of both parties. False if only one party voted yes. Cannot be determined if the roll call cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's roll-call records show the House voted 250-175 on Dec. 15, 2010 to pass the repeal (as the Senate amendment to H.R. 2965), with 235 Democrats and 15 Republicans voting yes; it became Public Law 111-321.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 2965, 111th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "select congress, bill_type, bill_number, vote_chamber, session_number, roll_number, action_date, action_text, url from law.bill_recorded_votes where (congress=117 and bill_type='hr' and bill_number=4346) or (congress=117 and bill_type='s' and bill_number=2938) or (congress=111 and bill_type='hr' and bill_number in (2965,6520)) order by congress, bill_number, action_date"
+        },
+        {
+          "label": "law.member_roll_call_votes (House roll call 638, 2010, by party)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "select roll_number, \"year\", vote_cast, party, count(*) n from law.member_roll_call_votes where chamber='House' and ((year=2022 and roll_number in (404,299) and session_number=2) or (year=2010 and roll_number=638 and session_number=2)) group by roll_number, \"year\", vote_cast, party order by \"year\", roll_number, party, vote_cast"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-20"
     },
     {
       "id": 75,
@@ -2993,16 +3072,37 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a House Export-Import Bank reauthorization passed with bipartisan votes in 2013 over the opposition of the Republican Financial Services chairman. Contradicted on the year if the official record shows the reauthorization happened in a different year and none in 2013. Cannot be determined if the record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "AskAmerica's bill records show Export-Import Bank reauthorizations enacted in 2012 (H.R. 2072, P.L. 112-122) and passed by the House in October 2015 (H.R. 597, 313-118, after a discharge motion), while 2013 Ex-Im bills were only referred to committee; the 2015 bill's text amends the 2012 act, with no 2013 act between them. Hoyer's own role and the chairman's opposition were not assessed, and the warehouse holds no 2013 House roll calls, so a 2013 vote under another title is not fully ruled out.",
+      "evidence": [
+        {
+          "label": "law.bills (Export-Import Bank bills, 112th-114th Congresses)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "select congress, bill_type, bill_number, title, introduced_date, latest_action_text from law.bills where lower(title) like '%export-import bank%' and congress in (112,113,114) and bill_type in ('hr','hres') order by congress, bill_number"
+        },
+        {
+          "label": "law.bill_recorded_votes (Ex-Im reauthorization votes)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "select congress, bill_number, vote_chamber, roll_number, action_date, action_text from law.bill_recorded_votes where (congress=114 and bill_type in ('hr','hres') and bill_number in (597,450)) or (congress=112 and bill_type='hr' and bill_number=2072) or (congress=113 and action_text like '%Export%') order by action_date"
+        },
+        {
+          "label": "H.R. 597 (114th), engrossed text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-114hr597eh/html/BILLS-114hr597eh.htm"
+        },
+        {
+          "label": "Export-Import Bank Reauthorization Act of 2012, P.L. 112-122",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-112publ122/html/PLAW-112publ122.htm"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-20"
     },
     {
       "id": 76,
@@ -3025,16 +3125,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill he refers to had the support of 86 senators and about 60 percent of House members. False if the official vote or cosponsor record shows materially different numbers. Cannot be determined if the bill cannot be identified or its record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The bill the speech describes is H.R. 5334, the Lindsey O. Graham Sanctioning Russia and Iran Act of 2026 (P.L. 119-111). AskAmerica's roll-call records show the Senate passed it 86-11 on Aug. 7, 2026 and the House agreed 262-159 on Sept. 16, 2026, which is 60.2% of the House's 435 seats.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 5334 votes, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT vote_chamber, session_number, roll_number, action_date, action_text, url FROM law.bill_recorded_votes WHERE vote_congress=119 AND bill_type='hr' AND bill_number=5334"
+        },
+        {
+          "label": "House Clerk, roll call 308 (2026)",
+          "url": "https://clerk.house.gov/evs/2026/roll308.xml"
+        }
+      ],
+      "check_run": "q221/askamerica/2026-11-20"
     },
     {
       "id": 77,
@@ -3057,16 +3168,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill became law with Trump's signature and within days the administration waived or declined to impose sanctions the law provided for. Contradicted if the official record shows the bill was not signed by Trump or no waiver followed. Cannot be determined if the record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's bill records show Trump signed H.R. 5334 on Sept. 18, 2026, and Executive Order 14436 of Oct. 16, 2026 waived its sanctions before they took effect. The signing and the waiver are confirmed; the waiver came 28 days after the signing, so whether that is \"just days later\" depends on how loosely the phrase is read.",
+      "evidence": [
+        {
+          "label": "law.bill_actions (H.R. 5334 latest actions)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number=5334 ORDER BY action_seq DESC FETCH FIRST 6 ROWS ONLY"
+        },
+        {
+          "label": "White House, Executive Order 14436 (Oct. 16, 2026)",
+          "url": "https://www.whitehouse.gov/presidential-actions/2026/10/implementing-the-lindsey-o-graham-sanctioning-russia-and-iran-act-of-2026/"
+        }
+      ],
+      "check_run": "q221/askamerica/2026-11-20"
     },
     {
       "id": 78,
@@ -3089,16 +3211,31 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Congress enacted a Russia sanctions law with bipartisan support including some of those named that official sources describe as the most extensive Russia sanctions to date. Unsettled if a law was enacted but \"most sweeping ever\" cannot be measured from the record. Contradicted if no such law was enacted.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Congress enacted P.L. 119-111 with bipartisan votes, and AskAmerica's cosponsor records show McConnell, Blumenthal and Shaheen cosponsored the Senate versions and McCaul a House version. No official source read describes it as the most sweeping sanctions ever imposed on Russia, and a law-firm analysis says most provisions codify existing sanctions while adding new tariff authority.",
+      "evidence": [
+        {
+          "label": "law.bill_cosponsors (Russia sanctions bills, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_cosponsors-table",
+          "askamerica": true,
+          "sql": "SELECT bill_type, bill_number, full_name, is_original_cosponsor FROM law.bill_cosponsors WHERE congress=119 AND ((bill_type='s' AND bill_number IN (5025,1241) AND (full_name ILIKE '%McConnell%' OR full_name ILIKE '%Blumenthal%' OR full_name ILIKE '%Shaheen%' OR full_name ILIKE '%Graham%')) OR (bill_type='hr' AND bill_number IN (5334,2548) AND (full_name ILIKE '%McCaul%' OR full_name ILIKE '%Rogers (AL%' OR full_name ILIKE '%Wilson (SC%' OR full_name ILIKE '%Hoyer%')))"
+        },
+        {
+          "label": "Orrick, New Russia Sanctions Law Enacted",
+          "url": "https://www.orrick.com/en/Insights/2026/09/New-Russia-Sanctions-Law-Enacted"
+        },
+        {
+          "label": "Covington, President Trump signs Russia sanctions legislation",
+          "url": "https://www.cov.com/en/news-and-insights/insights/2026/09/president-trump-signs-legislation-authorizing-russia-related-tariffs-and-additional-sanctions"
+        }
+      ],
+      "check_run": "q221/askamerica/2026-11-20"
     },
     {
       "id": 79,
@@ -3121,16 +3258,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Senate passed S. 744 (113th Congress) by 68-32. False if the official roll call shows a different tally. Cannot be determined if the roll call cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Senate's roll call 168 of June 27, 2013 records passage of S. 744 by 68-32, and AskAmerica's member-level votes for that roll call also total 68 yeas and 32 nays.",
+      "evidence": [
+        {
+          "label": "law.member_roll_call_votes (Senate roll call 168, 2013)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "SELECT count(*) AS n, sum(case when vote_cast='Yea' then 1 else 0 end) AS yea, sum(case when vote_cast='Nay' then 1 else 0 end) AS nay FROM law.member_roll_call_votes WHERE chamber='Senate' AND congress=113 AND session_number=1 AND roll_number=168"
+        },
+        {
+          "label": "Senate roll call 168, 113th Congress",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1131/vote_113_1_00168.xml"
+        }
+      ],
+      "check_run": "q222/askamerica/2026-11-20"
     },
     {
       "id": 80,
@@ -3153,16 +3301,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the House never voted on S. 744 and Speaker Boehner declined to bring it up, citing the lack of a Republican majority for it. Contradicted if the House did vote on S. 744. Cannot be determined if Boehner's reasons cannot be found in a primary source.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's bill records show the House never voted on S. 744; its last action is Senate passage on June 27, 2013. NPR reported in July 2013 that Boehner would not let an immigration bill pass without a majority of House Republicans, but no primary statement of his reasons was read, and the role of the Freedom Caucus was not established from a source read.",
+      "evidence": [
+        {
+          "label": "law.bills (S. 744, 113th Congress, latest action)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT latest_action_date, latest_action_text FROM law.bills WHERE congress=113 AND bill_type='s' AND bill_number=744"
+        },
+        {
+          "label": "NPR, House GOP: We Won't Consider Senate Immigration Bill (July 10, 2013)",
+          "url": "https://www.npr.org/sections/itsallpolitics/2013/07/10/200860744/house-gop-we-wont-consider-senate-immigration-bill"
+        }
+      ],
+      "check_run": "q222/askamerica/2026-11-20"
     },
     {
       "id": 81,
@@ -3185,16 +3344,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official count shows about 17 lapses in appropriations from 1981 to 2026 with nine under Reagan and G.H.W. Bush. False if the official list shows materially different counts. Unsettled if the count depends on what is counted as a shutdown.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CRS's table of funding gaps lists 17 from fiscal 1982 through fiscal 2026, nine of them in the Reagan and George H.W. Bush years. CRS counts funding gaps and notes that not every gap led to a shutdown.",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-20"
     },
     {
       "id": 82,
@@ -3217,16 +3381,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the funding gaps from 1981 to January 1993 averaged under two days by the official list. False if they averaged two days or more. Cannot be determined if the list cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CRS lists the nine gaps from fiscal 1982 through fiscal 1991 as lasting 2, 1, 3, 3, 2, 1, 1, 1 and 3 full days, 17 days in all, an average of about 1.9 days.",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-20"
     },
     {
       "id": 83,
@@ -3249,16 +3418,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Dec. 16, 1995 to Jan. 6, 1996 funding gap lasted 21 days. False if the official record gives a materially different length. Cannot be determined if the record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CRS lists the second fiscal 1996 funding gap, from Dec. 15, 1995 to Jan. 6, 1996, as 21 full days. Gingrich's motive was not assessed.",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-20"
     },
     {
       "id": 84,
@@ -3281,16 +3455,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Oct. 1-16, 2013 funding gap lasted 16 days and House-passed funding bills in that dispute sought to defund, delay or repeal the ACA. False if the length was materially different or the dispute had no ACA component. Unsettled if it turns on whether defunding or delay counts as repeal.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CRS records the fiscal 2014 funding gap as 16 full days in October 2013 and ties the dispute to the Affordable Care Act, but the House bills' provisions were not read, and whether defunding or delaying the law counts as an attempt to repeal it is a matter of wording.",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        },
+        {
+          "label": "CRS RL34680, Shutdown of the Federal Government",
+          "url": "https://www.everycrsreport.com/reports/RL34680.html"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-20"
     },
     {
       "id": 85,
@@ -3313,16 +3496,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the funding gap beginning Dec. 22, 2018 lasted about 34-35 days. False if the official record gives a materially different length. Cannot be determined if the record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CRS lists the gap from Dec. 22, 2018 to Jan. 25, 2019 as 34 full days (35 counting the end date).",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-20"
     },
     {
       "id": 86,
@@ -3345,16 +3533,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the funding gap beginning Oct. 1, 2025 lasted 43 days, was government-wide and was the longest on record when it ended. False if the official record gives a materially different length or a longer earlier gap. Cannot be determined if the record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CRS lists the government-wide gap from Oct. 1 to Nov. 12, 2025 as 42 full days, which is 43 calendar days counting both ends, and it was longer than any earlier gap (the previous longest was 34 days). Whether the figure is 42 or 43 depends on the counting convention.",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-20"
     },
     {
       "id": 87,
@@ -3377,16 +3570,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the official record shows a 2026 lapse in DHS appropriations lasting about 76 days. False if the record gives a materially different length or no DHS-only lapse. Cannot be determined if the record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CRS lists a funding gap affecting only the Department of Homeland Security appropriations act from Feb. 14 to Apr. 30, 2026, 75 full days (76 counting the end date).",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-20"
     },
     {
       "id": 88,
@@ -3409,16 +3607,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official estimates of the economic cost of the four longest shutdowns since 2006 sum to about $40 billion. Unsettled if estimates exist for only some of them or use different measures. Unsupported if no official estimate is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "By CRS's list the four longest gaps since 2006 are the 2026 DHS gap, the 2025, 2018-19 and 2013 gaps. CBO's October 2025 analysis estimated lost real GDP of $7 billion to $14 billion for a four- to eight-week 2025 shutdown, but no official estimate was found for the 2026 DHS gap and CBO's pages on the earlier gaps could not be read, so the $40 billion total is neither confirmed nor ruled out.",
+      "evidence": [
+        {
+          "label": "CRS RS20348, Federal Funding Gaps (May 26, 2026), Table 1",
+          "url": "https://www.everycrsreport.com/reports/RS20348.html"
+        },
+        {
+          "label": "CBO, Quantitative Effects of a Shutdown (Oct. 2025), House Budget Committee copy",
+          "url": "https://arrington.house.gov/uploadedfiles/61823-quantitative-effects-of-a-shutdown-1.pdf"
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-20"
     },
     {
       "id": 89,
@@ -3441,16 +3648,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a primary record shows Trump telling Republican congressional leaders not to negotiate with Democrats during that shutdown. Unsettled if only secondhand accounts exist. Unsupported if nothing is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The Fiscal Times reported that Trump said on Fox & Friends on Sept. 12, 2025, \"Don't even bother dealing with them,\" about Democrats in the funding talks, three weeks before the shutdown began; the transcript that was fetched did not contain the lines, and the remark was made on air rather than as a reported instruction to leaders.",
+      "evidence": [
+        {
+          "label": "Fiscal Times, Sept. 12, 2025",
+          "url": "https://www.thefiscaltimes.com/2025/09/12/Dont-Even-Bother-Dealing-Them-Trump-Dismisses-Shutdown-Talks-Dems"
+        }
+      ],
+      "check_run": "q225/askamerica/2026-11-20"
     },
     {
       "id": 90,
@@ -3473,16 +3685,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official source shows FY1997 (enacted September 1996) as the most recent year all regular appropriations were enacted by Oct. 1. False if a later year also met that. Cannot be determined if no official source can be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CRS reports R42647 and R46595 name fiscal 1997, whose bills were enacted in September 1996, as the most recent year all regular appropriations were enacted before the fiscal year began, and fiscal 2026 and 2027 both began under continuing resolutions.",
+      "evidence": [
+        {
+          "label": "CRS R46595, appropriations enacted by the start of the fiscal year",
+          "url": "https://www.everycrsreport.com/reports/R46595.html"
+        },
+        {
+          "label": "CRS R42647, Continuing Resolutions (Table 3)",
+          "url": "https://www.everycrsreport.com/reports/R42647.html"
+        }
+      ],
+      "check_run": "q225/askamerica/2026-11-20"
     },
     {
       "id": 91,
@@ -3505,16 +3726,31 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if, for FY2008-FY2027, official data show no regular appropriations act enacted by Oct. 1 in 16 of those 20 years. False if the official count differs materially. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CRS's table shows no regular appropriations bill enacted by Oct. 1 in 14 of fiscal 2008-2025 (the exceptions are 2009, 2010, 2017 and 2019), and AskAmerica's bill records and the public-law text show fiscal 2026 and 2027 also began with a continuing resolution only, making 16 of 20.",
+      "evidence": [
+        {
+          "label": "law.bills (119th Congress appropriations laws)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT title, law_number, latest_action_date, latest_action_text FROM law.bills WHERE congress=119 AND law_number IS NOT NULL AND (title ILIKE '%appropriations act, 2027%' OR title ILIKE '%continuing appropriations%') ORDER BY latest_action_date"
+        },
+        {
+          "label": "CRS R46595, appropriations enacted by the start of the fiscal year",
+          "url": "https://www.everycrsreport.com/reports/R46595.html"
+        },
+        {
+          "label": "Public Law 119-103 (continuing appropriations, Sept. 2, 2026)",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ103/html/PLAW-119publ103.htm"
+        }
+      ],
+      "check_run": "q225/askamerica/2026-11-20"
     },
     {
       "id": 92,
@@ -3537,16 +3773,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official data on continuing resolutions show an average of about 108 days per year under CRs for FY2001-FY2010. False if materially different. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "CRS R42647's Table 3 gives total days under continuing resolutions for fiscal 2001-2010 of 82, 102, 143, 123, 69, 92, 365, 92, 162 and 79, an average of about 131 days a year, not 108; leaving out fiscal 2007's full-year resolution gives about 105. What remains open is whether the figure comes from a different counting method.",
+      "evidence": [
+        {
+          "label": "CRS R42647, Continuing Resolutions (Table 3)",
+          "url": "https://www.everycrsreport.com/reports/R42647.html"
+        }
+      ],
+      "check_run": "q225/askamerica/2026-11-20"
     },
     {
       "id": 93,
@@ -3569,16 +3810,31 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the days from Oct. 1 to enactment of the last regular appropriations (or a full-year CR) were about 160 in FY2024, about 165 in FY2025 and about 211 in FY2026, by official dates. False if the official dates give materially different counts. Cannot be determined if the dates cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "By the enactment dates in AskAmerica's bill records and the public laws, fiscal 2025's full-year resolution came 165 days into the year and fiscal 2026's last regular bill (Homeland Security, Apr. 30, 2026) 211 days in, while fiscal 2024's 160 days runs only to the first batch of bills (Mar. 9, 2024), 174 to the last. Fiscal 2026's count also includes 43 days of full funding lapse rather than days under a continuing resolution, so the figures fit only some readings of the measure.",
+      "evidence": [
+        {
+          "label": "law.bills (appropriations laws, fiscal 2024-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT congress, bill_type, bill_number, title, latest_action_date, law_number FROM law.bills WHERE law_number IS NOT NULL AND ((congress=118 AND latest_action_date BETWEEN '2023-09-25' AND '2024-10-01') OR (congress=118 AND latest_action_date BETWEEN '2024-12-01' AND '2025-01-03') OR (congress=119 AND latest_action_date >= '2025-03-01')) AND (title ILIKE '%appropriation%' OR title ILIKE '%continuing%' OR title ILIKE '%full-year%') ORDER BY latest_action_date"
+        },
+        {
+          "label": "P.L. 119-86 (Apr. 30, 2026)",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ86/html/PLAW-119publ86.htm"
+        },
+        {
+          "label": "P.L. 118-47 (Mar. 23, 2024)",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-118publ47/html/PLAW-118publ47.htm"
+        }
+      ],
+      "check_run": "q226/askamerica/2026-11-20"
     },
     {
       "id": 94,
@@ -3601,16 +3857,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if no FY2027 regular appropriations bill received Senate floor consideration before Sept. 30, 2026. Contradicted if the Senate record shows floor action on any FY2027 appropriations bill before then. Cannot be determined if the record cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill-action records show the House-passed fiscal 2027 bills were only received in or placed on the Senate calendar, with no motion to proceed, cloture or passage vote before Sept. 30, 2026. The only fiscal 2027 measure with Senate floor action was the continuing resolution H.R. 6500, which is not a regular appropriations bill.",
+      "evidence": [
+        {
+          "label": "law.bills (fiscal 2027 appropriations bills)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT bill_type, bill_number, title, latest_action_date, latest_action_text FROM law.bills WHERE congress=119 AND bill_type='hr' AND title ILIKE '%September 30, 2027%' ORDER BY bill_number"
+        },
+        {
+          "label": "law.bill_actions (H.R. 8469 and H.R. 8595, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT bill_number, action_date, text FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number IN (8469,8595) AND action_date >= '2026-06-01' ORDER BY bill_number, action_seq"
+        }
+      ],
+      "check_run": "q226/askamerica/2026-11-20"
     },
     {
       "id": 95,
@@ -3633,16 +3902,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the House party division when the 117th Congress convened on Jan. 3, 2021 was 222 Democrats to 211 or 212 Republicans. False if the official count differs materially. Cannot be determined if the count cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The House Historian's party-division table lists the 117th Congress as 222 Democrats and 212 Republicans, noting one seat (NY-22) vacant at the opening.",
+      "evidence": [
+        {
+          "label": "House Historian, party divisions",
+          "url": "https://history.house.gov/Institution/Party-Divisions/Party-Divisions/"
+        }
+      ],
+      "check_run": "q226/askamerica/2026-11-20"
     },
     {
       "id": 96,
