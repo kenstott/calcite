@@ -15402,11 +15402,12 @@ public class McpServer {
     /**
      * web_fetch identifies itself honestly. Bot filters (Akamai on cdc.gov, gao.gov, nrc.gov)
      * compare the claimed browser with the TLS handshake: a Java client claiming to be Chrome is
-     * refused with 403, while this User-Agent is served. Measured 2026-11-20 on 109 URLs that
-     * had returned 401/403 in eval runs: this header reached 21 the Chrome header could not,
-     * and every URL the Chrome header reached.
+     * refused with 403, while this User-Agent is served. It carries no URL and not the word
+     * "fetch": NPR drops the connection for either. Measured 2026-11-20 from Java on 109 URLs
+     * that had returned 401/403 in eval runs: this header reached 27, a URL-bearing one 20 (a
+     * subset), the Chrome header 0; it also reaches NPR, cdc.gov, gao.gov, nrc.gov and govinfo.
      */
-    static final String FETCH_USER_AGENT = "askamerica-fetch/1.0 (+https://askamerica.ai)";
+    static final String FETCH_USER_AGENT = "AskAmerica/1.0 (askamerica.ai)";
 
     /**
      * Shared GET-and-buffer helper for web_fetch. Returns the fetched bytes, or throws with a
