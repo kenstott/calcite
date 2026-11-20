@@ -1,0 +1,1824 @@
+{
+ "date": "2026-11-20",
+ "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 19 or 20, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 20 at about 7:40 ET, less the stories earlier pages already used, plus the one transcript from the fixed transcript sources dated in that window (the White House text of the Nov. 19 U.S.-Russia-China declaration). Transcripts from Nov. 13 to 18 were searched only to confirm quotes. PBS NewsHour carries Associated Press reporting. Quotes under five words were left out, as were commentators' accounts of what an official said and statements by officials outside the offices in scope. Statements are worded as the outlet reported them; entries beginning \"Reported as\" are the reporter's wording.",
+ "lede": [
+  "Nov. 19 and 20 brought President Trump's three-way summit with Xi Jinping and Vladimir Putin in Shenzhen, a Senate vote on ending the war in Iran, Senate passage of a bipartisan permitting bill, and a House Homeland Security Committee hearing with Homeland Security Secretary Markwayne Mullin on the FAA ground stop, recent tech outages and a reported Iranian dirty-bomb plan. This page lists what officeholders in scope were quoted saying in that coverage, 47 statements from 18 speakers.",
+  "Seventeen statements made checkable factual claims or rested on a stated factual premise. Checks against AskAmerica's warehouse found U.S. gasoline and diesel prices above their pre-war levels, CISA's workforce down about 35% since January 2025, and Oklahoma receiving about 1.6% of federal highway formula funds. A House roll call confirmed how Mullin voted on the 2021 infrastructure law, and the Senate's record confirmed the permitting bill's Nov. 19 passage.",
+  "Several claims could not be decided from the record. No official root-cause finding has been published for the outages, no on-record agency assessment of the dirty-bomb threat's imminence was found beyond the secretary's own testimony, and China's published readouts of the summit do not mention Iran or the Strait of Hormuz. Each statement's test, finding and sources are shown with it."
+ ],
+ "stories": [
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/19/nx-s1-6045750/katherine-clark-hakeem-jeffries-house-democrats",
+   "headline": "Incoming House majority leader Katherine Clark stresses Democratic unity",
+   "published": "2026-11-19T06:20-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/19/g-s1-154340/un-court-myanmar-genocide-rohingya",
+   "headline": "The U.N.'s top court rules Myanmar committed genocide against the Rohingya",
+   "published": "2026-11-19T07:29-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/watch-live-senate-meets-for-legislative-business-as-trump-returns-from-putin-xi-talks-in-china",
+   "headline": "WATCH: Senate Republicans block latest Democratic effort to end war in Iran",
+   "published": "2026-11-19T10:00-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/world/no-breakthroughs-from-trump-xi-and-putins-3-way-talks-on-nuclear-risks",
+   "headline": "No breakthroughs from Trump, Xi and Putin's 3-way talks on nuclear risks",
+   "published": "2026-11-19T10:45-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/19/nx-s1-6045916/democrats-midterm-house-majority",
+   "headline": "The midterms were the largest win for either party in 50 years",
+   "published": "2026-11-19T10:55-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/republican-rep-nick-begich-wins-reelection-for-alaska-house-seat",
+   "headline": "Republican Rep. Nick Begich wins reelection for Alaska House seat",
+   "published": "2026-11-19T11:16-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/19/nx-s1-6047338/bigger-than-barack-obamas-election-scholars-reflect-on-mississippi-senate-race",
+   "headline": "'Bigger than Barack Obama's election': Scholars reflect on Mississippi Senate race",
+   "published": "2026-11-19T12:03-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/im-not-maga-elon-musk-says-after-republicans-midterm-thrashing",
+   "headline": "'I'm not MAGA,' Elon Musk says after Republicans' midterm thrashing",
+   "published": "2026-11-19T12:09-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/mississippi-saw-a-spike-in-inactive-voters-for-the-midterms-democratic-lawmakers-want-answers",
+   "headline": "Mississippi saw a spike in 'inactive' voters for the midterms. Democratic lawmakers want answers",
+   "published": "2026-11-19T14:07-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/19/nx-s1-6047151/trump-arch-golf-course-judge-orders",
+   "headline": "Judges have put Trump's arch and golf course on hold, but only for a matter of days",
+   "published": "2026-11-19T14:46-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs",
+   "headline": "Fact-checking Mullin's House hearing on FAA ground stop, outages and dirty bombs",
+   "published": "2026-11-19T15:12-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/judge-issues-14-day-extension-of-order-blocking-trumps-triumphal-arch-construction",
+   "headline": "Judge issues 14-day extension of order blocking Trump's triumphal arch construction",
+   "published": "2026-11-19T17:39-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/world/3-takeaways-from-trump-xi-and-putins-historic-summit",
+   "headline": "3 takeaways from Trump, Xi and Putin's historic summit",
+   "published": "2026-11-19T17:58-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/tennessee-democrat-describes-how-she-won-a-trump-district-with-almost-no-ad-money",
+   "headline": "Tennessee Democrat describes how she won a Trump district with almost no ad money",
+   "published": "2026-11-19T18:30-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/20/nx-s1-5981356/new-york-city-rikers-jail-plans-germany-prison-model",
+   "headline": "New York City unveils a bold plan to move its jails off Rikers Island",
+   "published": "2026-11-20T05:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill",
+   "headline": "Senate passes bipartisan energy bill amid environmental concerns",
+   "published": "2026-11-20T06:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/20/g-s1-154582/up-first-newsletter-democrats-iran-war-trump-xi-jinping-iowa-army",
+   "headline": "Dems aim to block Iran war funding. And, Army delays lead azide detonation in Iowa",
+   "published": "2026-11-20T07:04-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/20/nx-s1-6048461/texas-execution-dennes-moaned-pain",
+   "headline": "Texas execution took over an hour as staff struggled to find vein; Reinaldo Dennes moaned about pain",
+   "published": "2026-11-20T07:24-05:00"
+  },
+  {
+   "outlet": "White House briefings and statements",
+   "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/",
+   "headline": "U.S.-Russia-China Heads of State Declaration toward Peace",
+   "published": "2026-11-19"
+  }
+ ],
+ "statements": [
+  {
+   "id": 1,
+   "speaker": "Katherine Clark",
+   "office": "U.S. Representative from Massachusetts",
+   "party": "D",
+   "context": "In a Nov. 20 NPR Morning Edition interview, Rep. Katherine Clark, nominated for House majority leader, described what gives her optimism about the incoming Democratic caucus.",
+   "topic": "House Democratic leadership",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MA",
+   "about_states": [],
+   "quote": "It was really looking at the diversity of that caucus, people who have been sent to Congress from all walks of life, that gives me the optimism and the energy that we can really deliver for the American people",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/19/nx-s1-6045750/katherine-clark-hakeem-jeffries-house-democrats"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 2,
+   "speaker": "Katherine Clark",
+   "office": "U.S. Representative from Massachusetts",
+   "party": "D",
+   "context": "Asked in a Nov. 20 NPR interview whether 11 votes against Hakeem Jeffries for speaker could complicate the House Democratic agenda, Rep. Katherine Clark described the incoming caucus.",
+   "topic": "House Democratic leadership",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MA",
+   "about_states": [],
+   "quote": "We are having conversations with every part of our new caucus, and they are united behind making life better for working people",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/19/nx-s1-6045750/katherine-clark-hakeem-jeffries-house-democrats"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 3,
+   "speaker": "Tim Kaine",
+   "office": "U.S. Senator from Virginia",
+   "party": "D",
+   "context": "Before a Nov. 19 Senate vote on a resolution to end the war in Iran, Sen. Tim Kaine described public opinion on the war.",
+   "topic": "Iran war powers vote",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "The American public is tired of it",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-senate-meets-for-legislative-business-as-trump-returns-from-putin-xi-talks-in-china"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 4,
+   "speaker": "Tim Kaine",
+   "office": "U.S. Senator from Virginia",
+   "party": "D",
+   "context": "Before a Nov. 19 Senate vote on a resolution to end the war in Iran, Sen. Tim Kaine described fuel prices since the war began.",
+   "topic": "Iran war powers vote",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "The American public is also tired of escalating gasoline prices and diesel prices, and other things that have gone up and punished Americans since the war.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-senate-meets-for-legislative-business-as-trump-returns-from-putin-xi-talks-in-china"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if U.S. average retail gasoline and diesel prices are higher in the most recent data than just before the Iran war began. False if both are at or below their pre-war levels. Cannot be determined if the war's start date or recent price data cannot be established.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "In EIA weekly retail data in AskAmerica's warehouse, U.S. regular gasoline averaged $2.937 a gallon and diesel $3.809 in the week of Feb. 23, 2026, just before the war began; in the week of Nov. 16 they were $3.805 and $5.937. Both are higher than before the war, though below their 2026 peaks ($4.50 for gasoline in May, $6.529 for diesel in September). The \"other things\" were not tested.",
+   "evidence": [
+    {
+     "label": "energy.eia_retail_gasoline_prices (weekly U.S. gasoline and diesel, Jan.-Nov. 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+     "askamerica": true,
+     "sql": "SELECT report_date, series_id, price_dollars_per_gallon FROM energy.eia_retail_gasoline_prices WHERE series_id IN ('EMM_EPMR_PTE_NUS_DPG','EMD_EPD2D_PTE_NUS_DPG') AND report_date >= '2026-01-01' ORDER BY report_date, series_id"
+    },
+    {
+     "label": "ABC13, gas prices top $4 as Iran war escalates",
+     "url": "https://abc13.com/story/gas-prices-top-4-gallon-iran-war-escalates/19544401/"
+    }
+   ],
+   "check_run": "q201/askamerica/2026-11-20"
+  },
+  {
+   "id": 5,
+   "speaker": "Tim Sheehy",
+   "office": "U.S. Senator from Montana",
+   "party": "R",
+   "context": "Before the Nov. 19 Senate vote on a resolution to end the war in Iran, Sen. Tim Sheehy said what the United States should do in the war.",
+   "topic": "Iran war powers vote",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "MT",
+   "about_states": [],
+   "quote": "finish the job, protect this nation and protect our allies",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-senate-meets-for-legislative-business-as-trump-returns-from-putin-xi-talks-in-china"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 6,
+   "speaker": "Tim Kaine",
+   "office": "U.S. Senator from Virginia",
+   "party": "D",
+   "context": "Ahead of a Dec. 11 deadline to pass a government funding measure, Sen. Tim Kaine's plan for the stopgap spending bill was reported by NPR.",
+   "topic": "Iran war funding",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "VA",
+   "about_states": [],
+   "quote": "Reported as: Virginia Sen. Tim Kaine aims to include a provision to end war funding in the stopgap bill.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154582/up-first-newsletter-democrats-iran-war-trump-xi-jinping-iowa-army"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 7,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "At the start of the Nov. 19 three-way meeting in Shenzhen, China, with Chinese President Xi Jinping and Russian President Vladimir Putin, President Trump characterized the meeting.",
+   "topic": "Trump-Xi-Putin summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "We are really making history",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/no-breakthroughs-from-trump-xi-and-putins-3-way-talks-on-nuclear-risks"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 8,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "At the start of the Nov. 19 three-way meeting in Shenzhen with Xi Jinping and Vladimir Putin, President Trump described the three countries' role on nuclear weapons.",
+   "topic": "Nuclear arms control",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "The United States, Russia and China are uniquely positioned to discuss how to reduce the number of nuclear weapons on Earth and also to lessen the risk of those weapons being used.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/no-breakthroughs-from-trump-xi-and-putins-3-way-talks-on-nuclear-risks"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 9,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Before a Nov. 19 one-on-one meeting with Russian President Vladimir Putin in Shenzhen, China, President Trump predicted the outcome of the talks.",
+   "topic": "Trump-Xi-Putin summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Wonderful things can come out of this",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/no-breakthroughs-from-trump-xi-and-putins-3-way-talks-on-nuclear-risks"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "A lot of wonderful things can come out of this, or at least start,",
+     "outlet": "PBS NewsHour",
+     "url": "https://www.pbs.org/newshour/world/3-takeaways-from-trump-xi-and-putins-historic-summit"
+    }
+   ],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 10,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "After a Nov. 19 meeting in Shenzhen, China, AP reported President Trump's statement about shared interests with Chinese President Xi Jinping on oil shipments through the Strait of Hormuz.",
+   "topic": "Iran and the Strait of Hormuz",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Trump said they had a shared interest in having oil flow through the Strait of Hormuz, a key waterway for oil shipments from the Middle East that was repeatedly shut because of attacks in the Iran war.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/no-breakthroughs-from-trump-xi-and-putins-3-way-talks-on-nuclear-risks"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if an official Chinese government readout or statement on the Nov. 19 talks expresses support for oil continuing to flow through the Strait of Hormuz. False if an official Chinese record states a position against that. Cannot be determined if no official Chinese record addresses it.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "China's Foreign Ministry readouts of the Nov. 19 trilateral summit and of the Xi-Trump meeting do not mention Hormuz, oil shipments or Iran; they say only that the Middle East situation was discussed. The joint declaration released by the White House says the three countries \"reaffirmed the importance of stable energy flows\", which is general and does not decide the specific Hormuz point.",
+   "evidence": [
+    {
+     "label": "China Foreign Ministry, readout of the China-Russia-U.S. summit (Nov. 19)",
+     "url": "https://www.fmprc.gov.cn/eng/xw/zyxw/202611/t20261119_12063266.html"
+    },
+    {
+     "label": "China Foreign Ministry, readout of the Xi-Trump meeting (Nov. 19)",
+     "url": "https://www.fmprc.gov.cn/eng/xw/zyxw/202611/t20261119_12063139.html"
+    },
+    {
+     "label": "White House, U.S.-Russia-China Heads of State Declaration toward Peace",
+     "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+    }
+   ],
+   "check_run": "q202/askamerica/2026-11-20"
+  },
+  {
+   "id": 11,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "After the Nov. 19 meetings in Shenzhen, China, AP reported President Trump's statement that he and Chinese President Xi Jinping agree on the Strait of Hormuz.",
+   "topic": "Iran and the Strait of Hormuz",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: He reiterated Thursday that he and Xi agree Iran needs to fully reopen the Strait of Hormuz, a critical waterway for world energy supplies that has become a chokepoint since the start of the war.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/3-takeaways-from-trump-xi-and-putins-historic-summit"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if an official Chinese government readout or statement on the Nov. 19 talks says Iran should fully reopen the Strait of Hormuz. False if an official Chinese record rejects that position. Cannot be determined if no official Chinese record addresses it.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsupported",
+   "finding": "No Chinese record found states or rejects that Iran must fully reopen the Strait of Hormuz; the statement rests on Trump's own account. Searched: China's Foreign Ministry readouts of the Nov. 19 summit and bilateral meeting (which mention only that the Middle East was discussed), the joint declaration, and AP's report; Xinhua could not be loaded, and no Chinese-language record was searched.",
+   "evidence": [
+    {
+     "label": "China Foreign Ministry, readout of the China-Russia-U.S. summit (Nov. 19)",
+     "url": "https://www.fmprc.gov.cn/eng/xw/zyxw/202611/t20261119_12063266.html"
+    },
+    {
+     "label": "China Foreign Ministry, readout of the Xi-Trump meeting (Nov. 19)",
+     "url": "https://www.fmprc.gov.cn/eng/xw/zyxw/202611/t20261119_12063139.html"
+    },
+    {
+     "label": "AP report via Military.com",
+     "url": "https://www.military.com/trump-xi-and-putin-hold-rare-3-way-talks-on-nuclear-risks-but-deliver-no-breakthroughs"
+    }
+   ],
+   "check_run": "q202/askamerica/2026-11-20"
+  },
+  {
+   "id": 12,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "After the Nov. 19 meetings in Shenzhen, China, AP reported President Trump's statement that he and Chinese President Xi Jinping agree Iran cannot obtain a nuclear weapon.",
+   "topic": "Iran and the Strait of Hormuz",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: They also agree that Iran cannot obtain a nuclear weapon, Trump said.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/3-takeaways-from-trump-xi-and-putins-historic-summit"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if an official Chinese government readout or statement on the Nov. 19 talks, or the joint declaration, says Iran must not obtain a nuclear weapon. False if an official Chinese record states a different position. Cannot be determined if no official Chinese record addresses it.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsupported",
+   "finding": "No Chinese record found says China agrees Iran cannot obtain a nuclear weapon. China's summit readout and the joint declaration speak of preventing the proliferation of nuclear weapons in general and do not name Iran. Searched: the two Chinese Foreign Ministry readouts of Nov. 19, the joint declaration and AP's report; Xinhua could not be loaded, and no Chinese-language record was searched.",
+   "evidence": [
+    {
+     "label": "China Foreign Ministry, readout of the China-Russia-U.S. summit (Nov. 19)",
+     "url": "https://www.fmprc.gov.cn/eng/xw/zyxw/202611/t20261119_12063266.html"
+    },
+    {
+     "label": "White House, U.S.-Russia-China Heads of State Declaration toward Peace",
+     "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+    },
+    {
+     "label": "AP report via Military.com",
+     "url": "https://www.military.com/trump-xi-and-putin-hold-rare-3-way-talks-on-nuclear-risks-but-deliver-no-breakthroughs"
+    }
+   ],
+   "check_run": "q202/askamerica/2026-11-20"
+  },
+  {
+   "id": 13,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "After the Nov. 19 meeting in Shenzhen, China, AP reported President Trump's statement about pressing Chinese President Xi Jinping to buy more U.S. farm goods.",
+   "topic": "China agricultural purchases",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Trump suggested he would push Xi to buy more agricultural products from America.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/no-breakthroughs-from-trump-xi-and-putins-3-way-talks-on-nuclear-risks"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 14,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In reporting on the Nov. 19 Shenzhen summit, AP described what President Trump has said he wants after the New START treaty expired.",
+   "topic": "Nuclear arms control",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: The last nuclear arms pact between Russia and the United States, known as New START, expired in February, and Trump has said he wants \"a new, improved and modernized\" deal that includes China.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/no-breakthroughs-from-trump-xi-and-putins-3-way-talks-on-nuclear-risks"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 15,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In the White House text of the Nov. 19 U.S.-Russia-China declaration, the three heads of state, including President Trump, are stated to have committed to strategic stability.",
+   "topic": "Trump-Xi-Putin summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "The three heads of state had an in-depth exchange of views on the current international situation and committed to maintaining strategic stability and international security.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 16,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In the White House text of the Nov. 19 U.S.-Russia-China declaration, the three countries, including the United States under President Trump, are stated to have committed to reform the United Nations.",
+   "topic": "United Nations reform",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "As permanent members of the United Nations Security Council, the United States, Russia, and China committed to reform the UN so that the UN can respond more effectively to global challenges and conform to its fundamental mission of international peace and security.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 17,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In the White House text of the Nov. 19 U.S.-Russia-China declaration, the three countries, including the United States under President Trump, state a plan on refined petroleum products.",
+   "topic": "Trump-Xi-Putin summit",
+   "broad_topic": "Energy",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "The three countries plan to increase the production and supply of refined petroleum products for the benefit of all nations.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 18,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In the White House text of the Nov. 19 U.S.-Russia-China declaration, the three heads of state, including President Trump, are stated to have taken a position on the International Criminal Court.",
+   "topic": "International Criminal Court",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "The three heads of state recognized that the principle of state consent and respect for immunities of State officials are of paramount importance, and concurred that the International Criminal Court and other similar bodies must not abuse their jurisdiction.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 19,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In the White House text of the Nov. 19 U.S.-Russia-China declaration, the three heads of state, including President Trump, are stated to have reaffirmed a position on nuclear war.",
+   "topic": "Nuclear arms control",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "The three heads of state reaffirmed that a nuclear war cannot be won and must never be fought.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/",
+    "note": ""
+   },
+   "kind": "premised_prediction",
+   "test": "Premise only. True if the United States, Russia and China, before Nov. 19, 2026, jointly stated that a nuclear war cannot be won and must never be fought (for example in a joint leaders' statement). False if no such earlier joint statement by all three exists. Cannot be determined if the record of earlier statements cannot be read.",
+   "premise": "The United States, Russia and China had previously affirmed together that a nuclear war cannot be won and must never be fought.",
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "Premise only: the Jan. 3, 2022 Joint Statement of the Leaders of the Five Nuclear-Weapon States, issued by China, France, Russia, the United Kingdom and the United States, says \"We affirm that a nuclear war cannot be won and must never be fought.\" The view itself was not assessed.",
+   "evidence": [
+    {
+     "label": "Joint Statement of the Leaders of the Five Nuclear-Weapon States (Jan. 3, 2022), UK government copy",
+     "url": "https://assets.publishing.service.gov.uk/media/61d308ffe90e071971e25654/Joint_Statement_Of_the_Leaders_of_the_Five_Nuclear-Weapon_States_On_Preventing_Nuclear_War_and_Avoiding_Arms_Races.pdf"
+    },
+    {
+     "label": "White House, U.S.-Russia-China Heads of State Declaration toward Peace",
+     "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+    }
+   ],
+   "check_run": "q203/askamerica/2026-11-20"
+  },
+  {
+   "id": 20,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In the White House text of the Nov. 19 U.S.-Russia-China declaration, the three countries, including the United States under President Trump, state they will hold a nuclear dialogue.",
+   "topic": "Nuclear arms control",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "The three countries will conduct a dialogue on reducing nuclear risks and preventing the proliferation of nuclear weapons.",
+   "reported_by": {
+    "outlet": "White House briefings and statements",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 21,
+   "speaker": "Nick Begich",
+   "office": "U.S. Representative from Alaska",
+   "party": "R",
+   "context": "After winning reelection to Alaska's U.S. House seat on Nov. 18, Rep. Nick Begich commented on the campaign in a statement.",
+   "topic": "Alaska House race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "AK",
+   "about_states": [
+    "AK"
+   ],
+   "quote": "This process requires engagement, and the perspectives brought forward during the campaign added value for Alaskans as they made important decisions about their vote in this race",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republican-rep-nick-begich-wins-reelection-for-alaska-house-seat"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 22,
+   "speaker": "Cindy Hyde-Smith",
+   "office": "U.S. Senator from Mississippi",
+   "party": "R",
+   "context": "In an interview played in a campaign ad aired by her opponent, Sen. Cindy Hyde-Smith responded to a question about rising beef prices.",
+   "topic": "Mississippi Senate race",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "MS",
+   "about_states": [
+    "MS"
+   ],
+   "quote": "You know, you have so many proteins to choose from.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/19/nx-s1-6047338/bigger-than-barack-obamas-election-scholars-reflect-on-mississippi-senate-race"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 23,
+   "speaker": "Ruben Gallego",
+   "office": "U.S. Senator from Arizona",
+   "party": "D",
+   "context": "Responding on X to Elon Musk's statement that he is not MAGA, Sen. Ruben Gallego addressed Musk.",
+   "topic": "Congressional oversight of Musk",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "AZ",
+   "about_states": [],
+   "quote": "You are still getting a subpoena.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/im-not-maga-elon-musk-says-after-republicans-midterm-thrashing"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 24,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a Truth Social post after a federal judge ordered East Potomac Park kept open, President Trump described the golf course and the judge's order.",
+   "topic": "East Potomac golf course and arch",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Why would a judge want to delay taking a terrible and very unsafe golf course, one that is mocked all over D.C.(and far beyond!), instead of quickly turning it into a great and admired one?",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/19/nx-s1-6047151/trump-arch-golf-course-judge-orders"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 25,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a Truth Social post after a federal judge ordered East Potomac Park kept open, President Trump predicted consequences of the delay.",
+   "topic": "East Potomac golf course and arch",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Time is of the essence, or golf seasons, jobs, prestige, and much money, will be lost!",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/19/nx-s1-6047151/trump-arch-golf-course-judge-orders"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 26,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "NPR reported President Trump's repeated social media statements that East Potomac Park in Washington, D.C., would close and work would start on Nov. 15.",
+   "topic": "East Potomac golf course and arch",
+   "broad_topic": "Housing and Communities",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Reported as: Trump's dream of redeveloping a municipal D.C. golf course into a championship-level venue is also temporarily on hold, despite his repeated social media pronouncements that the park would close and work would begin on Nov. 15.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/19/nx-s1-6047151/trump-arch-golf-course-judge-orders"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 27,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "NPR reported President Trump's September statement about the planned triumphal arch in Washington, D.C.",
+   "topic": "East Potomac golf course and arch",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ],
+   "quote": "Reported as: Trump said in September that the arch would double as a military complex, but the plans that got final approval this month don't include any details to that effect.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/19/nx-s1-6047151/trump-arch-golf-course-judge-orders"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 28,
+   "speaker": "Markwayne Mullin",
+   "office": "Secretary of Homeland Security",
+   "party": "R",
+   "context": "PolitiFact reported what Homeland Security Secretary Markwayne Mullin and two other officials told a House committee on Nov. 18 about the cause of recent outages.",
+   "topic": "FAA and tech outages",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Mullin, FBI Deputy Director Christopher Raia and Director of National Intelligence Jay Clayton told the House Homeland Security Committee that the outages affecting the Federal Aviation Administration, the National Security Agency and private companies such as Chase , Apple and United Airlines were unrelated and not the result of hostile cyberattacks.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official findings from the FAA, NSA or the companies named attribute each of the recent outages to non-hostile causes and none links them to one another. False if an official source attributes any of them to a hostile cyberattack or links them. Cannot be determined if the causes have not been published or the inquiries are open without findings.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "As reported by Deseret News and Alhurra, officials told the committee the FAA outage came from newly installed routers overloading its telecommunications system and the others from separate maintenance and technical changes. No FAA, NSA or company root-cause finding has been published and the FBI inquiry remains open, so the claim cannot yet be decided; no source found links the outages or attributes any of them to an attack.",
+   "evidence": [
+    {
+     "label": "Deseret News, Mullin faces questions after FAA outage (Nov. 18)",
+     "url": "https://www.deseret.com/politics/2026/11/18/markwayne-mullin-faces-questions-after-faa-outage/"
+    },
+    {
+     "label": "Alhurra, U.S. officials press for answers on tech outages",
+     "url": "https://alhurra.com/en/55817"
+    }
+   ],
+   "check_run": "q204/askamerica/2026-11-20"
+  },
+  {
+   "id": 29,
+   "speaker": "Markwayne Mullin",
+   "office": "Secretary of Homeland Security",
+   "party": "R",
+   "context": "PolitiFact reported Homeland Security Secretary Markwayne Mullin's answer to a House committee about a reported Iranian plan to detonate a dirty bomb in Washington.",
+   "topic": "Dirty bomb threat",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Mullin said the threat was not imminent.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if an official public statement other than Secretary Mullin's own testimony (from the FBI, the intelligence community or DHS) describes the reported Iranian dirty-bomb plan as not imminent. False if such a statement describes it as imminent. Cannot be determined if no such official assessment of its imminence has been published.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "No on-record FBI, intelligence-community or DHS assessment of the plot's imminence, other than the secretary's own testimony, was found. A White House statement said there were \"no credible threats to the homeland,\" and CNN's unnamed sources described the planning as \"an effort to give itself options rather than an indicator of an imminent attack\"; nothing found describes it as imminent.",
+   "evidence": [
+    {
+     "label": "WRDW/CNN, White House says no credible threats (Nov. 17)",
+     "url": "https://www.wrdw.com/2026/11/17/us-monitoring-reported-iran-dirty-bomb-plans-white-house-says-no-credible-threats/"
+    },
+    {
+     "label": "Scripps News/CNN, Iran developing plans for possible dirty bomb attack",
+     "url": "https://www.scrippsnews.com/us-news/iran-war/iran-developing-plans-for-possible-dirty-bomb-or-chemical-attack-in-dc-officials-say"
+    },
+    {
+     "label": "NBC Boston, analysis of Iran dirty bomb reports",
+     "url": "https://www.nbcboston.com/news/local/iran-dirty-bomb-washington-analysis/4051061/"
+    }
+   ],
+   "check_run": "q205/askamerica/2026-11-20"
+  },
+  {
+   "id": 30,
+   "speaker": "Markwayne Mullin",
+   "office": "Secretary of Homeland Security",
+   "party": "R",
+   "context": "In a 2021 news release, then-Rep. Markwayne Mullin, now Homeland Security Secretary, explained his vote against the bipartisan infrastructure bill.",
+   "topic": "FAA funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [
+    "OK"
+   ],
+   "quote": "Only $110 billion of this package will go towards improving actual infrastructure, like roads and bridges, and Oklahoma would only receive a small fraction of that money",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the 2021 bipartisan infrastructure bill's own funding for roads, bridges and major projects was about $110 billion of a larger total and Oklahoma's formula share of that was a small fraction. False if the bill's roads-and-bridges funding was substantially more than $110 billion or Oklahoma's share was large. Cannot be determined if it turns on what counts as 'actual infrastructure'.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "The White House's Aug. 2, 2021 fact sheet says the bill invested \"$110 billion of new funds for roads, bridges, and major projects\" within about $550 billion of new federal spending. AskAmerica's FHWA apportionment data give Oklahoma about $4.66 billion of about $299.7 billion in FY2022-26 highway formula funds, about 1.6%. Counting baseline highway funding as \"actual infrastructure\" would give a larger figure than $110 billion.",
+   "evidence": [
+    {
+     "label": "fiscal.fhwa_program_apportionments (FHWA formula apportionments, FY2022-26, Oklahoma vs. U.S.)",
+     "url": "https://askamerica.ai/catalog/schemas/fiscal/#fhwa_program_apportionments-table",
+     "askamerica": true,
+     "sql": "SELECT SUM(amount) AS total_all, SUM(CASE WHEN state_abbr='OK' THEN amount END) AS ok_total FROM fiscal.fhwa_program_apportionments"
+    },
+    {
+     "label": "White House, updated fact sheet on the Bipartisan Infrastructure Investment and Jobs Act (Aug. 2, 2021)",
+     "url": "https://bidenwhitehouse.archives.gov/briefing-room/statements-releases/2021/08/02/updated-fact-sheet-bipartisan-infrastructure-investment-and-jobs-act/"
+    }
+   ],
+   "check_run": "q206/askamerica/2026-11-20"
+  },
+  {
+   "id": 31,
+   "speaker": "LaMonica McIver",
+   "office": "U.S. Representative from New Jersey",
+   "party": "D",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. LaMonica McIver questioned Homeland Security Secretary Markwayne Mullin about the 2021 infrastructure law's aviation funding.",
+   "topic": "FAA funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "NJ",
+   "about_states": [],
+   "quote": "You and (Transportation) Secretary (Sean) Duffy criticized Congress for failing to prioritize investments in our nation's aging air traffic control infrastructure. But in 2021, Congress passed the bipartisan infrastructure law providing $25 billion for aviation infrastructure, including $5 billion specifically for FAA facilities and equipment",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the 2021 Infrastructure Investment and Jobs Act provided about $25 billion for aviation, including about $5 billion for FAA facilities and equipment. False if the law's aviation amounts were materially different. Cannot be determined if the law's aviation amounts cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "The FAA's Bipartisan Infrastructure Law page says the law gives the FAA $25 billion, including $1 billion a year for five years ($5 billion) for air traffic facilities. The first sentence, about the secretaries' criticism of Congress, was not tested.",
+   "evidence": [
+    {
+     "label": "FAA, Bipartisan Infrastructure Law",
+     "url": "https://www.faa.gov/bil"
+    }
+   ],
+   "check_run": "q207/askamerica/2026-11-20"
+  },
+  {
+   "id": 32,
+   "speaker": "LaMonica McIver",
+   "office": "U.S. Representative from New Jersey",
+   "party": "D",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. LaMonica McIver told Homeland Security Secretary Markwayne Mullin how he voted on the 2021 infrastructure law.",
+   "topic": "FAA funding",
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": "NJ",
+   "about_states": [],
+   "quote": "I'll tell you how you voted. You voted against it.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the House roll call on final passage of H.R. 3684, the Infrastructure Investment and Jobs Act, in November 2021 records Rep. Markwayne Mullin voting No. False if it records him voting Yes or not voting. Cannot be determined if the roll call cannot be read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "House roll call 369 of Nov. 5, 2021, the House's final vote on H.R. 3684, the Infrastructure Investment and Jobs Act (passed 228-206), records Rep. Markwayne Mullin voting Nay.",
+   "evidence": [
+    {
+     "label": "House Clerk, roll call 369 (Nov. 5, 2021)",
+     "url": "https://clerk.house.gov/evs/2021/roll369.xml"
+    }
+   ],
+   "check_run": "q207/askamerica/2026-11-20"
+  },
+  {
+   "id": 33,
+   "speaker": "Dan Goldman",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. Dan Goldman described staffing at DHS and FBI cybersecurity units under the Trump administration.",
+   "topic": "Cybersecurity staffing",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "have decimated the cybersecurity personnel that this administration entered office with",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official staffing figures show cybersecurity personnel at DHS (including CISA) and the FBI fell by a large share, roughly a third or more, since January 2025. False if those staffing levels are flat or higher. Cannot be determined if figures are lacking or the result turns on how 'decimated' is read.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "OPM headcount data in AskAmerica's warehouse show CISA's workforce fell from 3,379 in January 2025 to 2,197 in September 2026, about 35%, while the FBI as a whole fell from 37,107 to 35,427, about 4.5%. No series isolates FBI cybersecurity staff, so the FBI part cannot be measured, and \"decimated\" has no fixed threshold.",
+   "evidence": [
+    {
+     "label": "officials.federal_workforce_by_agency (OPM headcount, CISA and FBI, Jan. 2025-Sept. 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/officials/#federal_workforce_by_agency-table",
+     "askamerica": true,
+     "sql": "SELECT snapshot_month, agency_subelement, SUM(headcount) hc FROM officials.federal_workforce_by_agency WHERE snapshot_month IN ('202501','202601','202608','202609','202610') AND (agency_subelement_code='HSCA' OR agency_code='HS' OR agency_subelement ILIKE '%FEDERAL BUREAU OF INV%') GROUP BY snapshot_month, agency_subelement ORDER BY agency_subelement, snapshot_month"
+    }
+   ],
+   "check_run": "q208/askamerica/2026-11-20"
+  },
+  {
+   "id": 34,
+   "speaker": "Dan Goldman",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. Dan Goldman described staffing levels at the Cybersecurity and Infrastructure Security Agency.",
+   "topic": "Cybersecurity staffing",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "(The Cybersecurity and Infrastructure Security Agency) is way down",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Cybersecurity and Infrastructure Security Agency's workforce is substantially smaller now than in January 2025. False if it is the same size or larger. Cannot be determined if no reliable workforce figures exist.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "OPM headcount data in AskAmerica's warehouse show CISA had 3,379 employees in January 2025 and 2,197 in September 2026, down about 35%.",
+   "evidence": [
+    {
+     "label": "officials.federal_workforce_by_agency (OPM headcount, CISA, Jan. 2025-Sept. 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/officials/#federal_workforce_by_agency-table",
+     "askamerica": true,
+     "sql": "SELECT snapshot_month, agency_subelement, SUM(headcount) hc FROM officials.federal_workforce_by_agency WHERE snapshot_month IN ('202501','202601','202608','202609','202610') AND (agency_subelement_code='HSCA' OR agency_code='HS' OR agency_subelement ILIKE '%FEDERAL BUREAU OF INV%') GROUP BY snapshot_month, agency_subelement ORDER BY agency_subelement, snapshot_month"
+    }
+   ],
+   "check_run": "q208/askamerica/2026-11-20"
+  },
+  {
+   "id": 35,
+   "speaker": "Dan Goldman",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. Dan Goldman gave his view of why President Trump reduced staffing at the Cybersecurity and Infrastructure Security Agency.",
+   "topic": "Cybersecurity staffing",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "because the president didn't want election fraud to be uncovered.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 36,
+   "speaker": "Dan Goldman",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. Dan Goldman described FBI firings of cybersecurity agents.",
+   "topic": "Cybersecurity staffing",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "The FBI has fired numerous cybersecurity agents because they may or may not have served a subpoena in the Mar-a-Lago case.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if primary records (court filings, FBI or Justice Department statements, or the fired agents' own legal filings) show the FBI fired several cybersecurity agents over their role in the Mar-a-Lago documents case, such as serving a subpoena. False if primary records show no such firings. Cannot be determined if only secondary accounts exist or the reason for the firings is disputed.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "As reported by AP, a lawsuit says nine FBI agents, analysts and staff on counterintelligence and counterespionage squads were fired in February 2026 over their roles in the Mar-a-Lago documents investigation, after disclosure that the FBI had subpoenaed toll records. That confirms firings tied to the case, but the suit as reported does not describe them as cybersecurity agents or say the firings were for serving a subpoena; the complaint itself could not be read directly.",
+   "evidence": [
+    {
+     "label": "AP via Daily Herald, fired FBI agents sue to get their jobs back (Oct. 15, 2026)",
+     "url": "https://www.heraldextra.com/top-headlines/2026/oct/15/fbi-agents-and-analysts-fired-for-roles-in-trump-classified-files-probe-sue-to-get-their-jobs-back/"
+    }
+   ],
+   "check_run": "q208/askamerica/2026-11-20"
+  },
+  {
+   "id": 37,
+   "speaker": "Carlos Gimenez",
+   "office": "U.S. Representative from Florida",
+   "party": "R",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. Carlos Gimenez described a dirty bomb.",
+   "topic": "Dirty bomb threat",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "FL",
+   "about_states": [],
+   "quote": "simple to make and detonate",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official sources (NRC, DHS, CDC) describe a dirty bomb (radiological dispersal device) as relatively simple to make and set off. False if official sources describe it as difficult to make or detonate. Cannot be determined if official sources do not address its difficulty.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "NRC and CDC fact pages describe a dirty bomb as conventional explosives combined with radioactive material that would rarely release enough radiation to kill, but do not say how easy one is to make or detonate; a 2011 Congressional Research Service report calls such devices \"much simpler to build\" than nuclear weapons while listing obstacles to an effective attack. These pages were read through a summarizing fetch tool, not directly, and the DHS fact sheet could not be read.",
+   "evidence": [
+    {
+     "label": "NRC, Dirty Bombs fact sheet",
+     "url": "https://www.nrc.gov/reading-rm/doc-collections/fact-sheets/fs-dirty-bombs.html"
+    },
+    {
+     "label": "CDC, radiation emergencies overview",
+     "url": "https://www.cdc.gov/radiation-emergencies/about/index.html"
+    },
+    {
+     "label": "Congressional Research Service, R41891 Dirty Bombs: Background in Brief (2011)",
+     "url": "https://www.everycrsreport.com/files/20110624_R41891_f3192de7c00f36fd677349d2a9f715d3b5f543b8.html"
+    }
+   ],
+   "check_run": "q209/askamerica/2026-11-20"
+  },
+  {
+   "id": 38,
+   "speaker": "Michael McCaul",
+   "office": "U.S. Representative from Texas",
+   "party": "R",
+   "context": "At a Nov. 18 House Homeland Security Committee hearing, Rep. Michael McCaul described smuggling a dirty bomb.",
+   "topic": "Dirty bomb threat",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "TX",
+   "about_states": [],
+   "quote": "smuggling a dirty bomb would be a relatively easy thing to do",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/fact-checking-mullins-house-hearing-on-faa-ground-stop-outages-and-dirty-bombs"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official assessments (GAO, DHS, NRC) describe smuggling a radiological device or its material into the United States as relatively easy, for example because of detection gaps. False if official assessments say detection makes it difficult. Cannot be determined if official assessments do not address it or disagree.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "GAO's 2022 report on radiation portal monitors (GAO-22-104498) describes a delayed replacement program, high nuisance-alarm rates and an unfinished analysis of detection gaps, but does not say smuggling radiological material is relatively easy or difficult; the report page was read through a summarizing fetch tool, not directly, and older GAO covert-test reports could not be loaded. \"Relatively easy\" has no stated baseline.",
+   "evidence": [
+    {
+     "label": "GAO-22-104498, radiation portal monitor replacement (2022)",
+     "url": "https://www.gao.gov/products/GAO-22-104498"
+    }
+   ],
+   "check_run": "q210/askamerica/2026-11-20"
+  },
+  {
+   "id": 39,
+   "speaker": "Shelley Moore Capito",
+   "office": "U.S. Senator from West Virginia",
+   "party": "R",
+   "context": "After the Senate passed a bipartisan permitting bill 62-33 on Nov. 19, Sen. Shelley Moore Capito, a co-author, described its effect.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Energy",
+   "speaker_state": "WV",
+   "about_states": [],
+   "quote": "Tonight, the passage of permitting reform in the Senate finally became reality and we took a major step towards addressing the affordability concerns of the American people",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "premised_prediction",
+   "test": "Premise only. True if the Senate record shows the permitting reform bill passed the Senate on Nov. 19, 2026. False if it did not pass or passed on a different date. Cannot be determined if the Senate record cannot be read.",
+   "premise": "The Senate passed the permitting reform bill on the night of Nov. 19, 2026.",
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "Premise only: the Senate's roll-call list shows vote 270 on Nov. 19, 2026, \"Passage, H.R. 2347, as amended,\" passed 62-33; the permitting package moved as an amendment to H.R. 2347. AskAmerica's warehouse holds the preceding Nov. 18 votes on the same bill (the substitute amendment, 69-27, and cloture, 65-31) but not yet the Nov. 19 passage vote. The view on affordability was not assessed.",
+   "evidence": [
+    {
+     "label": "law.member_roll_call_votes (Senate votes from Nov. 18, 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+     "askamerica": true,
+     "sql": "select vote_date, roll_number, vote_result, count(*) n, sum(case when vote_cast='Yea' then 1 else 0 end) yea, sum(case when vote_cast='Nay' then 1 else 0 end) nay from law.member_roll_call_votes where chamber='Senate' and vote_date>='2026-11-18' group by vote_date, roll_number, vote_result order by vote_date, roll_number"
+    },
+    {
+     "label": "law.bills (H.R. 2347 latest action)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "select bill_number, title, latest_action_text, latest_action_date from law.bills where congress=119 and bill_type='hr' and bill_number=2347"
+    },
+    {
+     "label": "U.S. Senate, roll call votes, 119th Congress, 2nd session",
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_119_2.htm"
+    }
+   ],
+   "check_run": "q211/askamerica/2026-11-20"
+  },
+  {
+   "id": 40,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Sen. John Thune, the Senate majority leader, described the effect of the bipartisan permitting bill the Senate passed on Nov. 19.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Energy",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "cut through decades of red tape",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 41,
+   "speaker": "John Thune",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Sen. John Thune, the Senate majority leader, predicted the effects of the bipartisan permitting bill the Senate passed on Nov. 19.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Energy",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "save the average household hundreds of dollars each year, and Americans will see better roads, more American manufacturing, and better-paying jobs.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 42,
+   "speaker": "Sheldon Whitehouse",
+   "office": "U.S. Senator from Rhode Island",
+   "party": "D",
+   "context": "Sen. Sheldon Whitehouse, a co-author of the bipartisan permitting bill the Senate passed on Nov. 19, predicted its effect if the House passes it.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Energy",
+   "speaker_state": "RI",
+   "about_states": [],
+   "quote": "Americans will quickly begin getting some relief on their energy bills if the House follows suit.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 43,
+   "speaker": "Sheldon Whitehouse",
+   "office": "U.S. Senator from Rhode Island",
+   "party": "D",
+   "context": "NPR reported Sen. Sheldon Whitehouse's statement about what the bipartisan permitting bill the Senate passed on Nov. 19 would require of data centers.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Energy",
+   "speaker_state": "RI",
+   "about_states": [],
+   "quote": "Reported as: Whitehouse also said the bill would make data centers pay for the power they use.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the text of the permitting bill the Senate passed on Nov. 19, 2026 contains a provision requiring data centers or other large new electricity loads to pay for the power or grid costs they cause. False if the bill has no such provision. Cannot be determined if the bill text cannot be read or the provision's effect is ambiguous.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "S. 5653 as introduced adds a Federal Power Act section 228 that bars shifting the incremental grid costs of data centers drawing 20 megawatts or more to other customers and requires recovery from the data center; it addresses grid costs they cause rather than power use in general. The Capito substitute that the Senate actually passed as H.R. 2347 on Nov. 19 could not be read, so whether the provision survived is unconfirmed.",
+   "evidence": [
+    {
+     "label": "law.bill_text_versions (text versions of S. 5653 and H.R. 2347)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_text_versions-table",
+     "askamerica": true,
+     "sql": "select version_type, version_date, url from law.bill_text_versions where congress=119 and ((bill_type='s' and bill_number=5653) or (bill_type='hr' and bill_number=2347))"
+    },
+    {
+     "label": "S. 5653 as introduced (govinfo)",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/xml/BILLS-119s5653is.xml"
+    },
+    {
+     "label": "U.S. Senate, roll call vote 270 (Nov. 19, 2026)",
+     "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00270.htm"
+    }
+   ],
+   "check_run": "q212/askamerica/2026-11-20"
+  },
+  {
+   "id": 44,
+   "speaker": "Maria Cantwell",
+   "office": "U.S. Senator from Washington",
+   "party": "D",
+   "context": "On X, Sen. Maria Cantwell urged against provisions in the bipartisan permitting bill the Senate passed on Nov. 19.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "WA",
+   "about_states": [],
+   "quote": "Don't sacrifice the Clean Water Act, hunting or fishing grounds, historic or sacred sites, or protections of tribal sovereignty",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 45,
+   "speaker": "Alex Padilla",
+   "office": "U.S. Senator from California",
+   "party": "D",
+   "context": "Sen. Alex Padilla stated his position on the bipartisan permitting bill the Senate passed on Nov. 19.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Environment and Climate",
+   "speaker_state": "CA",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "I support cutting red tape and getting more energy projects built, but not at the expense of tribal sovereignty and California's environment",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 46,
+   "speaker": "Jeff Merkley",
+   "office": "U.S. Senator from Oregon",
+   "party": "D",
+   "context": "On X, Sen. Jeff Merkley criticized the bipartisan permitting bill the Senate passed on Nov. 19.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Energy",
+   "speaker_state": "OR",
+   "about_states": [],
+   "quote": "It opens the gates to a flood of natural gas for data centers while leaving expanded transmission of renewable energy subject to Trump's obstruction",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 47,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a social media post, President Trump urged Congress to approve the bipartisan permitting bill the Senate passed on Nov. 19.",
+   "topic": "Energy permitting and fuel supply",
+   "broad_topic": "Energy",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "BIG WIN for U.S. ENERGY INDEPENDENCE and DOMINANCE.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  }
+ ]
+}
