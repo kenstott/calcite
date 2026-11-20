@@ -30,6 +30,7 @@ import org.apache.calcite.sql.SqlDialects;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.dialect.HsqldbSqlDialect;
+import org.apache.calcite.sql.dialect.OracleSqlDialect;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.test.CalciteAssert.AssertThat;
 import org.apache.calcite.test.CalciteAssert.DatabaseInstance;
@@ -1841,6 +1842,32 @@ class JdbcAdapterTest {
         .returnsUnordered("ENAME=CLARK", "ENAME=MILLER");
   }
 
+  /** The Oracle dialect evaluates the empty string as NULL: a comparison
+   * with '' stays in Calcite and the rest of the filter is pushed
+   * (REQ-2256). Checked by EXPLAIN only: the source here is HSQLDB. */
+  @Test void testEmptyStringComparisonWithheldOracle() {
+    CalciteAssert.model(scottModel(OracleDialectFactory.class))
+        .query("select ename from scott.emp\n"
+            + "where ename <> '' and deptno = 10")
+        .explainContains("expr#9=[<>($t1, $t8)]")
+        .explainContains("  JdbcToEnumerableConverter\n"
+            + "    JdbcFilter(condition=[=(CAST($7):INTEGER, 10)])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n");
+  }
+
+  /** A comparison with a non-empty text literal is still pushed to Oracle,
+   * whose text level is EQUALITY. */
+  @Test void testNonEmptyStringComparisonPushedOracle() {
+    CalciteAssert.model(scottModel(OracleDialectFactory.class))
+        .query("select ename from scott.emp\n"
+            + "where ename <> 'KING' and deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1])\n"
+            + "    JdbcFilter(condition=[AND(<>($1, 'KING'), "
+            + "=(CAST($7):INTEGER, 10))])\n"
+            + "      JdbcTableScan(table=[[SCOTT, EMP]])\n");
+  }
+
   /** COUNT(DISTINCT) on text is withheld from a source whose text level is
    * below ALL, as GROUP BY is; it is pushed at ALL (REQ-2256). */
   @Test void testTextCountDistinctWithheldBelowAll() {
@@ -2024,6 +2051,105 @@ class JdbcAdapterTest {
             + "R=[ROW_NUMBER() OVER (PARTITION BY $2 ORDER BY $1)])\n");
   }
 
+  /** LISTAGG ordered by a text key (WITHIN GROUP (ORDER BY ename)) is
+   * withheld from a source whose text level is below ALL; its input is
+   * still pushed (REQ-2256). */
+  @Test void testTextOrderedAggregateWithheldBelowAll() {
+    CalciteAssert.model(scottModel(ListAggTextEqualityOnlyDialectFactory.class))
+        .query("select listagg(job, ',') within group (order by ename) as l\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=EnumerableAggregate(group=[{}], "
+            + "L=[LISTAGG($0, $1) WITHIN GROUP ([2])])\n"
+            + "  JdbcToEnumerableConverter\n")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returns("L=MANAGER,PRESIDENT,CLERK\n");
+  }
+
+  /** At text level ALL the same ordered aggregate is pushed. Checked by
+   * EXPLAIN only: HSQLDB does not run the LISTAGG the JDBC adapter
+   * generates. */
+  @Test void testTextOrderedAggregatePushedAtAll() {
+    CalciteAssert.model(scottModel(ListAggDialectFactory.class))
+        .query("select listagg(job, ',') within group (order by ename) as l\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{}], "
+            + "L=[LISTAGG($0, $1) WITHIN GROUP ([2])])\n");
+  }
+
+  /** LISTAGG ordered by a numeric key is pushed below text level ALL: the
+   * text argument is concatenated, not compared. */
+  @Test void testNumericOrderedAggregatePushedBelowAll() {
+    CalciteAssert.model(scottModel(ListAggTextEqualityOnlyDialectFactory.class))
+        .query("select listagg(job, ',') within group (order by empno) as l\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcAggregate(group=[{}], "
+            + "L=[LISTAGG($0, $1) WITHIN GROUP ([2])])\n");
+  }
+
+  /** MIN of text over a window is withheld from a source whose text level
+   * is below ALL, even with a numeric partition key (REQ-2256). */
+  @Test void testTextWindowMinWithheldBelowAll() {
+    CalciteAssert.model(scottModel(WindowTextEqualityOnlyDialectFactory.class))
+        .query("select ename, min(ename) over (partition by deptno) as m\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("EnumerableWindow(window#0=[window(partition {")
+        .runs()
+        .enable(CalciteAssert.DB == DatabaseInstance.HSQLDB)
+        .returnsUnordered("ENAME=CLARK; M=CLARK", "ENAME=KING; M=CLARK",
+            "ENAME=MILLER; M=CLARK");
+  }
+
+  @Test void testTextWindowMaxPushedAtAll() {
+    CalciteAssert.model(scottModel(WindowDialectFactory.class))
+        .query("select ename, max(ename) over (partition by deptno) as m\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1], "
+            + "M=[MAX($1) OVER (PARTITION BY $7)])\n");
+  }
+
+  @Test void testNumericWindowMaxPushedBelowAll() {
+    CalciteAssert.model(scottModel(WindowTextEqualityOnlyDialectFactory.class))
+        .query("select ename, max(sal) over (partition by deptno) as m\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1], "
+            + "M=[MAX($5) OVER (PARTITION BY $7)])\n");
+  }
+
+  /** A DISTINCT aggregate of text over a window is withheld from a source
+   * whose text level is below ALL (REQ-2256). */
+  @Test void testTextWindowDistinctWithheldBelowAll() {
+    CalciteAssert.model(scottModel(WindowTextEqualityOnlyDialectFactory.class))
+        .query("select ename,\n"
+            + "  count(distinct job) over (partition by deptno) as c\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("EnumerableWindow(window#0=[window(partition {");
+  }
+
+  @Test void testTextWindowDistinctPushedAtAll() {
+    CalciteAssert.model(scottModel(WindowDialectFactory.class))
+        .query("select ename,\n"
+            + "  count(distinct job) over (partition by deptno) as c\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1], "
+            + "C=[COUNT(DISTINCT $2) OVER (PARTITION BY $7)])\n");
+  }
+
+  @Test void testNumericWindowDistinctPushedBelowAll() {
+    CalciteAssert.model(scottModel(WindowTextEqualityOnlyDialectFactory.class))
+        .query("select ename,\n"
+            + "  count(distinct sal) over (partition by deptno) as c\n"
+            + "from scott.emp where deptno = 10")
+        .explainContains("PLAN=JdbcToEnumerableConverter\n"
+            + "  JdbcProject(ENAME=[$1], "
+            + "C=[COUNT(DISTINCT $5) OVER (PARTITION BY $7)])\n");
+  }
+
   /** A partly pushable filter over a project the planner cannot move it
    * below (a windowed aggregate) is split: the pushable conjunct goes to the
    * source above the project, the text comparison stays in Calcite
@@ -2141,6 +2267,44 @@ class JdbcAdapterTest {
 
         @Override public boolean supportsWindowFunctions() {
           return true;
+        }
+      };
+    }
+  }
+
+  /** Oracle dialect, used to check the plans the JDBC adapter makes for an
+   * Oracle source. */
+  public static class OracleDialectFactory implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new OracleSqlDialect(SqlDialects.createContext(metaData));
+    }
+  }
+
+  /** HSQLDB dialect, text level ALL, that is taken to support LISTAGG. */
+  public static class ListAggDialectFactory implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public boolean supportsAggregateFunction(SqlKind kind) {
+          return kind == SqlKind.LISTAGG
+              || super.supportsAggregateFunction(kind);
+        }
+      };
+    }
+  }
+
+  /** HSQLDB dialect, text level EQUALITY, that is taken to support
+   * LISTAGG. */
+  public static class ListAggTextEqualityOnlyDialectFactory
+      implements SqlDialectFactory {
+    @Override public SqlDialect create(DatabaseMetaData metaData) {
+      return new HsqldbSqlDialect(SqlDialects.createContext(metaData)) {
+        @Override public TextComparisonPushdown getTextComparisonPushdown() {
+          return TextComparisonPushdown.EQUALITY;
+        }
+
+        @Override public boolean supportsAggregateFunction(SqlKind kind) {
+          return kind == SqlKind.LISTAGG
+              || super.supportsAggregateFunction(kind);
         }
       };
     }

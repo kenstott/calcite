@@ -5723,6 +5723,12 @@ class RelToSqlConverterTest {
         is(false));
   }
 
+  /** Oracle evaluates the empty string as NULL, so the JDBC adapter
+   * withholds comparisons with an empty text literal from it (REQ-2256). */
+  @Test void testTreatsEmptyStringAsNullOracle() {
+    assertThat(OracleSqlDialect.DEFAULT.treatsEmptyStringAsNull(), is(true));
+  }
+
   /** OFFSET without FETCH renders for Sybase instead of failing on the
    * missing fetch (REQ-2256). */
   @Test void testOffsetWithoutFetchSybase() {

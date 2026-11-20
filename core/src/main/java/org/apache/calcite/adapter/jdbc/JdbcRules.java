@@ -676,12 +676,13 @@ public class JdbcRules {
   }
 
   /** Returns whether a source with the given dialect can group by the
-   * aggregate's keys and compute its MIN, MAX and DISTINCT calls as Calcite
-   * does.
+   * aggregate's keys and compute its MIN, MAX, DISTINCT and ordered calls as
+   * Calcite does.
    *
-   * <p>Grouping by a character value, taking its MIN or MAX, or aggregating
-   * its distinct values (COUNT(DISTINCT), for example) is pushed only to a
-   * dialect whose
+   * <p>Grouping by a character value, taking its MIN or MAX, aggregating
+   * its distinct values (COUNT(DISTINCT), for example) or ordering an
+   * aggregate's input by it (LISTAGG ... WITHIN GROUP (ORDER BY), for
+   * example) is pushed only to a dialect whose
    * {@link SqlDialect#getTextComparisonPushdown() text comparison level} is
    * {@link SqlDialect.TextComparisonPushdown#ALL ALL}. */
   static boolean canPushTextOrdering(Aggregate aggregate, SqlDialect dialect) {
@@ -697,6 +698,13 @@ public class JdbcRules {
       }
     }
     for (AggregateCall aggCall : aggregate.getAggCallList()) {
+      for (RelFieldCollation fieldCollation
+          : aggCall.collation.getFieldCollations()) {
+        if (SqlTypeUtil.inCharFamily(
+            fields.get(fieldCollation.getFieldIndex()).getType())) {
+          return false;
+        }
+      }
       if (aggCall.isDistinct()) {
         for (int arg : aggCall.getArgList()) {
           if (SqlTypeUtil.inCharFamily(fields.get(arg).getType())) {
@@ -1344,14 +1352,31 @@ public class JdbcRules {
       return super.visitOver(over);
     }
 
-    /** Returns whether the dialect partitions and orders the window of a
-     * windowed aggregate as Calcite does: a character partition or order key
-     * is pushed only at level
-     * {@link SqlDialect.TextComparisonPushdown#ALL ALL}. */
+    /** Returns whether the dialect computes a windowed aggregate as Calcite
+     * does: a character partition or order key, MIN or MAX of a character
+     * argument, or DISTINCT over a character argument is pushed only at
+     * level {@link SqlDialect.TextComparisonPushdown#ALL ALL}. */
     private boolean canPushWindowOrdering(RexOver over) {
       if (dialect.getTextComparisonPushdown()
           == SqlDialect.TextComparisonPushdown.ALL) {
         return true;
+      }
+      final boolean comparesArguments;
+      switch (over.getKind()) {
+      case MIN:
+      case MAX:
+        comparesArguments = true;
+        break;
+      default:
+        comparesArguments = over.isDistinct();
+        break;
+      }
+      if (comparesArguments) {
+        for (RexNode operand : over.getOperands()) {
+          if (SqlTypeUtil.inCharFamily(operand.getType())) {
+            return false;
+          }
+        }
       }
       final RexWindow window = over.getWindow();
       for (RexNode key : window.partitionKeys) {
