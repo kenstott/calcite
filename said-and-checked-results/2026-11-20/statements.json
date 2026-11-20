@@ -11272,16 +11272,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a prediction market listed a 2026 contract on whether Artemis II would explode or suffer a catastrophic failure. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Protos reported that Polymarket listed a market titled \"Artemis II explodes?\" from Jan. 20, 2026, later renamed \"Artemis II booster rupture?\", and that Polymarket said it covered a booster rupture rather than harm to the crew.",
+      "evidence": [
+        {
+          "label": "Protos, Polymarket renames Artemis II explosion bet",
+          "url": "https://protos.com/polymarket-renames-artemis-ii-explosion-bet-after-backlash"
+        }
+      ],
+      "check_run": "q272/askamerica/2026-11-20"
     },
     {
       "id": 299,
@@ -11304,16 +11309,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a prediction market listed a contract on Maduro leaving or being removed from power. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Polymarket's \"Maduro out by...?\" market opened Nov. 3, 2025 and drew about $56.6 million in trading.",
+      "evidence": [
+        {
+          "label": "Polymarket, Maduro out by...?",
+          "url": "https://polymarket.com/event/maduro-out-in-2025"
+        }
+      ],
+      "check_run": "q272/askamerica/2026-11-20"
     },
     {
       "id": 300,
@@ -11336,16 +11346,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "Factual core only: True if the CFTC under its current chair has asserted federal preemption of state gambling laws over event contracts. Unsettled if the position is described only in reporting without official filings. The characterizations are not assessed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "WilmerHale reported that on Feb. 17, 2026 the CFTC, under Chairman Michael Selig, filed an amicus brief in the Ninth Circuit arguing that event contracts fall under its exclusive jurisdiction and that state gambling laws are preempted; the brief itself was not read.",
+      "evidence": [
+        {
+          "label": "WilmerHale, on the CFTC amicus brief (Feb. 24, 2026)",
+          "url": "https://www.wilmerhale.com/en/insights/client-alerts/20260224-cftc-files-amicus-brief-urging-exclusive-federal-jurisdiction-of-event-contracts"
+        }
+      ],
+      "check_run": "q272/askamerica/2026-11-20"
     },
     {
       "id": 301,
@@ -11368,16 +11383,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if prediction markets offered contracts on Iran war events and reporting or official inquiries describe suspected insider trading on them. Unsettled if insider trading is only alleged without inquiry. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Week, relaying CNN, reported Polymarket contracts on U.S. strikes, a ceasefire and Iran's leadership, and a trader who won 93% of dozens of Iran bets placed hours before military action, drawing scrutiny from lawmakers and regulators; reports of DOJ and CFTC inquiries were seen only in search summaries.",
+      "evidence": [
+        {
+          "label": "The Week, on insider profits in Iran war prediction markets",
+          "url": "https://www.theweek.com/politics/insider-profits-prediction-markets-iran-war-polymarket"
+        }
+      ],
+      "check_run": "q272/askamerica/2026-11-20"
     },
     {
       "id": 302,
@@ -11464,16 +11484,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if prediction platforms list contracts on sports, on war events, and on disasters or deaths. Unsettled if only some categories are documented.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AP and Al Jazeera reporting documents Kalshi and Polymarket contracts on sports and on U.S. and Israeli strikes on Iran, but no page read documented contracts on disasters or deaths.",
+      "evidence": [
+        {
+          "label": "AP via PBS NewsHour, Apr. 12, 2026, on prediction markets and the Iran war",
+          "url": "https://www.pbs.org/newshour/economy/iran-war-puts-prediction-markets-back-in-the-spotlight"
+        },
+        {
+          "label": "Al Jazeera, Mar. 4, 2026, on bets on Iran strikes",
+          "url": "https://www.aljazeera.com/economy/2026/3/4/traders-mint-money-on-betting-platforms-on-us-israel-strike-on-iran"
+        }
+      ],
+      "check_run": "q273/askamerica/2026-11-20"
     },
     {
       "id": 305,
@@ -11496,16 +11525,33 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill record shows a Schiff-Curtis bill titled the Prediction Markets Are Gambling Act whose text prohibits sports-event and casino-style contracts on CFTC-registered entities. False if no such bill exists or its text differs materially.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show S. 4160, the Prediction Markets Are Gambling Act, introduced by Sen. Schiff on March 23, 2026 with Curtis as a cosponsor, and its text bars contracts on sporting events and casino-style games on registered entities.",
+      "evidence": [
+        {
+          "label": "law.bills (prediction market bills, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT congress, bill_type, bill_number, title, sponsor_full_name, introduced_date, latest_action_text FROM law.bills WHERE congress=119 AND (title ILIKE '%Prediction Markets Are Gambling%' OR title ILIKE '%event contract%' OR title ILIKE '%prediction market%' OR title ILIKE '%ASSASSINATION, TRAGEDY%') ORDER BY introduced_date"
+        },
+        {
+          "label": "law.bill_cosponsors (S. 4160)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_cosponsors-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM law.bill_cosponsors WHERE congress=119 AND bill_type='s' AND bill_number=4160"
+        },
+        {
+          "label": "S. 4160 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s4160is/html/BILLS-119s4160is.htm"
+        }
+      ],
+      "check_run": "q273/askamerica/2026-11-20"
     },
     {
       "id": 306,
