@@ -4796,6 +4796,469 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # --- OSHA ENFORCEMENT (DOL) ---
+  - name: osha_inspections
+    pattern: "type=osha_inspections/year=*/osha_inspections.parquet"
+    # Current-year rows change daily (new inspections, penalty revisions): re-pull the last year each run.
+    lookbackPeriods: 1
+    freshness:
+      type: hash
+    partitions: *standard_partitions
+    comment: >
+      OSHA workplace inspections by establishment, 2019 onward: one row per inspection
+      (activity_nr) with establishment name, worksite address/city/state/ZIP, NAICS code,
+      employee count, inspection type (complaint, accident, programmed), scope, union status
+      and open/close dates. Join to osha_violations on activity_nr for citations and
+      penalties. Partitioned by year of open_date. Source is the DOL OSHA enforcement
+      extract (enforcedata.dol.gov, whose own bulk files now redirect to the DOL homepage and whose
+      successor API needs a key) as mirrored keylessly at labordata.bunkum.us (a third-party
+      Datasette; re-verify if it 404s). The mirror is refreshed within days of the DOL
+      feed (newest open_date 2026-11-13 seen on 2026-11-20). Use for state and industry
+      inspection-rate trends and for matching new plants by NAICS, address and first-inspection date.
+
+    dimensions:
+      type:
+        - osha_inspections
+      year:
+        type: yearRange
+        start: "${GOVDATA_OSHA_START_YEAR:2019}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
+    columns:
+      - name: activity_nr
+        type: long
+        nullable: true
+        comment: >
+          Inspection activity number; primary key. Joins to osha_violations.activity_nr.
+      - name: reporting_id
+        type: long
+        nullable: true
+        comment: >
+          OSHA reporting (area office) id.
+      - name: state_flag
+        type: string
+        nullable: true
+        comment: >
+          State-plan flag from the source.
+      - name: estab_name
+        type: string
+        nullable: true
+        comment: >
+          Establishment (worksite) name as recorded by OSHA.
+      - name: site_address
+        type: string
+        nullable: true
+        comment: >
+          Worksite street address.
+      - name: site_city
+        type: string
+        nullable: true
+        comment: >
+          Worksite city.
+      - name: site_state
+        type: string
+        nullable: true
+        comment: >
+          Worksite two-letter state.
+      - name: site_zip
+        type: string
+        nullable: true
+        expression: "CASE WHEN src.\"site_zip\" IS NULL OR TRIM(CAST(src.\"site_zip\" AS VARCHAR)) = '' THEN NULL ELSE LPAD(SPLIT_PART(CAST(src.\"site_zip\" AS VARCHAR), '.', 1), 5, '0') END"
+        comment: >
+          Worksite ZIP code. Left-padded to 5 digits (the mirror stores ZIPs as integers and drops leading zeros).
+      - name: owner_type
+        type: string
+        nullable: true
+        comment: >
+          Ownership: A=private, B=local government, C=state government, D=federal.
+      - name: owner_code
+        type: string
+        nullable: true
+        comment: >
+          Owner code from the source.
+      - name: adv_notice
+        type: string
+        nullable: true
+        comment: >
+          Y if advance notice was given.
+      - name: safety_hlth
+        type: string
+        nullable: true
+        comment: >
+          S=safety inspection, H=health inspection.
+      - name: sic_code
+        type: string
+        nullable: true
+        comment: >
+          Standard Industrial Classification code (blank on recent records).
+      - name: naics_code
+        type: string
+        nullable: true
+        comment: >
+          NAICS industry code of the establishment.
+      - name: insp_type
+        type: string
+        nullable: true
+        comment: >
+          Inspection type code (A=accident, B=complaint, G=programmed planned, H=programmed related, etc.).
+      - name: insp_scope
+        type: string
+        nullable: true
+        comment: >
+          Scope: A=complete, B=partial, C=records only, D=no inspection.
+      - name: why_no_insp
+        type: string
+        nullable: true
+        comment: >
+          Reason no inspection took place, when insp_scope = D.
+      - name: union_status
+        type: string
+        nullable: true
+        comment: >
+          Union status of the establishment: Y/N/A/B.
+      - name: safety_manuf
+        type: string
+        nullable: true
+        comment: >
+          Safety emphasis-program flag: manufacturing.
+      - name: safety_const
+        type: string
+        nullable: true
+        comment: >
+          Safety emphasis flag: construction.
+      - name: safety_marit
+        type: string
+        nullable: true
+        comment: >
+          Safety emphasis flag: maritime.
+      - name: health_manuf
+        type: string
+        nullable: true
+        comment: >
+          Health emphasis flag: manufacturing.
+      - name: health_const
+        type: string
+        nullable: true
+        comment: >
+          Health emphasis flag: construction.
+      - name: health_marit
+        type: string
+        nullable: true
+        comment: >
+          Health emphasis flag: maritime.
+      - name: migrant
+        type: string
+        nullable: true
+        comment: >
+          Migrant-worker inspection flag.
+      - name: mail_street
+        type: string
+        nullable: true
+        comment: >
+          Establishment mailing street.
+      - name: mail_city
+        type: string
+        nullable: true
+        comment: >
+          Establishment mailing city.
+      - name: mail_state
+        type: string
+        nullable: true
+        comment: >
+          Establishment mailing state.
+      - name: mail_zip
+        type: string
+        nullable: true
+        expression: "CASE WHEN src.\"mail_zip\" IS NULL OR TRIM(CAST(src.\"mail_zip\" AS VARCHAR)) = '' THEN NULL ELSE LPAD(SPLIT_PART(CAST(src.\"mail_zip\" AS VARCHAR), '.', 1), 5, '0') END"
+        comment: >
+          Establishment mailing ZIP. Left-padded to 5 digits (the mirror stores ZIPs as integers and drops leading zeros).
+      - name: host_est_key
+        type: string
+        nullable: true
+        comment: >
+          Host-establishment key (multi-employer worksites).
+      - name: nr_in_estab
+        type: int
+        nullable: true
+        comment: >
+          Number of employees at the establishment.
+      - name: open_date
+        type: date
+        nullable: true
+        comment: >
+          Inspection open date; the year partition is this date's year.
+      - name: case_mod_date
+        type: timestamp
+        nullable: true
+        expression: 'TRY_CAST(src."case_mod_date" AS TIMESTAMP)'
+        comment: >
+          Date the case record was last modified. NULL when the source holds NaT.
+      - name: close_conf_date
+        type: timestamp
+        nullable: true
+        expression: 'TRY_CAST(src."close_conf_date" AS TIMESTAMP)'
+        comment: >
+          Closing conference date. NULL when the source holds NaT.
+      - name: close_case_date
+        type: timestamp
+        nullable: true
+        expression: 'TRY_CAST(src."close_case_date" AS TIMESTAMP)'
+        comment: >
+          Date the case was closed. NULL when the source holds NaT.
+      - name: ld_dt
+        type: timestamp
+        nullable: true
+        comment: >
+          Date the row was loaded by the DOL feed.
+
+    source:
+      type: http
+      url: "https://labordata.bunkum.us/osha_enforcement/inspection.csv?_stream=on&_size=max&open_date__gte={year}-01-01&open_date__lte={year}-12-31"
+      method: GET
+      headers:
+        # labordata's Cloudflare challenges HttpSource's default browser-style User-Agent (HTTP 403);
+        # a plain self-identifying client name is served.
+        User-Agent: "calcite-govdata"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=osha_inspections/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
+  - name: osha_violations
+    pattern: "type=osha_violations/year=*/osha_violations.parquet"
+    # Current-year rows change daily (new inspections, penalty revisions): re-pull the last year each run.
+    lookbackPeriods: 1
+    freshness:
+      type: hash
+    partitions: *standard_partitions
+    comment: >
+      OSHA citations (violations) with initial and current penalties, 2019 onward: one row per
+      citation (activity_nr + citation_id) with the standard cited, violation type
+      (S serious, W willful, R repeat, O other), issuance, abatement, contest and final-order
+      dates, instances, employees exposed and hazard category. Establishment, NAICS and state
+      are on osha_inspections: join on activity_nr. Partitioned by year of issuance_date.
+      Same source and caveats as osha_inspections (third-party Datasette mirror of the DOL
+      OSHA enforcement extract). Sum current_penalty by establishment, NAICS or state for
+      penalty totals.
+
+    dimensions:
+      type:
+        - osha_violations
+      year:
+        type: yearRange
+        start: "${GOVDATA_OSHA_START_YEAR:2019}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
+    columns:
+      - name: activity_nr
+        type: long
+        nullable: true
+        comment: >
+          Inspection activity number; joins to osha_inspections.activity_nr. Primary key with citation_id.
+      - name: citation_id
+        type: string
+        nullable: true
+        comment: >
+          Citation id within the inspection, e.g. 01001; primary key with activity_nr.
+      - name: delete_flag
+        type: string
+        nullable: true
+        comment: >
+          Source delete flag.
+      - name: standard
+        type: string
+        nullable: true
+        comment: >
+          OSHA standard cited, e.g. 19260501 B04 (29 CFR 1926.501).
+      - name: viol_type
+        type: string
+        nullable: true
+        comment: >
+          S=serious, W=willful, R=repeat, O=other, U=unclassified.
+      - name: issuance_date
+        type: date
+        nullable: true
+        comment: >
+          Citation issuance date; the year partition is this date's year.
+      - name: abate_date
+        type: date
+        nullable: true
+        comment: >
+          Abatement due date.
+      - name: abate_complete
+        type: string
+        nullable: true
+        comment: >
+          Abatement completion indicator.
+      - name: current_penalty
+        type: double
+        nullable: true
+        comment: >
+          Current penalty in dollars after settlements and adjustments.
+      - name: initial_penalty
+        type: double
+        nullable: true
+        comment: >
+          Initial proposed penalty in dollars.
+      - name: contest_date
+        type: date
+        nullable: true
+        comment: >
+          Date the citation was contested.
+      - name: final_order_date
+        type: date
+        nullable: true
+        comment: >
+          Final order date.
+      - name: nr_instances
+        type: int
+        nullable: true
+        comment: >
+          Number of instances of the violation.
+      - name: nr_exposed
+        type: int
+        nullable: true
+        comment: >
+          Number of employees exposed.
+      - name: rec
+        type: string
+        nullable: true
+        comment: >
+          Record type code.
+      - name: gravity
+        type: string
+        nullable: true
+        comment: >
+          Gravity score of the violation.
+      - name: emphasis
+        type: string
+        nullable: true
+        comment: >
+          Emphasis-program code.
+      - name: hazcat
+        type: string
+        nullable: true
+        comment: >
+          Hazard category code.
+      - name: fta_insp_nr
+        type: long
+        nullable: true
+        comment: >
+          Failure-to-abate inspection number.
+      - name: fta_issuance_date
+        type: date
+        nullable: true
+        comment: >
+          Failure-to-abate issuance date.
+      - name: fta_penalty
+        type: double
+        nullable: true
+        comment: >
+          Failure-to-abate penalty in dollars.
+      - name: fta_contest_date
+        type: date
+        nullable: true
+        comment: >
+          Failure-to-abate contest date.
+      - name: fta_final_order_date
+        type: date
+        nullable: true
+        comment: >
+          Failure-to-abate final order date.
+      - name: hazsub1
+        type: string
+        nullable: true
+        comment: >
+          Hazardous substance 1.
+      - name: hazsub2
+        type: string
+        nullable: true
+        comment: >
+          Hazardous substance 2.
+      - name: hazsub3
+        type: string
+        nullable: true
+        comment: >
+          Hazardous substance 3.
+      - name: hazsub4
+        type: string
+        nullable: true
+        comment: >
+          Hazardous substance 4.
+      - name: hazsub5
+        type: string
+        nullable: true
+        comment: >
+          Hazardous substance 5.
+      - name: load_dt
+        type: timestamp
+        nullable: true
+        comment: >
+          Date the row was loaded by the DOL feed.
+
+    source:
+      type: http
+      url: "https://labordata.bunkum.us/osha_enforcement/violation.csv?_stream=on&_size=max&issuance_date__gte={year}-01-01&issuance_date__lte={year}-12-31"
+      method: GET
+      headers:
+        # labordata's Cloudflare challenges HttpSource's default browser-style User-Agent (HTTP 403);
+        # a plain self-identifying client name is served.
+        User-Agent: "calcite-govdata"
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=osha_violations/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
   - name: social_security_cola
     dataset_type: snapshot
     freshness:

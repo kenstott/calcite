@@ -65,6 +65,8 @@ FROM (
   UNION ALL SELECT 'jolts_state',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'wage_growth',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'osha_inspections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'osha_violations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t)
@@ -132,6 +134,8 @@ FROM (
   UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 0
   UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 10  -- recalibrated: BLS wage_growth yields ~15 rows for the DQ window; 50 was prod-scale
   UNION ALL SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
+  UNION ALL SELECT 'osha_inspections',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true)), 200000  -- ~30-40k inspections/yr over 2019 onward; DQ run may cover fewer years
+  UNION ALL SELECT 'osha_violations',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)), 200000
   UNION ALL SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50  -- one row per year 1975-2026
   UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)), 20000  -- CSL carries ~26,000 listings
   UNION ALL SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20  -- one row per year 2005-2026
@@ -364,6 +368,48 @@ SELECT 'econ', 'state_ui_claims', 'known_value', 'fail', 'LA 2026-10-17', 'initi
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)
 WHERE state = 'LA' AND week_ending = DATE '2026-10-17'
 HAVING COALESCE(MAX(initial_claims), -1) <> 1179 OR COALESCE(MAX(continued_weeks_claimed), -1) <> 5295;
+
+-- osha_inspections / osha_violations (DOL OSHA enforcement)
+-- Columns empty in every 2019+ source row (legacy emphasis-program flags, hazcat, emphasis, state_flag) are excluded.
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('state_flag', 'safety_manuf', 'safety_const', 'safety_marit', 'health_manuf', 'health_const', 'health_marit');
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('emphasis', 'hazcat');
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'pk_duplicates', 'fail', 'activity_nr', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT activity_nr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) GROUP BY 1 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'pk_duplicates', 'fail', 'activity_nr,citation_id', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT activity_nr, citation_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+-- Plausibility: every inspection has an establishment and 2-letter state; penalties non-negative
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'expected_values', 'fail', 'estab_name, site_state', 'no NULL name, 2-letter state',
+  CAST(COUNT(*) AS VARCHAR) || ' bad rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true)
+WHERE estab_name IS NULL OR LENGTH(site_state) <> 2
+HAVING COUNT(*) > 0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'expected_values', 'fail', 'penalties', 'initial_penalty >= 0, current_penalty >= 0',
+  CAST(COUNT(*) AS VARCHAR) || ' bad rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)
+WHERE initial_penalty < 0 OR current_penalty < 0
+HAVING COUNT(*) > 0;
 
 -- social_security_cola
 INSERT INTO dq_results
