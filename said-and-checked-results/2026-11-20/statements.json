@@ -9503,16 +9503,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if 29 U.S.C. 2612 entitles an eligible employee to 12 workweeks of unpaid leave in a 12-month period for the birth and care of a newborn. False if the statute says otherwise.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Family and Medical Leave Act text in AskAmerica's U.S. Code table, 29 U.S.C. 2612(a)(1)(A), entitles an eligible employee to 12 workweeks of leave in any 12-month period for the birth and care of a child; the provision making the leave unpaid was not queried, and eligibility limits apply.",
+      "evidence": [
+        {
+          "label": "law.usc_subsections (29 U.S.C. 2612(a))",
+          "url": "https://askamerica.ai/catalog/schemas/law/#usc_subsections-table",
+          "askamerica": true,
+          "sql": "select unit_path, unit_text from law.usc_subsections where title_number='29' and section_number='2612' and unit_seq<=2 order by unit_seq"
+        }
+      ],
+      "check_run": "q259/askamerica/2026-11-20"
     },
     {
       "id": 252,
@@ -9535,16 +9542,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if 29 U.S.C. 2612(f) limits spouses employed by the same employer to an aggregate 12 workweeks for birth, placement or care of a child. False if the statute contains no such limit.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "29 U.S.C. 2612(f), in AskAmerica's U.S. Code table, says spouses working for the same employer may be limited to an aggregate 12 workweeks for birth or placement leave; the limit is at the employer's option rather than automatic.",
+      "evidence": [
+        {
+          "label": "law.usc_subsections (29 U.S.C. 2612(f))",
+          "url": "https://askamerica.ai/catalog/schemas/law/#usc_subsections-table",
+          "askamerica": true,
+          "sql": "select unit_path, unit_text from law.usc_subsections where title_number='29' and section_number='2612' and (unit_path like '(a)(1)%' or unit_path like '(f)%' or unit_path like '%(f)%') order by unit_seq"
+        }
+      ],
+      "check_run": "q259/askamerica/2026-11-20"
     },
     {
       "id": 253,
@@ -9567,16 +9581,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if DoD's Demographics Profile reports that roughly 45-50% of married active-duty women are in dual-military marriages. False if the official share is materially different.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "DoD's 2021 Demographics Report puts 45.1% of married active-duty women in dual-military marriages; its 2024 report shows 34.6% DoD-wide but omits Army dual-military marriages, so no comparable current figure exists. Her daughter's situation was not assessed.",
+      "evidence": [
+        {
+          "label": "DoD 2021 Demographics Report, table 5.25",
+          "url": "https://download.militaryonesource.mil/12038/MOS/Reports/2021-demographics-report.pdf"
+        },
+        {
+          "label": "DoD 2024 Demographics Report, table 5.25",
+          "url": "https://download.militaryonesource.mil/12038/MOS/Reports/2024-demographics-report.pdf"
+        }
+      ],
+      "check_run": "q259/askamerica/2026-11-20"
     },
     {
       "id": 254,
@@ -9599,16 +9622,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the National Down Syndrome Society or the 2019 National Council on Disability report it draws on reports about 52% receiving a referral. Unsupported if no such figure is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The National Council on Disability's 2019 report says a 2004 survey found only 52% of people with disabilities who asked for a referral to a transplant specialist received one, and calls it the most recent such survey.",
+      "evidence": [
+        {
+          "label": "National Council on Disability, Organ Transplant Discrimination report (2019)",
+          "url": "https://www.ncd.gov/assets/uploads/docs/ncd-organ-transplant-508.pdf"
+        }
+      ],
+      "check_run": "q260/askamerica/2026-11-20"
     },
     {
       "id": 255,
@@ -9631,16 +9659,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published survey found about 43% of pediatric transplant centers consider intellectual disability a factor against transplant. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The National Council on Disability's 2019 report cites a 2008 survey finding 43% of pediatric transplant centers always or usually consider intellectual disability an absolute or relative contraindication to transplant.",
+      "evidence": [
+        {
+          "label": "National Council on Disability, Organ Transplant Discrimination report (2019)",
+          "url": "https://www.ncd.gov/assets/uploads/docs/ncd-organ-transplant-508.pdf"
+        }
+      ],
+      "check_run": "q260/askamerica/2026-11-20"
     },
     {
       "id": 256,
@@ -9663,16 +9696,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published survey reports roughly 60-70% of centers have serious reservations about a kidney transplant for people with even mild intellectual disability. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The National Council on Disability's 2019 report cites a 2006 NPR report that about 60% of transplant centers have serious reservations about giving a kidney to someone with a mild to moderate intellectual disability, the low end of \"close to two-thirds\".",
+      "evidence": [
+        {
+          "label": "National Council on Disability, Organ Transplant Discrimination report (2019)",
+          "url": "https://www.ncd.gov/assets/uploads/docs/ncd-organ-transplant-508.pdf"
+        }
+      ],
+      "check_run": "q260/askamerica/2026-11-20"
     },
     {
       "id": 257,
@@ -9697,16 +9735,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if reporting or family accounts describe the child dying after about 40 days in a NICU after being denied a heart transplant evaluation or listing. Unsupported if no account is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsettled",
+      "finding": "Search summaries of family and news accounts describe Zion Sarmiento of Ocala spending 40 days in a NICU and being refused by three Florida transplant centers before dying in October 2021 at about 16 weeks old, so the 40 days and the refusals fit but the sequence in the sentence is not confirmed; no account was read directly.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q260/askamerica/2026-11-20"
     },
     {
       "id": 258,
@@ -9729,16 +9767,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill record shows the House passed the Charlotte Woodward Organ Transplant Discrimination Prevention Act in the 119th Congress. False if the House has not passed it.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show the House passed H.R. 1520, the Charlotte Woodward Organ Transplant Discrimination Prevention Act, by voice vote on June 23, 2025; its Senate companion, S. 1782, awaits Senate action.",
+      "evidence": [
+        {
+          "label": "law.bill_actions (H.R. 1520 and S. 1782, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT bill_type, bill_number, action_date, text FROM law.bill_actions WHERE congress=119 AND ((bill_type='hr' AND bill_number=1520) OR (bill_type='s' AND bill_number=1782)) ORDER BY bill_type, action_seq"
+        }
+      ],
+      "check_run": "q260/askamerica/2026-11-20"
     },
     {
       "id": 259,
