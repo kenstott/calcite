@@ -5590,16 +5590,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if total discretionary budget authority or outlays in FY2026 were within a few percent of FY2025. False if they changed materially. Unsettled if the answer depends on authority vs. outlays or on defense vs. nondefense.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Committee for a Responsible Federal Budget's table of enacted appropriations, citing CBO, shows base discretionary funding of $1.600 trillion for fiscal 2025 and $1.575 trillion for fiscal 2026 before the Homeland Security bill, about $1.64 trillion with it, within about 2% either way; discretionary outlays were not confirmed.",
+      "evidence": [
+        {
+          "label": "CRFB, Appropriations Watch FY2026",
+          "url": "https://www.crfb.org/blogs/appropriations-watch-fy-2026"
+        }
+      ],
+      "check_run": "q236/askamerica/2026-11-20"
     },
     {
       "id": 140,
@@ -5622,16 +5627,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if CBO's estimate of the 2025 reconciliation law (P.L. 119-21) shows mandatory spending reductions of about $1.7 trillion over ten years, gross or net. False if CBO's figure is materially different on every ordinary measure. Cannot be determined if the estimate cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsettled",
+      "finding": "Search summaries of CBO's estimate put the law's net reduction in direct spending at about $1.1 trillion over 2025-2034; CBO's pages refused the fetch, so its gross reductions, which could approach $1.7 trillion, could not be read.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q236/askamerica/2026-11-20"
     },
     {
       "id": 141,
@@ -5654,7 +5659,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if total public debt outstanding is about $42 trillion as of November 2026. False if Treasury data show materially less. Unsettled if a broader measure fits. (The \"empire\" characterization is not assessed.)",
       "premise": null,
       "counter_statements": [
         99
@@ -5662,17 +5667,24 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "Treasury's Debt to the Penny series in AskAmerica's warehouse shows total public debt of $40.715 trillion on Nov. 17, 2026, about $1.3 trillion below $42 trillion. The Treasury source could not be read directly outside the warehouse.",
+      "evidence": [
+        {
+          "label": "econ.federal_debt (total public debt, Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#federal_debt-table",
+          "askamerica": true,
+          "sql": "select record_date, tot_pub_debt_out_amt from econ.federal_debt order by record_date desc fetch first 5 rows only"
+        }
+      ],
+      "check_run": "q236/askamerica/2026-11-20"
     },
     {
       "id": 142,
       "speaker": "Chip Roy",
       "office": "U.S. Representative",
       "party": "R",
-      "context": "In a Nov. 19, 2026 House floor speech titled The Empire Is Striking Back, Roy described whether Congress has voted on the Iran war.",
+      "context": "In a Nov. 19, 2026 House floor speech, Roy said Congress had held no up-or-down vote on the Iran war, while acknowledging votes on War Powers Resolutions.",
       "topic": "Iran war",
       "broad_topic": "War and Foreign Affairs",
       "speaker_state": "TX",
@@ -5688,18 +5700,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "Read in his context as \"no up-or-down vote authorizing the war\": True if neither chamber of the 119th Congress has held a recorded vote on a declaration of war or authorization for use of military force against Iran. False if the roll-call record shows such a vote. War Powers Resolution votes to remove forces, which he acknowledges, are not counted.",
       "premise": null,
-      "counter_statements": [
-        272
-      ],
+      "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show one Iran authorization bill in the 119th Congress, H.J.Res. 176, which was referred to committee with no recorded vote, and the Senate's 2026 roll-call list shows only War Powers removal votes, not an authorization or declaration. Read literally, the sentence would not hold, because both chambers have voted on War Powers measures, which the speaker acknowledged.",
+      "evidence": [
+        {
+          "label": "law.bills and law.bill_recorded_votes (Iran authorization bills, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT b.bill_type, b.bill_number, b.title, b.latest_action_text, (SELECT count(*) FROM law.bill_recorded_votes v WHERE v.congress=b.congress AND v.bill_type=b.bill_type AND v.bill_number=b.bill_number) AS votes FROM law.bills b WHERE b.congress=119 AND (b.title ILIKE '%Authorization for Use of Military Force%' OR b.title ILIKE '%declar%war%' OR b.title ILIKE '%declaration of war%' OR b.title ILIKE '%AUMF%') AND (b.title ILIKE '%Iran%' OR b.title ILIKE '%Epic Fury%') ORDER BY 1,2"
+        },
+        {
+          "label": "Senate roll-call vote list, 119th Congress, 2nd session",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_119_2.htm"
+        }
+      ],
+      "check_run": "q238/askamerica/2026-11-20"
     },
     {
       "id": 143,
@@ -5788,16 +5809,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Republicans have held the Texas governorship and both legislative chambers (or all statewide offices) for about 30 years. False if the record shows a materially different span. Unsettled if the span depends on which offices are counted.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Republicans have held the Texas governorship since 1995 and the state Senate since 1997, but the state House only since 2003, so the span of one-party control is 23 to 31 years depending on which offices are counted; this rests on a secondary summary, not the Legislative Reference Library's tables.",
+      "evidence": [
+        {
+          "label": "Wikipedia, Political party strength in Texas",
+          "url": "https://en.wikipedia.org/wiki/Political_party_strength_in_Texas"
+        }
+      ],
+      "check_run": "q238/askamerica/2026-11-20"
     },
     {
       "id": 146,
@@ -5888,16 +5914,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Census Bureau estimates the U.S. foreign-born population at about 53 million in the latest estimate. False if the official estimate is materially different. Cannot be determined if the data cannot be read. (The \"fundamentally changing\" judgment is not assessed.)",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The Census Bureau's 2025 American Community Survey estimate in AskAmerica's warehouse puts the foreign-born population at 50.4 million, while the Current Population Survey reportedly counted 53.3 million in January 2025 and 51.9 million in June 2025; the CPS figures and the Census source could not be read directly, so which estimate applies is open.",
+      "evidence": [
+        {
+          "label": "census.acs1_nativity (U.S. foreign-born population, ACS 1-year)",
+          "url": "https://askamerica.ai/catalog/schemas/census/#acs1_nativity-table",
+          "askamerica": true,
+          "sql": "SELECT \"year\", geography, foreign_born, total_population FROM census.acs1_nativity WHERE geography='us' ORDER BY \"year\""
+        },
+        {
+          "label": "Census Bureau release on 2025 CPS foreign-born tables",
+          "url": "https://www.census.gov/newsroom/press-releases/2026/new-foreign-born-data-tables-available.html"
+        }
+      ],
+      "check_run": "q239/askamerica/2026-11-20"
     },
     {
       "id": 149,
@@ -5922,16 +5959,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if published totals show about $500 million spent by Republicans and allied groups in Texas 2026 races and about $250 million on the Republican U.S. Senate candidate. Unsettled if totals depend on what is counted. Unsupported if no totals are found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "FEC independent-expenditure filings in AskAmerica's warehouse show about $226 million spent opposing the Democratic Senate candidate and $103 million supporting the Republican in Texas in 2026, and the Texas Tribune reported other totals by different measures; no total matches $250 million or $500 million, and the answer depends on what spending is counted.",
+      "evidence": [
+        {
+          "label": "fec.independent_expenditures_current (Texas 2026 races by office and party)",
+          "url": "https://askamerica.ai/catalog/schemas/fec/#independent_expenditures_current-view",
+          "askamerica": true,
+          "sql": "SELECT candidate_office, support_oppose, candidate_party, sum(amount) total FROM fec.independent_expenditures_current WHERE year='2026' AND candidate_state='TX' AND superseded_by_amendment IS NOT TRUE AND amount_implausible IS NOT TRUE GROUP BY candidate_office, support_oppose, candidate_party ORDER BY total DESC FETCH FIRST 20 ROWS ONLY"
+        },
+        {
+          "label": "Texas Tribune, outside spending in the Texas Senate race (Oct. 1, 2026)",
+          "url": "https://www.texastribune.org/2026/10/01/texas-senate-gop-outside-spending-ken-paxton-thune-trump-talarico/"
+        }
+      ],
+      "check_run": "q238/askamerica/2026-11-20"
     },
     {
       "id": 150,
@@ -5986,16 +6034,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if BEA data show health care and government together accounting for most of real GDP growth or job growth in recent years. Unsettled if it holds for jobs but not GDP, or depends on period. Contradicted if they account for well under half on both measures.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "In AskAmerica's BEA data, health care and government account for only about 13% to 16% of real value-added growth since 2019 or 2022, but in its BLS state payroll data education and health plus government account for about 53% of job growth over 2019-2025 and 76% over 2022-2025. The claim holds for jobs but not output. Whether health care is \"bloated\" was not assessed.",
+      "evidence": [
+        {
+          "label": "econ.industry_gdp (BEA real value added by industry, 2019-2025)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#industry_gdp-table",
+          "askamerica": true,
+          "sql": "select \"year\", sum(value) tot, sum(case when industry in ('62','GFG','GSLG','GFE') then value else 0 end) hg, sum(case when industry='62' then value else 0 end) hc from econ.industry_gdp where table_id='10' and frequency='A' and \"year\" in (2019,2022,2023,2024,2025) group by \"year\" order by \"year\""
+        },
+        {
+          "label": "econ.state_industry (BLS payrolls by supersector, 2019-2025)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#state_industry-table",
+          "askamerica": true,
+          "sql": "select substr(series,11,2) ss, \"year\", sum(value) v from econ.state_industry where series like 'SMU__00000__00000001' and period='M13' and substr(series,11,2) in ('00','90','65') and substr(series,4,2) not in ('72','78') and \"year\" in (2019,2022,2024,2025) group by substr(series,11,2), \"year\" order by 1,2"
+        }
+      ],
+      "check_run": "q236/askamerica/2026-11-20"
     },
     {
       "id": 152,
@@ -6082,16 +6143,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if contemporaneous reporting or official conference documents show the House Republican Conference debating rule changes to penalize members in November 2026. Unsupported if nothing is found. Unsettled if found reports do not speak to punishing members.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "supported",
+      "finding": "Axios reported on Nov. 17, 2026, as seen in search summaries, that Rep. Mike Flood and the Main Street Caucus were pushing a conference rule letting the Steering Committee penalize members who vote against procedural rules, with Freedom Caucus members opposed; the article itself could not be read directly, and no conference document was found.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q237/askamerica/2026-11-20"
     },
     {
       "id": 155,
@@ -6114,16 +6175,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if, before July 2026, no border-codification bill of this kind in the 119th Congress had been reported by the House Judiciary Committee or passed the House. False if the bill record shows one had been reported or passed before then. Cannot be determined if the bill cannot be identified.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show no House passage of such a border bill in the 119th Congress, and the Judiciary Committee's first report of one, H.R. 9773 (the Permanent Trump Secure Border Act), was ordered on July 21, 2026. The bill was matched to the description by title, not by comparing its text with H.R. 2.",
+      "evidence": [
+        {
+          "label": "law.bill_actions (H.R. 9773 and H.R. 9200, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT bill_number, action_seq, action_date, source_system, text FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number IN (9773,9200) ORDER BY bill_number, action_seq"
+        },
+        {
+          "label": "law.bill_committee_activities (House Judiciary reports and markups, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_committee_activities-table",
+          "askamerica": true,
+          "sql": "SELECT b.bill_number, b.title, a.activity_name, a.activity_date FROM law.bill_committee_activities a JOIN law.bills b ON b.congress=a.congress AND b.bill_type=a.bill_type AND b.bill_number=a.bill_number WHERE a.congress=119 AND a.bill_type='hr' AND a.committee_system_code='hsju00' AND a.activity_name IN ('Reported By','Markup By','Reported Original Measure') AND a.activity_date >= '2026-01-01' ORDER BY a.activity_date"
+        }
+      ],
+      "check_run": "q239/askamerica/2026-11-20"
     },
     {
       "id": 156,
@@ -6146,16 +6220,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill record shows the House Judiciary Committee ordering such a border bill reported in or after July 2026. Contradicted if no Judiciary markup or report of such a bill appears. (Whether Roy's objection caused it is not assessed.)",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show H.R. 9773 was introduced July 20, 2026 and ordered reported by the House Judiciary Committee on July 21 by a 16-14 recorded vote. Whether the objection caused the markup was not assessed.",
+      "evidence": [
+        {
+          "label": "law.bill_actions (H.R. 9773 and H.R. 9200, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT bill_number, action_seq, action_date, source_system, text FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number IN (9773,9200) ORDER BY bill_number, action_seq"
+        },
+        {
+          "label": "law.bill_committee_activities (House Judiciary reports and markups, 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_committee_activities-table",
+          "askamerica": true,
+          "sql": "SELECT b.bill_number, b.title, a.activity_name, a.activity_date FROM law.bill_committee_activities a JOIN law.bills b ON b.congress=a.congress AND b.bill_type=a.bill_type AND b.bill_number=a.bill_number WHERE a.congress=119 AND a.bill_type='hr' AND a.committee_system_code='hsju00' AND a.activity_name IN ('Reported By','Markup By','Reported Original Measure') AND a.activity_date >= '2026-01-01' ORDER BY a.activity_date"
+        }
+      ],
+      "check_run": "q239/askamerica/2026-11-20"
     },
     {
       "id": 157,
@@ -9674,9 +9761,7 @@
       "kind": "factual",
       "test": null,
       "premise": null,
-      "counter_statements": [
-        142
-      ],
+      "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
