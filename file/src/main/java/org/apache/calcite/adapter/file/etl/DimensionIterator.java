@@ -591,6 +591,9 @@ public class DimensionIterator {
         } else if (CalendarPeriodProvider.isPeriodUnit(config.getType())) {
           values = CalendarPeriodProvider.values(config.getType(), config.getWeekYear(),
               existing, todayUtc(), config.isSkipWeekends());
+          if (config.getType() == DimensionType.DAY && config.getMaxAgeDays() > 0) {
+            values = withinMaxAge(values, existing, config.getMaxAgeDays());
+          }
         } else {
           values = resolveDimension(config);
         }
@@ -682,6 +685,30 @@ public class DimensionIterator {
         throw new IllegalStateException("Unknown dimension type '" + config.getType()
             + "' for dimension '" + config.getName() + "'");
     }
+  }
+
+  /**
+   * Drops DAY values older than {@code maxAgeDays} before today (UTC). The year and month come
+   * from the enclosing combination, which CalendarPeriodProvider already required to expand days.
+   */
+  private static List<String> withinMaxAge(List<String> days, Map<String, String> context,
+      int maxAgeDays) {
+    LocalDate oldest = todayUtc().minusDays(maxAgeDays);
+    String yearStr = context.get("year");
+    String monthStr = context.get("month");
+    if (yearStr == null || monthStr == null) {
+      throw new IllegalStateException("maxAgeDays on a day dimension requires year and month "
+          + "dimensions in the same combination, got " + context);
+    }
+    int year = Integer.parseInt(yearStr);
+    int month = Integer.parseInt(monthStr);
+    List<String> kept = new ArrayList<String>();
+    for (String day : days) {
+      if (!LocalDate.of(year, month, Integer.parseInt(day)).isBefore(oldest)) {
+        kept.add(day);
+      }
+    }
+    return kept;
   }
 
   /** Current date in UTC; the anchor for current-period capping in providers. */
