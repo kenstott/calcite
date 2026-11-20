@@ -11,12 +11,14 @@ This is a **driver/CLI-server tool for technical users**, so the primary deliver
 is package managers + tarballs, which are **not Gatekeeper/SmartScreen quarantined**
 and therefore need **no OS code-signing** (PGW-030/031 revised):
 
-- **macOS / Linux — Homebrew tap:** `brew install kenstott/tap/pgwire-file`
-  (formula: `packaging/homebrew/pgwire-file.rb`). Brew-installed CLIs are not
-  Gatekeeper-quarantined — no Apple Developer account / notarization required.
-- **Windows — Scoop bucket:** `scoop install pgwire-file`
-  (manifest: `packaging/scoop/pgwire-file.json`). Scoop needs no Authenticode
+- **macOS / Linux — Homebrew tap:** `brew install kenstott/tap/pgwire-file`. Brew-installed
+  CLIs are not Gatekeeper-quarantined — no Apple Developer account / notarization required.
+- **Windows — Scoop bucket:** `scoop install pgwire-file`. Scoop needs no Authenticode
   signing and is not SmartScreen-quarantined.
+- Both ship one runtime formula (`pgwire-calcite-runtime`) plus one formula per pack
+  (`pgwire-<adapter>`) that depends on it, generated at release by
+  `runtime_packs.py formulas <out> <version> <sums-dir>` from `adapters.json`, `platforms.json`
+  and the release's `.sha256` assets (see the layout section).
 - **All — per-OS/arch tarball** GitHub release (`packaging/pack.sh`) + a one-line
   `curl | sh` install. Terminal installs aren't quarantined either.
 
@@ -52,38 +54,46 @@ delivery above.
 
 Each engine release ships, per OS/arch, one **runtime** and one **pack** per adapter. The runtime
 holds what every adapter needs; a pack holds what only its adapter needs and names the runtime
-version it requires. Each tarball holds its part of one tree, so extracting a runtime and a pack
+**line** it requires: an ABI number (`runtime-line`), bumped when the runtime's jar set or the
+runtime/pack contract changes. A pack starts the newest runtime installed on its line, so a runtime
+release on the same line ships with the packs unchanged. Each tarball holds its part of one tree, so extracting a runtime and a pack
 into the same directory installs them (`src/pgwire_calcite/packs.py` documents the layout):
 
 ```
 <root>/
 ├── runtimes/<version>/              pgwire-calcite-runtime-<version>-<os>-<arch>.tar.gz
-│   ├── runtime.json                 {"name": "pgwire-calcite-runtime", "version", "variant"}
+│   ├── runtime.json                 {"name": "pgwire-calcite-runtime", "line", "version", "variant"}
 │   ├── jre/                         jlinked JRE (every JDK module)
 │   ├── python/ cpython/             python-build-standalone + a venv with pgwire_calcite (PGW-028)
 │   ├── jars/                        the jars every adapter's classpath holds (calcite-core, avatica, ...)
 │   ├── pgwire-launcher.jar          Java entry point (PGW-025)
 │   └── bin/pgwire-calcite-runtime   starts a pack: --pack <pack-dir> [server args]
 └── packs/<adapter>/<version>/       pgwire-<adapter>-pack-<version>-<os>-<arch>.tar.gz
-    ├── pack.json                    {"name", "version", "runtime": "<version>", "variant", "args"}
+    ├── pack.json                    {"name", "version", "runtime_line", "variant", "args"}
     ├── jars/                        the adapter's jars the runtime does not hold
     ├── model/model.json             the adapter's Calcite model (+ catalog cache, embedder model)
     ├── site-packages/               optional: Python packages only this adapter uses (govdata)
-    └── bin/pgwire-<adapter>         finds runtimes/<runtime>; refuses to start, naming the
-                                     version, when it is not installed
+    └── bin/pgwire-<adapter>         starts the newest runtimes/<version> on its line; refuses to
+                                     start, naming the line, when none is installed
 ```
 
 The classpath is the runtime's `jars/` then the pack's `jars/`
-(`PGWIRE_CALCITE_CLASSPATH_DIRS`); a jar name in both is refused. The Python path is the runtime's
+(`PGWIRE_CALCITE_CLASSPATH_DIRS`); a jar in both, by name or as two versions of one artifact, is
+refused at start, and `pack-jars` refuses the same at pack build time. The Python path is the runtime's
 venv plus the pack's `site-packages/`. Each source still runs in its own server process. A
 Python-only change ships as a new runtime; the packs are unchanged.
 
-`runtime_packs.py` lays both out (`common-jars`, `pack-jars`, `runtime`, `pack`, `pack-extras`);
+`runtime_packs.py` lays both out (`common-jars`, `pack-jars`, `runtime`, `pack`, `pack-extras`)
+and writes the package-manager formulas (`formulas`);
 `pgwire-calcite-release.yml` builds the runtime and `pgwire-adapters-release.yml` calls it and builds
 the packs against it. `build-bundle.sh <adapter> <variant> <out-dir>` builds the same runtime and
-one pack from a checkout. The Homebrew formula (`homebrew/pgwire-file.rb`) and Scoop manifest
-(`scoop/pgwire-file.json`) install a runtime plus the file pack; another adapter's is the same with
-its pack's name.
+one pack from a checkout.
+
+Homebrew and Scoop install each formula in its own prefix. A pack formula's wrapper sets
+`PGWIRE_CALCITE_RUNTIMES` to the runtime formula's stable directory
+(`opt/pgwire-calcite-runtime/libexec/runtimes`, `apps\pgwire-calcite-runtime\current\runtimes`),
+where the pack's launcher looks for the newest runtime on its line instead of `runtimes/` beside
+the packs; upgrading the runtime formula leaves the pack formulas as they are.
 
 Jars ship **exploded** (a `jars/` dir), not a fat jar (operational: per-jar Calcite pinning, clean
 native signing, no shade/ServiceLoader fragility).

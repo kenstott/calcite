@@ -26,9 +26,13 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 
 _DEFAULT_FILE = "calcite-classpath.txt"
 CLASSPATH_DIRS_ENV = "PGWIRE_CALCITE_CLASSPATH_DIRS"
+#: name-version.jar; the same reading as packaging/runtime_packs.py, which refuses the same clash
+#: when a pack is built (that script runs on the release runner without this package).
+_JAR_VERSION_RE = re.compile(r"^(.+)-([0-9][0-9A-Za-z_.]*)\.jar$")
 
 
 def _project_root() -> pathlib.Path:
@@ -49,22 +53,33 @@ def _vendored_jars() -> list[str]:
     return [str(p) for p in sorted(jar_dir.glob("*.jar"))]
 
 
+def _artifact(name: str) -> str:
+    m = _JAR_VERSION_RE.match(name)
+    return m.group(1) if m else name[: -len(".jar")]
+
+
 def jars_in_dirs(dirs: list[str]) -> list[str]:
-    """Every ``*.jar`` in each directory, sorted within it, directories in the order given. One jar
-    name in two directories is refused: a pack never carries a jar its runtime already has."""
+    """Every ``*.jar`` in each directory, sorted within it, directories in the order given. A jar in
+    two directories, by name or as two versions of one artifact, is refused: a pack never carries a
+    jar its runtime already has, and a newer runtime on the pack's line may have gained one."""
     jars: list[str] = []
     seen: dict = {}
     for d in dirs:
         jar_dir = pathlib.Path(d)
         if not jar_dir.is_dir():
             raise ClasspathError(f"{CLASSPATH_DIRS_ENV} names {d}, which is not a directory.")
+        here: dict = {}
         for p in sorted(jar_dir.glob("*.jar")):
-            if p.name in seen:
+            artifact = _artifact(p.name)
+            if artifact in seen:
+                other, other_dir = seen[artifact]
                 raise ClasspathError(
-                    f"{p.name} is in both {seen[p.name]} and {jar_dir}; a jar belongs to one directory."
+                    f"{p.name} in {jar_dir} and {other} in {other_dir} are one jar; a jar belongs "
+                    "to one directory."
                 )
-            seen[p.name] = jar_dir
+            here[artifact] = (p.name, jar_dir)
             jars.append(str(p))
+        seen.update(here)
     return jars
 
 

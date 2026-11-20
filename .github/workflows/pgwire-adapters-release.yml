@@ -140,7 +140,8 @@ jobs:
 
   # One pack per adapter and platform: the adapter's jars the runtime does not hold, its model,
   # the Python packages only it uses (govdata's EMBED() embedder) and its launcher, which finds
-  # runtimes/<version> beside it. No JRE, CPython or common jar: those are the runtime's.
+  # the newest runtime on its runtime line under runtimes/ beside it. No JRE, CPython or common
+  # jar: those are the runtime's.
   pack:
     needs: [plan, runtime]
     strategy:
@@ -242,7 +243,7 @@ jobs:
           # --database names the reported catalog after the adapter. govdata's
           # "--auth askamerica-key" (ASKAM-010) is baked in, so nothing starts an open govdata
           # server by omission; the caller's arguments follow and win.
-          python3 pgwire-calcite/packaging/runtime_packs.py pack "$PK" "${{ matrix.adapter.name }}" "$VERSION" "$VERSION" \
+          python3 pgwire-calcite/packaging/runtime_packs.py pack "$PK" "${{ matrix.adapter.name }}" "$VERSION" \
             "${{ matrix.os.variant }}" --database "${{ matrix.adapter.name }}" ${{ matrix.adapter.flags }}
 
       - name: Pack tarball + sha256
@@ -351,17 +352,19 @@ jobs:
             exit 1
           fi
 
-      - name: A pack whose runtime is absent is refused at start, naming the version
+      - name: A pack with no runtime on its line is refused at start, naming the line
         run: |
           set -euo pipefail
           mkdir -p alone
           python3 -c "import sys, tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter='data')" \
             "$(ls dl/pgwire-file-pack-*-${{ matrix.os.variant }}.tar.gz)" alone
+          line=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['runtime_line'])" \
+            "alone/packs/file/$VERSION/pack.json")
           if "alone/packs/file/$VERSION/bin/pgwire-file" --port 5454 > alone.out 2>&1; then
             echo "the pack started without its runtime" >&2; exit 1
           fi
-          grep -F "requires pgwire-calcite runtime $VERSION, which is not installed" alone.out \
-            || { echo "the refusal does not name the runtime version:" >&2; cat alone.out >&2; exit 1; }
+          grep -F "requires a pgwire-calcite runtime on line $line, and none is installed" alone.out \
+            || { echo "the refusal does not name the runtime line:" >&2; cat alone.out >&2; exit 1; }
 
       - name: Extract the runtime and the pack into one root with Python's safe tarfile filter (proves relocatability)
         run: |
@@ -541,15 +544,16 @@ jobs:
           name: runtime-windows-x86_64
           path: dl
 
-      - name: A pack whose runtime is absent is refused at start, naming the version
+      - name: A pack with no runtime on its line is refused at start, naming the line
         run: |
           $tar = (Get-ChildItem dl -Filter 'pgwire-file-pack-*-windows-x86_64.tar.gz' | Select-Object -First 1).FullName
           New-Item -ItemType Directory -Force alone | Out-Null
           python -c "import sys, tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter='data')" $tar alone
           if ($LASTEXITCODE -ne 0) { throw "could not extract $tar" }
+          $line = (Get-Content "alone\packs\file\$env:VERSION\pack.json" -Raw | ConvertFrom-Json).runtime_line
           $out = & cmd /c "alone\packs\file\$env:VERSION\bin\pgwire-file.bat --port 5454 2>&1"
           if ($LASTEXITCODE -eq 0) { throw "the pack started without its runtime" }
-          if ("$out" -notmatch [regex]::Escape("requires pgwire-calcite runtime $env:VERSION, which is not installed")) { throw "the refusal does not name the runtime version: $out" }
+          if ("$out" -notmatch [regex]::Escape("requires a pgwire-calcite runtime on line $line, and none is installed")) { throw "the refusal does not name the runtime line: $out" }
           $global:LASTEXITCODE = 0
 
       - name: Extract the runtime and the pack into one root with Python's safe tarfile filter (proves relocatability)

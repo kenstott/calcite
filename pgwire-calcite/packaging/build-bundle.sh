@@ -201,7 +201,7 @@ print('embedder model cached')
   # --database names the reported catalog after the adapter; the caller's arguments follow the
   # pack's flags and win
   # shellcheck disable=SC2086
-  python3 "$PACKAGING/runtime_packs.py" pack "$PK" "$ADAPTER" "$VERSION" "$VERSION" "$VARIANT" \
+  python3 "$PACKAGING/runtime_packs.py" pack "$PK" "$ADAPTER" "$VERSION" "$VARIANT" \
     --database "$ADAPTER" $FLAGS
 }
 

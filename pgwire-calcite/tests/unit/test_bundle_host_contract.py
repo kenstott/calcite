@@ -71,7 +71,20 @@ def test_one_jar_in_two_classpath_dirs_is_an_error_naming_it(tmp_path, monkeypat
     (pack / "calcite-core.jar").write_bytes(b"")
     monkeypatch.delenv("PGWIRE_CALCITE_CLASSPATH", raising=False)
     monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIRS", os.pathsep.join([str(runtime), str(pack)]))
-    with pytest.raises(classpath.ClasspathError, match="calcite-core.jar is in both"):
+    with pytest.raises(classpath.ClasspathError, match=r"calcite-core\.jar in .* are one jar"):
+        classpath.resolve_classpath()
+
+
+def test_two_versions_of_one_jar_in_two_classpath_dirs_are_an_error_naming_both(tmp_path, monkeypatch):
+    runtime, pack = tmp_path / "runtime", tmp_path / "pack"
+    runtime.mkdir()
+    pack.mkdir()
+    (runtime / "jackson-core-2.18.4.jar").write_bytes(b"")
+    (pack / "jackson-core-2.19.0.jar").write_bytes(b"")
+    monkeypatch.delenv("PGWIRE_CALCITE_CLASSPATH", raising=False)
+    monkeypatch.setenv("PGWIRE_CALCITE_CLASSPATH_DIRS", os.pathsep.join([str(runtime), str(pack)]))
+    with pytest.raises(classpath.ClasspathError,
+                       match=r"jackson-core-2\.19\.0\.jar in .* and jackson-core-2\.18\.4\.jar in .* are one jar"):
         classpath.resolve_classpath()
 
 

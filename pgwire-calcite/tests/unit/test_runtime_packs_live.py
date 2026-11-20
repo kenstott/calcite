@@ -43,7 +43,8 @@ PROJECT = pathlib.Path(__file__).resolve().parents[2]
 PACKAGING = PROJECT / "packaging"
 FIXTURES = PROJECT / "tests" / "fixtures"
 JDBC_CLASSPATH = PROJECT / "jdbc-pack-classpath.txt"
-VERSION = "0.0.0-live"
+VERSION = "0.0.0"
+LINE = 1
 VARIANT = "test-variant"
 START_SECONDS = 240
 
@@ -139,7 +140,7 @@ def installed(tmp_path_factory):
     site = _runtime_cpython(runtime / "cpython")
     _launcher_jar(runtime / "pgwire-launcher.jar", tmp)
     runtime_packs.common_jars(runtime / "jars", [file_jars, jdbc_jars])
-    runtime_packs.write_runtime(runtime, VERSION, VARIANT)
+    runtime_packs.write_runtime(runtime, VERSION, VARIANT, LINE)
 
     file_pack = root / "packs" / "file" / VERSION
     runtime_packs.pack_jars(runtime / "jars", file_jars, file_pack / "jars")
@@ -151,7 +152,7 @@ def installed(tmp_path_factory):
                      "operand": {"directory": str(FIXTURES / "filedata"), "ephemeralCache": True,
                                  "baseDirectory": str(tmp / "file-base"),
                                  "executionEngine": "linq4j"}}]}))
-    runtime_packs.write_pack(file_pack, "file", VERSION, VERSION, VARIANT, ["--database", "file"])
+    runtime_packs.write_pack(file_pack, "file", VERSION, LINE, VARIANT, ["--database", "file"])
 
     jdbc_pack = root / "packs" / "jdbc" / VERSION
     runtime_packs.pack_jars(runtime / "jars", jdbc_jars, jdbc_pack / "jars")
@@ -160,7 +161,7 @@ def installed(tmp_path_factory):
         "version": "1.0", "defaultSchema": "SCOTT",
         "schemas": [{"name": "SCOTT", "type": "jdbc", "jdbcUrl": "jdbc:hsqldb:res:scott",
                      "jdbcUser": "SCOTT", "jdbcPassword": "TIGER", "jdbcSchema": "SCOTT"}]}))
-    runtime_packs.write_pack(jdbc_pack, "jdbc", VERSION, VERSION, VARIANT, ["--database", "jdbc"])
+    runtime_packs.write_pack(jdbc_pack, "jdbc", VERSION, LINE, VARIANT, ["--database", "jdbc"])
     return {"root": root, "runtime": runtime, "site": site, "tmp": tmp,
             "packs": {"file": file_pack, "jdbc": jdbc_pack}}
 
@@ -250,16 +251,16 @@ def test_a_python_only_runtime_update_leaves_both_packs_untouched_and_both_start
     assert _tree_digest(installed["runtime"] / "jars") == jars_before
 
 
-def test_a_pack_whose_runtime_version_is_absent_fails_at_start_naming_it(installed):
+def test_a_pack_with_no_runtime_on_its_line_fails_at_start_naming_it(installed):
     pack = installed["packs"]["jdbc"]
     manifest = json.loads((pack / "pack.json").read_text())
     target = installed["root"] / "packs" / "jdbc" / "9.9.9"
     shutil.copytree(pack, target, symlinks=True)
     try:
-        runtime_packs.write_pack(target, "jdbc", "9.9.9", "9.9.9", VARIANT, manifest["args"])
+        runtime_packs.write_pack(target, "jdbc", "9.9.9", LINE + 1, VARIANT, manifest["args"])
         done = subprocess.run([str(target / "bin" / "pgwire-jdbc"), "--port", str(_free_port())],
                               check=False, capture_output=True, text=True, timeout=60)
         assert done.returncode == 2
-        assert "requires pgwire-calcite runtime 9.9.9, which is not installed" in done.stderr
+        assert f"requires a pgwire-calcite runtime on line {LINE + 1}, and none is installed" in done.stderr
     finally:
         shutil.rmtree(target)
