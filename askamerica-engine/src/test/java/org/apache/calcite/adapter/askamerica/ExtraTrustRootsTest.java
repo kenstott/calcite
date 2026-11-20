@@ -24,9 +24,10 @@ class ExtraTrustRootsTest {
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
     String[] expected = {
         "CN=GlobalSign Root R46, O=GlobalSign nv-sa, C=BE",
-        "CN=Sectigo Public Server Authentication Root R46, O=Sectigo Limited, C=GB"};
+        "CN=Sectigo Public Server Authentication Root R46, O=Sectigo Limited, C=GB",
+        "CN=CFCA EV ROOT, O=China Financial Certification Authority, C=CN"};
     String[] files = {"globalsign-root-r46.pem",
-        "sectigo-public-server-authentication-root-r46.pem"};
+        "sectigo-public-server-authentication-root-r46.pem", "cfca-ev-root.pem"};
     for (int i = 0; i < files.length; i++) {
       try (InputStream in = getClass().getClassLoader()
           .getResourceAsStream("extra-trust-roots/" + files[i])) {

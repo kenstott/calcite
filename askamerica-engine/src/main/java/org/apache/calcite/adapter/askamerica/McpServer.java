@@ -15400,6 +15400,15 @@ public class McpServer {
     private static final int DOC_FETCH_MAX_BYTES = 25 * 1024 * 1024;
 
     /**
+     * web_fetch identifies itself honestly. Bot filters (Akamai on cdc.gov, gao.gov, nrc.gov)
+     * compare the claimed browser with the TLS handshake: a Java client claiming to be Chrome is
+     * refused with 403, while this User-Agent is served. Measured 2026-11-20 on 109 URLs that
+     * had returned 401/403 in eval runs: this header reached 21 the Chrome header could not,
+     * and every URL the Chrome header reached.
+     */
+    static final String FETCH_USER_AGENT = "askamerica-fetch/1.0 (+https://askamerica.ai)";
+
+    /**
      * Shared GET-and-buffer helper for web_fetch. Returns the fetched bytes, or throws with a
      * caller-facing message (via {@link FetchException}) on a non-http(s) scheme, a non-2xx
      * response, or a download exceeding {@link #DOC_FETCH_MAX_BYTES}.
@@ -15481,16 +15490,7 @@ public class McpServer {
             c.setConnectTimeout(15000);
             c.setReadTimeout(30000);
             c.setInstanceFollowRedirects(true);
-            // A self-identifying UA (e.g. "askamerica-engine/1.0") gets naively blocklisted by
-            // some government/publisher sites' bot filters even for wholly public, unauthenticated
-            // documents — several fetches in comparative-eval runs came back HTTP 403 this way
-            // (Health Affairs, FEMA/NRDC PDFs, USAspending) despite the resource being public.
-            // Presenting an ordinary browser's header set is not a CAPTCHA/challenge bypass — it
-            // states no false identity beyond "a normal browser," the same posture the client's
-            // own WebFetch already has — and resolves a real, recurring access failure.
-            c.setRequestProperty("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
-                    + " Chrome/124.0.0.0 Safari/537.36");
+            c.setRequestProperty("User-Agent", FETCH_USER_AGENT);
             c.setRequestProperty("Accept",
                 "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
             c.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
