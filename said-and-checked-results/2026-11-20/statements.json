@@ -12663,16 +12663,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the managers' amendment limits the permit-certainty provision to projects holding all required federal authorizations, compared with the introduced text. Unsettled if the amendment text cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A C2ES summary of the managers' amendment says it narrows the certainty provision (section 1401) to projects that have secured all necessary federal authorizations, but the amendment text itself could not be read.",
+      "evidence": [
+        {
+          "label": "C2ES, section-by-section summary of the managers' amendment",
+          "url": "https://www.c2es.org/wp-content/uploads/2026/10/Permitting-section-by-section-summary-Managers-Amendement.pdf"
+        },
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        }
+      ],
+      "check_run": "q280/askamerica/2026-11-20"
     },
     {
       "id": 337,
@@ -12695,16 +12704,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the amended bill gives Indian Tribes the same role as States in the transmission planning provisions. Unsettled if the amendment text cannot be read or the role is narrower.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The introduced text gives Tribes consultation and comment roles in transmission studies while States have the backstop siting role, and the C2ES summary of the managers' amendment shows no change making those roles equal; the amendment text could not be read.",
+      "evidence": [
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        },
+        {
+          "label": "C2ES, section-by-section summary of the managers' amendment",
+          "url": "https://www.c2es.org/wp-content/uploads/2026/10/Permitting-section-by-section-summary-Managers-Amendement.pdf"
+        }
+      ],
+      "check_run": "q280/askamerica/2026-11-20"
     },
     {
       "id": 338,
@@ -12727,7 +12745,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the amendment changes an objection window from 30 to 45 days and doubles the Historic Preservation Fund authorization relative to the introduced text or current law. Unsettled if one part cannot be confirmed.",
       "premise": null,
       "counter_statements": [
         335
@@ -12735,10 +12753,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A C2ES summary says the managers' amendment extends the objection deadline from 30 to 45 days, matching the introduced text's 30 days, but says it keeps the Historic Preservation Fund authorization at $200 million a year, as in the introduced text; current law and the amendment text were not read, so the doubling is not shown.",
+      "evidence": [
+        {
+          "label": "C2ES, section-by-section summary of the managers' amendment",
+          "url": "https://www.c2es.org/wp-content/uploads/2026/10/Permitting-section-by-section-summary-Managers-Amendement.pdf"
+        },
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        }
+      ],
+      "check_run": "q280/askamerica/2026-11-20"
     },
     {
       "id": 339,
@@ -12761,16 +12788,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if press reports say the administration plans to reprogram about $49 million appropriated for international family planning. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The New York Times, as published by the Boston Globe on Oct. 29, 2026, reported a State Department memo to Congress proposing to shift up to $125 million in foreign aid to energy costs, including $48.5 million appropriated for family planning in low-income countries.",
+      "evidence": [
+        {
+          "label": "Boston Globe (New York Times), Oct. 29, 2026",
+          "url": "https://www.bostonglobe.com/2026/10/29/nation/state-dept-shift-millions-contraception-funding-cover-energy-costs/"
+        }
+      ],
+      "check_run": "q281/askamerica/2026-11-20"
     },
     {
       "id": 340,
@@ -12793,16 +12825,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official statements or reporting put the cost of destroying the USAID contraceptive stockpile at about $0.5 million and confirm destruction. Unsettled if figures refer to different costs.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "The USAID inspector general's June 2026 advisory says the destruction order was reversed in July 2025 and the stock was not destroyed; the more than $360,000 spent since January 2025 (about $434,000 by Guttmacher's count) was for storage and transport, while about $8 million of the stock became unusable. What remains open is the stock's final disposition, which had not been decided.",
+      "evidence": [
+        {
+          "label": "USAID Office of Inspector General, management advisory on family planning commodities in Belgium (June 2026)",
+          "url": "https://oig.usaid.gov/sites/default/files/2026-06/Management%20Advisory_Family%20Planning%20Commodities%20in%20Belgium%20Need%20Final%20Disposition%20Instructions%20%281%29.pdf"
+        },
+        {
+          "label": "Guttmacher Institute, Locked Away and Left to Expire",
+          "url": "https://www.guttmacher.org/node/300928/printable/print"
+        }
+      ],
+      "check_run": "q281/askamerica/2026-11-20"
     },
     {
       "id": 341,
@@ -12825,16 +12866,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate gives these figures for this amount. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Guttmacher's June 2026 analysis says the $434,317 spent storing the stockpile since January 2025 could have provided contraceptive care to 43,900 women and couples, averting 15,700 unintended pregnancies and 4,800 unsafe abortions.",
+      "evidence": [
+        {
+          "label": "Guttmacher Institute, Locked Away and Left to Expire",
+          "url": "https://www.guttmacher.org/node/300928/printable/print"
+        }
+      ],
+      "check_run": "q281/askamerica/2026-11-20"
     },
     {
       "id": 342,
@@ -12857,16 +12903,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the administration described the stockpile as abortifacients, the items were held past expiration, and the products are contraceptives rather than abortifacients. Unsettled if only some items were labeled or the expiry claim is not confirmed. Motive is not assessed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The State Department described the stock to NPR as \"abortifacient birth control commodities,\" and NPR reported it contained pills, IUDs and implants with no abortion methods, but the inspector general says about $8 million became unusable through improper storage rather than expiration, with usable items expiring from 2028 to 2031.",
+      "evidence": [
+        {
+          "label": "NPR, July 28, 2025, on the contraceptive stockpile",
+          "url": "https://www.npr.org/sections/goats-and-soda/2025/07/28/nx-s1-5482742/the-u-s-is-destroying-9-7-million-in-contraceptives-is-there-another-option"
+        },
+        {
+          "label": "USAID Office of Inspector General, management advisory on family planning commodities in Belgium (June 2026)",
+          "url": "https://oig.usaid.gov/sites/default/files/2026-06/Management%20Advisory_Family%20Planning%20Commodities%20in%20Belgium%20Need%20Final%20Disposition%20Instructions%20%281%29.pdf"
+        }
+      ],
+      "check_run": "q281/askamerica/2026-11-20"
     },
     {
       "id": 343,
@@ -12889,16 +12944,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if WHO or a peer-reviewed global estimate attributes about 20% of maternal deaths worldwide or in a stated region to unsafe abortion. Contradicted if WHO's current figure is materially lower. Unsettled if estimates range widely or the figure applies only to some regions.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "WHO's abortion fact sheet says a 2009-2020 review found 8% of maternal deaths were linked to abortion, not one in five, while noting such deaths are often underreported. What remains open is whether some regional estimate approaches 20%, which was not checked.",
+      "evidence": [
+        {
+          "label": "WHO, abortion fact sheet",
+          "url": "https://www.who.int/news-room/fact-sheets/detail/abortion"
+        }
+      ],
+      "check_run": "q282/askamerica/2026-11-20"
     },
     {
       "id": 344,
