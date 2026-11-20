@@ -10472,16 +10472,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "If \"It\" is the Iranian regime over its history: true if official U.S. findings attribute thousands of American deaths to Iran or its proxies; unsettled if official totals reach hundreds but \"thousands\" depends on what is counted. If it is the current war, compare with the DoD count.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "In the speech \"It\" is radical Islam and the Iranian regime over the past half-century. The official attributions found reach the hundreds, including at least 603 U.S. deaths in Iraq attributed to Iran-backed militants by the Pentagon in 2019, as reported by Military Times, so \"thousands\" depends on what is counted.",
+      "evidence": [
+        {
+          "label": "Military Times, Apr. 4, 2019, on the Pentagon's 603 figure",
+          "url": "https://www.militarytimes.com/news/your-military/2019/04/04/iran-killed-more-us-troops-in-iraq-than-previously-known-pentagon-says/"
+        }
+      ],
+      "check_run": "q266/askamerica/2026-11-20"
     },
     {
       "id": 278,
@@ -10632,16 +10637,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if authoritative assessments describe the U.S. as leading in frontier AI development and in advanced chip design, and credit the U.S. an advantage in high-end chip manufacturing. Unsettled if high-end chip manufacturing leadership rests mainly on Taiwan rather than the U.S.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A 2023 CRS report says U.S. firms lead in AI chip design and the U.S. leads in chipmaking equipment, but the most advanced AI chips are manufactured only by TSMC in Taiwan and Samsung in Korea.",
+      "evidence": [
+        {
+          "label": "CRS IF12497, Semiconductors and Artificial Intelligence",
+          "url": "https://www.everycrsreport.com/reports/IF12497.html"
+        }
+      ],
+      "check_run": "q267/askamerica/2026-11-20"
     },
     {
       "id": 283,
@@ -10664,16 +10674,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if major media reports say Nvidia sold billions of dollars of chips to Megaspeed and that some were diverted to China. Unsupported if no such report is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Investing.com and Tom's Hardware, citing The New York Times, reported that Megaspeed bought about $2 billion or more of Nvidia hardware, partly through a reseller, and that chips were allegedly made available to Chinese customers; the reports say no definitive proof of diversion has been made public, and Nvidia denies it.",
+      "evidence": [
+        {
+          "label": "Investing.com via Yahoo Finance, on the Commerce and DOJ investigation",
+          "url": "https://finance.yahoo.com/technology/ai/articles/u-commerce-dept-doj-investigated-051834040.html"
+        },
+        {
+          "label": "Tom's Hardware, summarizing The New York Times, on Megaspeed",
+          "url": "https://www.tomshardware.com/tech-industry/artificial-intelligence/singapore-company-alleged-to-have-helped-china-get-usd2-billion-worth-of-nvidia-ai-processors-report-claims-nvidia-denies-that-the-accused-has-any-china-ties-but-a-u-s-investigation-is-underway"
+        }
+      ],
+      "check_run": "q267/askamerica/2026-11-20"
     },
     {
       "id": 284,
@@ -10696,16 +10715,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if reporting or Commerce documents show a Commerce inquiry into Megaspeed starting in late 2024. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Hill and Investing.com reported a joint Commerce and Justice Department statement that Commerce began investigating Megaspeed in 2024, and The New York Times, as summarized by Tom's Hardware, placed a Commerce inspection of its Malaysian data center in late 2024.",
+      "evidence": [
+        {
+          "label": "The Hill, on the Megaspeed investigation",
+          "url": "https://thehill.com/policy/technology/6224649-us-investigates-megaspeed-nvidia-chips/amp/"
+        },
+        {
+          "label": "Investing.com via Yahoo Finance, on the Commerce and DOJ investigation",
+          "url": "https://finance.yahoo.com/technology/ai/articles/u-commerce-dept-doj-investigated-051834040.html"
+        },
+        {
+          "label": "Tom's Hardware, summarizing The New York Times, on Megaspeed",
+          "url": "https://www.tomshardware.com/tech-industry/artificial-intelligence/singapore-company-alleged-to-have-helped-china-get-usd2-billion-worth-of-nvidia-ai-processors-report-claims-nvidia-denies-that-the-accused-has-any-china-ties-but-a-u-s-investigation-is-underway"
+        }
+      ],
+      "check_run": "q267/askamerica/2026-11-20"
     },
     {
       "id": 285,
@@ -10728,16 +10760,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Nvidia's 10-K shows about $104 billion of revenue attributed to Singapore. False if the 10-K figure differs materially.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Nvidia's fiscal 2026 annual report, which covers most of 2025, reports revenue by customer headquarters and gives no Singapore figure. The check found Singapore billings of $23.7 billion in the fiscal 2025 report, but that filing could not be read directly here, so the $104 billion figure is neither confirmed nor ruled out.",
+      "evidence": [
+        {
+          "label": "Nvidia fiscal 2026 annual report (10-K)",
+          "url": "https://fortune.com/company-assets/1936/quartr/annual-report-10-k-4ccfc-2026-02-25-09-13-43.pdf"
+        }
+      ],
+      "check_run": "q267/askamerica/2026-11-20"
     },
     {
       "id": 286,
@@ -10760,16 +10797,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Nvidia or major media reports say Nvidia placed Megaspeed on an internal no-sell or restricted list in June 2025. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CNBC reported that a joint Commerce and Justice Department statement says Nvidia placed Megaspeed on its \"no sell\" list in June 2025 after Commerce investigators sought sales records.",
+      "evidence": [
+        {
+          "label": "CNBC, Nov. 17, 2026, on the Megaspeed investigation",
+          "url": "https://www.cnbc.com/2026/11/17/megaspeed-investigation-nvidia-jensen-huang.html"
+        }
+      ],
+      "check_run": "q268/askamerica/2026-11-20"
     },
     {
       "id": 287,
@@ -10792,16 +10834,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a major media report says Nvidia's checks could not account for about 50,000 chips sold to Megaspeed via partners. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Next Web, citing a Nov. 9, 2026 Bloomberg report, says Nvidia's count of chips sold to Megaspeed through partners came up 50,000 units short; Nvidia disputes this, and the Bloomberg report itself was not read.",
+      "evidence": [
+        {
+          "label": "The Next Web, citing Bloomberg, on the Megaspeed chip count",
+          "url": "https://thenextweb.com/news/nvidia-megaspeed-ban-gb300-imports-bloomberg"
+        }
+      ],
+      "check_run": "q268/askamerica/2026-11-20"
     },
     {
       "id": 288,
@@ -10824,16 +10871,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if reporting or official documents say State, War, Energy, Treasury and USTR recommended adding Megaspeed to the Entity List. Unsettled if only some agencies are named. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Treasury Secretary Bessent said Treasury, the Pentagon, State and USTR favored listing Megaspeed, as reported by The Next Web and CNBC; Energy was named only in a summarized report that was not read, so no source read names all five. Megaspeed has not been added to the Entity List.",
+      "evidence": [
+        {
+          "label": "The Next Web, on Bessent and the Megaspeed listing",
+          "url": "https://thenextweb.com/news/bessent-lutnick-commerce-megaspeed-entity-list"
+        },
+        {
+          "label": "CNBC, Nov. 17, 2026, on the Megaspeed investigation",
+          "url": "https://www.cnbc.com/2026/11/17/megaspeed-investigation-nvidia-jensen-huang.html"
+        }
+      ],
+      "check_run": "q268/askamerica/2026-11-20"
     },
     {
       "id": 289,
@@ -10856,16 +10912,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if reporting cites U.S. intelligence or law-enforcement officials assessing Alice Huang as a Chinese intelligence asset. Unsupported if not found. Unsettled if the reporting attributes the assessment to unnamed sources or describes only suspicion.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CNBC, citing The New York Times and Financial Times, reported that U.S. intelligence agencies have expressed concerns that Alice Huang, affiliated with Megaspeed, passed information to Beijing, but also reported that the Justice Department has reached no conclusion and that Singapore said she was not investigated for espionage.",
+      "evidence": [
+        {
+          "label": "CNBC, Nov. 8, 2026",
+          "url": "https://www.cnbc.com/2026/11/08/nvidia-jensen-huang-investigation-china-spy.html"
+        },
+        {
+          "label": "CNBC, Nov. 17, 2026, on the Megaspeed investigation",
+          "url": "https://www.cnbc.com/2026/11/17/megaspeed-investigation-nvidia-jensen-huang.html"
+        }
+      ],
+      "check_run": "q268/askamerica/2026-11-20"
     },
     {
       "id": 290,
