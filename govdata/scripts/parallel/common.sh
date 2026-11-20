@@ -2008,6 +2008,20 @@ drop_tables_unknown_to_jar() {
   echo "${out%,}"
 }
 
+# Same as drop_tables_unknown_to_jar for a list whose names are double-quoted ("a","b"), echoing
+# the surviving names double-quoted again. Empty output means every table was dropped.
+#
+# Usage: quoted=$(drop_quoted_tables_unknown_to_jar <schema> '"t1","t2"')
+drop_quoted_tables_unknown_to_jar() {
+  local schema="$1" quoted_csv="$2" kept _t out=""
+  kept="$(drop_tables_unknown_to_jar "$schema" "$(echo "$quoted_csv" | tr -d '" ')")" || return 1
+  IFS=',' read -ra _kept_arr <<< "$kept"
+  for _t in "${_kept_arr[@]}"; do
+    [ -n "$_t" ] && out="${out}\"${_t}\","
+  done
+  echo "${out%,}"
+}
+
 #
 # Usage: filtered=$(filter_enabled_tables "table1,table2,table3")
 #   Echoes a JSON-array-ready, double-quoted, comma-separated list for the group. With

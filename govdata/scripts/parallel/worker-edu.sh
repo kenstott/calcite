@@ -82,6 +82,12 @@ EDU_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/edu/edu-schema.yaml"
 run_edu_model() {
   local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
+  enabled_tables="$(drop_quoted_tables_unknown_to_jar edu "$enabled_tables")" || return 1
+  if [ -z "$enabled_tables" ]; then
+    log_info "$WORKER_ID: skipping $model_name — none of its tables are in the staged jar's schema"
+    return 0
+  fi
+
   local model_file="$MODEL_DIR/${model_name}.json"
   local parquet_dir="${EDU_PARQUET_DIR:-${GOVDATA_PARQUET_DIR}}"
   local cache_dir="${EDU_CACHE_DIR:-${GOVDATA_CACHE_DIR}/edu}"
