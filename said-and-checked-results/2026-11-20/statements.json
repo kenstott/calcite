@@ -4003,7 +4003,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Treasury's total public debt outstanding on or about Nov. 17-18, 2026 was about $40.66 trillion. False if Treasury's Debt to the Penny for those dates differs materially. Cannot be determined if the figure cannot be read.",
       "premise": null,
       "counter_statements": [
         141
@@ -4011,10 +4011,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's Treasury debt table and Treasury's Debt to the Penny show total public debt of $40.662 trillion on Nov. 16, 2026, $40.715 trillion on Nov. 17 and $40.691 trillion on Nov. 18.",
+      "evidence": [
+        {
+          "label": "econ.federal_debt (Treasury total public debt, Nov. 2025 to Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#federal_debt-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, tot_pub_debt_out_amt FROM econ.federal_debt WHERE record_date IN ('2025-11-17','2025-11-18','2025-11-14','2026-09-30','2026-10-01','2026-11-18','2026-11-17','2026-11-16') ORDER BY record_date"
+        },
+        {
+          "label": "Treasury Debt to the Penny (latest records)",
+          "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?sort=-record_date&page[size]=10"
+        }
+      ],
+      "check_run": "q227/askamerica/2026-11-20"
     },
     {
       "id": 100,
@@ -4037,16 +4048,31 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the increase in total public debt over the 12 months to mid-November 2026, divided by the seconds in a year, is about $78,900 a second (about $2.49 trillion a year). False if materially different. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Total public debt rose $2.43 trillion to $2.53 trillion over the 12 months to Nov. 17-18, 2026, depending on the dates paired, which is $76,900 to $80,300 a second; $78,896 a second ($2.49 trillion a year) falls within that range.",
+      "evidence": [
+        {
+          "label": "econ.federal_debt (Treasury total public debt, Nov. 2025 to Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#federal_debt-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, tot_pub_debt_out_amt FROM econ.federal_debt WHERE record_date IN ('2025-11-17','2025-11-18','2025-11-14','2026-09-30','2026-10-01','2026-11-18','2026-11-17','2026-11-16') ORDER BY record_date"
+        },
+        {
+          "label": "Treasury Debt to the Penny (latest records)",
+          "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?sort=-record_date&page[size]=10"
+        },
+        {
+          "label": "Treasury Debt to the Penny (Nov. 12-19, 2025)",
+          "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?filter=record_date:gte:2025-11-12,record_date:lte:2025-11-19&sort=-record_date"
+        }
+      ],
+      "check_run": "q227/askamerica/2026-11-20"
     },
     {
       "id": 101,
@@ -4069,16 +4095,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the debt increase from the start of fiscal 2027 to mid-November 2026, divided by the seconds elapsed, exceeds $120,000 a second. False if it is materially lower. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Measured from the Sept. 30, 2026 closing balance of $40.172 trillion, debt rose about $122,600 a second through Nov. 18; measured from the Oct. 1 balance of $40.261 trillion, after a one-day rise of about $89 billion, it rose about $103,800 a second. The answer depends on which balance starts the fiscal year.",
+      "evidence": [
+        {
+          "label": "econ.federal_debt (Treasury total public debt, Nov. 2025 to Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#federal_debt-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, tot_pub_debt_out_amt FROM econ.federal_debt WHERE record_date IN ('2025-11-17','2025-11-18','2025-11-14','2026-09-30','2026-10-01','2026-11-18','2026-11-17','2026-11-16') ORDER BY record_date"
+        },
+        {
+          "label": "Treasury Debt to the Penny (latest records)",
+          "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?sort=-record_date&page[size]=10"
+        }
+      ],
+      "check_run": "q227/askamerica/2026-11-20"
     },
     {
       "id": 102,
@@ -4101,16 +4138,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the statutory debt limit is about $41.1-41.3 trillion. False if the official limit is materially different. (The Feb. 22 prediction is not assessed.) Cannot be determined if the limit cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Treasury's Monthly Statement of the Public Debt shows a statutory debt limit of $41.104 trillion from June 30 through Oct. 31, 2026, after P.L. 119-21 raised it by $5 trillion. The Feb. 22 prediction was not assessed.",
+      "evidence": [
+        {
+          "label": "Treasury MSPD Table 2, debt subject to limit",
+          "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/debt/mspd/mspd_table_2?sort=-record_date&page[size]=40"
+        },
+        {
+          "label": "P.L. 119-21, sec. 72001",
+          "url": "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.htm"
+        }
+      ],
+      "check_run": "q227/askamerica/2026-11-20"
     },
     {
       "id": 103,
@@ -4133,16 +4179,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official projection shows federal spending on people 65 and older exceeding half of total outlays by about mid-2028. Unsettled if estimates of spending on the elderly exist but do not project a crossing date. Unsupported if no estimate is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "No official projection dating such a crossing was found. Penn Wharton's estimate puts fiscal 2025 spending on retirees at 38.6% of total outlays, but 62% of the spending that can be assigned to an age group, so whether it is near half depends on the denominator.",
+      "evidence": [
+        {
+          "label": "Penn Wharton Budget Model, federal spending by age group, FY2025",
+          "url": "https://budgetmodel.wharton.upenn.edu/p/2026-04-01-how-federal-spending-is-distributed-by-age-group-in-fy2025/"
+        }
+      ],
+      "check_run": "q228/askamerica/2026-11-20"
     },
     {
       "id": 104,
@@ -4165,16 +4216,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an analysis of federal spending shows about $7 for the elderly per $1 for children. Unsettled if the ratio depends on the measure. Unsupported if nothing is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Penn Wharton's fiscal 2025 estimates give about $6 for retirees per $1 for people under 26 in total spending ($2.71 trillion against $449 billion) and about $10 to $1 per person, so the ratio depends on the measure; no official figure was read.",
+      "evidence": [
+        {
+          "label": "Penn Wharton Budget Model, federal spending by age group, FY2025",
+          "url": "https://budgetmodel.wharton.upenn.edu/p/2026-04-01-how-federal-spending-is-distributed-by-age-group-in-fy2025/"
+        }
+      ],
+      "check_run": "q228/askamerica/2026-11-20"
     },
     {
       "id": 105,
@@ -4197,16 +4253,31 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if mandatory spending plus net interest is about 76% of federal outlays in the most recent fiscal year per CBO or OMB. False if the official share is materially different. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CBO's fiscal 2026 baseline, as reported by CRS, puts mandatory outlays plus net interest at about 75% of total outlays, and AskAmerica's Treasury data show net interest at 13.8% of fiscal 2025's $7.01 trillion in outlays. CBO's own tables could not be read, so a share near 76% is neither confirmed nor ruled out.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (Treasury total outlays and net interest, FY2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_fiscal_year, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2025-09-30','2026-09-30') AND CAST(line_code_nbr AS INTEGER) >= 130 ORDER BY record_fiscal_year, CAST(line_code_nbr AS INTEGER)"
+        },
+        {
+          "label": "CRS R49408, Overview of Fiscal Spending Projections: FY2027 Budget Cycle",
+          "url": "https://www.everycrsreport.com/files/2026-09-30_R49408_bdaed1cb01b3a5dbbe601bd4a99611371b40ca34.pdf"
+        },
+        {
+          "label": "CRS IN12535",
+          "url": "https://www.congress.gov/crs_external_products/IN/PDF/IN12535/IN12535.1.pdf"
+        }
+      ],
+      "check_run": "q228/askamerica/2026-11-20"
     },
     {
       "id": 106,
@@ -4229,16 +4300,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if discretionary outlays are about 24% of total federal outlays in the most recent fiscal year per CBO or OMB. False if materially different. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CBO's fiscal 2026 baseline, as reported by CRS, puts discretionary outlays at 5.9% of GDP out of 23.4%, about 25% of outlays; CBO's and OMB's own tables could not be read, so the 24% figure is neither confirmed nor ruled out.",
+      "evidence": [
+        {
+          "label": "CRS R49408, Overview of Fiscal Spending Projections: FY2027 Budget Cycle",
+          "url": "https://www.everycrsreport.com/files/2026-09-30_R49408_bdaed1cb01b3a5dbbe601bd4a99611371b40ca34.pdf"
+        },
+        {
+          "label": "CRS IN12535",
+          "url": "https://www.congress.gov/crs_external_products/IN/PDF/IN12535/IN12535.1.pdf"
+        }
+      ],
+      "check_run": "q228/askamerica/2026-11-20"
     },
     {
       "id": 107,
@@ -4261,16 +4341,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if national defense outlays ranked fifth among federal spending categories in FY2025 or FY2026 per Treasury, OMB or CBO. False if they ranked materially differently under every ordinary grouping. Unsettled if the rank depends on grouping.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "By budget function in AskAmerica's Monthly Treasury Statement data, national defense ranked fifth in both fiscal 2025 ($916.6 billion) and fiscal 2026 ($965.2 billion), behind Social Security, Medicare, net interest and health.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (outlays by budget function, FY2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2025-09-30','2026-09-30') AND CAST(line_code_nbr AS INTEGER) BETWEEN 130 AND 340 ORDER BY record_date, current_fytd_rcpt_outly_amt DESC"
+        }
+      ],
+      "check_run": "q229/askamerica/2026-11-20"
     },
     {
       "id": 108,
@@ -4293,16 +4380,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FY2026 national defense outlays or appropriations were about $965 billion. False if materially different under both measures. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's Monthly Treasury Statement data show fiscal 2026 national defense outlays of $965.16 billion. Appropriations were not checked.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (outlays by budget function, FY2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2025-09-30','2026-09-30') AND CAST(line_code_nbr AS INTEGER) BETWEEN 130 AND 340 ORDER BY record_date, current_fytd_rcpt_outly_amt DESC"
+        }
+      ],
+      "check_run": "q229/askamerica/2026-11-20"
     },
     {
       "id": 109,
@@ -4325,16 +4419,35 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FY2026 or FY2025 defense outlays are about 45% of that year's deficit or debt increase. False if materially different under both deficit and debt-increase measures. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "In AskAmerica's Treasury data, fiscal 2026 defense outlays of $965.2 billion equal 44.9% of the year's $2.15 trillion rise in debt held by the public (46.5% in fiscal 2025); they are 48.4% of the fiscal 2026 deficit and 38% of the rise in total public debt, so the figure fits the debt-held-by-the-public measure.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (outlays by budget function, FY2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2025-09-30','2026-09-30') AND CAST(line_code_nbr AS INTEGER) BETWEEN 130 AND 340 ORDER BY record_date, current_fytd_rcpt_outly_amt DESC"
+        },
+        {
+          "label": "econ.mts_outlays_by_function (total receipts and outlays, FY2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2025-09-30','2026-09-30') AND CAST(line_code_nbr AS INTEGER) < 130 ORDER BY record_date, line_code_nbr"
+        },
+        {
+          "label": "econ.federal_debt (debt at fiscal year-end, 2024-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#federal_debt-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, tot_pub_debt_out_amt, debt_held_public_amt FROM econ.federal_debt WHERE record_date IN ('2024-09-30','2025-09-30','2026-09-30') ORDER BY record_date"
+        }
+      ],
+      "check_run": "q229/askamerica/2026-11-20"
     },
     {
       "id": 110,
@@ -4357,16 +4470,33 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if federal receipts have typically been about 17-18% of GDP per OMB, CBO or Treasury and BEA GDP. False if materially different. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "OMB's series of federal receipts as a share of GDP, published on FRED, averages about 17.2% over 1974-2025, with 16.7% in 2024 and 17.0% in 2025; AskAmerica's Treasury receipts and GDP data give about 16.8% for fiscal 2026, slightly under the stated band.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (total receipts and outlays, FY2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2025-09-30','2026-09-30') AND CAST(line_code_nbr AS INTEGER) < 130 ORDER BY record_date, line_code_nbr"
+        },
+        {
+          "label": "econ.fred_indicators (GDP, 2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+          "askamerica": true,
+          "sql": "SELECT date, value FROM econ.fred_indicators WHERE series='GDP' AND date >= '2025-07-01' ORDER BY date"
+        },
+        {
+          "label": "FRED FYFRGDA188S, federal receipts as percent of GDP (OMB)",
+          "url": "https://fred.stlouisfed.org/data/FYFRGDA188S.txt"
+        }
+      ],
+      "check_run": "q229/askamerica/2026-11-20"
     },
     {
       "id": 111,
@@ -4421,16 +4551,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if both OMB's and CBO's published projections of FY2026 receipts exceeded actual FY2026 receipts. False if either projection was at or below actual receipts. Cannot be determined if the projections cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's Treasury data show actual fiscal 2026 receipts of $5.403 trillion. As reported by the Committee for a Responsible Federal Budget, OMB projected about $5.5 trillion and CBO about $5.6 trillion, both higher, but neither projection could be read directly.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (receipts and outlays, FY2025-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2025-09-30','2026-09-30') AND CAST(line_code_nbr AS INTEGER) < 130 ORDER BY record_date, CAST(line_code_nbr AS INTEGER)"
+        },
+        {
+          "label": "CRFB, Trump CEA Projections Tracker",
+          "url": "https://crfb.org/blogs/trump-cea-projections-tracker"
+        }
+      ],
+      "check_run": "q230/askamerica/2026-11-20"
     },
     {
       "id": 113,
@@ -4453,16 +4594,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if OMB's FY2026 receipts projection exceeded actual FY2026 receipts by about $600 billion. False if the gap is materially different for every OMB projection. Cannot be determined if the projection cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Actual fiscal 2026 receipts were $5.403 trillion in AskAmerica's Treasury data; the only OMB figure found, about $5.5 trillion as reported by the Committee for a Responsible Federal Budget, implies a gap near $100 billion, but OMB's own receipts projections could not be read directly, so a $600 billion gap in some OMB projection is not ruled out.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (FY2026 total receipts and outlays)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2026-09-30') AND (line_code_nbr IN ('340') OR classification_desc ILIKE '%total%' OR classification_desc ILIKE '%deficit%' OR classification_desc ILIKE '%surplus%') ORDER BY line_code_nbr"
+        },
+        {
+          "label": "CRFB, Trump CEA Projections Tracker",
+          "url": "https://crfb.org/blogs/trump-cea-projections-tracker"
+        }
+      ],
+      "check_run": "q230/askamerica/2026-11-20"
     },
     {
       "id": 114,
@@ -4485,16 +4637,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the actual FY2026 deficit exceeded OMB's projected FY2026 deficit by about $391 billion. False if materially different for every OMB projection. Cannot be determined if the projection cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "OMB's FY2026 Mid-Session Review projected a fiscal 2026 deficit of $2.220 trillion, while AskAmerica's Treasury data show the actual deficit was $1.993 trillion ($7.396 trillion in outlays less $5.403 trillion in receipts), so that projection overstated the deficit by about $228 billion. OMB's earlier budget-proposal projection was not located, so whether it understated the deficit remains open.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (FY2026 total receipts and outlays)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2026-09-30') AND (line_code_nbr IN ('340') OR classification_desc ILIKE '%total%' OR classification_desc ILIKE '%deficit%' OR classification_desc ILIKE '%surplus%') ORDER BY line_code_nbr"
+        },
+        {
+          "label": "OMB, FY2026 Mid-Session Review, Table 1",
+          "url": "https://www.whitehouse.gov/wp-content/uploads/2025/09/MSR_2026.pdf"
+        }
+      ],
+      "check_run": "q230/askamerica/2026-11-20"
     },
     {
       "id": 115,
@@ -4517,16 +4680,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if total outlays divided by total receipts was about 1.40 in FY2025 or FY2026. False if materially different in both years. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's Treasury data show fiscal 2026 outlays of $7.396 trillion against receipts of $5.403 trillion, about $1.37 spent per $1 received ($1.34 in fiscal 2025). The description of the economy was not assessed.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (FY2026 total receipts and outlays)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2026-09-30') AND (line_code_nbr IN ('340') OR classification_desc ILIKE '%total%' OR classification_desc ILIKE '%deficit%' OR classification_desc ILIKE '%surplus%') ORDER BY line_code_nbr"
+        }
+      ],
+      "check_run": "q230/askamerica/2026-11-20"
     },
     {
       "id": 116,
@@ -4549,16 +4719,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if federal Medicaid outlays rose more than 8% in FY2025 or FY2026 over the prior fiscal year. False if the increase was materially lower in both years. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Treasury's Monthly Treasury Statement shows federal grants to states for Medicaid of $723.0 billion in fiscal 2026, up 8.2% from $668.1 billion, which was itself up 8.2% from fiscal 2024.",
+      "evidence": [
+        {
+          "label": "Treasury MTS Table 5, fiscal 2026",
+          "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_5?filter=record_date:eq:2026-09-30&fields=classification_desc,current_fytd_net_outly_amt,prior_fytd_net_outly_amt&page%5Bsize%5D=400"
+        },
+        {
+          "label": "Treasury MTS Table 5, fiscal 2025",
+          "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_5?filter=record_date:eq:2025-09-30&fields=classification_desc,current_fytd_net_outly_amt,prior_fytd_net_outly_amt&page%5Bsize%5D=400"
+        }
+      ],
+      "check_run": "q231/askamerica/2026-11-20"
     },
     {
       "id": 117,
@@ -4581,16 +4760,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the 10-year Treasury constant-maturity yield on Nov. 18-19, 2026 was above 5.0%. False if it was below 5.0% on those days. Cannot be determined if the data cannot be read. (The cause is not assessed.)",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's FRED data show the 10-year Treasury yield at 5.10% on Nov. 17, 2026, and FRED's published series shows 5.07% on Nov. 18; the Nov. 19 value was not yet published. The cause was not assessed.",
+      "evidence": [
+        {
+          "label": "econ.fred_indicators (10-year Treasury yield and 30-year mortgage rate, Oct.-Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+          "askamerica": true,
+          "sql": "SELECT series, \"date\", \"value\" FROM econ.fred_indicators WHERE series IN ('DGS10','MORTGAGE30US') AND \"date\" >= '2026-10-25' ORDER BY series, \"date\""
+        },
+        {
+          "label": "FRED DGS10, 10-year Treasury constant maturity",
+          "url": "https://fred.stlouisfed.org/data/DGS10.txt"
+        }
+      ],
+      "check_run": "q231/askamerica/2026-11-20"
     },
     {
       "id": 118,
@@ -4613,16 +4803,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a standard 30-year fixed mortgage rate measure was about 7.5% around Nov. 18, 2026. False if the measures were materially lower. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "Freddie Mac's weekly survey put the 30-year fixed rate at 7.28% for the week ending Nov. 19, 2026 and 7.11% a week earlier, and AskAmerica's FRED data show no weekly reading at 7.5% this fall. What remains open is a daily index, which was not read and can differ from the weekly survey.",
+      "evidence": [
+        {
+          "label": "econ.fred_indicators (10-year Treasury yield and 30-year mortgage rate, Oct.-Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+          "askamerica": true,
+          "sql": "SELECT series, \"date\", \"value\" FROM econ.fred_indicators WHERE series IN ('DGS10','MORTGAGE30US') AND \"date\" >= '2026-10-25' ORDER BY series, \"date\""
+        },
+        {
+          "label": "Freddie Mac Primary Mortgage Market Survey",
+          "url": "https://www.freddiemac.com/pmms"
+        }
+      ],
+      "check_run": "q231/askamerica/2026-11-20"
     },
     {
       "id": 119,
@@ -4645,16 +4846,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official or peer-reviewed estimates put the effect of federal debt or deficits on long-term rates above 1 percentage point at current debt levels. Unsettled if estimates vary around that size or depend on assumptions. Unsupported if none found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsettled",
+      "finding": "Search summaries of CBO and Federal Reserve research report effects of about 2 to 5 basis points on the 10-year yield per percentage point of debt-to-GDP, so whether the total exceeds 1 point depends on how much debt is counted; none of these papers could be read directly.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q231/askamerica/2026-11-20"
     },
     {
       "id": 120,
@@ -4677,16 +4878,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if federal civilian employment fell from about 3.0 million to about 2.7 million between early 2025 and late 2026. False if the official counts show a materially different start or end. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "BLS payroll data show federal government employment of 3.010 million in January 2025 and 2.677 million in October 2026.",
+      "evidence": [
+        {
+          "label": "FRED CES9091000001, federal government employment (BLS)",
+          "url": "https://fred.stlouisfed.org/data/CES9091000001.txt"
+        }
+      ],
+      "check_run": "q232/askamerica/2026-11-20"
     },
     {
       "id": 121,
@@ -4709,16 +4915,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Greece's 10-year government bond yield was below the U.S. 10-year Treasury yield in mid-November 2026. False if Greece's yield was higher. Cannot be determined if Greek yield data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Greece's 10-year yield averaged 4.41% in October 2026 (OECD, the latest month published), while AskAmerica's FRED data show the U.S. 10-year Treasury at 4.88% to 5.15% from Nov. 9 to 17, 2026.",
+      "evidence": [
+        {
+          "label": "econ.fred_indicators (10-year Treasury yield, Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+          "askamerica": true,
+          "sql": "select \"date\", \"series\", \"value\" from econ.fred_indicators where series='DGS10' and \"date\">='2026-11-09' order by \"date\""
+        },
+        {
+          "label": "FRED IRLTLT01GRM156N, Greece 10-year yield (OECD)",
+          "url": "https://fred.stlouisfed.org/data/IRLTLT01GRM156N.txt"
+        }
+      ],
+      "check_run": "q232/askamerica/2026-11-20"
     },
     {
       "id": 122,
@@ -4741,16 +4958,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Treasury TIC data show foreign official holdings of U.S. Treasuries falling, or official net purchases weak or negative, over the recent year. Unsettled if the data are mixed. Cannot be determined if TIC data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Treasury's TIC data show foreign official holdings of Treasury securities falling from $3.873 trillion in September 2025 to $3.675 trillion in September 2026, about 5%, while total foreign holdings were flat. Holdings include valuation changes, not only purchases.",
+      "evidence": [
+        {
+          "label": "Treasury TIC Table 5, major foreign holders",
+          "url": "https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table5.txt"
+        }
+      ],
+      "check_run": "q232/askamerica/2026-11-20"
     },
     {
       "id": 123,
@@ -4773,16 +4995,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published projection shows debt held by the public reaching about 162% of GDP around 2035 under current or higher interest-rate assumptions. Unsettled if projections exist but the figure depends on a scenario not found. Unsupported if no such projection is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsupported",
+      "finding": "No projection of 162% of GDP for about 2035 was found. The search covered the warehouse and a Peter G. Peterson Foundation summary of CBO's baseline (118.5% in 2035); CBO's own pages refused the fetch, so an alternative interest-rate scenario was not read.",
+      "evidence": [
+        {
+          "label": "Peter G. Peterson Foundation, summary of CBO projections",
+          "url": "https://www.pgpf.org/article/national-debt-on-track-to-reach-record-high-in-just-four-years/"
+        }
+      ],
+      "check_run": "q232/askamerica/2026-11-20"
     },
     {
       "id": 124,
@@ -4794,7 +5021,7 @@
       "broad_topic": "Congress and Government Spending",
       "speaker_state": "AZ",
       "about_states": [],
-      "quote": "In 2032, the Social Security trust fund will be empty. Grandma will get a 22- to 24-percent cut in her check, and we will double senior poverty.",
+      "quote": "In 2032, the Social Security trust fund will be empty. Grandma will get a 22- to 24-percent cut in her check",
       "reported_by": {
         "outlet": "Congressional Record",
         "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgH6304.htm"
@@ -4805,16 +5032,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the latest Social Security Trustees Report projects the OASI (or combined OASDI) trust fund depleted in about 2032 with payable benefits then about 76-78% of scheduled. False if the depletion year and payable share are materially different for both OASI and OASDI. Cannot be determined if the report cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's Trustees projections table and SSA's release on the 2026 Trustees Report show the old-age (OASI) trust fund projected to be depleted in late 2032 with 78% of scheduled benefits payable, a 22% cut; the combined OASDI funds are projected to last until 2034 with 83% payable.",
+      "evidence": [
+        {
+          "label": "econ.social_security_trustees_projections (2025-2026 Trustees Reports)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#social_security_trustees_projections-table",
+          "askamerica": true,
+          "sql": "SELECT report_year, fund, depletion_year, payable_benefits_pct_at_depletion FROM econ.social_security_trustees_projections WHERE report_year >= 2025 ORDER BY report_year, fund"
+        },
+        {
+          "label": "SSA press release on the 2026 Trustees Report",
+          "url": "https://www.ssa.gov/news/en/press/releases/2026-06-09.html"
+        }
+      ],
+      "check_run": "q233/askamerica/2026-11-20"
     },
     {
       "id": 125,
@@ -4837,16 +5075,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the latest Medicare Trustees Report projects the HI trust fund depleted in about 2032 with HI income then covering about 82% of scheduled benefits. False if the depletion year or payable share is materially different. Cannot be determined if the report cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "The 2026 Medicare Trustees Report projects the Hospital Insurance trust fund to be depleted in 2033, not 2032, with revenues then covering 89% of program costs, an 11% shortfall rather than 18%. These are projections that later reports can revise.",
+      "evidence": [
+        {
+          "label": "2026 Medicare Trustees Report (CMS)",
+          "url": "https://www.cms.gov/oact/tr/2026"
+        }
+      ],
+      "check_run": "q233/askamerica/2026-11-20"
     },
     {
       "id": 126,
@@ -4869,16 +5112,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published projection shows net interest at about 44% of federal revenues around 2035 under current or higher rates. Unsettled if baseline projections show a lower share and the higher-rate scenario is not found. Unsupported if no projection is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CBO's February 2026 baseline, as summarized by the House Budget Committee and the Committee for a Responsible Federal Budget, projects net interest at about a quarter of revenues in 2036 ($2.1 trillion of $8.3 trillion); no higher-rate projection of 44% was found, and the statement's \"available\" tax collections are not defined.",
+      "evidence": [
+        {
+          "label": "CBO February 2026 baseline (House Budget Committee copy)",
+          "url": "https://budget.house.gov/imo/media/doc/cbo_baseline_february_2026.pdf"
+        },
+        {
+          "label": "CRFB analysis of CBO's February 2026 outlook",
+          "url": "https://www.crfb.org/sites/default/files/media/documents/CRFB_CBO_February_2026_Budget_And_Economic_Outlook_5.pdf"
+        }
+      ],
+      "check_run": "q233/askamerica/2026-11-20"
     },
     {
       "id": 127,
@@ -4901,16 +5153,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate shows future generations' lifetime net tax burden at about 104% of lifetime earnings, or federal pension obligations requiring that. Unsupported if no such estimate is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsupported",
+      "finding": "No published generational-accounting, CBO or GAO estimate of 104% of lifetime earnings was found. The search covered the warehouse catalog, web searches on the figure and the Joint Economic Committee's 2026 report chapter, which does not contain it.",
+      "evidence": [
+        {
+          "label": "Joint Economic Committee, 2026 Joint Economic Report, ch. 1",
+          "url": "https://www.jec.senate.gov/public/vendor/_accounts/JEC-R/jer-chapters/2026JERChapter1.pdf"
+        }
+      ],
+      "check_run": "q233/askamerica/2026-11-20"
     },
     {
       "id": 128,
@@ -4933,16 +5190,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published cost estimate puts Medicare for All's new federal spending at about 10.7% of GDP and a published estimate puts the revenue of the tax proposed to pay for it at about 0.7% of GDP. Unsettled if estimates exist but differ in scope. Unsupported if no estimates are found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A 2018 Mercatus Center estimate of the Sanders Medicare for All bill, $32.6 trillion over 2022-2031, works out to 10.7% of GDP in its first year rising to 12.7%, as reported in summaries; the estimate itself could not be read. No estimate of a tax raising 0.7% of GDP to pay for it was found.",
+      "evidence": [
+        {
+          "label": "CRFB, Choices for Financing Medicare for All",
+          "url": "https://www.crfb.org/papers/choices-financing-medicare-all"
+        }
+      ],
+      "check_run": "q234/askamerica/2026-11-20"
     },
     {
       "id": 129,
@@ -4965,16 +5227,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published revenue estimate for an 8% annual wealth tax, or the specific proposal referred to, is about 0.5% of GDP a year. Unsettled if estimates vary widely around that. Unsupported if none found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "Saez and Zucman's estimate of Sen. Sanders's 2019 wealth tax, which tops out at 8% on wealth over $10 billion, is $4.35 trillion over a decade, about 1.6% of GDP a year, roughly three times the stated figure. What remains open is whether a different 8% design or scorer was meant; other scores of the plan were not read in full.",
+      "evidence": [
+        {
+          "label": "Saez and Zucman, letter on the Sanders wealth tax",
+          "url": "https://eml.berkeley.edu/~saez/saez-zucman-wealthtax-sanders-online.pdf"
+        }
+      ],
+      "check_run": "q234/askamerica/2026-11-20"
     },
     {
       "id": 130,
@@ -4997,16 +5264,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the FY2026 or FY2025 increase in total public debt outstanding, which includes trust-fund borrowing, was about 7.2-7.3% of GDP. False if materially different for both years. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's Treasury and GDP data show total public debt rose $2.53 trillion in fiscal 2026, about 7.9% of GDP, and $2.17 trillion in fiscal 2025, about 7.1%; the figure is near fiscal 2025 but not fiscal 2026, so it depends on which year \"last year\" means.",
+      "evidence": [
+        {
+          "label": "econ.federal_debt (total public debt at fiscal year-ends, 2024-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#federal_debt-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, tot_pub_debt_out_amt FROM econ.federal_debt WHERE record_date IN (DATE '2024-09-30', DATE '2025-09-30', DATE '2026-09-30', DATE '2025-09-29', DATE '2026-09-29') ORDER BY record_date"
+        },
+        {
+          "label": "econ.fred_indicators (nominal GDP, 2024-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+          "askamerica": true,
+          "sql": "SELECT \"date\", value FROM econ.fred_indicators WHERE series='GDP' AND \"date\" >= DATE '2024-07-01' ORDER BY \"date\""
+        }
+      ],
+      "check_run": "q234/askamerica/2026-11-20"
     },
     {
       "id": 131,
@@ -5029,16 +5309,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate of the Democratic 2026 campaign agenda totals about $5 trillion in new spending plus about $2 trillion in interest. Unsettled if estimates exist but the total depends on which proposals are counted. Unsupported if none found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No published estimate of a Democratic agenda totaling about $5 trillion plus $2 trillion in interest was found. The search covered the warehouse catalog and web searches for cost estimates of 2026 Democratic proposals; no estimate page was found to read.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q234/askamerica/2026-11-20"
     },
     {
       "id": 132,
@@ -5061,16 +5341,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate puts annual federal spending on health care for people in the country without legal status at about $2.5-2.6 billion. Contradicted if official estimates are materially different. Unsettled if estimates vary widely or the scope is unclear. Unsupported if no estimate is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Published figures cover federal and state Emergency Medicaid for noncitizens generally: CBO counted $27 billion over fiscal 2017-2023 and KFF and the Urban Institute $3.8 billion for fiscal 2023, as reported by KFF. No federal-only figure for people without legal status was found to compare with the roughly $2.6 billion implied.",
+      "evidence": [
+        {
+          "label": "KFF, Emergency Medicaid for noncitizen immigrants",
+          "url": "https://www.kff.org/quick-take/less-than-1-of-total-medicaid-spending-goes-to-emergency-care-for-noncitizen-immigrants/"
+        }
+      ],
+      "check_run": "q235/askamerica/2026-11-20"
     },
     {
       "id": 133,
@@ -5095,16 +5380,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official employment data show home health or home care added more jobs in New York City over about 2021-2026 than any other industry. Contradicted if official data show another industry added more. Unsettled if the data do not isolate the program or the city.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "In AskAmerica's QCEW data for New York City's five counties, the industry with the largest private job gain from 2021 to 2025 was individual and family services (NAICS 6241, +106,564), which includes home-based personal care, while home health care services (6216) added 52,389. The data cannot isolate a Medicaid home-care program from the rest of those industries.",
+      "evidence": [
+        {
+          "label": "econ.county_qcew (New York City private employment by industry, 2021-2025)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#county_qcew-table",
+          "askamerica": true,
+          "sql": "WITH t AS (SELECT industry_code, \"year\", SUM(annual_avg_emplvl) e, COUNT(annual_avg_emplvl) n FROM econ.county_qcew WHERE area_fips IN ('36005','36047','36061','36081','36085') AND own_code='5' AND \"year\" IN (2021,2025) AND LENGTH(industry_code) IN (3,4) GROUP BY industry_code, \"year\" HAVING COUNT(annual_avg_emplvl)=5) SELECT a.industry_code, a.e e2021, b.e e2025, b.e-a.e chg FROM t a JOIN t b ON a.industry_code=b.industry_code AND a.\"year\"=2021 AND b.\"year\"=2025 ORDER BY chg DESC"
+        }
+      ],
+      "check_run": "q235/askamerica/2026-11-20"
     },
     {
       "id": 134,
@@ -5222,17 +5514,28 @@
         "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgH6304.htm",
         "note": ""
       },
-      "kind": "factual",
-      "test": null,
-      "premise": null,
+      "kind": "premised_prediction",
+      "test": "True if the congressional bill record shows Schweikert sponsoring a bill in the 119th Congress aimed at reducing federal Medicare spending. Contradicted if no such bill by him is on record. Cannot be determined if the record cannot be read.",
+      "premise": "Schweikert has introduced legislation that would cut federal spending through changes to Medicare.",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show Schweikert introduced H.R. 3467 on May 15, 2025, a Medicare Advantage bill whose text lowers the payment benchmark, tightens risk adjustment and removes quality bonuses. Only that premise was checked, not whether the cuts would be the largest in history or whether services would be cut.",
+      "evidence": [
+        {
+          "label": "law.bills (bills sponsored by Rep. Schweikert, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT bill_type, bill_number, introduced_date, title, policy_area, latest_action_text FROM law.bills WHERE congress=119 AND sponsor_full_name LIKE 'Rep. Schweikert%' ORDER BY introduced_date"
+        },
+        {
+          "label": "H.R. 3467 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr3467ih/html/BILLS-119hr3467ih.htm"
+        }
+      ],
+      "check_run": "q235/askamerica/2026-11-20"
     },
     {
       "id": 138,
@@ -5387,7 +5690,9 @@
       "kind": "factual",
       "test": null,
       "premise": null,
-      "counter_statements": [],
+      "counter_statements": [
+        272
+      ],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
@@ -9369,7 +9674,9 @@
       "kind": "factual",
       "test": null,
       "premise": null,
-      "counter_statements": [],
+      "counter_statements": [
+        142
+      ],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
@@ -11995,6 +12302,38 @@
         }
       ],
       "check_run": "q204/askamerica/2026-11-20"
+    },
+    {
+      "id": 354,
+      "speaker": "David Schweikert",
+      "office": "U.S. Representative",
+      "party": "R",
+      "context": "In a Nov. 19, 2026 House floor speech on the federal debt, Schweikert predicted the effect of Social Security trust fund depletion on poverty among seniors.",
+      "topic": "Federal budget and spending",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "AZ",
+      "about_states": [],
+      "quote": "we will double senior poverty",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgH6304.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgH6304.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
     }
   ]
 }
