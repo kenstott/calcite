@@ -23,6 +23,8 @@
 #       bill_amendments, bill_amendment_actions, bill_amendment_cosponsors,
 #       bill_action_committees, bill_recorded_votes, bill_titles, bill_summaries,
 #       bill_cbo_cost_estimates, bill_committee_reports, bill_notes. No API key needed.
+#   - Congress.gov API (api.congress.gov/v3) — Library of Congress. bill_amendment_text_versions
+#     (Congressional Record URLs of each amendment's text). Keyed with API_DATA_GOV.
 #
 # Data Source (lobbying):
 #   - LDA.gov REST API (lda.gov/api/v1) — U.S. Senate Office of Public Records. Registrations
@@ -85,7 +87,7 @@ comment: >
   summaries, CBO estimates, committee reports and editorial notes in `bill_actions`,
   `bill_cosponsors`, `bill_committees`, `bill_committee_activities`, `bill_subjects`,
   `bill_text_versions`, `bill_related_bills`, `bill_amendments`, `bill_amendment_actions`,
-  `bill_amendment_cosponsors`, `bill_action_committees`, `bill_recorded_votes`, `bill_titles`,
+  `bill_amendment_cosponsors`, `bill_amendment_text_versions`, `bill_action_committees`, `bill_recorded_votes`, `bill_titles`,
   `bill_summaries`, `bill_cbo_cost_estimates`, `bill_committee_reports` and `bill_notes`;
   and federal lobbying disclosures from LDA.gov — `lobbying_filings` (LD-1 registrations and
   LD-2 quarterly reports: who lobbied for whom and for how much) with `lobbying_activities`
@@ -1650,6 +1652,102 @@ partitionedTables:
         tableName: bill_amendment_cosponsors
         batchPartitionColumns: [congress, bill_type]
         incrementalKeys: [congress, bill_type]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # BILL_AMENDMENT_TEXT_VERSIONS — Congressional Record text of each amendment
+  # ---------------------------------------------------------------------------
+  # Source: Congress.gov API /v3/amendment/{congress}/{type}/{number}/text (verified live
+  # 2026-11-20 with the API_DATA_GOV key). The Bill Status XML carries only a count of an
+  # amendment's text versions, so this table adds the versions themselves. Read through
+  # CongressAmendmentTextProvider, which lists the Congress's amendments and caches each text
+  # response by (number, updateDate), so a daily refresh re-reads only changed amendments.
+  - name: bill_amendment_text_versions
+    pattern: "type=bill_amendment_text_versions/congress=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_congress
+    comment: >
+      Where to read the text of each Senate (SAMDT) and House (HAMDT) amendment, one row per
+      (amendment, text version, format), from the Congress.gov API. `format_type` is HTML or PDF
+      and `url` is the Congressional Record page (congress.gov/<congress>/crec/...) that prints
+      the text; `version_type` is the stage the text was captured at (Submitted for a Senate
+      amendment, Offered for a House amendment, later stages such as Agreed To when the source
+      has them) and `version_date` its timestamp. The URL points at the Record page, which can
+      hold several amendments, not at a file holding only this amendment's text; this table
+      holds the link, not the text. An amendment with no text published yet has no rows, so a
+      newly submitted amendment can be absent here for a day or more. Join to `bill_amendments`
+      on (congress, amendment_type, amendment_number). The current Congress is re-read daily;
+      each amendment's text is re-fetched only when the source's updateDate for it changes. The
+      default GOVDATA_START_YEAR (2010) starts at the 111th Congress.
+
+    dimensions:
+      type:
+        - bill_amendment_text_versions
+      congress: *congress_range
+      refresh_date: *bill_refresh_date
+
+    columns:
+      - <<: *partition_congress
+      - name: amendment_type
+        type: string
+        nullable: false
+        comment: SAMDT or HAMDT; with congress and amendment_number identifies the amendment
+      - name: amendment_number
+        type: integer
+        nullable: false
+        comment: Amendment number within the Congress and amendment type
+      - name: version_type
+        type: string
+        nullable: true
+        comment: Stage of the text (Submitted, Offered, ...)
+      - name: version_date
+        type: string
+        nullable: true
+        comment: Timestamp of the text version (ISO 8601, UTC)
+      - name: format_type
+        type: string
+        nullable: true
+        comment: HTML or PDF
+      - name: url
+        type: string
+        nullable: true
+        comment: Congress.gov Congressional Record URL of the text in this format
+
+    source:
+      type: http
+      url: "https://api.congress.gov/v3/amendment/{congress}"
+      method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
+      response:
+        format: json
+      # The key allows 5,000 requests an hour; one request per second stays under it.
+      rateLimit:
+        requestsPerSecond: 1
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressAmendmentTextProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bill_amendment_text_versions/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: bill_amendment_text_versions
+        batchPartitionColumns: [congress]
+        incrementalKeys: [congress]
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -6871,6 +6969,13 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_abbr]
         comment: "Non-enforcing: state_ref covers the 50 states and DC only, so territorial delegates (PR, GU, VI, AS, MP) do not resolve. Expected, not a data error."
+
+  bill_amendment_text_versions:
+    # No primaryKey declared: an amendment has one row per text version and format.
+    foreignKeys:
+      - columns: [congress, amendment_type, amendment_number]
+        targetTable: bill_amendments
+        targetColumns: [congress, amendment_type, amendment_number]
 
   bill_action_committees:
     primaryKey: [congress, bill_type, bill_number, action_seq, committee_system_code]
