@@ -752,13 +752,15 @@ partitionedTables:
       section/category/label rows with a single numeric value that may be a count
       or a percentage (see the value column). One row per state + year + section
       + category + label. The CDE API rejects years before 2019 outright ("Year
-      field cannot be less than 2019"); the schema's 2010 floor is shared with
-      every CDE table but this dataset has no years before 2019 to backfill.
+      field cannot be less than 2019"); the year dimension's minYear of 2019 keeps
+      earlier years out of the fetch range.
 
     dimensions:
       type:
         - uof
-      year: *crime_year_range
+      year:
+        <<: *crime_year_range
+        minYear: 2019
       state_abbr: *all_state_abbrs
 
     columns:
