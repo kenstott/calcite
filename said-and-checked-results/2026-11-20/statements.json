@@ -7135,16 +7135,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a White House event on infrastructure or permitting reform was held early in the first Trump administration (2017). Unsettled if the referenced event cannot be identified. Whether the discussion started then is not assessed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Executive Order 13807 on federal permitting and environmental review was signed Aug. 15, 2017, early in the first Trump administration, but no White House news conference on permitting was identified, so the event referred to is not firmly established.",
+      "evidence": [
+        {
+          "label": "Executive Order 13807, Federal Register, Aug. 24, 2017",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2017-08-24/pdf/2017-18134.pdf"
+        }
+      ],
+      "check_run": "q244/askamerica/2026-11-20"
     },
     {
       "id": 187,
@@ -7171,16 +7176,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if records show a Colorado road project with about 13 years of federal review and a Wyoming wind project that waited about 12 years for federal approval. Unsettled if only one is documented. Unsupported if neither is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A Colorado Politics op-ed says Interstate 70's expansion took 13 years of environmental review before work began, and the Permitting Council's page for the Chokecherry and Sierra Madre wind project in Wyoming shows it proposed in 2008 with a federal decision in 2012 and later phase approvals; neither project was confirmed as the one meant, and the 12-year wait is not established.",
+      "evidence": [
+        {
+          "label": "Colorado Politics, July 15, 2020, on I-70 review",
+          "url": "https://www.coloradopolitics.com/2020/07/15/the-podium-removing-a-roadblock-of-red-tape"
+        },
+        {
+          "label": "Permitting Council, Chokecherry and Sierra Madre Wind Phase II",
+          "url": "https://www.permits.performance.gov/permitting-projects/chokecherrysierra-madre-wind-phase-ii"
+        }
+      ],
+      "check_run": "q244/askamerica/2026-11-20"
     },
     {
       "id": 188,
@@ -7205,16 +7219,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate puts Iowa projects awaiting federal permits at about $16.8 billion. Unsupported if no such estimate is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No published estimate of $16.8 billion in Iowa projects awaiting federal permits was found; the search covered the warehouse catalog, web searches and Grassley's own remarks pages, which did not contain the figure.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q244/askamerica/2026-11-20"
     },
     {
       "id": 189,
@@ -7237,16 +7251,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate puts investment awaiting federal permitting decisions at about $1.1-1.5 trillion. Unsettled if estimates exist but differ materially. Unsupported if none found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsettled",
+      "finding": "Search summaries report a McKinsey estimate of $1.1 trillion to $1.5 trillion in capital spending tied up in federal permitting, from 2022 data, and a newer figure of $1.8 trillion; McKinsey's page refused the fetch, so neither could be read directly.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q244/askamerica/2026-11-20"
     },
     {
       "id": 190,
@@ -7269,16 +7283,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published coalition letter or list on federal permitting reform in 2025-2026 has more than 1,000 organizational signers. Unsettled if the count found is near but below 1,000 or the letter is about a different bill. Unsupported if no such list is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The largest list read, the U.S. Chamber of Commerce's Nov. 6, 2026 coalition letter backing the permitting bill (S. 5653), has roughly 510 organizational signers by hand count, and other 2025-2026 letters read were smaller; no list of more than 1,000 was found, though several letters combined could reach it.",
+      "evidence": [
+        {
+          "label": "U.S. Chamber coalition letter on S. 5653, Nov. 6, 2026",
+          "url": "https://www.uschamber.com/energy/coalition-in-support-of-the-bipartisan-american-affordability-and-jobs-act-of-2026"
+        },
+        {
+          "label": "Bipartisan permitting stakeholder letter, Jan. 27, 2026",
+          "url": "https://www.uschamber.com/assets/documents/Bipartisan-Permitting-Stakeholder-Letter-Jan-2026-Final.pdf"
+        }
+      ],
+      "check_run": "q245/askamerica/2026-11-20"
     },
     {
       "id": 191,
@@ -7339,7 +7362,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate projects average household savings from the permitting bill in the hundreds of dollars a year. Unsettled if estimates exist but are smaller, larger or for a different measure. Unsupported if none is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
@@ -7351,10 +7374,15 @@
           "url": "https://www.npr.org/2026/11/20/g-s1-154579/senate-bipartisan-energy-bill"
         }
       ],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Rhodium Group's November 2026 analysis of the bill estimates average residential electricity bills falling $41 to $66 a year by 2035, tens rather than hundreds of dollars and for electricity only; no estimate of hundreds of dollars a year was found, and other analyses were not read.",
+      "evidence": [
+        {
+          "label": "Rhodium Group, permitting reform and residential electricity bills (Nov. 2026)",
+          "url": "https://rhg.com/wp-content/uploads/2026/11/The-Impact-of-Permitting-Reform-on-State-level-Residential-Electricity-Prices-and-Bills.pdf"
+        }
+      ],
+      "check_run": "q246/askamerica/2026-11-20"
     },
     {
       "id": 193,
@@ -7379,16 +7407,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Census data show about half (roughly 45-55%) of South Dakota's population living in rural areas. False if the official rural share is materially different. Cannot be determined if the data cannot be read.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's USDA county classification puts 50.3% of South Dakotans in nonmetro counties, while America's Health Rankings reports a Census-based rural share of 42.3%; the Census 2020 state table could not be read, so the answer depends on the definition of rural.",
+      "evidence": [
+        {
+          "label": "geo.rural_urban_continuum (South Dakota metro and nonmetro population)",
+          "url": "https://askamerica.ai/catalog/schemas/geo/#rural_urban_continuum-table",
+          "askamerica": true,
+          "sql": "SELECT metro_nonmetro, SUM(population) pop FROM geo.rural_urban_continuum WHERE state_fips='46' GROUP BY metro_nonmetro"
+        },
+        {
+          "label": "America's Health Rankings, rural population, South Dakota",
+          "url": "https://www.americashealthrankings.org/explore/measures/pct_rural_b/SD"
+        }
+      ],
+      "check_run": "q246/askamerica/2026-11-20"
     },
     {
       "id": 194,
@@ -7411,16 +7450,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the program was created by the 2025 reconciliation law (P.L. 119-21, Sec. 71401) and its stated purpose concerns rural health care access and quality. Contradicted if it was created by a different law or has a different stated purpose.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Section 71401 of Public Law 119-21, in a chapter titled \"Protecting Rural Hospitals and Providers,\" creates the Rural Health Transformation Program as a new section 2105(h) of the Social Security Act. The law's passage votes were not checked in this review.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 71401",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
+      "check_run": "q246/askamerica/2026-11-20"
     },
     {
       "id": 195,
@@ -7539,16 +7583,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the published joint declaration and official readouts of the summit contain no commitments on fentanyl, chip export controls, espionage, U.S. manufacturing, ending the Ukraine war, or aid to Iran. Contradicted if an official text contains a commitment on any of these.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Fox News's account of the declaration and readouts describes commitments on strategic stability, nuclear risk, refined-petroleum supply and international institutions, with none on the listed subjects, but the White House, Chinese and Russian texts themselves could not be read.",
+      "evidence": [
+        {
+          "label": "Fox News, on the U.S.-Russia-China declaration",
+          "url": "https://www.foxnews.com/world/trump-putin-xi-issue-4-point-declaration-historic-summit"
+        }
+      ],
+      "check_run": "q247/askamerica/2026-11-20"
     },
     {
       "id": 199,
@@ -7602,14 +7651,14 @@
         "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-19/html/CREC-2026-11-19-pt1-PgS5779-6.htm",
         "note": ""
       },
-      "kind": "factual",
+      "kind": "opinion_or_prediction",
       "test": null,
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
+      "result": null,
       "finding": null,
       "evidence": [],
       "check_run": null
@@ -7635,16 +7684,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the figures match a cited dataset for the year to October or November 2026. Unsettled if the source is unclear and official CPI items differ. Contradicted if official CPI item changes, read directly, differ materially for the same items.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A NielsenIQ-based analysis reported by Scripps News shows green beans up about 37%, frozen turkey up 26% and candied yams up about 11% in the year to Oct. 31, 2026, matching three figures; no stuffing figure above 8% was found, and the government's price index has no series for these items.",
+      "evidence": [
+        {
+          "label": "Scripps News, 2026 Thanksgiving grocery costs analysis",
+          "url": "https://www.scrippsnews.com/life/food-and-drink/2026-thanksgiving-grocery-costs-are-up-more-than-10-analysis-finds"
+        }
+      ],
+      "check_run": "q247/askamerica/2026-11-20"
     },
     {
       "id": 202,
@@ -7667,16 +7721,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if USDA SNAP data show a drop of about 5.5 million participants since early 2025, and a published estimate projects more than 6 million more losing benefits under the 2025 law's changes. Unsettled if the decline or projection differs. Contradicted if USDA data show no such decline.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "USDA participation data in AskAmerica's warehouse show SNAP enrollment falling from 41.42 million in August 2025 to 35.86 million in August 2026, a drop of 5.55 million. The only projection above 6 million found, 6.3 million losing benefits by fiscal 2029, comes from USDA's November 2026 proposed eligibility rule, not the 2025 law.",
+      "evidence": [
+        {
+          "label": "fiscal.snap_benefits_by_geography (SNAP participants by month, 2024-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/fiscal/#snap_benefits_by_geography-table",
+          "askamerica": true,
+          "sql": "SELECT year, month, SUM(persons_participating) AS persons FROM fiscal.snap_benefits_by_geography WHERE year >= 2024 AND month IS NOT NULL GROUP BY year, month ORDER BY year, month"
+        },
+        {
+          "label": "USDA proposed rule on SNAP categorical eligibility, Federal Register public inspection 2026-22936",
+          "url": "https://public-inspection.federalregister.gov/2026-22936.pdf"
+        }
+      ],
+      "check_run": "q247/askamerica/2026-11-20"
     },
     {
       "id": 203,
