@@ -5896,6 +5896,100 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- TIC FOREIGN HOLDINGS OF U.S. TREASURY SECURITIES ---
+  - name: treasury_foreign_holdings
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=treasury_foreign_holdings/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Foreign holdings of U.S. Treasury securities by holder country, monthly from January 2012,
+      from the U.S. Treasury International Capital (TIC) "Major Foreign Holders of Treasury
+      Securities" table (TIC Table 5), in billions of dollars at end of month. One row per
+      (year, month, holder). holder_kind separates COUNTRY rows (Japan, China Mainland, United
+      Kingdom, Canada, Cayman Islands ...; only the roughly 20-45 largest holders are listed in a
+      given month, ranked by Treasury, the rest are in ALL_OTHER) from GRAND_TOTAL (all foreign
+      holders) and the foreign-official breakdown: FOREIGN_OFFICIAL_TOTAL (central banks and
+      other government holders, the figure behind "foreign central banks are buying less of our
+      debt"), FOREIGN_OFFICIAL_BILLS and FOREIGN_OFFICIAL_BONDS_NOTES. Foreign private holdings
+      are GRAND_TOTAL minus FOREIGN_OFFICIAL_TOTAL. Holdings are attributed by custodian
+      location, not beneficial owner, so Belgium, Luxembourg, Cayman Islands and the United
+      Kingdom hold Treasuries on behalf of owners elsewhere and country rankings understate
+      holders such as China and Japan. Covers marketable and non-marketable bills, bonds and
+      notes. Only Series XIII (December 2011 onward, based on monthly TIC Form SLT custodian
+      data) is held, because earlier series use a different survey basis and are not
+      comparable. The latest 13 months come from the current Treasury table and carry its
+      revisions; earlier months come from Treasury's history file. Published about the 18th of
+      the second month after the reference month. Not the same as econ.iip_positions (BEA
+      international investment position, no country grain) or econ.federal_debt (total debt,
+      no holder split). Source: https://ticdata.treasury.gov (slt_table5.txt and mfhhis01.txt).
+
+    dimensions:
+      type:
+        - treasury_foreign_holdings
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of the end-of-month holding (2012 onward); part of the PK
+      - name: month
+        type: integer
+        nullable: false
+        comment: Calendar month 1-12 of the end-of-month holding; part of the PK
+      - name: holder
+        type: string
+        nullable: false
+        comment: >
+          Holder as Treasury labels it, with footnote markers removed: a country name (e.g.
+          Japan, "China, Mainland", United Kingdom), All Other, Grand Total, Foreign Official,
+          Foreign Official Treasury Bills or Foreign Official T-Bonds & Notes; part of the PK
+      - name: holder_kind
+        type: string
+        nullable: false
+        comment: >
+          COUNTRY | ALL_OTHER | GRAND_TOTAL | FOREIGN_OFFICIAL_TOTAL | FOREIGN_OFFICIAL_BILLS |
+          FOREIGN_OFFICIAL_BONDS_NOTES. Do not sum across kinds: GRAND_TOTAL already includes
+          every COUNTRY and ALL_OTHER row, and the FOREIGN_OFFICIAL rows are a subset of it
+      - name: holdings_usd_billions
+        type: double
+        nullable: false
+        comment: Holdings of U.S. Treasury securities at end of month, billions of U.S. dollars
+
+    source:
+      type: http
+      url: "https://ticdata.treasury.gov/resource-center/data-chart-center/tic/Documents/slt_table5.txt"
+      method: GET
+      response:
+        format: text
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.TicForeignHoldingsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=treasury_foreign_holdings/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 10000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # --- MONTHLY TREASURY STATEMENT OUTLAYS BY FUNCTION ---
   - name: mts_outlays_by_function
     pattern: "type=mts_outlays_by_function/year=*/mts_outlays_by_function.parquet"
@@ -12119,6 +12213,9 @@ constraints:
       - type
       - frequency
       - year
+
+  treasury_foreign_holdings:
+    primaryKey: [year, month, holder]
 
   federal_outlays_by_function:
     primaryKey:
