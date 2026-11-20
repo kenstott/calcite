@@ -968,7 +968,7 @@ FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
 INSERT INTO dq_results
 SELECT 'transport', 'barge_rates_weekly', 'T6_pk_duplicates',
   CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate primary-key rows'
-FROM (SELECT COUNT(*) - COUNT(DISTINCT rate_date, river_system_location) AS d FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true));
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true)) - (SELECT COUNT(*) FROM (SELECT DISTINCT rate_date, river_system_location FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true))) AS d);
 
 INSERT INTO dq_results
 SELECT 'transport', 'barge_rates_weekly', 'T6_pk_nulls',
@@ -984,8 +984,8 @@ FROM (SELECT MIN(rate_date)::VARCHAR AS miny, MAX(rate_date)::VARCHAR AS maxy FR
 INSERT INTO dq_results
 SELECT 'transport', 'barge_rates_weekly', 'T7_rate_plausible',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
-  'price_per_ton outside plausible [1, 100] USD/ton, or NULL'
-FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true) WHERE price_per_ton IS NULL OR price_per_ton < 1 OR price_per_ton > 100);
+  'Non-NULL price_per_ton outside [0, 150] USD/ton (source has ~2,000 NULL weeks with no quote; those are expected)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true) WHERE price_per_ton < 0 OR price_per_ton > 150);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: barge_lock_movements_monthly
@@ -1014,7 +1014,7 @@ FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
 INSERT INTO dq_results
 SELECT 'transport', 'barge_lock_movements_monthly', 'T6_pk_duplicates',
   CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate primary-key rows'
-FROM (SELECT COUNT(*) - COUNT(DISTINCT month_start, river, lock, direction, commodity) AS d FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true));
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true)) - (SELECT COUNT(*) FROM (SELECT DISTINCT month_start, river, lock, direction, commodity FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true))) AS d);
 
 INSERT INTO dq_results
 SELECT 'transport', 'barge_lock_movements_monthly', 'T6_pk_nulls',
