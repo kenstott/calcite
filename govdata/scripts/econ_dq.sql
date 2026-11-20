@@ -68,6 +68,7 @@ FROM (
   UNION ALL SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'treasury_foreign_holdings', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'social_security_trustees_projections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'social_security_trust_fund_operations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'regional_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',  allow_moved_paths := true) LIMIT 1) t)
@@ -134,6 +135,7 @@ FROM (
   UNION ALL SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50  -- one row per year 1975-2026
   UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)), 20000  -- CSL carries ~26,000 listings
   UNION ALL SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20  -- one row per year 2005-2026
+  UNION ALL SELECT 'treasury_foreign_holdings',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)), 8000  -- monthly 2012-2026, ~40-50 holders per month
   UNION ALL SELECT 'social_security_trustees_projections',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)), 30  -- 3 funds x reports 2016-2026
   UNION ALL SELECT 'social_security_trust_fund_operations',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true)), 220  -- OASI 1937-2025 (89) + DI 1957-2025 (69) + OASDI (69) = 227
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
@@ -191,6 +193,7 @@ SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'social_security_cola'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1;
 SELECT 'export_control_restricted_parties' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1;
 SELECT 'medicare_part_b_premiums'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1;
+SELECT 'treasury_foreign_holdings' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1; LIMIT 1;
 SELECT 'social_security_trustees_projections'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_trust_fund_operations'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_employment'    AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',    allow_moved_paths := true) LIMIT 1;
@@ -417,6 +420,58 @@ SELECT 'econ', 'medicare_part_b_premiums', 'value_range', 'fail', 'standard_prem
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)
 HAVING COUNT(*) FILTER (WHERE standard_premium <= 0 OR annual_deductible <= 0) > 0
     OR MAX(year) - MIN(year) + 1 <> COUNT(*);
+
+-- treasury_foreign_holdings
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_foreign_holdings', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- treasury_foreign_holdings PK uniqueness and kind coverage
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_foreign_holdings', 'pk_duplicates', 'fail', 'year, month, holder', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT year, month, holder FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) GROUP BY 1, 2, 3 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_foreign_holdings', 'kind_coverage', 'fail', 'holder_kind', '6 kinds',
+  'got ' || CAST(COUNT(DISTINCT holder_kind) AS VARCHAR) || ' kinds'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)
+HAVING COUNT(DISTINCT holder_kind) <> 6;
+
+-- treasury_foreign_holdings known values (TIC Table 5, billions: Japan Jan 2025 = 1079.3; Grand Total Sep 2026 = 9241.2; Foreign Official Sep 2026 = 3674.7)
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_foreign_holdings', 'known_value', 'fail', 'Japan 2025-01 / Grand Total 2026-09 / Foreign Official 2026-09', '1079.3 / 9241.2 / 3674.7',
+  'got ' || COALESCE(CAST(MAX(holdings_usd_billions) FILTER (WHERE year = 2025 AND month = 1 AND holder = 'Japan') AS VARCHAR), 'no row') || ' / '
+  || COALESCE(CAST(MAX(holdings_usd_billions) FILTER (WHERE year = 2026 AND month = 9 AND holder = 'Grand Total') AS VARCHAR), 'no row') || ' / '
+  || COALESCE(CAST(MAX(holdings_usd_billions) FILTER (WHERE year = 2026 AND month = 9 AND holder = 'Foreign Official') AS VARCHAR), 'no row')
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)
+HAVING COALESCE(MAX(holdings_usd_billions) FILTER (WHERE year = 2025 AND month = 1 AND holder = 'Japan'), -1) <> 1079.3
+    OR COALESCE(MAX(holdings_usd_billions) FILTER (WHERE year = 2026 AND month = 9 AND holder = 'Grand Total'), -1) <> 9241.2
+    OR COALESCE(MAX(holdings_usd_billions) FILTER (WHERE year = 2026 AND month = 9 AND holder = 'Foreign Official'), -1) <> 3674.7;
+
+-- treasury_foreign_holdings: positive values, months 1-12, series starts 2012 with no month gaps
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_foreign_holdings', 'value_range', 'fail', 'holdings_usd_billions/month', '> 0, month 1-12, contiguous months from 2012',
+  CAST(COUNT(*) FILTER (WHERE holdings_usd_billions <= 0 OR month NOT BETWEEN 1 AND 12) AS VARCHAR) || ' bad values; '
+  || CAST(COUNT(DISTINCT year * 12 + month) AS VARCHAR) || ' months between ' || CAST(MIN(year * 12 + month) AS VARCHAR) || ' and ' || CAST(MAX(year * 12 + month) AS VARCHAR)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)
+HAVING COUNT(*) FILTER (WHERE holdings_usd_billions <= 0 OR month NOT BETWEEN 1 AND 12) > 0
+    OR MIN(year) <> 2012
+    OR MAX(year * 12 + month) - MIN(year * 12 + month) + 1 <> COUNT(DISTINCT year * 12 + month);
+
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_foreign_holdings', 'official_le_total', 'fail', 'FOREIGN_OFFICIAL_TOTAL <= GRAND_TOTAL', '0 months violating',
+  CAST(COUNT(*) AS VARCHAR) || ' months violating'
+FROM (
+  SELECT year, month,
+         MAX(holdings_usd_billions) FILTER (WHERE holder_kind = 'FOREIGN_OFFICIAL_TOTAL') AS official,
+         MAX(holdings_usd_billions) FILTER (WHERE holder_kind = 'GRAND_TOTAL') AS total
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) GROUP BY 1, 2)
+WHERE official IS NULL OR total IS NULL OR official > total
+HAVING COUNT(*) > 0;
 
 -- wage_growth
 INSERT INTO dq_results
