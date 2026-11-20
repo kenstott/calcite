@@ -10955,16 +10955,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Census population for the Wasatch Front counties is about 75-80% of Utah's total. False if materially different under every ordinary definition.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's Census data (ACS 2020-2024) put Weber, Davis, Salt Lake and Utah counties at 74.9% of Utah's 3.39 million residents, and 82.2% with the six adjacent counties often included in the Wasatch Front.",
+      "evidence": [
+        {
+          "label": "census.acs_population (Utah counties, ACS 5-year 2024)",
+          "url": "https://askamerica.ai/catalog/schemas/census/#acs_population-table",
+          "askamerica": true,
+          "sql": "SELECT \"year\", SUM(CASE WHEN county_fips IN ('49057','49011','49035','49049') THEN total_population END) core4, SUM(CASE WHEN county_fips IN ('49057','49011','49035','49049','49003','49029','49045','49043','49051','49023') THEN total_population END) wide10, SUM(CASE WHEN county_fips='49000' OR county_fips LIKE '49%' THEN total_population END) tot FROM census.acs_population WHERE \"year\"=2024 AND county_fips LIKE '49%' AND county_fips<>'49000' GROUP BY \"year\""
+        }
+      ],
+      "check_run": "q269/askamerica/2026-11-20"
     },
     {
       "id": 291,
@@ -10989,16 +10996,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill text or trail planning documents describe a planned length of about 280 miles from the Idaho border to Nephi. Unsupported if no such figure is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The introduced text of S. 1135 describes the Bonneville Shoreline Trail as a system of trails extending approximately 280 miles from the Idaho-Utah border to Nephi, Utah.",
+      "evidence": [
+        {
+          "label": "S. 1135 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s1135is/html/BILLS-119s1135is.htm"
+        }
+      ],
+      "check_run": "q269/askamerica/2026-11-20"
     },
     {
       "id": 292,
@@ -11023,16 +11035,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FDNY or news reports describe a fire in a Brooklyn row house in early November 2026 that killed six people. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Streetsblog, citing an FDNY briefing, reported that a Nov. 5, 2026 fire destroyed a row house in Sunset Park, Brooklyn and killed six people; the cause was under investigation, with a lithium-ion battery found at the scene.",
+      "evidence": [
+        {
+          "label": "Streetsblog NYC, Nov. 5, 2026, Sunset Park fire",
+          "url": "https://nyc.streetsblog.org/2026/11/05/sunset-park-blaze-kills-6-as-lithium-ion-battery-fire-crisis-rages-on"
+        }
+      ],
+      "check_run": "q270/askamerica/2026-11-20"
     },
     {
       "id": 293,
@@ -11057,16 +11074,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FDNY or news reports describe an e-bike or lithium-ion battery fire in a Bronx apartment building in late October 2026 that killed four people including children. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "City Limits and The New York Times reported that an e-bike battery fire at the Patterson Houses in the Bronx on Oct. 28, 2026 killed an 11-year-old boy and, by FDNY's Oct. 31 count, three other members of his household.",
+      "evidence": [
+        {
+          "label": "City Limits, Oct. 28, 2026, Bronx NYCHA fire",
+          "url": "https://citylimits.org/11-year-old-boys-death-in-bronx-nycha-fire-is-a-horrific-reminder-of-e-bike-battery-dangers-mayor-says/"
+        },
+        {
+          "label": "The New York Times via DNYUZ, Nov. 1, 2026",
+          "url": "https://dnyuz.com/?p=317881"
+        }
+      ],
+      "check_run": "q270/askamerica/2026-11-20"
     },
     {
       "id": 294,
@@ -11091,16 +11117,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FDNY figures for 2026 to date show more than 400 lithium-ion battery fires. Unsettled if FDNY counts differ by category. Unsupported if no 2026 figure is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "City officials said on Oct. 28, 2026 that the city had seen more than 400 lithium-ion battery fires this year, and Streetsblog, citing FDNY, reported 406, of which about 154 were structural fires.",
+      "evidence": [
+        {
+          "label": "City Limits, Oct. 28, 2026, Bronx NYCHA fire",
+          "url": "https://citylimits.org/11-year-old-boys-death-in-bronx-nycha-fire-is-a-horrific-reminder-of-e-bike-battery-dangers-mayor-says/"
+        },
+        {
+          "label": "Streetsblog NYC, Nov. 5, 2026, Sunset Park fire",
+          "url": "https://nyc.streetsblog.org/2026/11/05/sunset-park-blaze-kills-6-as-lithium-ion-battery-fire-crisis-rages-on"
+        }
+      ],
+      "check_run": "q270/askamerica/2026-11-20"
     },
     {
       "id": 295,
@@ -11125,16 +11160,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FDNY figures give about 46 deaths and 628 injuries from lithium-ion battery fires since 2019. Unsettled if the figures are reported only in part. Contradicted if FDNY figures differ materially.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Brownstoner reported that lithium-ion battery fires have caused 46 deaths and 628 injuries since the Fire Department began tracking them in 2019; no FDNY release was read directly.",
+      "evidence": [
+        {
+          "label": "Brownstoner, on NYC lithium-ion battery fires",
+          "url": "https://www.brownstoner.com/brooklyn-life/nyc-lithium-ion-battery-fire-ebike-public-safety-111126/"
+        }
+      ],
+      "check_run": "q270/askamerica/2026-11-20"
     },
     {
       "id": 296,
@@ -11157,16 +11197,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the House passed the Setting Consumer Standards for Lithium-Ion Batteries Act by a large bipartisan roll-call margin or by voice vote under suspension. False if the House has not passed it.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's roll-call records and the House Clerk show the House passed H.R. 973 on April 28, 2025 under suspension by 365-42, with 202 Democrats and 163 Republicans voting yes.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 973, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "select action_date, action_text, url from law.bill_recorded_votes where congress=119 and bill_type='hr' and bill_number=973"
+        },
+        {
+          "label": "House Clerk, roll call 103 (2025)",
+          "url": "https://clerk.house.gov/evs/2025/roll103.xml"
+        }
+      ],
+      "check_run": "q271/askamerica/2026-11-20"
     },
     {
       "id": 297,
