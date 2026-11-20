@@ -12052,16 +12052,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill sets environmental review deadlines of about 2 years and official data show current EIS timelines of several years for such projects. Unsettled if the deadlines exist but actual outcomes are a forecast. Only the deadlines and the current-timeline premise are checked.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The bill sets a 2-year deadline for environmental impact statements, but CEQ's January 2025 report puts the median recent statement at 2.2 to 2.8 years, with a quarter taking more than six years, and existing law already sets a 2-year deadline, so the 5-to-10-year premise fits only slower cases.",
+      "evidence": [
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        },
+        {
+          "label": "CEQ, Environmental Impact Statement Timeline Report (Jan. 13, 2025)",
+          "url": "https://nepa.gov/sites/default/files/documents/CEQ_EIS_Timeline_Report_2025-1-13.pdf"
+        },
+        {
+          "label": "Columbia Center on Global Energy Policy, analysis of the permitting bill (Nov. 17, 2026)",
+          "url": "https://www.energypolicy.columbia.edu/publications/what-the-bipartisan-american-affordability-and-jobs-act-means-for-the-u-s-energy-system/"
+        }
+      ],
+      "check_run": "q278/askamerica/2026-11-20"
     },
     {
       "id": 321,
@@ -12084,16 +12097,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a Columbia University analysis and a CBO analysis of the bill each say it would shorten project approval timelines. Unsettled if only one is found or they address earlier bills. Citejacked if a named source says something materially different.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Columbia's Center on Global Energy Policy says the bill would make building energy infrastructure meaningfully faster, but CBO's letter on the bill refused the fetch, so what CBO said about timelines could not be confirmed.",
+      "evidence": [
+        {
+          "label": "Columbia Center on Global Energy Policy, analysis of the permitting bill (Nov. 17, 2026)",
+          "url": "https://www.energypolicy.columbia.edu/publications/what-the-bipartisan-american-affordability-and-jobs-act-means-for-the-u-s-energy-system/"
+        }
+      ],
+      "check_run": "q278/askamerica/2026-11-20"
     },
     {
       "id": 322,
@@ -12119,16 +12137,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if DC Water, EPA or reporting describe the January 2026 Potomac Interceptor rupture and an official or widely reported characterization that it was the largest sewage spill in U.S. history. Unsettled if the size is documented but the superlative is only one outlet's claim.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Potomac Interceptor ruptured on Jan. 19, 2026, releasing an estimated 240 million to 300 million gallons of wastewater, and ENR, Fox 5 DC and WTOP described it as the largest sewage spill in U.S. history; no official ranking was read.",
+      "evidence": [
+        {
+          "label": "ENR, on the Potomac River sewage spill",
+          "url": "https://www.enr.com/articles/62449-dc-utility-pushes-to-remediate-up-to-300m-gal-potomac-river-sewage-spill"
+        },
+        {
+          "label": "Fox 5 DC, on the Potomac spill",
+          "url": "https://www.fox5dc.com/news/maryland-leaders-push-oversight-after-historic-potomac-spill"
+        }
+      ],
+      "check_run": "q278/askamerica/2026-11-20"
     },
     {
       "id": 323,
@@ -12183,16 +12210,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill text does not amend Clean Water Act section 401 subsections (a) through (d). Contradicted if it amends any of them. Legal reading if it amends related provisions.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The introduced text of S. 5653 amends Clean Water Act section 401 only by adding new subsections at the end and does not rewrite subsections (a) through (d), though its new text applies \"notwithstanding\" parts of (a) and (d) for certain pipelines and transmission lines.",
+      "evidence": [
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        }
+      ],
+      "check_run": "q278/askamerica/2026-11-20"
     },
     {
       "id": 325,
@@ -12217,16 +12249,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a RIPTA, FTA or press source documents an estimate that NEPA review added thousands of dollars per bus shelter in Rhode Island. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No source documenting a per-shelter NEPA cost in Rhode Island was found; the search covered the warehouse catalog, web searches and ecoRI's reporting on RIPTA shelters, and RIPTA's board packet refused the fetch.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q278/askamerica/2026-11-20"
     },
     {
       "id": 326,
@@ -12249,16 +12281,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if NATHPO or a THPO survey or letter publishes an average review time of about 16 days and about 98% of reviews completed on time. Unsupported if not found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsupported",
+      "finding": "No NATHPO or tribal historic preservation officer source publishing a 16-day average or 98% on-time rate was found; the search covered the warehouse catalog, web searches and NATHPO's November 2025 release, which gives no review-time figures.",
+      "evidence": [
+        {
+          "label": "NATHPO press release, Nov. 5, 2025",
+          "url": "https://www.nathpo.org/2025/11/05/nathpo-november-5th-2025-press-release/"
+        }
+      ],
+      "check_run": "q279/askamerica/2026-11-20"
     },
     {
       "id": 327,
@@ -12281,16 +12318,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Tribal organizations stated publicly that they were not consulted on S. 5653 before its release. Unsettled if accounts conflict. Unsupported if nothing is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "High Country News reported that Native leaders and organizations said they were not consulted before S. 5653 was introduced, and that the National Congress of American Indians urged the bill be stopped unless its historic-preservation title changed; no primary tribal statement was read.",
+      "evidence": [
+        {
+          "label": "High Country News, on Tribes and the permitting bill",
+          "url": "https://www.hcn.org/?p=348172"
+        },
+        {
+          "label": "KUNC, Nov. 12, 2026",
+          "url": "https://www.kunc.org/2026-11-12/indigenous-leaders-voice-concerns-about-sovereignty-amid-senate-advancement-of-baaja-bill"
+        }
+      ],
+      "check_run": "q279/askamerica/2026-11-20"
     },
     {
       "id": 328,
@@ -12349,16 +12395,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the administration rescinded the 2023 Superior National Forest mineral withdrawal or reinstated Twin Metals leases, and/or Congress passed a measure revoking the withdrawal. Unsettled if only one branch acted. Contradicted if neither has acted.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's bill records show H.J.Res. 140, a Congressional Review Act resolution disapproving the Superior National Forest mineral withdrawal, became Public Law 119-85 on April 27, 2026; Fox 9 reported House passage 214-208 and Senate passage 50-49.",
+      "evidence": [
+        {
+          "label": "law.bills (H.J.Res. 140, 119th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM law.bills WHERE bill_type='hjres' AND bill_number=140 AND congress=119"
+        },
+        {
+          "label": "Fox 9, April 2026, on the end of the Boundary Waters mining ban",
+          "url": "https://www.fox9.com/news/bwca-mining-ban-ends-trump-april-2026"
+        }
+      ],
+      "check_run": "q279/askamerica/2026-11-20"
     },
     {
       "id": 330,
@@ -12559,7 +12616,9 @@
       "kind": "factual",
       "test": "True if the managers' amendment adds about $100 million for the Historic Preservation Fund and that is about a 50% increase over its current annual appropriation. Unsettled if the amount is confirmed but the baseline differs or the amendment text is not readable.",
       "premise": null,
-      "counter_statements": [],
+      "counter_statements": [
+        338
+      ],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [
@@ -12670,7 +12729,9 @@
       "kind": "factual",
       "test": null,
       "premise": null,
-      "counter_statements": [],
+      "counter_statements": [
+        335
+      ],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
