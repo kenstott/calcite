@@ -1855,13 +1855,15 @@ partitionedTables:
       checkedAt: "2026-11-20T02:22:21Z"
     partitions: *year_partition
     comment: >
-      Federal civilian headcount by month, agency, sub-agency and duty-station state from OPM's
+      Federal government employment: civilian federal employees (workforce size, headcount) by
+      month, agency, sub-agency and duty-station state from OPM's
       Federal Workforce Data (data.opm.gov), the EHRI Status snapshot of every active employee (in
       pay or non-pay status) on the last day of each month, March 2005 to the latest published
       month. One row per snapshot_month x agency_code x agency_subelement x state_abbr x
       country_name with headcount; the 2M-row record-level cube OPM publishes is aggregated to
       about 8,600 rows a month and occupation, grade, pay and demographic fields are not carried.
-      Use it for agency headcount change over time (for example Interior in March 2025 against
+      Use it for federal job cuts and agency headcount change over time (for example total federal
+      employees in January 2025 against the latest month, or Interior in March 2025 against
       September 2026): SUM(headcount) over agency_code for a snapshot_month, never over months.
       About 47 percent of employees carry state_abbr and country_name REDACTED, which OPM sets on
       sensitive records under its data release policy; they count in every agency total and are
