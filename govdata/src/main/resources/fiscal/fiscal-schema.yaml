@@ -7878,6 +7878,350 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: federal_funding_gaps
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=federal_funding_gaps/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Every lapse in federal appropriations (funding gap) since the fiscal year was moved to
+      October 1 in FY1977, one row per gap: 23 gaps through the FY2026 DHS lapse, from 1 to 75
+      full days (CRS RS20348 "Federal Funding Gaps: A Brief Overview", Table 1). full_days is
+      CRS's count, the days after last_funded_date and before funding resumed (gap_end_date is
+      the date funding resumed); every row's count is checked against its dates at load. A
+      funding gap is not always a shutdown: CRS notes many short or pre-1981 gaps did not
+      close agencies. Includes government-wide gaps (FY1996's two, FY2014, FY2026's first)
+      and partial ones (FY2019's 34 days affected the 7 bills not yet funded; FY2026's 75-day
+      gap affected only Homeland Security); which bills were uncovered is in the CRS
+      narrative, not the table, so it is not a column. CRS revises the report as gaps occur
+      and the table is replaced whole on each run. For CR counts and durations by year see
+      continuing_resolutions and appropriations_timeliness_by_fy. Source:
+      https://www.everycrsreport.com/reports/RS20348.html (CRS, public domain).
+
+    dimensions:
+      type:
+        - federal_funding_gaps
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: >
+          Federal fiscal year (October-September) in which the gap occurred; part of the PK.
+      - name: gap_seq_in_fiscal_year
+        type: integer
+        nullable: false
+        comment: >
+          1 for the first gap of the fiscal year, 2 for the second; part of the PK.
+      - name: last_funded_date
+        type: date
+        nullable: false
+        comment: >
+          Final date of budget authority, the last day agencies were funded
+      - name: gap_start_date
+        type: date
+        nullable: false
+        comment: >
+          First day without appropriations (last_funded_date + 1)
+      - name: gap_end_date
+        type: date
+        nullable: false
+        comment: >
+          Date the gap terminated, the day funding was restored
+      - name: full_days
+        type: integer
+        nullable: false
+        comment: >
+          Full days of the gap as CRS counts them: after the last funded day and before funding resumed; 1 to 75
+      - name: crs_report_version
+        type: string
+        nullable: false
+        comment: >
+          File name of the EveryCRSReport version the row was read from (YYYY-MM-DD_<report>_<hash>.html); the date is the CRS edition date
+
+    source:
+      type: http
+      # Documentary URL: the provider resolves the newest dated version of the report from the
+      # EveryCRSReport landing page and parses its HTML tables.
+      url: "https://www.everycrsreport.com/reports/RS20348.html"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.FundingGapsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=federal_funding_gaps/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: federal_funding_gaps
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  - name: continuing_resolutions
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=continuing_resolutions/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Every continuing-appropriations act (continuing resolution, CR) enacted since FY1977, one
+      row per act with its public law, Statutes at Large citation, enactment date, expiration
+      date and duration in days (CRS R46595 "Continuing Resolutions: Overview of Components
+      and Practices", Table A-1; 207 acts through FY2025's P.L. 119-4). Fiscal years with no CR
+      (FY1989, FY1995, FY1997) have no rows. duration_days is CRS's published figure and is
+      measured from the start of the period the act covers, so it can exceed
+      expiration_date minus enactment_date (FY1977's first CR was enacted October 11, 1976 and
+      counts 182 days). Includes full-year CRs (e.g. P.L. 119-4: 200 days to September 30,
+      2025) and acts passed after a funding gap began (see federal_funding_gaps). Fiscal
+      years CRS has not yet added are absent; the table is replaced whole on each run. Acts
+      can overlap, so sum duration_days over a year with care; CRS's own per-year total for
+      FY1998 on is interim_cr_total_days in appropriations_timeliness_by_fy. Source:
+      https://www.everycrsreport.com/reports/R46595.html (CRS, public domain).
+
+    dimensions:
+      type:
+        - continuing_resolutions
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: >
+          Federal fiscal year the CR funds; part of the PK.
+      - name: act_seq_in_fiscal_year
+        type: integer
+        nullable: false
+        comment: >
+          1 for the first CR of the fiscal year, 2 for the second; part of the PK.
+      - name: act_seq_cumulative
+        type: integer
+        nullable: false
+        comment: >
+          Running count of CRs since FY1977 (1 to 207); unique
+      - name: public_law
+        type: string
+        nullable: false
+        comment: >
+          Public law number as printed, e.g. P.L. 118-83
+      - name: statutes_at_large
+        type: string
+        nullable: false
+        comment: >
+          Statutes at Large citation, e.g. 138 Stat. 1524
+      - name: enactment_date
+        type: date
+        nullable: false
+        comment: >
+          Date the act was enacted
+      - name: expiration_date
+        type: date
+        nullable: true
+        comment: >
+          Date the act's budget authority expires; for a ladder CR the date covering the most
+          activities. Null where CRS prints [n/a] (acts with no single expiration, e.g. P.L.
+          99-591, P.L. 108-185 and P.L. 113-39); see source_cell_note.
+      - name: duration_days
+        type: integer
+        nullable: true
+        comment: >
+          Duration in days as CRS publishes it for the expiration_date period (see table
+          comment on how it is counted); null where CRS prints a dash. CRS parenthesises a few
+          FY2013-14 durations, e.g. (365) and (17); the number is kept and the cell is in
+          source_cell_note.
+      - name: expiration_date_second
+        type: date
+        nullable: true
+        comment: >
+          Second expiration date of a ladder CR, one whose activities expire on two dates
+          (FY2024's P.L. 118-22, 118-35 and 118-40); null for every other act
+      - name: duration_days_second
+        type: integer
+        nullable: true
+        comment: Duration in days for expiration_date_second; null unless a ladder CR
+      - name: source_cell_note
+        type: string
+        nullable: true
+        comment: >
+          Verbatim CRS expiration and duration cells ("expiration=...; duration=...") when
+          either is not a plain date and day count (n/a, dash, parenthesised, ladder,
+          footnoted); null for the clean majority of rows
+      - name: crs_report_version
+        type: string
+        nullable: false
+        comment: >
+          File name of the EveryCRSReport version the row was read from (YYYY-MM-DD_<report>_<hash>.html); the date is the CRS edition date
+
+    source:
+      type: http
+      # Documentary URL: the provider resolves the newest dated version of the report from the
+      # EveryCRSReport landing page and parses its HTML tables.
+      url: "https://www.everycrsreport.com/reports/R46595.html"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.ContinuingResolutionsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=continuing_resolutions/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: continuing_resolutions
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  - name: appropriations_timeliness_by_fy
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=appropriations_timeliness_by_fy/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      One row per fiscal year since FY1977 on how on time the regular appropriations bills
+      were: how many regular bills were expected (13 through FY2005, 11 in FY2006-07, 12
+      from FY2008), how many were enacted on or before October 1, and how many CRs were
+      enacted (CRS R46595 Table 1). Only FY1977, FY1989, FY1995 and FY1997 had all bills
+      enacted by October 1. For FY1998 onward the CRS interim-CR table adds interim_crs, the
+      total days those interim CRs covered (interim_cr_total_days) and the expiration date of
+      the last one; those three columns are null for FY1977-1997. continuing_resolutions_enacted
+      is CRS's Table 1 count and can differ from the number of rows in continuing_resolutions
+      for a year where CRS's two tables count differently. The date every regular bill was
+      enacted is not published in these tables and is not a column. Replaced whole on each
+      run. Source: https://www.everycrsreport.com/reports/R46595.html (CRS, public domain).
+
+    dimensions:
+      type:
+        - appropriations_timeliness_by_fy
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: >
+          Federal fiscal year; PK.
+      - name: regular_bills_count
+        type: integer
+        nullable: false
+        comment: >
+          Number of regular appropriations bills expected that year (13, 11 or 12)
+      - name: regular_bills_enacted_by_oct1
+        type: integer
+        nullable: false
+        comment: >
+          Regular bills enacted on or before October 1, the start of the fiscal year
+      - name: continuing_resolutions_enacted
+        type: integer
+        nullable: false
+        comment: >
+          Number of CRs enacted that fiscal year per CRS Table 1
+      - name: interim_crs
+        type: integer
+        nullable: true
+        comment: >
+          Number of interim CRs (CRS interim-CR table); null before FY1998
+      - name: interim_cr_total_days
+        type: integer
+        nullable: true
+        comment: >
+          Total duration in days of the interim CRs; null before FY1998
+      - name: final_interim_expiration_date
+        type: date
+        nullable: true
+        comment: >
+          Expiration date of the last interim CR; null before FY1998
+      - name: crs_report_version
+        type: string
+        nullable: false
+        comment: >
+          File name of the EveryCRSReport version the row was read from (YYYY-MM-DD_<report>_<hash>.html); the date is the CRS edition date
+
+    source:
+      type: http
+      # Documentary URL: the provider resolves the newest dated version of the report from the
+      # EveryCRSReport landing page and parses its HTML tables.
+      url: "https://www.everycrsreport.com/reports/R46595.html"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.AppropriationsTimelinessTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=appropriations_timeliness_by_fy/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: appropriations_timeliness_by_fy
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -8071,6 +8415,15 @@ constraints:
       # state_fips is null for jurisdiction_type FEDERAL/TERRITORY (Guam/Puerto
       # Rico/U.S. Virgin Islands are not in geo.state_ref); the FK only applies
       # to the STATE/DISTRICT rows where it is populated.
+
+  federal_funding_gaps:
+    primaryKey: [fiscal_year, gap_seq_in_fiscal_year]
+
+  continuing_resolutions:
+    primaryKey: [fiscal_year, act_seq_in_fiscal_year]
+
+  appropriations_timeliness_by_fy:
+    primaryKey: [fiscal_year]
 
   fhwa_program_apportionments:
     primaryKey: [fiscal_year, program, state_abbr]

@@ -2101,6 +2101,175 @@ FROM (SELECT a.state_abbr, SUM(a.amount) AS t, COUNT(DISTINCT a.fiscal_year) AS 
   GROUP BY a.state_abbr, e.expected);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: federal_funding_gaps (CRS report table; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T2_row_count',
+  CASE WHEN n >= 23 THEN 'pass' ELSE 'fail' END, n, 23, 'CRS RS20348 Table 1 lists 23 gaps since FY1977'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+-- crs_report_version is one value by design: the whole table is read from one CRS edition.
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'crs_report_version')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null primary-key columns'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true) WHERE fiscal_year IS NULL OR gap_seq_in_fiscal_year IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (fiscal_year, gap_seq_in_fiscal_year) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT fiscal_year, gap_seq_in_fiscal_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true) GROUP BY fiscal_year, gap_seq_in_fiscal_year HAVING COUNT(*) > 1));
+
+-- Known values from CRS RS20348: FY2014 16 days, FY2019 34, FY1996 two gaps of 5 and 21, longest 75 (FY2026 DHS).
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T7_known_values',
+  CASE WHEN n = 4 AND mx = 75 THEN 'pass' ELSE 'fail' END, n, 4,
+  'FY2014=16, FY2019=34, FY1996=5 and 21, max full_days=75'
+FROM (SELECT COUNT(*) FILTER (WHERE (fiscal_year = 2014 AND full_days = 16) OR (fiscal_year = 2019 AND full_days = 34)
+    OR (fiscal_year = 1996 AND gap_seq_in_fiscal_year = 1 AND full_days = 5)
+    OR (fiscal_year = 1996 AND gap_seq_in_fiscal_year = 2 AND full_days = 21)) AS n, MAX(full_days) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'federal_funding_gaps', 'T7_date_consistency',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'gap_end_date - gap_start_date <> full_days'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/federal_funding_gaps', allow_moved_paths := true) WHERE date_diff('day', gap_start_date, gap_end_date) <> full_days);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: continuing_resolutions (CRS report table; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T2_row_count',
+  CASE WHEN n >= 207 THEN 'pass' ELSE 'fail' END, n, 207, 'CRS R46595 Table A-1 lists 207 acts through P.L. 119-4'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+-- crs_report_version is one value by design: the whole table is read from one CRS edition.
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'crs_report_version')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null primary-key columns'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true) WHERE fiscal_year IS NULL OR act_seq_in_fiscal_year IS NULL OR enactment_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (fiscal_year, act_seq_in_fiscal_year) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT fiscal_year, act_seq_in_fiscal_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true) GROUP BY fiscal_year, act_seq_in_fiscal_year HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T7_known_values',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1, 'P.L. 119-4: FY2025, enacted 2025-03-15, 200 days'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true) WHERE public_law = 'P.L. 119-4' AND fiscal_year = 2025
+  AND enactment_date = DATE '2025-03-15' AND duration_days = 200);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T7_cumulative_sequence',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'act_seq_cumulative is not 1..N without gaps'
+FROM (SELECT COUNT(*) AS n FROM (SELECT MIN(act_seq_cumulative) AS mn, MAX(act_seq_cumulative) AS mx, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true))
+  WHERE mn <> 1 OR mx <> c);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: appropriations_timeliness_by_fy (CRS report table; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T2_row_count',
+  CASE WHEN n >= 49 THEN 'pass' ELSE 'fail' END, n, 49, 'One row per fiscal year FY1977-FY2025'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+-- crs_report_version is one value by design: the whole table is read from one CRS edition.
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'crs_report_version')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null primary-key columns'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true) WHERE fiscal_year IS NULL OR regular_bills_count IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (fiscal_year) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT fiscal_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true) GROUP BY fiscal_year HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T7_known_values',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END, n, 4,
+  'FY1977/1989/1995/1997 all bills by Oct 1; only those four years'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true) WHERE regular_bills_enacted_by_oct1 = regular_bills_count);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'appropriations_timeliness_by_fy', 'T7_interim_from_1998',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'interim_crs null for FY>=1998 or non-null before'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/appropriations_timeliness_by_fy', allow_moved_paths := true) WHERE (fiscal_year >= 1998 AND interim_crs IS NULL) OR (fiscal_year < 1998 AND interim_crs IS NOT NULL));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail
