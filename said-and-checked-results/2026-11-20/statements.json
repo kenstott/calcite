@@ -9806,16 +9806,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official finding documents people with disabilities being denied transplants or evaluation because of disability-based assumptions. Unsupported if no official finding is found. (\"outdated\" is not assessed.)",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The National Council on Disability's 2019 report finds that people with disabilities have been denied organ transplants because of unfounded assumptions about their quality of life and that such denials are frequently based on discriminatory assumptions, documenting refusals to evaluate and to list patients.",
+      "evidence": [
+        {
+          "label": "National Council on Disability, Organ Transplant Discrimination report (2019)",
+          "url": "https://www.ncd.gov/assets/uploads/docs/ncd-organ-transplant-508.pdf"
+        }
+      ],
+      "check_run": "q261/askamerica/2026-11-20"
     },
     {
       "id": 260,
@@ -9870,16 +9875,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a transcript or report of a Trump interview in the week of Nov. 9-15, 2026 shows him saying the U.S. had lost no soldiers in about the last five months. Unsupported if no such interview statement is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Raw Story, citing The Washington Post, reported that Trump told Hugh Hewitt in interviews aired Nov. 12, 2026, \"We haven't lost a soldier in five months\"; the interview transcript itself was not read.",
+      "evidence": [
+        {
+          "label": "Raw Story, Nov. 13, 2026",
+          "url": "https://www.rawstory.com/trump-iran-war-deaths/"
+        }
+      ],
+      "check_run": "q262/askamerica/2026-11-20"
     },
     {
       "id": 262,
@@ -9902,16 +9912,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Defense Department casualty data show 23 U.S. service member deaths in the war, including 9 since about mid-June 2026. False if the official counts differ materially. Unsettled if the total matches but the split cannot be confirmed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Stars and Stripes reported on Oct. 29, 2026 that the Pentagon's casualty count stood at 23 deaths, matching the total, but AP's count of 17 deaths by July 19 implies roughly 6 to 10 deaths since mid-June depending on the cutoff, so the figure of 9 could not be confirmed; the Pentagon's database was not read directly.",
+      "evidence": [
+        {
+          "label": "Stars and Stripes, Oct. 29, 2026, Pentagon raises toll to 23",
+          "url": "https://www.stripes.com/theaters/middle_east/2026-10-29/pentagon-iran-war-troops-deaths-23299434.html"
+        },
+        {
+          "label": "AP via ABC7, deaths as of July 19, 2026",
+          "url": "https://abc7.com/post/16-us-service-members-have-died-iran-war-reflecting-conflict-fought-largely-air/19537509/"
+        }
+      ],
+      "check_run": "q262/askamerica/2026-11-20"
     },
     {
       "id": 263,
@@ -9966,16 +9985,33 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if EIA diesel prices and fertilizer price indexes rose sharply since the war began (about February 2026). Unsettled if prices rose but \"astronomical\" cannot be pinned down. Contradicted if official data show no material rise. Causation is not assessed beyond timing.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "EIA prices in AskAmerica's warehouse show retail diesel rising from $3.81 a gallon on Feb. 23, 2026 to $6.29 by September and $5.94 on Nov. 16, with a 2022-2026 high of $6.53, and farmdoc reported urea up 41% and anhydrous ammonia up 29% from mid-February to mid-April; no official fertilizer index after April was read, and \"astronomical\" has no threshold.",
+      "evidence": [
+        {
+          "label": "energy.eia_retail_gasoline_prices (national diesel, Nov. 2025 to Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+          "askamerica": true,
+          "sql": "SELECT report_date, price_dollars_per_gallon FROM energy.eia_retail_gasoline_prices WHERE geo_level='national' AND product='No 2 Diesel' AND report_date >= '2025-10-01' AND (report_date IN ('2025-11-17','2026-01-26','2026-02-23','2026-03-30','2026-05-04','2026-06-15','2026-08-03','2026-09-14','2026-10-19','2026-11-02','2026-11-09','2026-11-16') ) ORDER BY report_date"
+        },
+        {
+          "label": "energy.eia_retail_gasoline_prices (diesel high since 2022)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+          "askamerica": true,
+          "sql": "SELECT max(price_dollars_per_gallon) mx, max(report_date) lastd, min(report_date) FROM energy.eia_retail_gasoline_prices WHERE geo_level='national' AND product='No 2 Diesel' AND price_year>=2022"
+        },
+        {
+          "label": "farmdoc daily, Apr. 24, 2026, fertilizer prices",
+          "url": "https://farmdocdaily.illinois.edu/2026/04/middle-east-ceasefire-fails-to-ease-u-s-fertilizer-price-pressure-on-farmers.html"
+        }
+      ],
+      "check_run": "q262/askamerica/2026-11-20"
     },
     {
       "id": 265,
@@ -9998,16 +10034,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a DoD estimate, CBO, CRS or a supplemental appropriation shows the war's cost at $47 billion or more. Unsettled if only non-official estimates exist near that figure. Unsupported if no estimate is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Stars and Stripes reported a Pentagon estimate given to Congress putting the war's cost at $47.1 billion as of Oct. 16, 2026, excluding damage to U.S. bases.",
+      "evidence": [
+        {
+          "label": "Stars and Stripes, Oct. 28, 2026, Pentagon estimate of war cost",
+          "url": "https://www.stripes.com/theaters/middle_east/2026-10-28/pentagon-estimate-iran-war-cost-47b-23289282.html"
+        }
+      ],
+      "check_run": "q263/askamerica/2026-11-20"
     },
     {
       "id": 266,
@@ -10030,16 +10071,31 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if EIA gasoline prices since February 2026, times average household use, yield about $850 extra per household, or a published analysis gives about that figure. Unsettled if estimates differ by method. Unsupported if none found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "EIA prices in AskAmerica's warehouse show regular gasoline averaging $4.09 a gallon since early March 2026 against $2.86 in January and February. Published estimates of the extra household cost differ by method, such as Moody's $860 for gasoline, diesel and jet fuel combined and Brown University's lower gasoline-and-diesel figure in May.",
+      "evidence": [
+        {
+          "label": "energy.eia_retail_gasoline_prices (U.S. regular gasoline before and during the war)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+          "askamerica": true,
+          "sql": "select max(case when report_date<'2026-01-01' then price_dollars_per_gallon end) prior_max, avg(case when report_date>='2026-03-02' then price_dollars_per_gallon end) avg_war, avg(case when report_date between '2026-01-05' and '2026-02-23' then price_dollars_per_gallon end) avg_pre, count(case when report_date>='2026-03-02' then 1 end) n from energy.eia_retail_gasoline_prices where series_id='EMM_EPMR_PTE_NUS_DPG'"
+        },
+        {
+          "label": "Fox Business, Moody's estimate of $860 per household",
+          "url": "https://www.foxbusiness.com/economy/iran-war-costs-us-households-860-more-higher-energy-prices-economist-says.amp"
+        },
+        {
+          "label": "Brown University Costs of War, Iran war energy cost",
+          "url": "https://costsofwar.watson.brown.edu/sites/default/files/Iran_War_Energy_Cost.pdf"
+        }
+      ],
+      "check_run": "q263/askamerica/2026-11-20"
     },
     {
       "id": 267,
@@ -10062,16 +10118,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if EIA diesel prices in 2026 reached a record and were near double year-earlier levels at some point. Unsettled if \"record\" holds only nominally or the doubling applies only to some fuel types. Contradicted if EIA data show no record and well under double.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "EIA data in AskAmerica's warehouse show national retail diesel reaching a record $6.53 a gallon on Sept. 21, 2026, above the 2022 high of $5.81, but that is about 1.7 times the price a year earlier, not nearly double; farm off-road diesel prices were not available to test the farmers' figure.",
+      "evidence": [
+        {
+          "label": "energy.eia_retail_gasoline_prices (U.S. diesel, Sept. 2025 to Nov. 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+          "askamerica": true,
+          "sql": "select report_date, series_id, price_dollars_per_gallon from energy.eia_retail_gasoline_prices where eia_area_code='NUS' and series_id in ('EMM_EPMR_PTE_NUS_DPG','EMD_EPD2D_PTE_NUS_DPG') and report_date>='2025-09-01' order by series_id, report_date"
+        },
+        {
+          "label": "energy.eia_retail_gasoline_prices (diesel high before 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+          "askamerica": true,
+          "sql": "select max(price_dollars_per_gallon) prior_max, max_by(report_date, price_dollars_per_gallon) d from energy.eia_retail_gasoline_prices where series_id='EMD_EPD2D_PTE_NUS_DPG' and report_date<'2026-01-01'"
+        }
+      ],
+      "check_run": "q263/askamerica/2026-11-20"
     },
     {
       "id": 268,
@@ -10094,16 +10163,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Defense Department casualty counts show 23 U.S. deaths and several hundred wounded in the Iran war. Unsettled if one figure cannot be confirmed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Stars and Stripes and the Washington Post reported the Pentagon's casualty count at 23 deaths as of Oct. 29, 2026, and 865 wounded, including nonhostile deaths; the Pentagon database was not read directly.",
+      "evidence": [
+        {
+          "label": "Stars and Stripes, Oct. 29, 2026, Pentagon raises toll to 23",
+          "url": "https://www.stripes.com/theaters/middle_east/2026-10-29/pentagon-iran-war-troops-deaths-23299434.html"
+        },
+        {
+          "label": "Washington Post via Anchorage Daily News, Oct. 10, 2026",
+          "url": "https://www.adn.com/nation-world/2026/10/10/pentagon-raises-official-toll-of-troops-who-died-during-war-with-iran-to-21/"
+        }
+      ],
+      "check_run": "q263/askamerica/2026-11-20"
     },
     {
       "id": 269,
