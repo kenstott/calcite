@@ -3573,6 +3573,152 @@ partitionedTables:
         catalogType: hadoop
         overwritePartitions: true
 
+  - name: barge_rates_weekly
+    timeColumn: rate_date  # observation week; this table has no column named 'year'
+    freshness:
+      type: etag
+    pattern: "type=barge_rates_weekly/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Weekly downbound grain barge freight rates on the Mississippi River system from the USDA
+      Agricultural Marketing Service Grain Transportation Report (agtransport.usda.gov Socrata
+      7spn-fbua), one row per week and river-segment location (26 locations, e.g. Illinois
+      River, Mid-Mississippi, St. Louis, Lower Ohio, Cairo-Memphis, Memphis-Cairo), Jan 2004
+      to the latest Tuesday. price_per_ton is dollars per ton for a loaded barge from that
+      location to New Orleans (the Gulf export position) as reported by AMS from barge
+      brokers; AMS also publishes the same series as a percent of 2000-2002 tariff, which is
+      not carried here. The ETag gate refetches the whole ~31,000-row series when AMS posts a
+      new week. Companion tables: barge_lock_movements_monthly (tonnage through locks). No
+      barge fleet size, age or count series is in this schema: the USACE Waterborne
+      Transportation Lines vessel files are not downloadable without a browser session.
+      Source: agtransport.usda.gov/resource/7spn-fbua.json.
+
+    dimensions:
+      type:
+        - barge_rates_weekly
+
+    columns:
+      - name: rate_date
+        type: date
+        nullable: false
+        expression: 'CAST(src."date" AS DATE)'
+        comment: Week of the rate observation (the Tuesday AMS reports the rate for)
+      - name: river_system_location
+        type: string
+        nullable: false
+        expression: 'src."river_system_location"'
+        comment: River segment or loading location the rate applies to, as named by AMS (for example 'Illinois River', 'St. Louis', 'Cairo-Memphis')
+      - name: price_per_ton
+        type: double
+        nullable: true
+        expression: 'CAST(src."price_per_ton" AS DOUBLE)'
+        comment: Downbound grain barge freight rate in US dollars per ton, origin location to New Orleans
+
+    source:
+      type: http
+      url: "https://agtransport.usda.gov/resource/7spn-fbua.json?$limit=100000&$order=date,river_system_location"
+      method: GET
+      response:
+        format: json
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=barge_rates_weekly/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: barge_rates_weekly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
+  - name: barge_lock_movements_monthly
+    timeColumn: month_start  # observation month; this table has no column named 'year'
+    freshness:
+      type: etag
+    pattern: "type=barge_lock_movements_monthly/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Monthly grain-related barge tonnage through the Corps of Engineers locks that USDA AMS
+      tracks for its Grain Transportation Report (agtransport.usda.gov Socrata sthp-khuk),
+      Jan 2013 to the latest month: one row per month, river, lock, direction and commodity
+      (CORN, SOYBEANS, WHEAT, FERTILIZER, OTHER). river is the AMS code (MI Mississippi, IL
+      Illinois, OH Ohio, AR/MK Arkansas, CO Columbia); direction is UP or DOWN. tonnage is
+      short tons moved through that lock, from USACE Lock Performance Monitoring System
+      reports, so it is a lock-passage count by direction, not an origin-destination flow;
+      a shipment crossing several locks appears at each. fertilizer_index is carried from
+      the source unchanged. The ETag gate refetches the whole ~12,000-row series. Companion
+      to barge_rates_weekly. Source: agtransport.usda.gov/resource/sthp-khuk.json.
+
+    dimensions:
+      type:
+        - barge_lock_movements_monthly
+
+    columns:
+      - name: month_start
+        type: date
+        nullable: false
+        expression: 'CAST(src."first_date" AS DATE)'
+        comment: First day of the observation month
+      - name: river
+        type: string
+        nullable: false
+        expression: 'src."river"'
+        comment: AMS river code (MI Mississippi, IL Illinois, OH Ohio, MK/AR Arkansas, CO Columbia)
+      - name: lock
+        type: string
+        nullable: false
+        expression: 'src."lock"'
+        comment: Lock number on that river (Corps of Engineers numbering)
+      - name: direction
+        type: string
+        nullable: false
+        expression: 'src."direction"'
+        comment: Direction of the barge movement through the lock, UP (upbound) or DOWN (downbound)
+      - name: commodity
+        type: string
+        nullable: false
+        expression: 'src."commodity"'
+        comment: Commodity group (CORN, SOYBEANS, WHEAT, FERTILIZER, OTHER)
+      - name: tonnage
+        type: double
+        nullable: true
+        expression: 'CAST(src."tonnage" AS DOUBLE)'
+        comment: Short tons of the commodity moved through the lock in that direction during the month
+      - name: fertilizer_index
+        type: double
+        nullable: true
+        expression: 'CAST(src."fertilizer_index" AS DOUBLE)'
+        comment: Fertilizer index value carried unchanged from the AMS dataset
+
+    source:
+      type: http
+      url: "https://agtransport.usda.gov/resource/sthp-khuk.json?$limit=100000&$order=first_date,river,lock,direction,commodity"
+      method: GET
+      response:
+        format: json
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=barge_lock_movements_monthly/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: barge_lock_movements_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
   - name: tsa_checkpoint_daily
     pattern: "type=tsa_checkpoint_daily/year=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
@@ -5823,6 +5969,12 @@ partitionedTables:
 # ============================================================================
 
 constraints:
+
+  barge_rates_weekly:
+    primaryKey: [rate_date, river_system_location]
+
+  barge_lock_movements_monthly:
+    primaryKey: [month_start, river, lock, direction, commodity]
 
   vehicle_recalls:
     primaryKey: [nhtsa_id]

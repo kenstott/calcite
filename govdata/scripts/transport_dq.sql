@@ -942,6 +942,98 @@ SELECT 'transport', 'bts_tsi_monthly', 'T7_truck_tonnage_plausible',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bts_tsi_monthly', allow_moved_paths := true) WHERE truck_d11 IS NULL OR truck_d11 < 50 OR truck_d11 > 200);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: barge_rates_weekly
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'barge_rates_weekly', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_rates_weekly', 'T2_row_count',
+  CASE WHEN n >= 25000 THEN 'pass' ELSE 'fail' END, n, 25000, 'Expected >=25,000 rows (31,044 confirmed live 20 Nov 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_rates_weekly', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_rates_weekly', 'T6_pk_duplicates',
+  CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate primary-key rows'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT rate_date, river_system_location) AS d FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_rates_weekly', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true) WHERE rate_date IS NULL OR river_system_location IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_rates_weekly', 'T7_date_range',
+  CASE WHEN miny <= '2004-12-31' AND maxy >= '2026-01-01' THEN 'pass' ELSE 'fail' END,
+  0, 0, 'Expected 2004 through a 2026 week: got ' || miny || ' to ' || maxy
+FROM (SELECT MIN(rate_date)::VARCHAR AS miny, MAX(rate_date)::VARCHAR AS maxy FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_rates_weekly', 'T7_rate_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
+  'price_per_ton outside plausible [1, 100] USD/ton, or NULL'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_rates_weekly', allow_moved_paths := true) WHERE price_per_ton IS NULL OR price_per_ton < 1 OR price_per_ton > 100);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: barge_lock_movements_monthly
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'barge_lock_movements_monthly', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_lock_movements_monthly', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000, 'Expected >=10,000 rows (11,810 confirmed live 20 Nov 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_lock_movements_monthly', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_lock_movements_monthly', 'T6_pk_duplicates',
+  CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate primary-key rows'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT month_start, river, lock, direction, commodity) AS d FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_lock_movements_monthly', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true) WHERE month_start IS NULL OR river IS NULL OR lock IS NULL OR direction IS NULL OR commodity IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_lock_movements_monthly', 'T7_date_range',
+  CASE WHEN miny = '2013-01-01' AND maxy >= '2026-01-01' THEN 'pass' ELSE 'fail' END,
+  0, 0, 'Expected 2013-01-01 through a 2026 month: got ' || miny || ' to ' || maxy
+FROM (SELECT MIN(month_start)::VARCHAR AS miny, MAX(month_start)::VARCHAR AS maxy FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'barge_lock_movements_monthly', 'T7_tonnage_plausible',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
+  'tonnage negative, NULL, or above 5,000,000 short tons in one lock-month'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/barge_lock_movements_monthly', allow_moved_paths := true) WHERE tonnage IS NULL OR tonnage < 0 OR tonnage > 5000000);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: phmsa_hazardous_liquid_incidents (PHMSA F 7000-1 accident reports, 2010-present, snapshot)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
