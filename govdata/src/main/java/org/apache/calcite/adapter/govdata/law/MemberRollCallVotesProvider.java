@@ -359,6 +359,7 @@ public class MemberRollCallVotesProvider implements DataProvider {
     String question = null;
     String result = null;
     String legisNum = null;
+    String voteDesc = null;
     List<Map<String, Object>> members = new ArrayList<Map<String, Object>>();
     Map<String, Object> member = null;
     while (r.hasNext()) {
@@ -371,6 +372,7 @@ public class MemberRollCallVotesProvider implements DataProvider {
       case "vote-question": question = r.getElementText().trim(); break;
       case "vote-result": result = r.getElementText().trim(); break;
       case "legis-num": legisNum = r.getElementText().trim(); break;
+      case "vote-desc": voteDesc = r.getElementText().trim(); break;
       case "recorded-vote": member = new LinkedHashMap<String, Object>(); break;
       case "legislator":
         if (member == null) {
@@ -391,6 +393,11 @@ public class MemberRollCallVotesProvider implements DataProvider {
         break;
       default: break;
       }
+    }
+    if (members.isEmpty() && voteDesc != null && voteDesc.contains("was vacated")) {
+      // The Clerk keeps the number of a roll that was vacated by unanimous consent and publishes
+      // it with no recorded votes; it records no member's vote, so it contributes no rows.
+      return;
     }
     if (members.isEmpty()) {
       throw new IOException(url + ": no <recorded-vote> elements; the House roll-call XML "

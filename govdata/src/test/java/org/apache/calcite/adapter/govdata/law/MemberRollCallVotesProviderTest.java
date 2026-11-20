@@ -22,6 +22,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Parsing of the Senate and House roll-call XML into one row per member. */
 @Tag("unit")
@@ -99,6 +100,15 @@ class MemberRollCallVotesProviderTest {
     assertThrows(java.io.IOException.class, () ->
         MemberRollCallVotesProvider.parseHouse(in(empty), "u", 2000, 106, 2, 1,
             new ArrayDeque<Map<String, Object>>()));
+  }
+
+  @Test void vacatedRollContributesNoRows() throws Exception {
+    String vacated = "<rollcall-vote><vote-metadata><action-date>4-Jun-2015</action-date>"
+        + "<vote-desc>This vote was vacated by unanimous consent on 4-Jun-2015.</vote-desc>"
+        + "</vote-metadata><vote-data /></rollcall-vote>";
+    Deque<Map<String, Object>> out = new ArrayDeque<Map<String, Object>>();
+    MemberRollCallVotesProvider.parseHouse(in(vacated), "u", 2015, 114, 1, 300, out);
+    assertTrue(out.isEmpty());
   }
 
   @Test void congressFollowsCalendarYear() {
