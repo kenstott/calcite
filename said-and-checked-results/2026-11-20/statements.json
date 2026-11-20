@@ -8487,16 +8487,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Rockefeller (born June 18, 1937) died on Nov. 5, 2026 at age 89, per an obituary or official notice. False if the date or age differs.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The AP obituary dated Nov. 6, 2026 says Rockefeller died at 89 on Thursday night, which was Nov. 5.",
+      "evidence": [
+        {
+          "label": "AP obituary via MPR News, Nov. 6, 2026",
+          "url": "https://www.mprnews.org/story/2026/11/06/jay-rockefeller-former-west-virginia-governor-us-senator-part-of-a-dynasty-dies-at-89"
+        }
+      ],
+      "check_run": "q253/askamerica/2026-11-20"
     },
     {
       "id": 224,
@@ -8521,16 +8526,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill record shows Rockefeller as a sponsor or cosponsor of the legislation creating CHIP or its precursor bills, or official accounts credit him as a coauthor. Unsettled if he is credited only as a supporter.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The introduced text of S. 525 (1997), the Hatch-Kennedy child health insurance bill that preceded CHIP's enactment in the Balanced Budget Act, lists Rockefeller among its original cosponsors.",
+      "evidence": [
+        {
+          "label": "S. 525 (105th Congress), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-105s525is/html/BILLS-105s525is.htm"
+        }
+      ],
+      "check_run": "q253/askamerica/2026-11-20"
     },
     {
       "id": 225,
@@ -8585,16 +8595,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the text of Garland's Oct. 4, 2021 memorandum cites no specific incident of harassment or threats. False if the memo cites a specific incident.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "NPR's account of the one-page memo describes a general rise in threats with no specific incident, and a Nov. 3, 2021 House Republican letter says it gave no supporting examples; the memo itself could not be read directly.",
+      "evidence": [
+        {
+          "label": "NPR, Oct. 5, 2021, on the Garland memo",
+          "url": "https://www.npr.org/2021/10/05/1043373383/merrick-garland-school-threats-coronavirus"
+        },
+        {
+          "label": "House Oversight Republicans' letter to DOJ, Nov. 3, 2021",
+          "url": "https://oversight.house.gov/wp-content/uploads/2021/11/Letter-to-DOJ-re-School-Board-Memo-11-03-2021.pdf"
+        }
+      ],
+      "check_run": "q254/askamerica/2026-11-20"
     },
     {
       "id": 227,
@@ -8617,16 +8636,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if records show the National School Boards Association asked the administration for federal action before the memo was issued. Unsettled if the link between the letter and the memo is disputed in the record.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "NPR and House Republicans' letter describe the association's Sept. 29, 2021 letter to President Biden asking for federal help against threats to school officials, five days before the Oct. 4 memo. The DOJ report Grassley cited was not read, and \"weaponized\" was not assessed.",
+      "evidence": [
+        {
+          "label": "NPR, Oct. 5, 2021, on the Garland memo",
+          "url": "https://www.npr.org/2021/10/05/1043373383/merrick-garland-school-threats-coronavirus"
+        },
+        {
+          "label": "House Oversight Republicans' letter to DOJ, Nov. 3, 2021",
+          "url": "https://oversight.house.gov/wp-content/uploads/2021/11/Letter-to-DOJ-re-School-Board-Memo-11-03-2021.pdf"
+        }
+      ],
+      "check_run": "q254/askamerica/2026-11-20"
     },
     {
       "id": 228,
@@ -8649,16 +8677,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the senators' letter to Garland of about Oct. 7, 2021 was signed only by Republicans. False if any Democrat signed it.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Fox News and the Washington Examiner reported that the Oct. 7, 2021 letter came from the Senate Judiciary Committee's Republican members led by Grassley, with no Democratic signer mentioned; the letter itself could not be read.",
+      "evidence": [
+        {
+          "label": "Fox News, on the Senate Republicans' letter to Garland",
+          "url": "https://www.foxnews.com/politics/gop-senators-push-back-doj-policing-speech-of-citizens-garland.amp"
+        }
+      ],
+      "check_run": "q254/askamerica/2026-11-20"
     },
     {
       "id": 229,
