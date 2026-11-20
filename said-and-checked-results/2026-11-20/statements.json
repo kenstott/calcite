@@ -12981,16 +12981,27 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Social Security Act and CRS or MACPAC describe the IMD exclusion as dating from 1965 and the 16-bed definition as added in 1988. False if the dates differ.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "42 U.S.C. 1396d(i), in AskAmerica's U.S. Code table, defines an institution for mental diseases as one of more than 16 beds, and MACPAC dates the exclusion to Medicaid's creation in 1965 and the 16-bed threshold to 1988.",
+      "evidence": [
+        {
+          "label": "law.usc_subsections (42 U.S.C. 1396d(i))",
+          "url": "https://askamerica.ai/catalog/schemas/law/#usc_subsections-table",
+          "askamerica": true,
+          "sql": "SELECT citation, unit_text FROM law.usc_subsections WHERE title_number='42' AND section_number='1396d' AND unit_text ILIKE '%institution for mental diseases%means%' FETCH FIRST 3 ROWS ONLY"
+        },
+        {
+          "label": "MACPAC, The Medicaid IMD Exclusion",
+          "url": "https://www.macpac.gov/wp-content/uploads/2016/03/The-Medicaid-Institution-for-Mental-Diseases-IMD-Exclusion.pdf"
+        }
+      ],
+      "check_run": "q283/askamerica/2026-11-20"
     },
     {
       "id": 345,
@@ -13013,16 +13024,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if MACPAC, SAMHSA or CRS data show under 8% of psychiatric hospitals with 16 or fewer beds. Unsupported if no such figure is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "CMS's provider file in AskAmerica's warehouse lists 1,425 psychiatric hospitals, of which 100 (7.0%) have 16 or fewer certified beds; this is a CMS count rather than a MACPAC or SAMHSA figure, and the file may include closed providers.",
+      "evidence": [
+        {
+          "label": "health.cms_pos_facilities (psychiatric hospitals by certified beds)",
+          "url": "https://askamerica.ai/catalog/schemas/health/#cms_pos_facilities-table",
+          "askamerica": true,
+          "sql": "SELECT COUNT(*) n, SUM(CASE WHEN bed_count<=16 THEN 1 ELSE 0 END) le16, SUM(CASE WHEN bed_count>0 THEN 1 ELSE 0 END) pos, SUM(CASE WHEN bed_count BETWEEN 1 AND 16 THEN 1 ELSE 0 END) between1_16 FROM health.cms_pos_facilities WHERE provider_category_code='01' AND provider_subtype_code='04'"
+        }
+      ],
+      "check_run": "q283/askamerica/2026-11-20"
     },
     {
       "id": 346,
@@ -13045,16 +13063,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if SAMHSA, MACPAC or KFF data state Medicaid is the largest single payer of mental health services. Unsettled if the source says largest payer of behavioral health including substance use, or ranks Medicaid near private insurance.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "MACPAC calls Medicaid the single largest payer for behavioral health services, including mental health and substance use, at 26% of such spending in 2009, a broader category than mental health alone.",
+      "evidence": [
+        {
+          "label": "MACPAC, Behavioral Health in the Medicaid Program",
+          "url": "https://www.macpac.gov/publication/behavioral-health-in-the-medicaid-program%e2%80%95people-use-and-expenditures"
+        }
+      ],
+      "check_run": "q283/askamerica/2026-11-20"
     },
     {
       "id": 347,
@@ -13077,16 +13100,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Treatment Advocacy Center's 2016 report shows state psychiatric beds at about 11.7 per 100,000 in 2016, down more than 96% per capita from the 1955 peak. False if the figures differ materially.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Treatment Advocacy Center's 2016 report gives 11.7 state hospital beds per 100,000 people in 2016 against 337 in 1955, a drop of about 96.5%.",
+      "evidence": [
+        {
+          "label": "Treatment Advocacy Center, Going, Going, Gone (2016)",
+          "url": "https://www.treatmentadvocacycenter.org/wp-content/uploads/2023/11/Going-Going-Gone.pdf"
+        }
+      ],
+      "check_run": "q283/askamerica/2026-11-20"
     },
     {
       "id": 348,
