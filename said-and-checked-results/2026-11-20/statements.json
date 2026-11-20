@@ -11606,16 +11606,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a published estimate of the permitting bill projects household electricity savings of many hundreds of dollars a year. Unsettled if published estimates are smaller or cover different measures. Unsupported if none found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Rhodium Group's November 2026 analysis estimates average household electricity bills falling $41 to $66 a year by 2035, or $196 to $334 cumulatively through 2035; no estimate of hundreds of dollars a year was found.",
+      "evidence": [
+        {
+          "label": "Rhodium Group, permitting reform and residential electricity bills (Nov. 2026)",
+          "url": "https://rhg.com/wp-content/uploads/2026/11/The-Impact-of-Permitting-Reform-on-State-level-Residential-Electricity-Prices-and-Bills.pdf"
+        }
+      ],
+      "check_run": "q274/askamerica/2026-11-20"
     },
     {
       "id": 308,
@@ -11638,16 +11643,23 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Treasury data show federal deficits of about $2 trillion in recent fiscal years (FY2024-FY2026). False if materially different. Unsettled if only some recent years are near $2 trillion.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Treasury data in AskAmerica's warehouse show deficits of $1.83 trillion in fiscal 2024, $1.78 trillion in fiscal 2025 and $1.99 trillion in fiscal 2026.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (receipts and outlays, FY2024-FY2026)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_fiscal_year, record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date IN ('2024-09-30','2025-09-30','2026-09-30') AND (line_code_nbr IN ('340') OR classification_desc ILIKE '%total%') ORDER BY record_date, line_code_nbr"
+        }
+      ],
+      "check_run": "q274/askamerica/2026-11-20"
     },
     {
       "id": 309,
@@ -11670,7 +11682,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill text contains only one provision amending or referencing the Clean Air Act and the record shows Sen. Merkley authored it. Contradicted if the text contains more than one. Unsettled if authorship cannot be confirmed.",
       "premise": null,
       "counter_statements": [
         315
@@ -11678,10 +11690,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The introduced text of S. 5653 has one Clean Air Act reference, in a list of applicable laws, with no indication of authorship; a C2ES summary describes a managers' amendment section amending the Clean Air Act for prescribed fires, which would be a second, but the Senate-passed text could not be read.",
+      "evidence": [
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        },
+        {
+          "label": "C2ES, section-by-section summary of the managers' amendment",
+          "url": "https://www.c2es.org/wp-content/uploads/2026/10/Permitting-section-by-section-summary-Managers-Amendement.pdf"
+        }
+      ],
+      "check_run": "q274/askamerica/2026-11-20"
     },
     {
       "id": 310,
@@ -12390,7 +12411,7 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "Legal reading of what the bill says about data centers and the Clean Air Act. True if the bill contains no exemption of data centers from Clean Air Act requirements. Contradicted if it exempts them or their power sources. Unsettled if it turns on how a provision is read.",
       "premise": null,
       "counter_statements": [
         315
@@ -12398,10 +12419,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "No Clean Air Act exemption for data centers appears in the introduced text of S. 5653, but the Senate-passed text with the managers' amendment could not be read, and whether data centers remain \"unequivocally\" covered is a legal reading.",
+      "evidence": [
+        {
+          "label": "S. 5653 (119th), introduced text",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        }
+      ],
+      "check_run": "q274/askamerica/2026-11-20"
     },
     {
       "id": 332,
