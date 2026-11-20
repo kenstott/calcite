@@ -878,4 +878,33 @@ class ExternalCheckGateTest {
                 page("Deaths fell 2.5% to 16,750 from 17,175 in the first half.")));
         assertNull(articleTextGate(claims, copy));
     }
+
+    /** Daily eval q137 (2026-11-20): msn.com returned empty text and a headline-only claim
+     *  passed against another outlet's coverage of the same event. */
+    @Test void figurelessClaimsNeedACopyOfTheSameStoryNotJustTheEvent() throws Exception {
+        String article = "https://www.msn.com/en-us/news/politics/dan-patrick-tells-texas-gop"
+            + "-convention-twelve-million-moved/ar-AA1abc";
+        Method m = McpServer.class.getDeclaredMethod("enforceArticleTextRead",
+            JsonNode.class, String.class, String.class);
+        m.setAccessible(true);
+        String copy = "https://www.fox7austin.com/news/patrick-convention";
+        String headlineOnly = "[{\"assertion\":\"Dan Patrick tells Texas GOP convention twelve "
+            + "million moved\",\"verdict\":\"unsupported\"}]";
+        String body = "[{\"assertion\":\"Migrants arrived from blue states over two decades\","
+            + "\"verdict\":\"unsupported\"}]";
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
+            java.util.Collections.singletonList(page("Dan Patrick tells Texas GOP convention "
+                + "twelve million moved to Texas.")));
+        String refused = (String) m.invoke(null, MAPPER.readTree(headlineOnly), article, copy);
+        assertNotNull(refused);
+        assertTrue(refused.contains("restates its headline"), refused);
+
+        assertNull(m.invoke(null, MAPPER.readTree(body), article, copy));
+
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
+            java.util.Collections.singletonList(page("Texas rents rose last year.")));
+        String other = (String) m.invoke(null, MAPPER.readTree(body), article, copy);
+        assertNotNull(other);
+        assertTrue(other.contains("different story"), other);
+    }
 }

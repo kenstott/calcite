@@ -8383,10 +8383,10 @@ public class McpServer {
                 centralFigures.addAll(f);
             }
         }
-        if (figures.isEmpty()) {
-            return null;
-        }
         String text = String.join("\n", FETCHED_TEXT.get(copy));
+        if (figures.isEmpty()) {
+            return enforceFigurelessCopy(claims, articleUrl, copyUrl, text);
+        }
         java.util.List<String> missing = new java.util.ArrayList<>();
         for (String f : figures) {
             if (!text.contains(f)) {
@@ -8406,6 +8406,67 @@ public class McpServer {
             + ", so it is not a copy of the story the claims came from. A copy carries the "
             + "central claim's figures and most of the others. Find one that does, web_fetch it, "
             + "extract the claims from its text and name it.";
+    }
+
+    /** Fraction of the article's headline words its copy must carry when the claims hold no figure. */
+    private static final double HEADLINE_COPY_SHARE = 0.6;
+
+    /** Headline words: the last non-identifier path segment of the article URL, split on hyphens. */
+    private static java.util.Set<String> headlineWords(String articleUrl) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        String path = articleUrl.replaceFirst("^[a-z]+://[^/]+", "").replaceAll("[?#].*$", "");
+        String slug = "";
+        for (String seg : path.split("/")) {
+            if (seg.matches("[A-Za-z0-9]+(?:-[A-Za-z0-9]+){2,}") && !seg.matches("ar-[A-Za-z0-9]+")) {
+                slug = seg;
+            }
+        }
+        for (String w : slug.toLowerCase(java.util.Locale.ROOT).split("-")) {
+            if (w.length() >= 4 && !CLAIM_STOPWORDS.contains(w)) {
+                out.add(w);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * With no distinctive figure to match, a copy proves it is the same story only by carrying the
+     * article's headline words, and a claim set that restates nothing beyond the headline shows no
+     * claim was read from the article's body.
+     */
+    private static String enforceFigurelessCopy(JsonNode claims, String articleUrl,
+            String copyUrl, String copyText) {
+        java.util.Set<String> headline = headlineWords(articleUrl);
+        if (headline.size() < 3) {
+            return "validation refused: the article " + articleUrl + " did not load and its claims "
+                + "carry no figure, and the URL gives no headline to check `article_copy_url` "
+                + "against. web_search the headline in quotes or the original outlet, web_fetch "
+                + "that page, and extract claims that carry figures from its body.";
+        }
+        java.util.Set<String> claimWords = new java.util.LinkedHashSet<>();
+        for (JsonNode c : claims) {
+            claimWords.addAll(claimWords(c.path("assertion").asText("")));
+        }
+        if (headline.containsAll(claimWords)) {
+            return "validation refused: the article " + articleUrl + " did not load and every "
+                + "claim only restates its headline, so nothing was read from the article's body. "
+                + "web_search the headline in quotes or the original outlet (a syndicated page "
+                + "names its partner), web_fetch the full text and grade the claims in its body.";
+        }
+        String lower = copyText.toLowerCase(java.util.Locale.ROOT);
+        int shared = 0;
+        for (String w : headline) {
+            if (lower.contains(w)) {
+                shared++;
+            }
+        }
+        if (shared < HEADLINE_COPY_SHARE * headline.size()) {
+            return "validation refused: `article_copy_url` " + copyUrl + " carries " + shared
+                + " of the article headline's " + headline.size() + " words (" + headline
+                + "), so it is a different story, not a copy. web_search the headline in quotes "
+                + "or the original outlet, web_fetch it and name it.";
+        }
+        return null;
     }
 
     /** Verdicts that say the claim is wrong or could not be confirmed. */
