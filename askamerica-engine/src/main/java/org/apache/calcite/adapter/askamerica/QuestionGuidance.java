@@ -369,8 +369,10 @@ final class QuestionGuidance {
         + "is the cheapest check available and it catches the largest errors, including "
         + "ones in this connector's own data you would otherwise have no way to detect.\n\n"
         + "Fetch every URL with web_fetch first. Only when web_fetch reports HTTP 401, 403, "
-        + "429 or 451 for a primary source, retry that same URL once with the client's own "
-        + "WebFetch/Fetch tool before grading anything 'unsupported'.",
+        + "429 or 451 for a primary source, find the same document at another primary source "
+        + "(the publisher's mirror or data file, govinfo.gov for congress.gov bill text, the "
+        + "agency's report PDF, the dataset's API) and fetch that before grading anything "
+        + "'unsupported'. A summarizing fetch tool's paraphrase is not the primary text.",
 
         "AskAmerica usage guide 6/9 — ASKING WELL, worked rewrites (vague question -> "
         + "sharpened question -> why), part 1/2. Apply the same move to the user's "
