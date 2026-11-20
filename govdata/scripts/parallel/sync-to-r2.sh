@@ -252,21 +252,27 @@ _is_always_synced() {
   return 1
 }
 
-# _probe_iceberg_live <schema> <dir> → 0 when <schema>/<dir>/metadata/ holds a *.metadata.json, 1 when it does
-# not (no such prefix, or no metadata file in it), 75 when the probe failed or timed out. One flat prefix
-# listing of metadata/ filtered server-side-key to *.metadata.json, never a listing of the folder itself, so a
-# legacy folder with millions of children costs one probe and a table with thousands of manifests prints only
-# its metadata.json names.
+# _probe_iceberg_live <schema> <dir> → 0 when <schema>/<dir> is an Iceberg table, 1 when it is not, 75 when the
+# probe failed or timed out. A Hadoop-catalog table publishes metadata/version-hint.text, so the first check is a
+# read of that single key (rclone cat; a missing key prints nothing): its cost does not depend on how many files metadata/ holds. A folder without a hint
+# falls back to a listing of metadata/ that stops at the first *.metadata.json (grep -m1 closes the pipe and
+# rclone ends on SIGPIPE), so a folder with hundreds of thousands of orphaned files is not listed in full.
 _probe_iceberg_live() {
-  local out rc=0
-  out=$(timeout --kill-after=10 "$LIST_MAX" rclone lsf --timeout "$LIST_MAX" --files-only --max-depth 1 \
-    --include '*.metadata.json' "${MINIO_REMOTE}:${BUCKETS[0]}/$1/$2/metadata/" 2>/dev/null) || rc=$?
-  if [ "$rc" -eq 3 ]; then return 1; fi   # rclone: directory not found
-  if [ "$rc" -ne 0 ]; then
-    log_error "sync-to-r2: [$1/$2] Iceberg probe failed or exceeded ${LIST_MAX} (rc=$rc)"
-    return 75
-  fi
-  grep -q '\.metadata\.json$' <<< "$out"
+  local m="${MINIO_REMOTE}:${BUCKETS[0]}/$1/$2/metadata" out rc=0 st
+  out=$(timeout --kill-after=10 "$LIST_MAX" rclone cat --timeout "$LIST_MAX" "$m/version-hint.text" 2>/dev/null) || rc=$?
+  case "$rc" in
+    0) if grep -qE '^[0-9]+$' <<< "$out"; then return 0; fi ;;
+    3|4) ;;   # rclone: directory or file not found
+    *) log_error "sync-to-r2: [$1/$2] Iceberg probe failed or exceeded ${LIST_MAX} (rc=$rc)"; return 75 ;;
+  esac
+  timeout --kill-after=10 "$LIST_MAX" rclone lsf --timeout "$LIST_MAX" --files-only --max-depth 1 "$m/" 2>/dev/null \
+    | grep -q -m1 '\.metadata\.json$'
+  st=("${PIPESTATUS[@]}")
+  if [ "${st[1]}" -eq 0 ]; then return 0; fi
+  case "${st[0]}" in
+    0|3) return 1 ;;
+    *) log_error "sync-to-r2: [$1/$2] Iceberg probe failed or exceeded ${LIST_MAX} (rc=${st[0]})"; return 75 ;;
+  esac
 }
 
 # _probe_iceberg <schema> <dir> → _probe_iceberg_live, cached per folder in STATE_DIR/.iceberg-<schema>-<dir>

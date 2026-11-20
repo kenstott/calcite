@@ -12,7 +12,7 @@ mkdir -p "$R/econ/gdp/metadata" "$R/econ/nohint/metadata" "$R/econ/legacy/acc1" 
          "$R/econ/emptymeta/metadata" "$R/econ/type=qcew_bulk/year=2020" "$R/ref/vectorized_chunk_codes" \
          "$R/ref/calendar/metadata" "$R/sec/year=2020" "$R/sec/filing/metadata" \
          "$R/econ/vectorized_chunk_codes" "$R/telemetry/metadata"
-: > "$R/econ/gdp/metadata/v3.metadata.json"; : > "$R/econ/gdp/metadata/version-hint.text"
+: > "$R/econ/gdp/metadata/v3.metadata.json"; echo 3 > "$R/econ/gdp/metadata/version-hint.text"
 : > "$R/econ/nohint/metadata/v1.metadata.json"
 : > "$R/econ/emptymeta/metadata/snap-1.avro"
 : > "$R/sec/filing/metadata/v1.metadata.json"
@@ -23,9 +23,11 @@ mkdir -p "$T/bin"
 cat > "$T/bin/rclone" <<'STUB'
 #!/bin/bash
 for a in "$@"; do p="$a"; done
+if [ "$1" = cat ]; then d="$STUB_ROOT/${p#*:*/}"; echo "$d" >> "$STUB_LOG"; [ -n "${STUB_FAIL:-}" ] && [[ "$d" == *"$STUB_FAIL"* ]] && exit 1; [ -f "$d" ] && cat "$d"; exit 0; fi
 d="$STUB_ROOT/${p#*:*/}"; d="${d%/}"
 echo "$d" >> "$STUB_LOG"
 [ -n "${STUB_FAIL:-}" ] && [[ "$d" == *"$STUB_FAIL"* ]] && exit 1
+if [ -f "$d" ]; then basename "$d"; exit 0; fi
 [ -d "$d" ] || exit 3
 for e in "$d"/*; do [ -e "$e" ] || continue; if [ -d "$e" ]; then echo "$(basename "$e")/"; else basename "$e"; fi; done
 STUB
@@ -69,6 +71,7 @@ ALWAYS_SYNC="*/vectorized_chunk_codes telemetry/*"
 
 STUB_FAIL="/econ/nohint/metadata" _classify_schema econ 2>"$T/err"; rc=$?
 ok "a failing probe fails the classification"          '[ "$rc" -eq 75 ]'
+ok "a hinted table is decided by one lookup of the hint" '! grep -q "/econ/gdp/metadata$" "$T/calls" && grep -q "/econ/gdp/metadata/version-hint.text" "$T/calls"'
 ok "a failed probe is logged"                          'grep -q "Iceberg probe failed" "$T/err"'
 ok "a failed probe skips nothing"                      '! _is_excluded econ legacy'
 STUB_FAIL="/sec" _classify_schema sec 2>/dev/null; rc=$?
