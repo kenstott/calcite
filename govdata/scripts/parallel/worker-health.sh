@@ -82,6 +82,7 @@ run_health_model() {
   local extra_operands="${1:-}"
 
   local enabled_tables
+  table_csv="$(drop_tables_unknown_to_jar health "$table_csv")" || return 1
   enabled_tables="$(filter_enabled_tables "$table_csv")"
   if [ -z "$enabled_tables" ]; then
     log_info "$WORKER_ID: skipping $model_name — none of its tables match GOVDATA_TABLES=${GOVDATA_TABLES}"

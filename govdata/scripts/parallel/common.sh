@@ -1979,6 +1979,35 @@ unassigned_schema_tables() {
   echo "${unassigned%,}"
 }
 
+# Drops from a hand-maintained group's table list every table the running jar's bundled schema
+# YAML does not declare, and logs a WARNING naming each. A table merged to main after the staged
+# jar was built is in the checkout's groups but not in the jar; passing it through makes
+# GovDataSubSchemaFactory.applyEnabledTablesFilter throw and stops every table of the schema for
+# the day (govdata-ops#1379). The skip is reported, and the table runs once the next jar carries
+# it. A table named explicitly in GOVDATA_TABLES is kept, so a deliberate request for a name the
+# jar lacks still fails loudly there (the stale-jar guard from govdata-ops#719).
+#
+# Usage: group_csv=$(drop_tables_unknown_to_jar <schema> "t1,t2,t3")
+drop_tables_unknown_to_jar() {
+  local schema="$1" group_csv="$2" jar_tables _t out=""
+  jar_tables=",$(schema_tables "$schema" all),"
+  [ "$jar_tables" != ",," ] || return 1
+  IFS=',' read -ra _grp <<< "$group_csv"
+  for _t in "${_grp[@]}"; do
+    _t="$(echo "$_t" | xargs)"
+    [ -n "$_t" ] || continue
+    case "$jar_tables" in
+      *",${_t},"*) out="${out}${_t}," ;;
+      *)
+        case ",${GOVDATA_TABLES:-}," in
+          *",${_t},"*) out="${out}${_t}," ;;
+          *) echo "WARNING: ${schema} table ${_t} is not in the staged jar's schema YAML (jar predates its merge); skipping it this run" >&2 ;;
+        esac ;;
+    esac
+  done
+  echo "${out%,}"
+}
+
 #
 # Usage: filtered=$(filter_enabled_tables "table1,table2,table3")
 #   Echoes a JSON-array-ready, double-quoted, comma-separated list for the group. With
