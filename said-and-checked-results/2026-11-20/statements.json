@@ -9057,16 +9057,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Congress has enacted an NDAA every year for 65-66 consecutive years (since FY1962). False if the official count differs materially.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "supported",
+      "finding": "Search summaries of coverage of the fiscal 2026 NDAA's signing on Dec. 18, 2025 describe it as the 65th consecutive annual NDAA, within the test's range; a 66th would require the fiscal 2027 bill, which had not been enacted. No CRS or committee page was read.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q256/askamerica/2026-11-20"
     },
     {
       "id": 240,
@@ -9089,16 +9089,29 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Senate record shows a failed cloture vote or a Schumer objection on proceeding to the FY2027 NDAA, with Democrats led by Schumer opposing. Unsettled if the record shows a failed vote but the \"blocked\" attribution is a characterization. Contradicted if no blocking vote or objection occurred.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's records show cloture on the motion to proceed to the fiscal 2027 NDAA (S. 4784) failed 50-46 on July 14, 2026, with all voting Democrats and independents, including Schumer, voting no; no later Senate action on the bill is recorded.",
+      "evidence": [
+        {
+          "label": "law.bill_actions (S. 4784, FY2027 NDAA)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+          "askamerica": true,
+          "sql": "SELECT action_seq, action_date, text FROM law.bill_actions WHERE congress=119 AND bill_type='s' AND bill_number=4784 ORDER BY action_seq"
+        },
+        {
+          "label": "law.member_roll_call_votes (Senate roll call 195, 2026, by party)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#member_roll_call_votes-table",
+          "askamerica": true,
+          "sql": "SELECT party, vote_cast, COUNT(*) n FROM law.member_roll_call_votes WHERE \"year\"=2026 AND roll_number=195 AND chamber='Senate' GROUP BY party, vote_cast ORDER BY party, vote_cast"
+        }
+      ],
+      "check_run": "q256/askamerica/2026-11-20"
     },
     {
       "id": 241,
@@ -9121,16 +9134,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Armed Services Committee or Congressional Record description of the FY2027 NDAA managers' package lists about 38 Republican, 38 Democratic and 10 bipartisan amendments. Unsupported if no such count is published.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No published count of the managers' package amendments by party was found; the search covered the warehouse bill records and web searches, and no committee description of the package was located.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q256/askamerica/2026-11-20"
     },
     {
       "id": 242,
@@ -9153,16 +9166,16 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a committee or subcommittee document states 184 Senator requests addressed. Unsupported if no such count is found.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No committee or subcommittee document stating 184 Senator requests was found; the search covered the warehouse and web searches.",
       "evidence": [],
-      "check_run": null
+      "check_run": "q256/askamerica/2026-11-20"
     },
     {
       "id": 243,
@@ -9185,16 +9198,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official U.S. assessments state that the U.S. faces, for the first time, two nuclear peer or near-peer competitors. Unsettled if official sources call China a near-peer or say it will become a peer, rather than a current peer.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The 2023 congressional Strategic Posture Commission report says the U.S. will face two nuclear peer adversaries for the first time in 2027-2035 and is on the cusp of it, calling Russia a peer and China advancing toward peer status, a future rather than present finding.",
+      "evidence": [
+        {
+          "label": "Strategic Posture Commission report, 2023 (Senate copy)",
+          "url": "https://www.wicker.senate.gov/services/files/8F9BE603-032B-4B21-82D8-8E9A62A751C8"
+        }
+      ],
+      "check_run": "q257/askamerica/2026-11-20"
     },
     {
       "id": 244,
@@ -9217,16 +9235,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official U.S. or authoritative sources say Russia has modernized most of its strategic nuclear forces. Unsettled if figures cover only strategic forces or vary.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "President Putin said in February 2024 that 95% of Russia's strategic nuclear forces had been modernized, as reported by Reuters; no U.S. government figure was found, and the claim covers strategic forces only.",
+      "evidence": [
+        {
+          "label": "Reuters via The Star, Feb. 23, 2024, on Putin's modernization claim",
+          "url": "https://www.thestar.com.my/news/world/2024/02/23/putin-says-95-of-russia039s-nuclear-forces-have-been-modernised"
+        }
+      ],
+      "check_run": "q257/askamerica/2026-11-20"
     },
     {
       "id": 245,
@@ -9249,16 +9272,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if DoD's China Military Power Reports show China's warhead count growing quickly and exceeding earlier DoD projections. Unsettled if growth is documented but exceeding estimates is not.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "DoD's 2024 China Military Power Report says China surpassed 600 operational nuclear warheads by mid-2024, expects more than 1,000 by 2030, and says its stockpile is on track to exceed previous projections. \"Breathtaking\" was not assessed.",
+      "evidence": [
+        {
+          "label": "DoD, Military and Security Developments Involving the PRC 2024",
+          "url": "https://media.defense.gov/2024/Dec/18/2003615520/-1/-1/0/MILITARY-AND-SECURITY-DEVELOPMENTS-INVOLVING-THE-PEOPLES-REPUBLIC-OF-CHINA-2024.PDF"
+        }
+      ],
+      "check_run": "q257/askamerica/2026-11-20"
     },
     {
       "id": 246,
@@ -9281,16 +9309,25 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official U.S. statements say Russia is developing a satellite carrying a nuclear weapon or nuclear device. Unsettled if officials describe it only as a capability or concern without confirming development.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The White House said in February 2024 that Russia is developing an anti-satellite capability in space, but declined to say whether it is nuclear, as reported by PBS; the U.S. statements to the UN Security Council could not be read.",
+      "evidence": [
+        {
+          "label": "PBS NewsHour, Feb. 2024, on the White House statement",
+          "url": "https://www.pbs.org/newshour/politics/russia-has-obtained-troubling-capability-for-anti-satellite-space-weapon-white-house-says"
+        },
+        {
+          "label": "SpacePolicyOnline, on Russia's space weapon program",
+          "url": "https://www.spacepolicyonline.com/?p=68807"
+        }
+      ],
+      "check_run": "q257/askamerica/2026-11-20"
     },
     {
       "id": 247,
@@ -9313,16 +9350,31 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the bill she refers to was included in the FY2025 NDAA and that NDAA's Senate final passage vote was 85-14. False if the Senate vote differs materially. Unsettled if the inclusion of her bill cannot be confirmed.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's roll-call records show the Senate passed the fiscal 2025 NDAA (H.R. 5009) 85-14 on Dec. 18, 2024. Fischer's press release says it included key elements of her Restoring American Deterrence Act, and the enacted law carries its missile-defense architecture provision in Sec. 1655, though only in part.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 5009, FY2025 NDAA)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT b.bill_number, b.title, v.action_date, v.action_text, v.url FROM law.bills b JOIN law.bill_recorded_votes v ON v.congress=b.congress AND v.bill_type=b.bill_type AND v.bill_number=b.bill_number WHERE b.congress=118 AND b.bill_type='hr' AND b.bill_number=5009 ORDER BY v.action_date"
+        },
+        {
+          "label": "P.L. 118-159 (FY2025 NDAA)",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-118publ159/html/PLAW-118publ159.htm"
+        },
+        {
+          "label": "Sen. Fischer press release, Dec. 2024",
+          "url": "https://www.fischer.senate.gov/public/index.cfm/2024/12/defense-bill-including-fischer-wins-heads-to-president"
+        }
+      ],
+      "check_run": "q258/askamerica/2026-11-20"
     },
     {
       "id": 248,
@@ -9345,16 +9397,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official U.S. sources describe China's hypersonic program as leading and report China testing many times more often than the U.S. Unsettled if the ratio is reported differently or only by non-official sources.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "CRS report R45811 cites a 2018 statement by the Pentagon's research chief that China had conducted 20 times as many hypersonic tests as the U.S., but describes the U.S., Russia and China together as having the most advanced programs rather than calling China's the most advanced.",
+      "evidence": [
+        {
+          "label": "CRS R45811, Hypersonic Weapons (Aug. 2025)",
+          "url": "https://www.everycrsreport.com/files/2025-08-27_R45811_41dc1d17aff8254c390cc2827f5b7a9c24e3b780.html"
+        }
+      ],
+      "check_run": "q258/askamerica/2026-11-20"
     },
     {
       "id": 249,
@@ -9377,16 +9434,21 @@
         "note": ""
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the 2025 reconciliation law or FY2026 appropriations provided more than $24 billion for Golden Dome or missile defense. False if the amount is materially lower.",
       "premise": null,
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Section 20003 of Public Law 119-21 appropriates about $24.4 billion for integrated air and missile defense, including space-based interceptors and sensors, available through fiscal 2029; the law does not use the name Golden Dome.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 20003",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
+      "check_run": "q258/askamerica/2026-11-20"
     },
     {
       "id": 250,
