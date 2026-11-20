@@ -916,6 +916,77 @@ SELECT 'health', 'cdc_county_injury_mortality', 'T7_county_coverage',
 FROM (SELECT COUNT(DISTINCT geoid) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_injury_mortality', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_state_injury_mortality (data.cdc.gov Socrata fpsi-y8tj; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_injury_mortality', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true));
+
+-- T2: row_count (2,142 upstream at 2026-11-20: 51 states x 6 intents x 7 periods)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_injury_mortality', 'T2_row_count',
+  CASE WHEN n >= 2100 THEN 'pass' ELSE 'fail' END,
+  n, 2100, 'Expected ~2,142 rows (state x intent x period)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols (type is a constant discriminator)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_injury_mortality', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_injury_mortality', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL geoid, intent, period or year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true)
+      WHERE geoid IS NULL OR intent IS NULL OR period IS NULL OR year IS NULL);
+
+-- T7: state coverage (50 states + DC)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_injury_mortality', 'T7_state_coverage',
+  CASE WHEN n = 51 THEN 'pass' ELSE 'fail' END,
+  n, 51, 'Distinct state geoid values'
+FROM (SELECT COUNT(DISTINCT geoid) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true));
+
+-- T8: pk duplication (geoid, intent, period)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_injury_mortality', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (geoid, intent, period) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT geoid, intent, period FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true)
+  GROUP BY 1,2,3 HAVING COUNT(*) > 1));
+
+-- T9: expected value (California All_Homicide 2023 = 5.1, 2024 = 4.5 per 100,000, per CDC)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_state_injury_mortality', 'T9_ca_homicide_known_values',
+  CASE WHEN ABS(r23 - 5.1) < 0.05 AND ABS(r24 - 4.5) < 0.05 THEN 'pass' ELSE 'fail' END,
+  r24, 4.5, 'California All_Homicide rate 2023=5.1, 2024=4.5'
+FROM (SELECT MAX(CASE WHEN year = 2023 THEN rate END) AS r23,
+             MAX(CASE WHEN year = 2024 THEN rate END) AS r24
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_state_injury_mortality', allow_moved_paths := true)
+      WHERE name = 'California' AND intent = 'All_Homicide' AND period = CAST(year AS VARCHAR));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: cdc_nndss_weekly (data.cdc.gov Socrata; one paginated JSON artifact)
 -- ─────────────────────────────────────────────────────────────
 
