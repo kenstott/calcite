@@ -33,8 +33,10 @@ on:
           - linux-file-govdata
           - windows-file
           - linux-aarch64
+  # 'published', not 'created': publishing a draft fires only 'published' (#1419). A non-draft
+  # release fires both, so this covers it too; drafts made by CI are also dispatched explicitly.
   release:
-    types: [created]
+    types: [published]
 
 # One run per release at a time (queued, never cancelled). Two runs for one release (a manual
 # dispatch beside the automatic one, engine-v0.110.0; a tag pushed twice, engine-v0.110.1) uploaded
