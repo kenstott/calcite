@@ -23,3 +23,11 @@ patents.patent_publication_cpc
 transport.barge_lock_movements_monthly
 transport.barge_rates_weekly
 transport.usace_vessel_inventory
+census.acs_rent_burden_by_income
+econ.business_formation_statistics
+edu.edfacts_chronic_absenteeism
+energy.eia_plant_generation
+fiscal.foreign_assistance_by_country
+health.msha_coal_dust_samples
+health.msha_mnm_health_samples
+housing.cfpb_mortgage_performance
