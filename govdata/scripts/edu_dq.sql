@@ -53,6 +53,7 @@ FROM (
   UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_special_ed_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_el_enrollment',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'edfacts_chronic_absenteeism', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_loan_portfolio_status', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true) LIMIT 1)
@@ -105,6 +106,7 @@ FROM (
   UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
   UNION ALL SELECT 'district_special_ed_counts',           COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)  -- ~16,000-18,500 LEAs/year verified 2020-2024
   UNION ALL SELECT 'district_el_enrollment',              COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true)  -- ~17,700 LEAs/collection verified 2020-21 and 2021-22
+  UNION ALL SELECT 'edfacts_chronic_absenteeism',          COUNT(*), 100000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true)  -- ~390,000-475,000 rows per year (state + ~17,900 LEAs x subgroup x sex), 2020-2022
   UNION ALL SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true)  -- dqRowLimit=2000/(year,grade)
   UNION ALL SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)  -- ~44 rows verified live 2026-09-27
   UNION ALL SELECT 'fsa_loan_portfolio_status',            COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)  -- 4 portfolios x ~50 quarters x 7-8 statuses
@@ -135,6 +137,7 @@ SELECT 'library_outlets'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ
 SELECT 'f33_district_finance'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1;
 SELECT 'district_special_ed_counts' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1;
 SELECT 'district_el_enrollment'  AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true) LIMIT 1;
+SELECT 'edfacts_chronic_absenteeism' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true) LIMIT 1;
 SELECT 'district_assessments'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1;
 
 -- ============================================================
@@ -1468,6 +1471,70 @@ FROM (
     AND reporting_month = (SELECT MAX(reporting_month) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true))
   ORDER BY students DESC LIMIT 2
 ) WHERE country_name IN ('CHINA', 'INDIA');
+
+-- edfacts_chronic_absenteeism: no column may be entirely null. enrolled / percent_numerator /
+-- rate_pct are populated only on all-students rows, so they are non-null overall.
+INSERT INTO dq_results
+SELECT 'edu', 'edfacts_chronic_absenteeism', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year');
+
+-- edfacts_chronic_absenteeism PK: year, geo_level, state_name, leaid (district rows), subgroup_code, sex
+INSERT INTO dq_results
+SELECT 'edu', 'edfacts_chronic_absenteeism', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(
+    CASE WHEN year IS NULL OR geo_level IS NULL OR state_name IS NULL OR subgroup_code IS NULL
+       OR sex IS NULL OR (geo_level = 'district' AND leaid IS NULL)
+       OR (geo_level <> 'district' AND leaid IS NOT NULL)
+    THEN 1 ELSE 0 END
+  ) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true)
+);
+
+INSERT INTO dq_results
+SELECT 'edu', 'edfacts_chronic_absenteeism', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT year, geo_level, state_name, leaid, subgroup_code, sex
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true)
+  GROUP BY year, geo_level, state_name, leaid, subgroup_code, sex HAVING COUNT(*) > 1
+);
+
+-- edfacts_chronic_absenteeism: counts never negative, rate within 0-100, a rate never carried by
+-- a sex split, and a 7-digit LEA ID on every district row.
+INSERT INTO dq_results
+SELECT 'edu', 'edfacts_chronic_absenteeism', 'value_ranges',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(
+    CASE WHEN students_chronically_absent < 0 OR enrolled < 0 OR percent_numerator < 0
+       OR rate_pct < 0 OR rate_pct > 100
+       OR (rate_pct IS NOT NULL AND sex <> 'all')
+       OR (geo_level = 'district' AND length(leaid) <> 7)
+    THEN 1 ELSE 0 END
+  ) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true)
+);
+
+-- edfacts_chronic_absenteeism: 2022-23 national all-students rate is 27.8 percent (13,406,900 of
+-- 48,268,200) and Oregon's 2022-23 state rate is 43.8 percent, as published by ED Data Express
+-- (verified live 2026-11-21).
+INSERT INTO dq_results
+SELECT 'edu', 'edfacts_chronic_absenteeism', 'known_values',
+  CASE WHEN COUNT(*) = 2 THEN 'pass' ELSE 'fail' END,
+  CAST(COUNT(*) AS VARCHAR), '2', NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true)
+WHERE year = 2022 AND sex = 'all'
+  AND ((geo_level = 'national' AND enrolled = 48268200 AND percent_numerator = 13406900 AND rate_pct = 27.8)
+    OR (geo_level = 'state' AND state_name = 'OREGON' AND subgroup_code = 'ALLSEA' AND rate_pct = 43.8));
 
 -- ============================================================
 -- ALL RESULTS

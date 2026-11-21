@@ -3640,6 +3640,146 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # EDFACTS CHRONIC ABSENTEEISM — U.S. Department of Education, ED Data Express
+  # FS195 / DG814 (counts) and DG814PCT (percent), state + district + national
+  # ==========================================================================
+  - name: edfacts_chronic_absenteeism
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      Annual chronic absenteeism — students absent 10% or more of school days — by state and school
+      district (LEA), from the U.S. Department of Education EDFacts collection (file spec FS195,
+      data group DG814) as published by ED Data Express. year is the school year's starting
+      calendar year (2022 = 2022-23). One row per geography x subgroup x sex: geo_level is
+      'national' (one all-students row, state_name 'UNITED STATES'), 'state' (52 state-level
+      entities: 50 states, DC, Puerto Rico and the Bureau of Indian Education) or 'district'
+      (about 17,900 LEAs; leaid joins ccd_districts.leaid). subgroup is all students, seven
+      race/ethnicity groups, economically disadvantaged, homeless enrolled, English learner,
+      children with disabilities (IDEA) and Section 504 status; sex is 'all', 'female', 'male' or
+      'missing'. students_chronically_absent is the privacy-perturbed FS195 count. For the
+      all-students rows, enrolled is the October membership denominator, percent_numerator the
+      numerator ED used for the rate, and rate_pct = percent_numerator / enrolled x 100 rounded to
+      one decimal; these come from the separate DG814PCT files and can differ slightly from
+      students_chronically_absent. Source MISSING / S (suppressed) markers are null. Covers school
+      years 2020-21 through 2022-23, the three ED Data Express has published; later years are
+      added when published (2023-24 is not yet on the site). Unlike the biennial CRDC
+      (crdc_schools), this is an annual series; school-level rows exist in the source but are not
+      loaded. Verified 2026-11-21: 2022-23 national rate 27.8% (13,406,900 of 48,268,200).
+      Definitions vary by state (some count half days, some use a different absence threshold), so
+      state-to-state differences are partly definitional. Source: one zip per school year linked
+      from https://eddataexpress.ed.gov/resources/reports-and-files/chronic-absenteeism-data.
+
+    columns:
+      - name: year
+        type: int
+        nullable: false
+        comment: >
+          School year's starting calendar year (2022 = school year 2022-23) — PK component.
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: >
+          'national', 'state' or 'district' — PK component.
+      - name: state_name
+        type: string
+        nullable: false
+        comment: >
+          State name in capitals as ED prints it ('OREGON'); 'UNITED STATES' on the national row; includes DISTRICT OF COLUMBIA, PUERTO RICO and BUREAU OF INDIAN EDUCATION — PK component.
+      - name: leaid
+        type: string
+        nullable: true
+        comment: >
+          NCES LEA ID (7-digit string) on district rows, joins ccd_districts.leaid. Null on state and national rows — PK component.
+      - name: lea_name
+        type: string
+        nullable: true
+        comment: >
+          District name as reported to EDFacts. Null on state and national rows.
+      - name: subgroup_code
+        type: string
+        nullable: false
+        comment: >
+          EDFacts subgroup code (ALLSEA / ALLLEA / NOCODES = all students; AM7, AS7, BL7, HI7, MU7, PI7, WH7 race/ethnicity; ECODIS; HOM; LEP; WDIS; DISAB504STAT) — PK component.
+      - name: subgroup
+        type: string
+        nullable: false
+        comment: >
+          Label for subgroup_code, e.g. 'All students', 'Black or African American', 'Economically disadvantaged', 'English learner'.
+      - name: sex
+        type: string
+        nullable: false
+        comment: >
+          'all', 'female', 'male' or 'missing' (sex not recorded) — PK component. Percent columns exist only for 'all'.
+      - name: students_chronically_absent
+        type: long
+        nullable: true
+        comment: >
+          Unduplicated students absent 10% or more of school days (FS195 / DG814), aggregated from school level and privacy-perturbed (cells of 4 or fewer are shifted by one). Null when the source marks it MISSING.
+      - name: enrolled
+        type: long
+        nullable: true
+        comment: >
+          All-students rows only: October membership denominator from the DG814PCT file. Null on subgroup rows and where the percent file is suppressed.
+      - name: percent_numerator
+        type: long
+        nullable: true
+        comment: >
+          All-students rows only: chronically absent students as used in the percent calculation (DG814PCT); can differ slightly from students_chronically_absent.
+      - name: rate_pct
+        type: double
+        nullable: true
+        comment: >
+          All-students rows only: percent of enrolled students chronically absent, as ED publishes it (one decimal; ED recodes values above 100 to 100). 27.8 means 27.8%. Null when suppressed.
+
+    source:
+      type: http
+      # Nominal source; EdfactsChronicAbsenteeismProvider reads the page's per-year zip links
+      # (the zip file names embed publication dates) and parses the SEA / LEA CSVs.
+      url: "https://eddataexpress.ed.gov/resources/reports-and-files/chronic-absenteeism-data"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.edu.EdfactsChronicAbsenteeismProvider"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2020}"
+        minYear: 2020
+        maxYear: 2022         # latest school year ED Data Express has published (2022-23); bump when 2023-24 appears. The provider errors on a year with no zip, so a year not yet published must not be requested.
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+        valueSource:
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # DISTRICT ASSESSMENTS — NCES EDFacts state-assessment proficiency, district grain
   # Urban Institute API: school-districts/edfacts/assessments/{year}/{grade}/
   # ~14,000 LEAs per (year, grade); years 2009-2018 and 2020 only (source has
