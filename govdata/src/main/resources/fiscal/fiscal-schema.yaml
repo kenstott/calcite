@@ -2839,7 +2839,12 @@ partitionedTables:
       actually outlaid so far in a year. Amounts are cumulative from the start of the fiscal year
       (Oct-Sep) through fiscal_period; use fiscal_period 12 for the full-year figure. FY2017-FY2019
       carry quarterly periods (3, 6, 9, 12), FY2020 onward monthly (2-12); agencies that report
-      quarterly have rows only at periods 3, 6, 9 and 12. Unpublished periods
+      quarterly have rows only at periods 3, 6, 9 and 12. A federal account can be reported by
+      more than one agency in the same period (a monthly submission and a quarterly one, or a
+      different reporting_agency_name), and a split account carries one row per budget_subfunction,
+      so the row grain is year x fiscal_period x federal_account_symbol x owning_agency_name x
+      reporting_agency_name x budget_subfunction; sum across reporting_agency_name for an account
+      total. Unpublished periods
       of the current year are absent. Source: USAspending Account Balances (DATA Act File A),
       api.usaspending.gov/api/v2/download/accounts/, account_level=federal_account.
 
@@ -8638,7 +8643,7 @@ constraints:
     primaryKey: [year, agency_name]
 
   usaspending_account_balances:
-    primaryKey: [year, fiscal_period, federal_account_symbol]
+    primaryKey: [year, fiscal_period, federal_account_symbol, owning_agency_name, reporting_agency_name, budget_subfunction]
 
   usaspending_by_state:
     primaryKey: [year, state_abbr]
