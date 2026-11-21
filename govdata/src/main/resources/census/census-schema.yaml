@@ -3605,6 +3605,176 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS REAL ESTATE TAXES - Property taxes paid by owner-occupied households
+  # ---------------------------------------------------------------------------
+  - name: acs_real_estate_taxes
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Real estate (property) taxes paid by owner-occupied households from ACS 5-year
+      tables B25103 and B25102, at state and county levels. B25103 gives the median
+      annual real estate taxes in dollars for all units, for units with a mortgage and for
+      units without one, each with a 90% margin of error. B25102 gives the number of
+      owner-occupied units in each annual-tax band (under $800, $800-$1,499, $1,500-$1,999,
+      $2,000-$2,999, $3,000 or more, none paid), split by mortgage status. Use it for
+      the typical property tax bill and the share of homeowners above a given tax level.
+      Vintages 2011 onward (variable layout is identical across vintages; band thresholds
+      are fixed nominal dollars, so later vintages shift toward the top band with inflation).
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+
+      - name: median_real_estate_taxes
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25103_001E" AS BIGINT)'
+        comment: Median real estate taxes paid in dollars per year, all owner-occupied units (B25103 total)
+      - name: median_real_estate_taxes_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25103_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25103_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for median_real_estate_taxes (Census variable B25103_001M; negative sentinels normalized to null)
+      - name: median_real_estate_taxes_with_mortgage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25103_002E" AS BIGINT)'
+        comment: Median real estate taxes paid in dollars per year, units with a mortgage
+      - name: median_real_estate_taxes_with_mortgage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25103_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25103_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for median_real_estate_taxes_with_mortgage (Census variable B25103_002M; negative sentinels normalized to null)
+      - name: median_real_estate_taxes_without_mortgage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25103_003E" AS BIGINT)'
+        comment: Median real estate taxes paid in dollars per year, units without a mortgage
+      - name: median_real_estate_taxes_without_mortgage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25103_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25103_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for median_real_estate_taxes_without_mortgage (Census variable B25103_003M; negative sentinels normalized to null)
+      - name: owner_occupied_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_001E" AS BIGINT)'
+        comment: Owner-occupied housing units (B25102 total)
+      - name: owner_occupied_units_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25102_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B25102_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for owner_occupied_units (Census variable B25102_001M; negative sentinels normalized to null)
+      - name: units_with_mortgage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_002E" AS BIGINT)'
+        comment: Owner-occupied units with a mortgage
+      - name: units_without_mortgage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_009E" AS BIGINT)'
+        comment: Owner-occupied units without a mortgage (not mortgaged)
+      - name: with_mortgage_taxes_under_800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_003E" AS BIGINT)'
+        comment: Units with a mortgage paying Less than $800 in real estate taxes per year
+      - name: with_mortgage_taxes_800_1499
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_004E" AS BIGINT)'
+        comment: Units with a mortgage paying $800 to $1,499 in real estate taxes per year
+      - name: with_mortgage_taxes_1500_1999
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_005E" AS BIGINT)'
+        comment: Units with a mortgage paying $1,500 to $1,999 in real estate taxes per year
+      - name: with_mortgage_taxes_2000_2999
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_006E" AS BIGINT)'
+        comment: Units with a mortgage paying $2,000 to $2,999 in real estate taxes per year
+      - name: with_mortgage_taxes_3000_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_007E" AS BIGINT)'
+        comment: Units with a mortgage paying $3,000 or more in real estate taxes per year
+      - name: with_mortgage_taxes_none
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_008E" AS BIGINT)'
+        comment: Units with a mortgage paying no real estate taxes
+      - name: without_mortgage_taxes_under_800
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_010E" AS BIGINT)'
+        comment: Units without a mortgage paying Less than $800 in real estate taxes per year
+      - name: without_mortgage_taxes_800_1499
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_011E" AS BIGINT)'
+        comment: Units without a mortgage paying $800 to $1,499 in real estate taxes per year
+      - name: without_mortgage_taxes_1500_1999
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_012E" AS BIGINT)'
+        comment: Units without a mortgage paying $1,500 to $1,999 in real estate taxes per year
+      - name: without_mortgage_taxes_2000_2999
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_013E" AS BIGINT)'
+        comment: Units without a mortgage paying $2,000 to $2,999 in real estate taxes per year
+      - name: without_mortgage_taxes_3000_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_014E" AS BIGINT)'
+        comment: Units without a mortgage paying $3,000 or more in real estate taxes per year
+      - name: without_mortgage_taxes_none
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25102_015E" AS BIGINT)'
+        comment: Units without a mortgage paying no real estate taxes
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B25103_001E,B25103_002E,B25103_003E,B25103_001M,B25103_002M,B25103_003M,B25102_001E,B25102_001M,B25102_002E,B25102_003E,B25102_004E,B25102_005E,B25102_006E,B25102_007E,B25102_008E,B25102_009E,B25102_010E,B25102_011E,B25102_012E,B25102_013E,B25102_014E,B25102_015E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_real_estate_taxes
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS HOUSING TENURE BY AGE OF HOUSEHOLDER - Owner/renter counts by age band
   # ---------------------------------------------------------------------------
   - name: acs_housing_tenure_by_age

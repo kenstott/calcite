@@ -81,6 +81,7 @@ FROM (
   UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_mortgage_status',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',      allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'acs_real_estate_taxes',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true) LIMIT 1) t)
@@ -156,6 +157,7 @@ FROM (
   UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_mortgage_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',      allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'acs_real_estate_taxes',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_rent_burden_by_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_rent_burden_by_income', allow_moved_paths := true)), 3000
   UNION ALL SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)), 9000
@@ -220,6 +222,7 @@ SELECT 'acs_marital_status'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'acs_household_type'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_housing_tenure'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_mortgage_status'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',     allow_moved_paths := true) LIMIT 1;
+SELECT 'acs_real_estate_taxes'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_housing_tenure_by_age' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_housing_year_built_detail' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_income_distribution'AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution',allow_moved_paths := true) LIMIT 1;
@@ -277,6 +280,7 @@ INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_null_cols', '
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_mortgage_status', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'acs_real_estate_taxes', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure_by_age', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_housing_year_built_detail', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'geography');
 INSERT INTO dq_results SELECT 'census', 'acs_income_distribution', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)) WHERE null_percentage = 100.0;
@@ -345,6 +349,7 @@ INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_same_value', 
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_mortgage_status', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+INSERT INTO dq_results SELECT 'census', 'acs_real_estate_taxes', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_housing_tenure_by_age', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_housing_year_built_detail', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'year', 'geography');
 INSERT INTO dq_results SELECT 'census', 'acs_income_distribution', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
@@ -1067,6 +1072,22 @@ FROM (SELECT COUNT(*) AS hits
          OR (CAST(year AS INTEGER) = 2024 AND cd_fips = '3612' AND total_population = 719940
              AND median_household_income = 147775 AND ROUND(median_age, 1) = 40.3));
 
+-- acs_real_estate_taxes: B25102 identity — mortgaged + not-mortgaged = total owner-occupied units;
+-- and the B25103 medians must be plausible annual dollar amounts (0 < median < 100000)
+INSERT INTO dq_results
+SELECT
+  'census', 'acs_real_estate_taxes', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where with+without mortgage != total, or a median is outside (0, 100000)'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes', allow_moved_paths := true)
+  WHERE (owner_occupied_units IS NOT NULL AND units_with_mortgage IS NOT NULL AND units_without_mortgage IS NOT NULL
+         AND units_with_mortgage + units_without_mortgage != owner_occupied_units)
+     OR median_real_estate_taxes <= 0 OR median_real_estate_taxes >= 100000
+);
+
 -- ============================================================================
 -- RESULTS SUMMARY
 -- ============================================================================
@@ -1082,6 +1103,7 @@ SELECT
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status', allow_moved_paths := true)
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes', allow_moved_paths := true)
   WHERE owner_occupied_units IS NOT NULL AND units_with_mortgage IS NOT NULL AND units_without_mortgage IS NOT NULL
     AND units_with_mortgage + units_without_mortgage != owner_occupied_units
 );
