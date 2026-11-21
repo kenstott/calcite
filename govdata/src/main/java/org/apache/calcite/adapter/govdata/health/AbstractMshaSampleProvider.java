@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
 import java.util.List;
@@ -227,7 +228,7 @@ abstract class AbstractMshaSampleProvider implements CachingDataProvider {
 
   /** Whether {@code d} is later than today: the source carries ~40 typo dates out to 2099. */
   static boolean inFuture(LocalDate d) {
-    return d.isAfter(LocalDate.now());
+    return d.isAfter(LocalDate.now(ZoneOffset.UTC));
   }
 
   static void logSkipped(String label, long skipped) {
