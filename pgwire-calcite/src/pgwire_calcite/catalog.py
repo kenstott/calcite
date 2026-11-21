@@ -4146,6 +4146,10 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                     this="list_contains",
                     expressions=[arr.transform(_transform), rhs.transform(_transform)],
                 )
+        if isinstance(node, (exp.Like, exp.ILike)) and not isinstance(node.parent, exp.Escape):
+            # PostgreSQL's LIKE escapes with a backslash when the query names no ESCAPE;
+            # DuckDB has no default escape, so name it.
+            return exp.Escape(this=node, expression=exp.Literal.string("\\"))
         if isinstance(node, exp.Cast):
             rewritten_cast = _rewrite_pg_cast(node, _transform)
             if rewritten_cast is not None:
