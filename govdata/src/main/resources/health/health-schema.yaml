@@ -3511,6 +3511,359 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: msha_coal_dust_samples
+    # Republished weekly as a complete file replacement; the host serves an ETag on HEAD (same gate as energy.eia_coal_mines).
+    freshness:
+      type: etag
+    pattern: "type=msha_coal_dust_samples/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    timeColumn: sample_date  # observation time: the day the sample was taken
+    comment: >
+      MSHA Coal Dust Samples (Open Government Data, republished weekly): one row per respirable
+      coal mine dust sample taken by operators and MSHA inspectors at coal mines since
+      2000-01-01, with the sample's concentration in mg/m3 (concentration_mg_m3; the coal
+      mine dust limit is 2.0 mg/m3), sample date, mine_id, occupation or designated area
+      sampled, device (gravimetric CMDPSU or continuous personal dust monitor, CPDM, which
+      operators use from 2016-02), void status and the CPDM equivalent concentration values.
+      MSHA Quartz Samples (crystalline silica analysis of the same cassettes) is joined on
+      cassette_num into quartz_pct and quartz_micrograms, so silica exposure by mine,
+      occupation and year is one table; quartz_micrograms divided by sample air volume gives
+      the exposure that the 50 ug/m3 silica limit applies to, but this table carries the mass
+      and percent MSHA reports, not a derived ug/m3. Compliance reading needs void_cd: '?'
+      means the sample was not voided, any other code is a voided sample that MSHA does not
+      count. Codes the source cannot resolve arrive as '?' (occupation_cd, mining_method_cd)
+      and are kept as published. About 40 rows whose sample date is a source typo in the
+      future (out to 2099) are dropped at load and counted in the log. Covers coal mines only;
+      metal/nonmetal sampling is msha_mnm_health_samples. This is exposure sampling, not
+      disease: black lung prevalence from the NIOSH Coal Workers' Health Surveillance
+      Program is not in the warehouse (NIOSH publishes it as report tables and PDFs, no
+      machine-readable file). Join mine_id to energy.eia_coal_mines for mine location,
+      operator and production.
+    dimensions:
+      type:
+        - msha_coal_dust_samples
+
+    columns:
+      - name: cassette_num
+        type: string
+        nullable: true
+        comment: MSHA cassette number, the key for gravimetric (CMDPSU) samples; null for every CPDM row, which is keyed by cpdm_file_name instead. A few cassette numbers repeat in the source
+      - name: cpdm_file_name
+        type: string
+        nullable: true
+        comment: Continuous Personal Dust Monitor result file name (key for CPDM samples, operator samples from 2016-02-01); null for gravimetric samples
+      - name: mine_id
+        type: string
+        nullable: false
+        comment: MSHA mine identifier; joins energy.eia_coal_mines.mine_id
+      - name: sample_date
+        type: date
+        nullable: false
+        comment: Date the sample was taken (source MM/DD/YYYY)
+      - name: device_type
+        type: string
+        nullable: true
+        comment: CMDPSU = gravimetric Coal Mine Dust Personal Sampler Unit; CPDM = Continuous Personal Dust Monitor
+      - name: inspector_sample
+        type: string
+        nullable: true
+        comment: 'INSP_IND: Y when taken by an MSHA inspector, N when taken by the operator'
+      - name: concentration_mg_m3
+        type: double
+        nullable: false
+        comment: Respirable coal mine dust concentration in mg/m3 (source CONC); compare to the 2.0 mg/m3 limit. 33 CPDM rows carry a small negative value as published by MSHA (instrument baseline drift); they are kept, so filter concentration_mg_m3 >= 0 for exposure statistics
+      - name: initial_weight_mg
+        type: double
+        nullable: true
+        comment: Cassette filter weight before sampling, mg (gravimetric only)
+      - name: final_weight_mg
+        type: double
+        nullable: true
+        comment: Cassette filter weight after sampling, mg (gravimetric only)
+      - name: sample_minutes
+        type: integer
+        nullable: true
+        comment: Sampling time in minutes (SMP_TIME)
+      - name: sample_type_cd
+        type: string
+        nullable: true
+        comment: 'Sample type code: 1 designated occupation, 2 non designated occupation, 3 designated area, 4 designated work position, 5 Part 90 miner, 6 nondesignated area, 7 intake air, 8 nondesignated work position, 9 control filter, 0 invalid'
+      - name: sample_type
+        type: string
+        nullable: true
+        comment: Sample type description, e.g. DESIGNATED OCCUPATION, DESIGNATED AREA
+      - name: use_cd
+        type: string
+        nullable: true
+        comment: Code for how the sample is used in the compliance determination
+      - name: use_desc
+        type: string
+        nullable: true
+        comment: Description of use_cd, e.g. NOT YET USED IN DETERMINATION
+      - name: void_cd
+        type: string
+        nullable: true
+        comment: Void code; '?' = sample not voided, any other value marks a voided sample
+      - name: void_desc
+        type: string
+        nullable: true
+        comment: Description of void_cd
+      - name: entity_num
+        type: string
+        nullable: true
+        comment: Designated occupation/area entity number within the mine (ENTITY_NUM)
+      - name: entity_type_cd
+        type: string
+        nullable: true
+        comment: Entity type code (TYPE_ENTITY)
+      - name: entity_type_desc
+        type: string
+        nullable: true
+        comment: Entity type description, e.g. MMU (DESIGNATED OCCUPATION), ROOF BOLTER DESIGNATED AREA
+      - name: occupation_cd
+        type: string
+        nullable: true
+        comment: Occupation code of the sampled miner; '?' when the source has no code
+      - name: occupation_desc
+        type: string
+        nullable: true
+        comment: Occupation description, e.g. CONTINUOUS MINER OPERATOR
+      - name: mining_method_cd
+        type: string
+        nullable: true
+        comment: Mining method code; null or '?' when not recorded
+      - name: mining_method_desc
+        type: string
+        nullable: true
+        comment: Mining method description
+      - name: single_sample_ecv
+        type: double
+        nullable: true
+        comment: Equivalent concentration value of the single sample (CPDM rows)
+      - name: average_5_ecv
+        type: double
+        nullable: true
+        comment: Rolling 5-sample average ECV (CPDM rows)
+      - name: average_15_ecv
+        type: double
+        nullable: true
+        comment: Rolling 15-sample average ECV (CPDM rows)
+      - name: quartz_pct
+        type: double
+        nullable: true
+        comment: Quartz (crystalline silica) percent of the dust on the cassette, from MSHA Quartz Samples joined on cassette_num; null when the cassette was not analysed for quartz (all CPDM rows and many gravimetric)
+      - name: quartz_micrograms
+        type: double
+        nullable: true
+        comment: Quartz mass in micrograms from the same analysis; null when not reported (about 36% of analysed cassettes)
+      - name: quartz_void_cd
+        type: string
+        nullable: true
+        comment: 'Void code of the quartz analysis; ? = not voided; QNE = suspended quartz sample (about 30% of analysed cassettes); other codes (CFI, QLV, OSP...) mark invalid analyses; comma-joined when several apply'
+      - name: type
+        type: string
+        nullable: false
+        comment: Always msha_coal_dust_samples
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of sample_date (partition column)
+
+    source:
+      type: http
+      url: "https://arlweb.msha.gov/OpenGovernmentData/DataSets/CoalDustSamples.zip"
+      method: GET
+      headers:
+        User-Agent: "Apache-Calcite-GovData/1.0"
+      response:
+        format: TEXT  # ignored: MshaCoalDustSamplesProvider streams the zip itself
+      quartzUrl: "https://arlweb.msha.gov/OpenGovernmentData/DataSets/QuartzSamples.zip"  # joined on cassette number by the provider
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.health.MshaCoalDustSamplesProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=msha_coal_dust_samples/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  - name: msha_mnm_health_samples
+    # Republished weekly as a complete file replacement; ETag gate as for msha_coal_dust_samples.
+    freshness:
+      type: etag
+    pattern: "type=msha_mnm_health_samples/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    timeColumn: sample_date  # observation time: the day the sample was taken
+    comment: >
+      MSHA Personal Health Samples (Open Government Data, republished weekly): one row per
+      health sample taken by MSHA inspectors at metal and nonmetal mines since 2000-01-01
+      (the coal equivalent is msha_coal_dust_samples). contaminant_desc names the substance:
+      respirable quartz (silica) and respirable dust dominate, alongside welding fumes, metals,
+      gases and nuisance dust. concentration is in the contaminant's own unit, exposure_limit
+      is its permissible limit, and concentration_over_limit (source C_OVER_E) divides one by
+      the other, so values above 1.0 are overexposures; action_taken_cd records the citation or
+      order that followed. Filter contaminant_desc before aggregating: units differ by
+      contaminant. Metal/nonmetal mines are not in
+      energy.eia_coal_mines; mine_id matches the MSHA Mines dataset.
+    dimensions:
+      type:
+        - msha_mnm_health_samples
+
+    columns:
+      - name: sample_no
+        type: string
+        nullable: false
+        comment: 'Unique sample id: yyyymmdd + AR number + sequence + subcomponent'
+      - name: mine_id
+        type: string
+        nullable: false
+        comment: MSHA mine identifier; joins the MSHA Mines dataset (metal/nonmetal mines are not in energy.eia_coal_mines)
+      - name: event_no
+        type: string
+        nullable: true
+        comment: Inspection event number the sample belongs to
+      - name: sample_date
+        type: date
+        nullable: false
+        comment: Date the sample was taken (source MM/DD/YYYY)
+      - name: contaminant_cd
+        type: string
+        nullable: false
+        comment: Code of the substance or agent sampled
+      - name: contaminant_desc
+        type: string
+        nullable: true
+        comment: Substance or agent sampled, e.g. Quartz, respirable, >1% Qtz; Respirable dust, <.1mg; Zinc oxide fumes; Nuisance dust
+      - name: concentration
+        type: double
+        nullable: false
+        comment: Measured concentration, in the unit native to the contaminant (mg/m3 for most; see contaminant_desc); not comparable across contaminants
+      - name: exposure_limit
+        type: double
+        nullable: true
+        comment: Permissible exposure limit for the contaminant in the same unit as concentration
+      - name: concentration_over_limit
+        type: double
+        nullable: true
+        comment: concentration divided by exposure_limit (source C_OVER_E); above 1.0 is over the limit
+      - name: protection_used
+        type: string
+        nullable: true
+        comment: Personal protective equipment used during sampling - X when used, null when not (the source stores a blank for not used)
+      - name: sampling_instrument_cd
+        type: string
+        nullable: true
+        comment: Sampling instrument code; '?' when not found in the source
+      - name: sampling_instrument_desc
+        type: string
+        nullable: true
+        comment: Sampling instrument description
+      - name: short_term_exposure
+        type: string
+        nullable: true
+        comment: X for a short-term exposure sample; null (source blank) for a full-shift sample
+      - name: action_taken_cd
+        type: string
+        nullable: true
+        comment: Action taken after analysis (C citation/order issued, L limit exceeded, E exceeds PEL but not PEL x error factor, etc.); '?' = none recorded
+      - name: action_taken_desc
+        type: string
+        nullable: true
+        comment: Description of action_taken_cd
+      - name: location_cd
+        type: string
+        nullable: true
+        comment: Work-area code of the miner during sampling
+      - name: location_desc
+        type: string
+        nullable: true
+        comment: Work-area description, e.g. S - Shops
+      - name: job_cd
+        type: string
+        nullable: true
+        comment: Occupation code of the sampled miner
+      - name: job_desc
+        type: string
+        nullable: true
+        comment: Occupation description, e.g. Welder, etc.
+      - name: contractor_id
+        type: string
+        nullable: true
+        comment: Contractor id when sampling was in a contractor's work area
+      - name: type
+        type: string
+        nullable: false
+        comment: Always msha_mnm_health_samples
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of sample_date (partition column)
+
+    source:
+      type: http
+      url: "https://arlweb.msha.gov/OpenGovernmentData/DataSets/PersonalHealthSamples.zip"
+      method: GET
+      headers:
+        User-Agent: "Apache-Calcite-GovData/1.0"
+      response:
+        format: TEXT  # ignored: MshaMnmHealthSamplesProvider streams the zip itself
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.health.MshaMnmHealthSamplesProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=msha_mnm_health_samples/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # ==========================================================================
   # HHS OCR HIPAA BREACH PORTAL — breaches of unsecured PHI affecting 500+ individuals (2009-)
   # ==========================================================================

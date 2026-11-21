@@ -190,6 +190,8 @@ ONCE_MODE_GROUPS=(
   "health-medicaid-enrollment-once|medicaid_chip_enrollment_monthly,medicaid_expenditures_by_state_quarter,medicaid_enrollment_by_eligibility_group"
   # HHS OCR HIPAA breach portal — own group: a single JSF-session source (ocrportal.hhs.gov), full snapshot, no year dimension.
   "health-hhs-ocr|hhs_ocr_breaches"
+  # MSHA Open Government Data health samples (arlweb.msha.gov zips) — own group: one source, ETag-gated full snapshots, no year dimension.
+  "health-msha|msha_coal_dust_samples,msha_mnm_health_samples"
 )
 
 run_year_health_tables() {
