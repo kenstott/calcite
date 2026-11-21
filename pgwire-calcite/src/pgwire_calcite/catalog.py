@@ -4257,35 +4257,40 @@ def _handle_txid(sql: str):
     return QueryResult(rows=[(next_txid(),)], column_names=[col], column_types=["BIGINT"])
 
 
+#: The whole statement is one current_setting() call, optionally aliased. Any wider query (more
+#: columns, a FROM clause) goes to the catalog database, which answers current_setting() per
+#: column: DuckDB's ATTACH probe reads six columns from pg_database alongside it.
+_BARE_CURRENT_SETTING_RE = re.compile(
+    r"^SELECT\s+(?:pg_catalog\.)?current_setting\s*\(\s*'([^']+)'\s*(?:,\s*\w+\s*)?\)"
+    r"(?:\s+(?:AS\s+)?(\w+))?$",
+    re.IGNORECASE,
+)
+
+#: asyncpg's startup statement: SELECT current_setting('x') AS a, set_config(...) AS b.
+_CURRENT_SETTING_SET_CONFIG_RE = re.compile(
+    r"^SELECT\s+(?:pg_catalog\.)?current_setting\s*\(\s*'([^']+)'\s*\)(?:\s+AS\s+(\w+))?"
+    r"\s*,\s*(?:pg_catalog\.)?set_config\s*\([^)]*\)(?:\s+AS\s+(\w+))?$",
+    re.IGNORECASE,
+)
+
+
 def _handle_current_setting(sql: str):
-    """Answer SELECT current_setting(...) [+ set_config(...)] without DuckDB."""
+    """Answer a statement that is only SELECT current_setting(...) [+ set_config(...)]."""
     from pgwire_calcite.types import QueryResult
 
-    lower = sql.lower()
-    if "current_setting" not in lower:
-        return None
-
-    # Multi-expression startup query: SELECT current_setting('x') AS a, set_config(...) AS b
-    # Detect alias names from the SQL so we return the right column names for asyncpg.
-    if "set_config" in lower:
-        m1 = re.search(
-            r"current_setting\s*\(\s*['\"]([^'\"]+)['\"]\s*\)(?:\s+AS\s+(\w+))?",
-            sql,
-            re.IGNORECASE,
+    m = _CURRENT_SETTING_SET_CONFIG_RE.match(sql)
+    if m:
+        return QueryResult(
+            rows=[(setting_value(m.group(1).lower()), None)],
+            column_names=[m.group(2) or "current_setting", m.group(3) or "set_config"],
         )
-        m2 = re.search(r"set_config\s*\([^)]+\)(?:\s+AS\s+(\w+))?", sql, re.IGNORECASE)
-        col1 = (m1.group(2) or "current_setting") if m1 else "current_setting"
-        col2 = (m2.group(1) or "set_config") if m2 else "set_config"
-        key = m1.group(1).lower() if m1 else ""
-        val1 = setting_value(key)
-        return QueryResult(rows=[(val1, None)], column_names=[col1, col2])
-
-    m = re.search(r"current_setting\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", sql, re.IGNORECASE)
-    if not m:
-        return None
-    key = m.group(1).lower()
-    value = setting_value(key)
-    return QueryResult(rows=[(value,)], column_names=["current_setting"])
+    m = _BARE_CURRENT_SETTING_RE.match(sql)
+    if m:
+        return QueryResult(
+            rows=[(setting_value(m.group(1).lower()),)],
+            column_names=[m.group(2) or "current_setting"],
+        )
+    return None
 
 
 _PARAMETER_MARK_RE = re.compile(r"^__pgwire_parameter_(\d+)__$")
