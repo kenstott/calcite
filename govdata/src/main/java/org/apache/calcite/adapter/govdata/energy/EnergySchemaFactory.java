@@ -47,6 +47,7 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
       "eia_utility_annual",
       "eia_utility_reliability",
       "eia_power_plants",
+      "eia_plant_generation",
       "eia_capacity_changes",
       "eia_crude_oil_imports"
   ));

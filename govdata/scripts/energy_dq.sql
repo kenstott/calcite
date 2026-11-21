@@ -4,7 +4,7 @@
 -- Run: source .env.prod && envsubst < scripts/energy_dq.sql | duckdb
 --
 -- Tables: eia_electricity_generation, eia_electricity_prices,
---         eia_utility_annual, eia_utility_reliability, eia_service_territory, eia_power_plants, gas_pipelines,
+--         eia_utility_annual, eia_utility_reliability, eia_service_territory, eia_power_plants, eia_plant_generation, gas_pipelines,
 --         interconnection_queue, eia_capacity_changes, eia_fossil_fuel_production,
 --         eia_state_energy_consumption, eia_natural_gas_storage,
 --         eia_petroleum_stocks, eia_retail_gasoline_prices, eia_crude_oil_imports, eia_refinery_operations,
@@ -578,6 +578,104 @@ FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_power_plants', allow_moved_paths := true)
   WHERE nameplate_capacity_mw IS NOT NULL AND nameplate_capacity_mw < 0
+) t;
+
+-- ============================================================
+-- eia_plant_generation
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_plant_generation', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true);
+
+-- T2: row_count (thousands of plant/prime-mover/fuel combinations x 12 months per year)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_plant_generation', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 50000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 50000, 'expected >= 50000 plant-month rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_plant_generation', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_plant_generation', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T6: pk_nulls (nuclear_unit_id is legitimately null for non-nuclear plants and is not checked)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_plant_generation', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'plant_id, prime_mover, fuel_type_code, generation_year or generation_month IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true)
+WHERE plant_id IS NULL OR prime_mover IS NULL OR fuel_type_code IS NULL
+   OR generation_year IS NULL OR generation_month IS NULL;
+
+-- T7: expected_values — month in 1..12
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_plant_generation', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0,
+  'generation_month outside 1..12'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true)
+  WHERE generation_month < 1 OR generation_month > 12
+) t;
+
+-- T8: worker_coverage — the annual file is current-year inclusive
+INSERT INTO dq_results
+SELECT 'energy', 'eia_plant_generation', 'T8_worker_coverage',
+  CASE WHEN MIN(generation_year) <= 2024 AND MAX(generation_year) >= 2025 THEN 'pass' ELSE 'fail' END,
+  MAX(generation_year), 2025,
+  printf('MIN=%d MAX=%d | expect MIN<=2024, MAX>=2025', MIN(generation_year), MAX(generation_year))
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true);
+
+-- T9: pk_duplication — no repeated (plant, unit, prime mover, fuel, state, sector, CHP, year, month);
+--     state/sector/CHP disambiguate EIA's plant 99999 state-level estimate rows
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_plant_generation', 'T9_pk_duplication',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'duplicate primary-key groups'
+FROM (
+  SELECT 1
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_plant_generation', allow_moved_paths := true)
+  GROUP BY plant_id, COALESCE(nuclear_unit_id, ''), prime_mover, fuel_type_code, COALESCE(state_abbr, ''), COALESCE(sector_code, -1), COALESCE(combined_heat_and_power, ''), generation_year, generation_month
+  HAVING COUNT(*) > 1
 ) t;
 
 -- ============================================================
