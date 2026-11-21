@@ -427,7 +427,7 @@ jobs:
               echo "Dispatching pgwire-adapters release for $VERSION"
               gh workflow run "pgwire-adapters release" --repo "$REPO" -f version="$VERSION" -f publish=true
             else
-              echo "A pgwire-adapters release run for $VERSION is in flight or just finished (or the assets are present); not dispatching, waiting."
+              echo "A pgwire-adapters release run for $VERSION is already in flight or just finished (or the assets are present); not dispatching, waiting."
             fi
             deadline=$(( $(date +%s) + BUNDLE_MAX_WAIT_MINUTES * 60 ))
             last=""
