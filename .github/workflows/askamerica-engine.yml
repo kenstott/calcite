@@ -415,14 +415,19 @@ jobs:
             # filtered by displayTitle (see pgwire-adapters-release.yml's run-name). A leftover run
             # of a different version produces assets tagged for that version, never for $TAG
             # (three releases in quick succession each hung 45 minutes on one, 2026-09-18).
+            # A run that COMPLETED successfully in the last 10 minutes counts as in flight too: its
+            # assets can lag the run's end, and dispatching then re-uploads every bundle over the
+            # published ones with --clobber (engine-v0.128.8, 2026-11-21). After a short settle the
+            # assets are re-checked, and nothing is dispatched once the three tarballs are there.
+            CUTOFF=$(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
             IN_FLIGHT=$(gh run list --repo "$REPO" --workflow "pgwire-adapters release" \
-              --json status,displayTitle \
-              --jq "[.[] | select((.status==\"in_progress\" or .status==\"queued\") and (.displayTitle | contains(\"$VERSION\")))] | length")
-            if [ "${IN_FLIGHT:-0}" = "0" ]; then
+              --json status,conclusion,displayTitle,updatedAt \
+              --jq "[.[] | select((.displayTitle | contains(\"$VERSION\")) and (.status==\"in_progress\" or .status==\"queued\" or (.status==\"completed\" and .conclusion==\"success\" and .updatedAt >= \"$CUTOFF\")))] | length")
+            if [ "${IN_FLIGHT:-0}" = "0" ] && [ -n "$(missing)" ]; then
               echo "Dispatching pgwire-adapters release for $VERSION"
               gh workflow run "pgwire-adapters release" --repo "$REPO" -f version="$VERSION" -f publish=true
             else
-              echo "A pgwire-adapters release run for $VERSION is already in flight; waiting on it."
+              echo "A pgwire-adapters release run for $VERSION is in flight or just finished (or the assets are present); not dispatching, waiting."
             fi
             deadline=$(( $(date +%s) + BUNDLE_MAX_WAIT_MINUTES * 60 ))
             last=""
