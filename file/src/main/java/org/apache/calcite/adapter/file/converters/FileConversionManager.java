@@ -100,6 +100,20 @@ public class FileConversionManager {
     return converter.convert(sourceFile, targetDirectory, metadata);
   }
 
+  /** As below, finding an Excel workbook's tables by the automatic rules (no operator hints). */
+  public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath,
+      CrawlerConfiguration pages) {
+    return convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory,
+        relativePath, pages, ExcelReadHints.AUTO);
+  }
+
+  /** As {@link #convert} below, finding an Excel workbook's tables by the automatic rules. */
+  public static boolean convert(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath,
+      CrawlerConfiguration pages) throws Exception {
+    return convert(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory,
+        relativePath, pages, ExcelReadHints.AUTO);
+  }
+
   /**
    * Identifies the source file type and runs the appropriate conversion if needed.
    *

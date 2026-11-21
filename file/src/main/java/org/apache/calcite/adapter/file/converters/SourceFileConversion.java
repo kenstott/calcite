@@ -55,6 +55,14 @@ public final class SourceFileConversion {
     this.excelReadHints = excelReadHints;
   }
 
+  /** As above, finding an Excel workbook's tables by the automatic rules (no operator hints). */
+  public SourceFileConversion(@Nullable String sourceRoot, @Nullable File outputDirectory,
+      @Nullable File baseDirectory, String columnNameCasing, String tableNameCasing,
+      CrawlerConfiguration pages) {
+    this(sourceRoot, outputDirectory, baseDirectory, columnNameCasing, tableNameCasing, pages,
+        ExcelReadHints.AUTO);
+  }
+
   public String columnNameCasing() {
     return columnNameCasing;
   }
