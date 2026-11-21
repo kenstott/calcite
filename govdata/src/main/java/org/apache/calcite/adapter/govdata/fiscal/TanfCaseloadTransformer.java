@@ -225,7 +225,7 @@ public class TanfCaseloadTransformer implements StreamingResponseTransformer {
   }
 
   private static int currentFiscalYear() {
-    LocalDate today = LocalDate.now();
+    LocalDate today = LocalDate.now(ZoneId.of("UTC"));
     return today.getMonthValue() >= 10 ? today.getYear() + 1 : today.getYear();
   }
 

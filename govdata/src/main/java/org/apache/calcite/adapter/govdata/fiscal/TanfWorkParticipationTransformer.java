@@ -20,6 +20,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -241,7 +242,7 @@ public class TanfWorkParticipationTransformer implements StreamingResponseTransf
   }
 
   private static int currentFiscalYear() {
-    LocalDate today = LocalDate.now();
+    LocalDate today = LocalDate.now(ZoneId.of("UTC"));
     return today.getMonthValue() >= 10 ? today.getYear() + 1 : today.getYear();
   }
 
