@@ -224,6 +224,7 @@ SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_
 SELECT 'state_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1;
 SELECT 'industry_occupation_employment_history' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment_history', allow_moved_paths := true) LIMIT 1;
 SELECT 'household_debt_credit' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true) LIMIT 1;
+SELECT 'business_formation_statistics' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true) LIMIT 1;
 SELECT 'industry_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true) LIMIT 1;
 SELECT 'apparel_cpi'             AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi',             allow_moved_paths := true) LIMIT 1;
 SELECT 'household_furnishings_cpi' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true) LIMIT 1;
@@ -1659,6 +1660,91 @@ SELECT 'econ', 'household_debt_credit', 'per_quarter_row_count',
 FROM (SELECT COUNT(*) AS bad FROM (
         SELECT year, quarter, COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true)
         GROUP BY year, quarter HAVING COUNT(*) < 28));
+
+-- ============================================================================
+-- business_formation_statistics (Census Business Formation Statistics, monthly; new 21 Nov 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true) LIMIT 1));
+
+-- one calendar year is about 1,500 national/region/state lines x up to 12 months x 2 adjustments;
+-- a single DQ year is well over 5,000 rows
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '5000',
+  CASE WHEN n >= 5000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year');  -- a DQ run over one year has a constant year
+
+-- PK (series_code, seasonally_adjusted, naics_sector, geo_code, year, month) must be unique
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'pk_duplicates',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (series_code, seasonally_adjusted, naics_sector, geo_code, year, month) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series_code, seasonally_adjusted, naics_sector, geo_code, year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true)
+        GROUP BY series_code, seasonally_adjusted, naics_sector, geo_code, year, month HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with an unknown series_code or geo_level, month outside 1-12, or negative value'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true)
+      WHERE series_code NOT IN ('BA_BA', 'BA_HBA', 'BA_WBA', 'BA_CBA', 'BF_BF4Q', 'BF_BF8Q', 'BF_PBF4Q',
+                                'BF_PBF8Q', 'BF_SBF4Q', 'BF_SBF8Q', 'BF_DUR4Q', 'BF_DUR8Q')
+         OR geo_level NOT IN ('national', 'region', 'state')
+         OR month NOT BETWEEN 1 AND 12
+         OR value < 0);
+
+-- the 50 states plus DC (Puerto Rico excluded) sum to the national unadjusted business applications
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'months where the state sum (excluding PR) differs from the national BA_BA total by more than 5'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT year, month,
+               SUM(CASE WHEN geo_level = 'state' AND geo_code <> 'PR' THEN value END) AS states,
+               MAX(CASE WHEN geo_level = 'national' THEN value END) AS us
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true)
+        WHERE series_code = 'BA_BA' AND naics_sector = 'TOTAL' AND NOT seasonally_adjusted
+        GROUP BY year, month)
+      WHERE ABS(states - us) > 5);
+
+-- high-propensity applications are a subset of all applications (unadjusted, all sectors)
+INSERT INTO dq_results
+SELECT 'econ', 'business_formation_statistics', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'geo/months where BA_HBA exceeds BA_BA'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT geo_code, year, month,
+               MAX(CASE WHEN series_code = 'BA_HBA' THEN value END) AS hba,
+               MAX(CASE WHEN series_code = 'BA_BA' THEN value END) AS ba
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true)
+        WHERE naics_sector = 'TOTAL' AND NOT seasonally_adjusted
+        GROUP BY geo_code, year, month)
+      WHERE hba > ba);
 
 -- ============================================================================
 -- industry_occupation_employment (BLS OEWS national industry x occupation mix, new 14 Sep 2026)
