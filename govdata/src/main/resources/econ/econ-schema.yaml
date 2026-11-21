@@ -7904,11 +7904,15 @@ partitionedTables:
         format: json
         # NOTE: dataPath removed - FredResponseTransformer already extracts observations array
       rateLimit:
-        requestsPerSecond: 1.0
+        requestsPerSecond: 1
+        # The FRED key's limit is per key, and the year workers are separate JVMs: one host-wide
+        # budget keeps their combined rate under it.
+        hostWide: true
+        retryBackoffMs: 5000
         # FRED sits behind a gateway that intermittently answers 500/502/504. The table replaces
         # whole month partitions, so a batch that fails without retry aborts the commit for the year.
         retryOn: [429, 500, 502, 503, 504]
-        maxRetries: 3
+        maxRetries: 5
       rawCache:
         enabled: true
 

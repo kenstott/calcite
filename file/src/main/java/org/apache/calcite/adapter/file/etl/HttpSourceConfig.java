@@ -1497,15 +1497,17 @@ public class HttpSourceConfig {
     private final int maxRetries;
     private final long retryBackoffMs;
     private final long readTimeoutMs;
+    private final boolean hostWide;
 
     private RateLimitConfig(int requestsPerSecond, int[] retryOn, int[] skipOn, int maxRetries,
-        long retryBackoffMs, long readTimeoutMs) {
+        long retryBackoffMs, long readTimeoutMs, boolean hostWide) {
       this.requestsPerSecond = requestsPerSecond;
       this.retryOn = retryOn;
       this.skipOn = skipOn;
       this.maxRetries = maxRetries;
       this.retryBackoffMs = retryBackoffMs;
       this.readTimeoutMs = readTimeoutMs;
+      this.hostWide = hostWide;
     }
 
     /** Default wait for response headers, milliseconds. */
@@ -1513,7 +1515,7 @@ public class HttpSourceConfig {
 
     public static RateLimitConfig defaults() {
       return new RateLimitConfig(10, new int[]{429, 503}, new int[0], 3, 1000,
-          DEFAULT_READ_TIMEOUT_MS);
+          DEFAULT_READ_TIMEOUT_MS, false);
     }
 
     public int getRequestsPerSecond() {
@@ -1535,6 +1537,15 @@ public class HttpSourceConfig {
 
     public long getRetryBackoffMs() {
       return retryBackoffMs;
+    }
+
+    /**
+     * True when {@code requestsPerSecond} is a budget shared by every process on the host, not
+     * just the threads of this JVM: the API's limit applies to the key, and parallel year workers
+     * are separate JVMs.
+     */
+    public boolean isHostWide() {
+      return hostWide;
     }
 
     /** Milliseconds to wait for response headers on a data request (default 120000). */
@@ -1592,7 +1603,9 @@ public class HttpSourceConfig {
         readTimeout = ((Number) readTimeoutObj).longValue();
       }
 
-      return new RateLimitConfig(rps, retryOn, skipOn, maxRetries, backoff, readTimeout);
+      boolean hostWide = Boolean.TRUE.equals(map.get("hostWide"));
+
+      return new RateLimitConfig(rps, retryOn, skipOn, maxRetries, backoff, readTimeout, hostWide);
     }
   }
 
