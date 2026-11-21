@@ -1639,10 +1639,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "DVIDS reports Thune spoke at the 665th Support Maintenance Company's welcome-home ceremony in Mitchell on Sept. 19, 2026, and South Dakota Searchlight reports he spoke at the 155th Engineer Company's ceremony in Wagner on Oct. 22, 2026, which it describes as a deployment send-off rather than using the word 'activation'.",
+      "evidence": [
+        {
+          "label": "DVIDS, South Dakota National Guard 665th Support Maintenance Company returns from Germany deployment",
+          "url": "https://www.dvidshub.net/news/575183/south-dakota-national-guard-665th-support-maintenance-company-deactivated-after-10-month-germany-deployment"
+        },
+        {
+          "label": "South Dakota Searchlight via Daily Montanan, 155th Engineer Company ceremony in Wagner",
+          "url": "https://dailymontanan.com/?p=39708"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-21"
     },
     {
       "id": 44,
