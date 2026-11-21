@@ -288,7 +288,7 @@ ci_gate() {
   head="$(git rev-parse origin/main)"
   if $DRY_RUN; then limit=0; grace=0; fi
   while :; do
-    state="$(ci_query "$head")"; qrc=$?
+    state="$(ci_query "$head")" && qrc=0 || qrc=$?
     if [ "$qrc" -eq 2 ]; then
       # A transport error is not a CI result: retry on the poll interval until the wait budget is spent.
       if [ "$waited" -ge "$limit" ]; then
