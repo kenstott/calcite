@@ -5,3 +5,20 @@
 #
 # Add an entry only after confirming the warehouse has no Iceberg table for it; a table that is
 # materialized but missing from the cache means the cache is stale -- regenerate it instead.
+econ.osha_inspections
+econ.osha_violations
+econ.treasury_foreign_holdings
+fiscal.appropriations_timeliness_by_fy
+fiscal.cbo_budget_projections
+fiscal.continuing_resolutions
+fiscal.federal_funding_gaps
+health.cdc_state_injury_mortality
+health.nchs_state_low_birthweight
+health.nchs_state_preterm_births
+health.rhtp_state_awards
+law.bill_amendment_text_versions
+patents.patent_publication_applicants
+patents.patent_publication_cpc
+transport.barge_lock_movements_monthly
+transport.barge_rates_weekly
+transport.usace_vessel_inventory
