@@ -91,14 +91,14 @@ class BundlesStepTest(unittest.TestCase):
 
     def test_missing_with_a_build_in_flight_waits_and_does_not_dispatch(self):
         open(os.path.join(self.d, "in_flight"), "w").write("1")
-        open(os.path.join(self.d, "appear_after"), "w").write("4")
+        open(os.path.join(self.d, "appear_after"), "w").write("7")
         r = self.run_step()
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         self.assertFalse(self.dispatched())
         self.assertIn("already in flight", r.stdout)
 
     def test_missing_with_no_build_dispatches_once_then_waits(self):
-        open(os.path.join(self.d, "appear_after"), "w").write("4")
+        open(os.path.join(self.d, "appear_after"), "w").write("7")
         r = self.run_step()
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
         self.assertEqual(1, open(os.path.join(self.d, "dispatched")).read().count("dispatched"))
