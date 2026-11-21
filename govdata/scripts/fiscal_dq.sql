@@ -2487,3 +2487,93 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/t
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+-- ─────────────────────────────────────────────────────────────
+-- tanf_caseload
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_caseload', 'T1_row_count',
+  CASE WHEN n >= 6000 THEN 'pass' ELSE 'fail' END, n, 6000,
+  'FY2017 onward: 55 geographies x at least 120 months'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_caseload', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_caseload', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null state_abbr/year/month/total_families/total_recipients'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_caseload', allow_moved_paths := true)
+  WHERE state_abbr IS NULL OR year IS NULL OR month IS NULL OR total_families IS NULL OR total_recipients IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_caseload', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (state_abbr, year, month) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT state_abbr, year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_caseload', allow_moved_paths := true)
+  GROUP BY state_abbr, year, month HAVING COUNT(*) > 1));
+
+-- Known values read from the ACF workbooks: U.S. totals October 2016 and October 2023.
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_caseload', 'T7_us_families_' || year || '_' || month,
+  CASE WHEN total_families = expected THEN 'pass' ELSE 'fail' END, total_families, expected,
+  'U.S. TANF families in the month (ACF workbook)'
+FROM (SELECT year, month, total_families,
+        CASE WHEN year = 2016 THEN 1151586 ELSE 854981 END AS expected
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_caseload', allow_moved_paths := true)
+      WHERE state_abbr = 'US' AND ((year = 2016 AND month = 10) OR (year = 2023 AND month = 10)));
+
+-- Families split by parent count must add up to the total for every row.
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_caseload', 'T7_parent_split_sums',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows where two+one+no-parent families differ from total_families by more than 5% (ACF reports Pennsylvania FY2026 two-parent as 0, a 2.3% gap)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_caseload', allow_moved_paths := true)
+  WHERE two_parent_families IS NOT NULL AND one_parent_families IS NOT NULL
+    AND no_parent_families IS NOT NULL AND total_families > 0
+    AND ABS(two_parent_families + one_parent_families + no_parent_families - total_families)
+        > 0.05 * total_families);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_caseload', 'T7_recipient_split_sums',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows where adult+child recipients differ from total_recipients by more than 1%'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_caseload', allow_moved_paths := true)
+  WHERE adult_recipients IS NOT NULL AND child_recipients IS NOT NULL AND total_recipients > 0
+    AND ABS(adult_recipients + child_recipients - total_recipients) > 0.01 * total_recipients);
+
+-- ─────────────────────────────────────────────────────────────
+-- tanf_work_participation
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_work_participation', 'T1_row_count',
+  CASE WHEN n >= 400 THEN 'pass' ELSE 'fail' END, n, 400,
+  'FY2017-2024: 55 rows (50 states, DC, PR, GU, VI, US) x 8 fiscal years = 440'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_work_participation', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_work_participation', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null fiscal_year/state_abbr/all_families_rate'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_work_participation', allow_moved_paths := true)
+  WHERE fiscal_year IS NULL OR state_abbr IS NULL OR all_families_rate IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_work_participation', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (fiscal_year, state_abbr) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT fiscal_year, state_abbr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_work_participation', allow_moved_paths := true)
+  GROUP BY fiscal_year, state_abbr HAVING COUNT(*) > 1));
+
+-- Known values read from the ACF workbooks: national all-families rate FY2018 and FY2024.
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_work_participation', 'T7_us_rate_fy' || fiscal_year,
+  CASE WHEN ABS(all_families_rate - expected) < 0.0005 THEN 'pass' ELSE 'fail' END,
+  all_families_rate, expected, 'National combined all-families participation rate (ACF Table 1A)'
+FROM (SELECT fiscal_year, all_families_rate,
+        CASE WHEN fiscal_year = 2018 THEN 0.481 ELSE 0.3541 END AS expected
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_work_participation', allow_moved_paths := true)
+      WHERE state_abbr = 'US' AND fiscal_year IN (2018, 2024));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'tanf_work_participation', 'T7_rate_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rates outside 0-10 (fractions; a few states report above 1 after caseload effects)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/tanf_work_participation', allow_moved_paths := true)
+  WHERE all_families_rate < 0 OR all_families_rate > 10
+     OR two_parent_rate < 0 OR two_parent_rate > 10);
+

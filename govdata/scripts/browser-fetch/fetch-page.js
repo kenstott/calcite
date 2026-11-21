@@ -4,8 +4,9 @@
 // one JSON reply per stdout line. All diagnostics go to stderr.
 //
 //   usage: fetch-page.js <entry-page-url> <delay-ms> [chrome-executable]
-//   request: {"url": "<page url on the same origin as the entry page>"}
-//   reply:   {"status": 200, "text": "<response body>"} | {"status": 404} | {"error": "<cause>"}
+//   request: {"url": "<page url on the same origin as the entry page>", "binary": true|false}
+//   reply:   {"status": 200, "text": "<response body>"} (or "base64" when binary is true)
+//            | {"status": 404} | {"error": "<cause>"}
 //
 // The entry page is loaded once; every URL is then fetched from inside that page (same-origin),
 // so the browser's own cookies and headers apply. Plain headed, unmodified Chrome: no stealth
@@ -61,18 +62,28 @@ async function main() {
     }
     let reply;
     try {
-      const url = JSON.parse(line).url;
+      const request = JSON.parse(line);
+      const url = request.url;
+      const binary = request.binary === true;
       const wait = lastRequest + delayMs - Date.now();
       if (wait > 0) {
         await new Promise(r => setTimeout(r, wait));
       }
-      reply = await page.evaluate(async (u) => {
+      reply = await page.evaluate(async (u, bin) => {
         const res = await fetch(u, {credentials: 'same-origin'});
         if (res.status !== 200) {
           return {status: res.status};
         }
-        return {status: 200, text: await res.text()};
-      }, url);
+        if (!bin) {
+          return {status: 200, text: await res.text()};
+        }
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        let s = '';
+        for (let i = 0; i < bytes.length; i += 8192) {
+          s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+        }
+        return {status: 200, base64: btoa(s)};
+      }, url, binary);
       lastRequest = Date.now();
       if (reply.status !== 200 && reply.status !== 404) {
         reply = {error: 'HTTP ' + reply.status + ' from ' + url};

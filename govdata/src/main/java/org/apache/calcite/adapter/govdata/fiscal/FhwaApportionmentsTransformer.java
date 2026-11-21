@@ -69,7 +69,7 @@ public class FhwaApportionmentsTransformer implements StreamingResponseTransform
   }
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context) {
-    FhwaBrowserSession session = FhwaBrowserSession.get(context);
+    FiscalBrowserSession session = FiscalBrowserSession.get(context);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     try {
       String index = session.fetchText(INDEX_URL);
@@ -95,7 +95,7 @@ public class FhwaApportionmentsTransformer implements StreamingResponseTransform
     return rows.iterator();
   }
 
-  private static String fetchNotice(FhwaBrowserSession session, int notice) throws IOException {
+  private static String fetchNotice(FiscalBrowserSession session, int notice) throws IOException {
     String url = NOTICE_URL + "4510" + notice;
     String html = session.fetchText(url);
     if (html == null) {
@@ -351,6 +351,11 @@ public class FhwaApportionmentsTransformer implements StreamingResponseTransform
   private static String text(String html) {
     return html.replaceAll("<[^>]+>", " ").replace("&nbsp;", " ").replace("&amp;", "&")
         .replace("&#39;", "'").replaceAll("\\s+", " ").trim();
+  }
+
+  /** The postal abbreviation for a state, DC or Puerto Rico name, or null when unknown. */
+  static String stateAbbr(String name) {
+    return STATE_ABBR.get(name);
   }
 
   private static Map<String, String> buildStateAbbrMap() {

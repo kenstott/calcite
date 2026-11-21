@@ -18,36 +18,37 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.util.Base64;
 import java.util.Arrays;
 import java.util.Map;
 
 /**
- * One headed-browser session for fetching highways.dot.gov pages (the FHWA site answers HTTP 403
- * to every non-browser client). The helper script
+ * One headed-browser session for fetching pages and files from federal sites that refuse
+ * non-browser clients (highways.dot.gov answers HTTP 403, acf.gov answers an AWS WAF challenge). The helper script
  * {@code govdata/scripts/browser-fetch/fetch-page.js} loads an entry page once and fetches every
  * later URL from inside it. Settings come from the table's source parameters; a missing or
  * unusable one throws {@link IllegalStateException} naming the cause. There is no fallback to a
  * plain HTTP client.
  */
-final class FhwaBrowserSession {
+final class FiscalBrowserSession {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String LABEL = "fhwa";
+  private static final String LABEL = "browser";
   private static final String INSTALL_HINT =
       "run govdata/scripts/browser-fetch/install.sh and set SSA_BROWSER_SCRIPT";
 
-  private static FhwaBrowserSession current;
+  private static FiscalBrowserSession current;
 
   private final String key;
   private final BrowserHelperProcess helper;
 
-  private FhwaBrowserSession(String key, BrowserHelperProcess helper) {
+  private FiscalBrowserSession(String key, BrowserHelperProcess helper) {
     this.key = key;
     this.helper = helper;
   }
 
   /** The shared session for the source parameters in {@code context}, started if needed. */
-  static synchronized FhwaBrowserSession get(RequestContext context) {
+  static synchronized FiscalBrowserSession get(RequestContext context) {
     Map<String, String> p = context.getParameters();
     String node = require(p, "browserNodeCommand");
     String script = p.get("browserScript");
@@ -64,7 +65,7 @@ final class FhwaBrowserSession {
     }
     BrowserHelperProcess h = BrowserHelperProcess.start(LABEL, node, script, INSTALL_HINT,
         Arrays.asList(entry, delay, chrome == null ? "" : chrome));
-    current = new FhwaBrowserSession(key, h);
+    current = new FiscalBrowserSession(key, h);
     return current;
   }
 
@@ -86,5 +87,17 @@ final class FhwaBrowserSession {
       return null;
     }
     return reply.path("text").asText();
+  }
+
+  /** The bytes of {@code url}, or null when the site answers 404. */
+  synchronized byte[] fetchBytes(String url) throws IOException {
+    ObjectNode req = MAPPER.createObjectNode();
+    req.put("url", url);
+    req.put("binary", true);
+    JsonNode reply = helper.call(req);
+    if (reply.path("status").asInt() == 404) {
+      return null;
+    }
+    return Base64.getDecoder().decode(reply.path("base64").asText());
   }
 }

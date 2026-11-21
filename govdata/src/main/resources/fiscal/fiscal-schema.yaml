@@ -8156,6 +8156,273 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   # U.S. FOREIGN ASSISTANCE BY COUNTRY x AGENCY x ACCOUNT x FISCAL YEAR — ForeignAssistance.gov
   # ---------------------------------------------------------------------------
+  - name: tanf_caseload
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=tanf_caseload/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Temporary Assistance for Needy Families (TANF) caseload by state and month from the HHS
+      Administration for Children and Families, Office of Family Assistance: one row per state
+      (50 states, DC, Puerto Rico, Guam, Virgin Islands) and calendar month, plus a national row
+      (state_abbr = 'US', which ACF prints as "U.S. Totals"), from October 2016 (fiscal year 2017)
+      onward. Families are counted in total and by number of parents in the case (two-parent,
+      one-parent, no-parent or child-only); recipients are counted in total, adults and children.
+      These are TANF-funded cases only: separate state programs funded with maintenance-of-effort
+      dollars (SSP-MOE) are excluded, so the counts understate total state cash-assistance
+      caseloads where states run SSP-MOE programs. Use it for claims about welfare caseload size or
+      change over time (for example U.S. TANF families fell from 1.15 million in October 2016 to
+      0.85 million in October 2023). The AFDC-era caseload before 1997 and the 1997-2016 TANF
+      years are not loaded. Each month is published in two annual workbooks (its own fiscal year
+      and the next year's first quarter); the later, revised figure is kept. fiscal_year is the
+      October-September federal fiscal year the month falls in. The ACF site answers an AWS WAF
+      challenge to non-browser clients, so the workbooks are read through a headed browser
+      session. Source: https://acf.gov/ofa/research-data/data/tanf (public domain).
+
+    dimensions:
+      type:
+        - tanf_caseload
+
+    columns:
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state, DC, PR, GU or VI code; US for the national total (FK to geo.state_ref for states); PK
+      - name: state_name
+        type: string
+        nullable: false
+        comment: State name as printed by ACF; United States for the national row
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September) the month falls in
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of the month; PK
+      - name: month
+        type: integer
+        nullable: false
+        comment: Calendar month number 1-12; PK
+      - name: total_families
+        type: long
+        nullable: true
+        comment: Total TANF families (cases) receiving assistance in the month
+      - name: two_parent_families
+        type: long
+        nullable: true
+        comment: TANF families with two parents in the case
+      - name: one_parent_families
+        type: long
+        nullable: true
+        comment: TANF families with one parent in the case
+      - name: no_parent_families
+        type: long
+        nullable: true
+        comment: TANF families with no parent in the case (child-only cases)
+      - name: total_recipients
+        type: long
+        nullable: true
+        comment: Total TANF recipients (adults plus children) in the month
+      - name: adult_recipients
+        type: long
+        nullable: true
+        comment: TANF adult recipients in the month
+      - name: child_recipients
+        type: long
+        nullable: true
+        comment: TANF child recipients in the month
+      - name: source_workbook
+        type: string
+        nullable: false
+        comment: File name of the ACF workbook the figures were read from (the latest one carrying the month)
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads the acf.gov pages and
+      # workbooks through a headed browser session (acf.gov answers an AWS WAF challenge, HTTP 202,
+      # to non-browser clients). Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY).
+      url: "https://acf.gov/ofa/research-data/data/tanf"
+      method: GET
+      parameters:
+        browserScript: "${SSA_BROWSER_SCRIPT:}"
+        browserNodeCommand: "${SSA_NODE_COMMAND:node}"
+        browserChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        browserRequestDelayMs: "${SSA_REQUEST_DELAY_MS:6000}"
+        browserEntryPageUrl: "https://acf.gov/ofa"
+        minFiscalYear: "2017"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.TanfCaseloadTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=tanf_caseload/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: tanf_caseload
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  - name: tanf_work_participation
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=tanf_work_participation/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      TANF work participation rates by state and federal fiscal year from the HHS Administration
+      for Children and Families, Office of Family Assistance, fiscal year 2017 onward: one row per
+      state (50 states, DC, Puerto Rico, Guam, Virgin Islands) and fiscal year, plus a national
+      row (state_abbr = 'US'). These are the combined TANF and SSP-MOE rates the federal law
+      measures states against: the all-families rate and the two-parent rate, each with the
+      state's adjusted standard (the 50 percent all-families and 90 percent two-parent targets
+      lowered by its caseload reduction credit) and whether the target was met, plus the monthly
+      average number of families behind the all-families rate: all TANF and SSP-MOE families, those
+      with no work-eligible individual, those counted in the rate, those participating, and the
+      families disregarded because of a single custodial parent with a child under one, a sanction
+      or participation in a tribal work program. Rates are fractions (0.354 is 35.4 percent). The
+      national row has rates and counts but no adjusted standard or met-target value. A state
+      with no two-parent rate (footnoted by ACF) has null two-parent columns. Fiscal years are
+      published about nine months after they end, so the newest year is typically not yet here.
+      The ACF site answers an AWS WAF challenge to non-browser clients, so the workbooks are read
+      through a headed browser session. Source: https://acf.gov/ofa/research-data/data/tanf
+      (public domain).
+
+    dimensions:
+      type:
+        - tanf_work_participation
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September); PK
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state, DC, PR, GU or VI code; US for the national row (FK to geo.state_ref for states); PK
+      - name: state_name
+        type: string
+        nullable: false
+        comment: State name as printed by ACF; United States for the national row
+      - name: all_families_rate
+        type: double
+        nullable: true
+        comment: Combined TANF and SSP-MOE all-families work participation rate, as a fraction
+      - name: all_families_adjusted_standard
+        type: double
+        nullable: true
+        comment: All-families target after the caseload reduction credit, as a fraction; null for the national row
+      - name: all_families_met_target
+        type: boolean
+        nullable: true
+        comment: True when the state met its all-families target; null for the national row
+      - name: two_parent_rate
+        type: double
+        nullable: true
+        comment: Combined two-parent families work participation rate, as a fraction; null where the state has none
+      - name: two_parent_adjusted_standard
+        type: double
+        nullable: true
+        comment: Two-parent target after the caseload reduction credit, as a fraction; null for the national row and states with no two-parent rate
+      - name: two_parent_met_target
+        type: boolean
+        nullable: true
+        comment: True when the state met its two-parent target; null for the national row and states with no two-parent rate
+      - name: avg_families
+        type: double
+        nullable: true
+        comment: Monthly average number of TANF and SSP-MOE families in the fiscal year
+      - name: avg_families_no_work_eligible
+        type: double
+        nullable: true
+        comment: Monthly average families with no work-eligible individual
+      - name: avg_families_in_rate
+        type: double
+        nullable: true
+        comment: Monthly average families counted in the all-families rate
+      - name: avg_participating_families
+        type: double
+        nullable: true
+        comment: Monthly average families participating in work activities for enough hours to count
+      - name: avg_disregarded_single_parent_under_1
+        type: double
+        nullable: true
+        comment: Monthly average families disregarded because of a single custodial parent with a child under one
+      - name: avg_disregarded_sanction
+        type: double
+        nullable: true
+        comment: Monthly average families disregarded because of a sanction
+      - name: avg_disregarded_tribal_work_program
+        type: double
+        nullable: true
+        comment: Monthly average families disregarded for participation in a tribal work program
+      - name: source_workbook
+        type: string
+        nullable: false
+        comment: File name of the ACF workbook the figures were read from
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads the acf.gov pages and
+      # workbooks through a headed browser session (acf.gov answers an AWS WAF challenge, HTTP 202,
+      # to non-browser clients). Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY).
+      url: "https://acf.gov/ofa/research-data/data/tanf"
+      method: GET
+      parameters:
+        browserScript: "${SSA_BROWSER_SCRIPT:}"
+        browserNodeCommand: "${SSA_NODE_COMMAND:node}"
+        browserChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        browserRequestDelayMs: "${SSA_REQUEST_DELAY_MS:6000}"
+        browserEntryPageUrl: "https://acf.gov/ofa"
+        minFiscalYear: "2017"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.TanfWorkParticipationTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=tanf_work_participation/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: tanf_work_participation
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   - name: foreign_assistance_by_country
     dataset_type: snapshot
     freshness:
