@@ -4213,3 +4213,156 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/r
 SELECT 'health', 'rhtp_state_awards', 'T7_total_range', CASE WHEN n BETWEEN 9500000000 AND 10500000000 THEN 'pass' ELSE 'fail' END, n, 10000000000, 'Each year totals about $10B'
 FROM (SELECT MIN(tot) AS n FROM (SELECT SUM(award_amount) AS tot FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/rhtp_state_awards', allow_moved_paths := true) GROUP BY fiscal_year));
 
+
+-- ============================================================
+-- TABLES: msha_coal_dust_samples, msha_mnm_health_samples (new 21 Nov 2026) — issue #1412
+-- ============================================================
+
+-- msha_coal_dust_samples
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T2_row_count',
+  CASE WHEN n >= 2500000 THEN 'pass' ELSE 'fail' END,
+  n, 2500000, 'Expected at least 2500000 rows (full file since 2000-01-01)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true))
+        WHERE null_percentage = 100.0 AND column_name NOT IN ('type'))
+);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true))
+        WHERE approx_unique <= 1 AND column_name NOT IN ('type'))
+);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL mine_id, sample_date or key rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true) WHERE mine_id IS NULL OR sample_date IS NULL OR (cassette_num IS NULL AND cpdm_file_name IS NULL));
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T7_year_range',
+  CASE WHEN lo = 2000 AND hi >= 2026 THEN 'pass' ELSE 'fail' END,
+  hi - lo, 26, 'Expected sample year 2000 through at least 2026'
+FROM (SELECT MIN(year) AS lo, MAX(year) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T7_no_future_dates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows dated after today (source typos are dropped at load)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true) WHERE sample_date > CURRENT_DATE);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T7_negative_concentration',
+  CASE WHEN n <= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Rows with negative concentration (33 CPDM rows are negative in the MSHA source; fail on growth)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true) WHERE concentration_mg_m3 < 0);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T7_quartz_joined',
+  CASE WHEN n >= 150000 THEN 'pass' ELSE 'warn' END,
+  n, 150000, 'Rows carrying a quartz_pct from the Quartz Samples join'
+FROM (SELECT COUNT(quartz_pct) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T7_cpdm_present',
+  CASE WHEN n >= 1000000 THEN 'pass' ELSE 'warn' END,
+  n, 1000000, 'CPDM (continuous monitor) rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true) WHERE device_type = 'CPDM');
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_coal_dust_samples', 'T8_pk_duplication',
+  CASE WHEN n <= 500 THEN 'pass' ELSE 'warn' END,
+  n, 500, 'Duplicate (cassette_num, cpdm_file_name) keys in the source feed (11 gravimetric and ~120 CPDM on 2026-11-21)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT cassette_num, cpdm_file_name FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_coal_dust_samples', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- msha_mnm_health_samples
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T2_row_count',
+  CASE WHEN n >= 300000 THEN 'pass' ELSE 'fail' END,
+  n, 300000, 'Expected at least 300000 rows (full file since 2000-01-01)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true))
+        WHERE null_percentage = 100.0 AND column_name NOT IN ('type'))
+);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true))
+        WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'protection_used', 'short_term_exposure'))
+);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL mine_id, sample_date or key rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true) WHERE mine_id IS NULL OR sample_date IS NULL OR sample_no IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T7_year_range',
+  CASE WHEN lo = 2000 AND hi >= 2026 THEN 'pass' ELSE 'fail' END,
+  hi - lo, 26, 'Expected sample year 2000 through at least 2026'
+FROM (SELECT MIN(year) AS lo, MAX(year) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T7_no_future_dates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows dated after today (source typos are dropped at load)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true) WHERE sample_date > CURRENT_DATE);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T7_negative_concentration',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with negative concentration'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true) WHERE concentration < 0);
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T7_silica_present',
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
+  n, 50000, 'Respirable quartz (silica) samples'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true) WHERE contaminant_desc ILIKE 'Quartz%');
+
+INSERT INTO dq_results
+SELECT 'health', 'msha_mnm_health_samples', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate sample_no (source key)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT sample_no FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/msha_mnm_health_samples', allow_moved_paths := true) GROUP BY sample_no HAVING COUNT(*) > 1));
+
