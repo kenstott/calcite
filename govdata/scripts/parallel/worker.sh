@@ -624,10 +624,13 @@ case "$SCHEMA" in
       *) echo "law: unknown mode '$MODE'. Valid modes: historical, once, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
     esac
     if $_law_year_addressed_only && [ -z "${GOVDATA_TABLES:-}" ]; then
-      GOVDATA_TABLES="$(python3 - "$GOVDATA_ROOT/src/main/resources/law/law-schema.yaml" <<'PY'
+      _law_jar="$(resolve_classpath)" || exit 1
+      GOVDATA_TABLES="$(python3 - "$_law_jar" "$(schema_yaml_resource law)" <<'PY'
+import subprocess
 import sys
 import yaml
-schema = yaml.safe_load(open(sys.argv[1]))
+res = subprocess.run(["unzip", "-p", sys.argv[1], sys.argv[2]], capture_output=True, check=True)
+schema = yaml.safe_load(res.stdout)
 print(",".join(t["name"] for t in schema["partitionedTables"]
                if {"year", "congress"} & set(t.get("dimensions") or {})))
 PY
