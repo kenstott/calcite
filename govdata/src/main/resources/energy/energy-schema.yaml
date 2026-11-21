@@ -178,6 +178,17 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
 
+  # EIA-923 plant-level monthly generation year range.
+  # dataLag: 0 — f923_{year}.zip is posted for the current year too (a partial-year time series,
+  # e.g. 2026 carried Jan-Aug as of the Oct 2026 release). Verified live 2026-11-21: 2011-2026
+  # archives exist; 2025+ sit under /electricity/data/eia923/xls/, earlier under /archive/xls/.
+  eia_generation_years: &eia_generation_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2015}"
+    minYear: 2015  # earliest year validated against the Page 1 layout; GOVDATA_START_YEAR cannot reach below it
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
   # EIA-860M capacity changes year range (monthly snapshot files available from 2015).
   # dataLag: 1 — the december_generator{effective_year}.xlsx snapshot publishes through
   # current-1 (in 2026 the newest is december_generator2025.xlsx; 2026 still 301-redirects
@@ -1363,6 +1374,141 @@ partitionedTables:
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA-923 PLANT-LEVEL MONTHLY GENERATION
+  # ---------------------------------------------------------------------------
+  - name: eia_plant_generation
+    # The current-year archive is re-posted monthly and earlier years are restated once when the
+    # annual EIA-923 is finalized (~Sept of year+1), so re-read the two most recent years.
+    # https://www.eia.gov/electricity/data/eia923/
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=eia_generation/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA Form 923 plant-level monthly net generation and fuel consumption, from the "Page 1
+      Generation and Fuel Data" sheet of the annual time-series workbook. One row per plant,
+      nuclear unit (nuclear plants only), prime mover, reported fuel type, year and month, 2015
+      onward; the current year is partial (months EIA has published so far). net_generation_mwh
+      is electricity net generation in MWh and can be negative (station service exceeds output,
+      typical of idle thermal units); fuel_consumed_mmbtu is total fuel consumed for electricity
+      and useful thermal output. A plant with several prime movers or fuels has several rows per
+      month — SUM over them for the plant total. Answers "how much did plant X produce in year
+      Y" (for example Glen Canyon Dam; Hoover Dam is split into two plants, "Hoover Dam (AZ)" and "Hoover Dam (NV)", so match plant_name LIKE 'Hoover Dam%' and SUM). Joins
+      EIA's own state-level estimate for plants that do not report monthly is carried as plant_id
+      99999 ("State-Fuel Level Increment"): one row per state, sector, fuel and prime mover — not a
+      physical plant, so exclude plant_id = 99999 when ranking or naming plants. The current year
+      holds only monthly respondents until EIA finalizes the annual file, so it understates the
+      year. Joins eia_power_plants on plant_id; state totals are in eia_electricity_generation. Preliminary
+      monthly values are restated when the annual file is finalized.
+
+    dimensions:
+      type:
+        - eia_generation
+      year: *eia_generation_years
+
+    columns:
+      - name: plant_id
+        type: integer
+        nullable: false
+        comment: EIA plant identifier (joins eia_power_plants.plant_id)
+      - name: nuclear_unit_id
+        type: string
+        nullable: true
+        comment: Nuclear unit identifier; null for non-nuclear plants
+      - name: generation_year
+        type: integer
+        nullable: false
+        comment: Generation year
+      - name: generation_month
+        type: integer
+        nullable: false
+        comment: Generation month, 1-12
+      - name: plant_name
+        type: string
+        nullable: true
+        comment: Plant name
+      - name: operator_id
+        type: integer
+        nullable: true
+        comment: EIA operator (utility) identifier
+      - name: operator_name
+        type: string
+        nullable: true
+        comment: Plant operator name
+      - <<: *state_abbr_column
+      - name: nerc_region
+        type: string
+        nullable: true
+        comment: NERC reliability region
+      - name: balancing_authority_code
+        type: string
+        nullable: true
+        comment: Balancing authority code
+      - name: sector_code
+        type: integer
+        nullable: true
+        comment: EIA sector number
+      - name: sector
+        type: string
+        nullable: true
+        comment: EIA sector name (for example Electric Utility, IPP Non-CHP)
+      - name: combined_heat_and_power
+        type: string
+        nullable: true
+        comment: Y when the plant is a combined heat and power plant, otherwise N
+      - name: prime_mover
+        type: string
+        nullable: false
+        comment: Reported prime mover code (HY hydro, ST steam turbine, GT gas turbine, WT wind, PV solar photovoltaic, CC combined cycle)
+      - name: fuel_type_code
+        type: string
+        nullable: false
+        comment: Reported fuel type code (WAT water, NG natural gas, SUB subbituminous coal, NUC nuclear, WND wind, SUN solar)
+      - name: mer_fuel_type_code
+        type: string
+        nullable: true
+        comment: Monthly Energy Review fuel type grouping
+      - name: net_generation_mwh
+        type: double
+        nullable: false
+        comment: Electricity net generation in megawatt-hours for the month
+      - name: fuel_consumed_mmbtu
+        type: double
+        nullable: true
+        comment: Total fuel consumed in MMBtu for the month (null when not reported)
+
+    source:
+      type: http
+      url: "https://www.eia.gov/electricity/data/eia923/archive/xls/f923_{effective_year}.zip"
+      method: GET
+      # Bulk-XLSX pipeline (~20 MB workbook, streamed): keep one fetch at a time.
+      parallel: 1
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia923PlantGenerationTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_generation/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_plant_generation
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # GAS PIPELINES — EIA interstate/intrastate natural gas pipeline network (static reference)
@@ -3927,6 +4073,14 @@ constraints:
       - columns: [utility_id]
         targetTable: eia_utility_annual
         targetColumns: [utility_id]
+
+  eia_plant_generation:
+    primaryKey: [plant_id, nuclear_unit_id, prime_mover, fuel_type_code, state_abbr, sector_code, combined_heat_and_power, generation_year, generation_month]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   gas_pipelines:
     primaryKey: [segment_id]
