@@ -134,10 +134,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The Mueller report says the FBI opened its investigation on July 31, 2016, after a foreign government's report about George Papadopoulos, and the special counsel was appointed on May 17, 2017 by Acting Attorney General Rod Rosenstein; it shows no Democratic origin for the opening. The Justice Department inspector general and Durham reports, which address the Democratic-funded Steele dossier, could not be read directly, so whether the investigation can be read as 'made up by the Democrats' stays open.",
+      "evidence": [
+        {
+          "label": "Report on the Investigation into Russian Interference in the 2016 Presidential Election, Vol. I (Justice Department)",
+          "url": "https://www.justice.gov/storage/report_volume1.pdf"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-21"
     },
     {
       "id": 3,
@@ -294,10 +299,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's FAA command-center advisories show the Nov. 13 nationwide ground stop and its cancellation, and the FAA's Q&A says the trigger was a data flood on its FTI network after a new router was deployed at El Dorado, Arkansas, with operations stable that evening but recovery 'slow and steady'. The causes and status of the other outages were not read from a primary source, so whether all were separate and under control is not decided.",
+      "evidence": [
+        {
+          "label": "transport.faa_atcscc_advisories (Nov. 13, 2026 nationwide ground stop advisories)",
+          "url": "https://askamerica.ai/catalog/schemas/transport/#faa_atcscc_advisories-table",
+          "askamerica": true,
+          "sql": "SELECT advisory_date, advisory_number, facility, advisory_type, subject, sent_time_utc FROM transport.faa_atcscc_advisories WHERE advisory_date >= DATE '2026-11-10' AND (subject ILIKE '%NATIONWIDE%' OR advisory_type = 'OUTAGE') ORDER BY advisory_date, sent_time_utc FETCH FIRST 40 ROWS ONLY"
+        },
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-21"
     },
     {
       "id": 9,
@@ -326,10 +342,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsupported",
+      "finding": "No source counting companies now upgrading their systems was found; the warehouse catalog has no such table and the FAA Q&A mentions only the FAA's own router and copper-to-fiber work. The search covered the warehouse catalog, web search and the FAA page; private-sector surveys were not searched.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-21"
     },
     {
       "id": 10,
@@ -358,10 +379,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The FAA's Q&A attributes the stop to instabilities in its 'legacy TDM system', says copper lines are being retired 'due to their obsolescence', and names a data flood from new router work as the trigger while denying that its upgrades caused the stop. Old equipment is part of the FAA's account, but the FAA's cause is more specific than 'ancient' and 'obsolete' technology.",
+      "evidence": [
+        {
+          "label": "transport.faa_atcscc_advisories (Nov. 13, 2026 nationwide ground stop advisories)",
+          "url": "https://askamerica.ai/catalog/schemas/transport/#faa_atcscc_advisories-table",
+          "askamerica": true,
+          "sql": "SELECT advisory_date, advisory_number, facility, advisory_type, subject, sent_time_utc FROM transport.faa_atcscc_advisories WHERE advisory_date >= DATE '2026-11-10' AND (subject ILIKE '%NATIONWIDE%' OR advisory_type = 'OUTAGE') ORDER BY advisory_date, sent_time_utc FETCH FIRST 40 ROWS ONLY"
+        },
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-21"
     },
     {
       "id": 11,
@@ -390,10 +422,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsupported",
+      "finding": "No record of the instruction was found beyond Trump's own account as reported by PBS NewsHour, and no statement from Secretary Duffy about it. The search covered the warehouse catalog, web search and the PBS report; DOT and White House releases were not read directly.",
+      "evidence": [
+        {
+          "label": "PBS NewsHour report",
+          "url": "https://www.pbs.org/newshour/politics/watch-cascade-of-tech-outages-separate-events-and-under-control-trump-says"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-21"
     },
     {
       "id": 12,
@@ -486,10 +523,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's EIA price data show average residential electricity prices rising from 2019 to 2025 in Virginia (+26.6%), Texas, Ohio, Georgia and the U.S. as a whole (+32.4%), so there is no sign of lower prices in leading data-center states, but state-level data do not isolate data centers' effect. USAFacts found no clear state-level link between data-center capacity and price changes; published studies conflict, and local tax relief is documented only for specific communities.",
+      "evidence": [
+        {
+          "label": "energy.eia_electricity_prices (residential, 2019 and 2025)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_electricity_prices-table",
+          "askamerica": true,
+          "sql": "SELECT state_abbr, price_year, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE sector_code='RES' AND state_abbr IN ('VA','TX','OH','GA','US') AND price_year IN (2019,2025) ORDER BY state_abbr, price_year"
+        },
+        {
+          "label": "USAFacts, Are AI data centers driving up your electric bill? (Aug. 11, 2026)",
+          "url": "https://usafacts.org/articles/are-ai-data-centers-driving-up-your-electric-bill/"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-21"
     },
     {
       "id": 15,
