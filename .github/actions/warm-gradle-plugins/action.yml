@@ -16,8 +16,9 @@
 #
 name: 'Warm Gradle plugins'
 description: >
-  Resolves the buildSrc plugins and the wrapper distribution with retries, so that a short outage of Maven
-  Central, the Gradle Plugin Portal or services.gradle.org does not fail the build step that follows.
+  Resolves the buildSrc plugins, the wrapper distribution and the project compile/runtime classpaths with
+  retries, so that a short outage of Maven Central, the Gradle Plugin Portal or services.gradle.org does not
+  fail the build step that follows.
 inputs:
   working-directory:
     description: 'Directory holding the gradlew wrapper'
@@ -35,7 +36,9 @@ runs:
       path: |
         ~/.gradle/caches/modules-2
         ~/.gradle/wrapper/dists
-      key: gradle-plugins-${{ runner.os }}-${{ hashFiles('**/buildSrc/*.kts', '**/buildSrc/*.properties', '**/buildSrc/subprojects/*/*.kts', '**/gradle/wrapper/gradle-wrapper.properties') }}
+      key: gradle-plugins-${{ runner.os }}-${{ hashFiles('**/buildSrc/*.kts', '**/buildSrc/*.properties', '**/buildSrc/subprojects/*/*.kts', '**/gradle/wrapper/gradle-wrapper.properties') }}-${{ hashFiles('**/build.gradle.kts', 'gradle.properties', 'bom/build.gradle.kts') }}
+      restore-keys: |
+        gradle-plugins-${{ runner.os }}-${{ hashFiles('**/buildSrc/*.kts', '**/buildSrc/*.properties', '**/buildSrc/subprojects/*/*.kts', '**/gradle/wrapper/gradle-wrapper.properties') }}-
   - name: 'Resolve buildSrc plugins (retry)'
     shell: bash
     working-directory: ${{ inputs.working-directory }}
@@ -43,29 +46,33 @@ runs:
       # Gradle's own repository retry covers transient I/O errors, but a plugin lookup that gets a
       # not-found answer from every repository fails at once (about 22 s) and is not retried (#1350).
       # Run the resolution here, with a growing pause, and fail loudly only when every attempt failed.
-      # Each attempt is capped at 4 minutes: a runner that cannot reach the hosts keeps failing, so the
-      # step gives up in about 13 minutes and a job-level rerun lands on a different runner.
+      # Each attempt is capped at 10 minutes: a runner that cannot reach the hosts keeps failing, so the
+      # step gives up in about 32 minutes and a job-level rerun lands on a different runner.
       # macOS runners have no GNU timeout: use timeout, else gtimeout, else run each attempt uncapped.
       if command -v timeout >/dev/null 2>&1; then
-        cap=(timeout 240)
+        cap=(timeout 600)
       elif command -v gtimeout >/dev/null 2>&1; then
-        cap=(gtimeout 240)
+        cap=(gtimeout 600)
       else
         cap=()
       fi
       echo "Per-attempt cap: ${cap[*]:-none (no timeout or gtimeout on PATH)}"
+      # A dependency lookup that gets a not-found answer (for guava, checker-qual, iceberg-api, apiguardian)
+      # fails at once and Gradle does not retry it, so the classpaths are resolved here too (#1421).
+      # The resolution runs once per attempt: plugins first, then every project's classpaths.
       attempts=3
       for attempt in $(seq 1 "$attempts"); do
-        if "${cap[@]}" ./gradlew --no-daemon --console=plain -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 help; then
-          echo "Gradle plugins resolved on attempt $attempt"
+        if "${cap[@]}" ./gradlew --no-daemon --console=plain -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 \
+             -I "${GITHUB_ACTION_PATH//\\//}/resolve-classpaths.init.gradle" help warmClasspaths; then
+          echo "Gradle plugins and classpaths resolved on attempt $attempt"
           exit 0
         fi
-        echo "::warning::Gradle plugin resolution failed on attempt $attempt of $attempts"
+        echo "::warning::Gradle plugin and classpath resolution failed on attempt $attempt of $attempts"
         if [ "$attempt" -lt "$attempts" ]; then
           sleep $((attempt * 20))
         fi
       done
-      echo "::error::Gradle plugin resolution failed on all $attempts attempts"
+      echo "::error::Gradle plugin and classpath resolution failed on all $attempts attempts"
       exit 1
   - name: 'Save Gradle plugin and wrapper cache'
     if: steps.plugin-cache.outputs.cache-hit != 'true'
