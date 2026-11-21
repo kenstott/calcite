@@ -1,7 +1,9 @@
 # Tables a govdata schema YAML declares but the warehouse does not hold yet (their ETL has not
-# run), so no complete catalog walk lists them and the shipped catalog cache cannot contain them.
-# check_catalog_cache_coverage.py accepts a declared table missing from the cache only when it is
-# listed here, and fails on an entry the cache holds or no YAML declares.
+# run), so no complete catalog walk lists them and the catalog cache each release walks cannot
+# contain them. check_catalog_cache_coverage.py, run by the release's catalog-cache job, accepts a
+# declared table missing from the cache only when it is listed here, and fails on an entry the
+# cache holds or no YAML declares.
 #
+# One entry per line, with its evidence after a #:  schema.table  # <evidence the warehouse lacks it>
 # Add an entry only after confirming the warehouse has no Iceberg table for it; a table that is
-# materialized but missing from the cache means the cache is stale -- regenerate it instead.
+# materialized but missing from the cache is a defect in the walk, which fails the release.

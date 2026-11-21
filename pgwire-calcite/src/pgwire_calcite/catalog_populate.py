@@ -23,7 +23,6 @@ simply have no PK/FK entries; clients (DataGrip) add virtual FKs on their side.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import pickle
@@ -31,6 +30,7 @@ import re
 from typing import Dict, List
 
 from pgwire_calcite import catalog, normalize
+from pgwire_calcite.catalog_cache_key import cache_key, engine_version
 from pgwire_calcite.compiler.sql_gen import (
     ColumnMeta,
     CompilationContext,
@@ -518,9 +518,7 @@ STATE_DIR_ENV = "PGWIRE_CALCITE_STATE_DIR"
 
 
 def _cache_file_name(model_path: str) -> str:
-    with open(model_path, "rb") as f:
-        model_hash = hashlib.sha256(f.read()).hexdigest()[:16]
-    return f"catalog-cache-{model_hash}.pkl"
+    return f"catalog-cache-{cache_key(model_path, engine_version())}.pkl"
 
 
 def catalog_cache_write_path(model_path: str) -> str:
@@ -537,14 +535,13 @@ def catalog_cache_write_path(model_path: str) -> str:
 
 
 def catalog_cache_path(model_path: str) -> str:
-    """Deterministic cache filename next to ``model_path``, keyed by its content hash.
+    """Deterministic cache filename next to ``model_path``, keyed by :func:`cache_key`.
 
-    A schema change (a table added/removed/edited in model.json) changes the hash and
-    therefore the filename, so a stale cache is simply never matched -- no separate
-    invalidation bookkeeping needed. Shipping a pre-built cache file is then just
-    shipping it alongside model.json in the same directory: the runtime path
-    computation independently lands on the identical name, so the bundled release
-    tarball needs no extra wiring at either build or install time.
+    A model.json change or another engine release changes the key and therefore the
+    filename, so a stale cache is simply never matched -- no separate invalidation
+    bookkeeping needed. The release walks the catalog with its own engine and ships the
+    cache in the pack beside model.json; the runtime path computation independently lands
+    on the same name when the pack runs on that release's runtime.
     """
     return os.path.join(
         os.path.dirname(os.path.abspath(model_path)),
@@ -557,8 +554,8 @@ def build_and_cache_context(conn, model_path: str):
     :func:`catalog_cache_path`'s file -- always regenerating, never trusting a stale
     file on disk.
 
-    Only a complete walk is written. The cache has no invalidation other than a
-    model.json change, so a walk that had to leave a schema or table out (a
+    Only a complete walk is written. The cache has no invalidation other than its
+    key (model.json and the engine release), so a walk that had to leave a schema or table out (a
     server still warming up, a schema whose listing threw) would otherwise be
     served as the whole catalog on every later launch. A partial result is still
     returned for this launch, and the next launch walks live again."""
@@ -624,7 +621,7 @@ def populate_state_cached(conn, state, model_path: str | None, role_id: str = ""
             log.exception(
                 "Catalog cache at %s failed to load -- rebuilding live", cache_path)
     # A production install ships the cache, so reaching here is a defect: the engine reads this
-    # marker from the server's log and says so, naming the files looked for and the model hash.
+    # marker from the server's log and says so, naming the files looked for and the cache key.
     log.warning(
         "%s catalog-cache-miss hash=%s looked=%s unloadable=%s -- walking the catalog live",
         STAGE_MARKER, _cache_file_name(model_path)[len("catalog-cache-"):-len(".pkl")],

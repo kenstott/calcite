@@ -11,6 +11,7 @@ on:
       - '.github/scripts/**'
       - 'pgwire-calcite/packaging/*.json'
       - 'pgwire-calcite/scripts/check_catalog_cache_coverage.py'
+      - 'govdata/src/main/resources/*/*-schema.yaml'
       - 'pgwire-govdata/**'
       - '.github/workflows/askamerica-engine.yml'
       - '.github/workflows/pgwire-adapters-release.yml'

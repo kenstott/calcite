@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Kenneth Stott
 # Licensed under the Business Source License 1.1 (see ../../LICENSE, ../../NOTICE).
-"""Fail when a shipped catalog cache lacks a table or view a govdata schema YAML declares.
+"""Fail when a release's catalog cache lacks a table or view a govdata schema YAML declares.
 
-The cache file is keyed by model.json's content hash, and adding a table to a schema YAML never
-changes model.json -- so a cache built before the table existed keeps matching and is served as
-the whole catalog (govdata-ops#940: every fisheries table missing). This compares the cache against
-the YAMLs instead.
+Each release walks the catalog live and writes the cache only from a complete walk, but a walk
+sees only the tables the warehouse serves: a table a schema YAML declares and the walk did not
+reach would be missing from the catalog every install serves (govdata-ops#940: every fisheries
+table missing). This compares the cache against the YAMLs.
 
 A declared table the warehouse does not hold yet (its ETL has not run) is absent from every
-complete catalog walk, so no regenerated cache can contain it. Such tables are named, one
-``schema.table`` per line, in the unmaterialized list; a declared table missing from the cache
-must be listed there. The list is kept honest both ways: a listed table the cache holds, or one
-no YAML declares, also fails, so an entry is dropped as soon as its table is materialized and
-the cache regenerated.
+complete catalog walk, so no cache can contain it. Such tables are named, one ``schema.table``
+per line followed by a ``#`` comment giving the evidence that the warehouse lacks it, in the
+unmaterialized list; a declared table missing from the cache must be listed there. The list is
+kept honest both ways: a listed table the cache holds, or one no YAML declares, also fails, so
+an entry is dropped as soon as its table is materialized.
 
     PYTHONPATH=pgwire-calcite/src python3 check_catalog_cache_coverage.py \\
         <cache.pkl> <unmaterialized.txt> <schema-yaml>...
@@ -40,16 +40,22 @@ def declared(yaml_path):
 
 
 def unmaterialized(list_path):
-    """The ``schema.table`` entries of the list; blank lines and ``#`` comments are ignored."""
+    """The ``schema.table`` entries of the list; blank and comment-only lines are ignored. Each
+    entry carries its evidence in a trailing ``#`` comment."""
     entries = set()
     with open(list_path) as f:
         for lineno, raw in enumerate(f, 1):
-            line = raw.split("#", 1)[0].strip()
+            line, _, evidence = raw.partition("#")
+            line = line.strip()
             if not line:
                 continue
             schema, dot, table = line.partition(".")
             if not dot or not schema or not table or "." in table:
                 raise ValueError(f"{list_path}:{lineno}: expected schema.table, got {line!r}")
+            if not evidence.strip():
+                raise ValueError(
+                    f"{list_path}:{lineno}: {line} gives no evidence that the warehouse lacks it "
+                    f"(expected `{line}  # <evidence>`)")
             entries.add((schema, table))
     return entries
 
@@ -74,8 +80,8 @@ def main(argv):
 
     if missing:
         _report(
-            f"{cache_path} lacks {len(missing)} declared table(s)/view(s) -- regenerate the cache "
-            f"from a complete walk, or, only for a table the warehouse does not hold, list it in "
+            f"{cache_path} lacks {len(missing)} declared table(s)/view(s) -- the walk did not reach "
+            f"them; only for a table the warehouse does not hold, list it with its evidence in "
             f"{list_path}:",
             missing)
     if listed_but_cached:

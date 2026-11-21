@@ -106,7 +106,38 @@ class AdaptersReleaseTest(unittest.TestCase):
         downloads = [s["with"].get("name") for s in jobs["pack"]["steps"]
                      if s.get("uses", "").startswith("actions/download-artifact")]
         self.assertEqual(["adapter-jars-${{ matrix.adapter.name }}", "runtime-jars",
-                          "runtime-${{ matrix.os.variant }}"], downloads)
+                          "runtime-${{ matrix.os.variant }}", "catalog-cache-govdata"], downloads)
+
+    def test_the_govdata_pack_ships_the_catalog_cache_this_release_walked(self):
+        jobs = workflow("pgwire-adapters-release.yml")["jobs"]
+        cache = jobs["catalog-cache"]
+        self.assertEqual(["plan", "runtime"], cache["needs"])
+        # A skipped job would skip the packs and every job after them; it idles instead.
+        self.assertNotIn("if", cache)
+        self.assertIn("catalog-cache", jobs["pack"]["needs"])
+        runs = "\n".join(s.get("run", "") for s in cache["steps"])
+        self.assertIn('echo "$VERSION" > src/pgwire_calcite/ENGINE_VERSION', runs)
+        self.assertIn("scripts/build_catalog_cache.py ../pgwire-govdata/model.json", runs)
+        self.assertIn("check_catalog_cache_coverage.py", runs)
+        self.assertIn("pgwire-govdata/unmaterialized-tables.txt", runs)
+        walk = next(s for s in cache["steps"] if "build_catalog_cache.py" in s.get("run", ""))
+        self.assertEqual("${{ secrets.AWS_ACCESS_KEY_ID }}", walk["env"]["AWS_ACCESS_KEY_ID"])
+        self.assertTrue(walk["env"]["GOVDATA_DUCKDB_CATALOG"].startswith("${{ github.workspace }}/"))
+        upload = next(s for s in cache["steps"] if s.get("uses", "").startswith("actions/upload-artifact"))
+        self.assertEqual("catalog-cache-govdata", upload["with"]["name"])
+        self.assertEqual("error", upload["with"]["if-no-files-found"])
+        get = next(s for s in jobs["pack"]["steps"]
+                   if s.get("with", {}).get("name") == "catalog-cache-govdata")
+        self.assertEqual("matrix.adapter.name == 'govdata'", get["if"])
+        model = next(s for s in jobs["pack"]["steps"]
+                     if s.get("name") == "Model, catalog cache, manifest + launcher")
+        self.assertIn("from pgwire_calcite.catalog_cache_key import cache_key", model["run"])
+        self.assertNotIn("pgwire-${{ matrix.adapter.name }}\"/catalog-cache-", model["run"])
+
+    def test_the_runtime_is_stamped_with_its_engine_release(self):
+        steps = workflow("pgwire-calcite-release.yml")["jobs"]["runtime"]["steps"]
+        runs = "\n".join(s.get("run", "") for s in steps)
+        self.assertIn('echo "$VERSION" > "$PKG/ENGINE_VERSION"', runs)
 
     def test_the_runtime_and_packs_are_published_only_after_the_smoke_jobs(self):
         jobs = workflow("pgwire-adapters-release.yml")["jobs"]

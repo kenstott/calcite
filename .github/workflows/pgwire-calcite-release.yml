@@ -237,6 +237,12 @@ jobs:
           # real install. Adapter-only Python packages (govdata's EMBED() embedder) go in that
           # adapter's pack, not here.
           uv pip install --python "$RTABS/cpython" --no-editable --override packaging/uv-overrides.txt ./vendor/buenavista ".[oidc]"
+          # The engine release this runtime belongs to, in its installed package: a pack's catalog
+          # cache is keyed by it (catalog_cache_key.engine_version), so the govdata pack built in
+          # the same release loads the cache pgwire-adapters-release.yml walked for it.
+          if [[ "$RUNNER_OS" == "Windows" ]]; then VENVPY="$RTABS/cpython/Scripts/python.exe"; else VENVPY="$RTABS/cpython/bin/python"; fi
+          PKG="$("$VENVPY" -c 'import os, pgwire_calcite; print(os.path.dirname(pgwire_calcite.__file__))')"
+          echo "$VERSION" > "$PKG/ENGINE_VERSION"
           # `uv venv` makes cpython/bin/python an absolute symlink; make it relative so the runtime
           # can be moved anywhere. CPython 3.11+ derives its prefix from the link's real path, so
           # pyvenv.cfg's build-machine `home` line is harmless on POSIX.
