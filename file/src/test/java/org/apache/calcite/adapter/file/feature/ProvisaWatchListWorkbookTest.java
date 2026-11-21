@@ -68,6 +68,9 @@ public class ProvisaWatchListWorkbookTest {
   }
 
   private void assertHeaders(Map<String, JsonNode> tables) {
+    assertEquals(
+        Arrays.asList("deal_id", "code_name", "legal_name", "aliases", "ticker", "deal_type",
+            "description", "announced_on"), columns(tables, "deals"));
     assertEquals(Arrays.asList("deal_id", "employee_id", "over_wall_at"),
         columns(tables, "deal_team"));
     assertEquals(Arrays.asList("message_id", "deal_id"), columns(tables, "screening"));
