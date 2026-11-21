@@ -8324,6 +8324,244 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: treasury_auction_results
+    freshness:
+      type: hash
+    pattern: "type=treasury_auction_results/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Every U.S. Treasury marketable-securities auction since 1979 (bills, notes, bonds, TIPS,
+      floating-rate notes, cash management bills; 11,154 auctions through October 2026), one row per auction (cusip + auction_date),
+      from Treasury Fiscal Data "Treasury Securities Auctions Data". Carries the results the
+      market watches: bid_to_cover_ratio, high_yield (notes/bonds) and high_discnt_rate /
+      high_investment_rate (bills), avg_med_yield, the offered and accepted amounts, and the
+      bidder split (primary_dealer, direct, indirect, SOMA, retail). The year partition is the
+      auction_date year. Amounts are dollars (not millions). Auctions already announced but not
+      yet held appear with null result columns until they settle, and the year is re-read in
+      full every run so a result lands on the row that announced it. Result columns are null
+      for older auctions where Treasury did not record them: bid_to_cover_ratio starts with the
+      1994-09-28 auction, and the primary-dealer, direct, indirect and SOMA splits start with the
+      2008-04-07 auction. Treasury writes missing values as the text "null"; they are stored as SQL NULL. Not the same as econ.treasury_yields (secondary-market constant-maturity
+      yields) or econ.federal_debt (outstanding debt): this is primary-market issuance. Join to
+      econ.fred_indicators by auction_date for rate-surprise or FOMC event studies. Source:
+      https://fiscaldata.treasury.gov/datasets/treasury-securities-auctions-data/ (public domain, no key).
+    columns:
+      - name: auction_date
+        type: date
+        nullable: false
+        comment: Date the auction was held; part of the PK
+      - name: cusip
+        type: string
+        nullable: false
+        comment: CUSIP of the security auctioned; part of the PK (a reopening reuses the CUSIP on a later auction_date)
+      - name: issue_date
+        type: date
+        nullable: true
+        comment: Settlement (issue) date of the securities
+      - name: maturity_date
+        type: date
+        nullable: true
+        comment: Maturity date of the security
+      - name: announcemt_date
+        type: date
+        nullable: true
+        comment: Date Treasury announced the auction (Treasury's spelling of the field)
+      - name: security_type
+        type: string
+        nullable: true
+        comment: Bill, Note or Bond only; TIPS, floating-rate notes and cash management bills are flagged by inflation_index_security, floating_rate and cash_management_bill_cmb
+      - name: security_term
+        type: string
+        nullable: true
+        comment: Term as auctioned, e.g. 10-Year, 17-Week, 29-Year 10-Month
+      - name: original_security_term
+        type: string
+        nullable: true
+        comment: Term of the original issue; differs from security_term on a reopening
+      - name: reopening
+        type: string
+        nullable: true
+        comment: Yes when the auction adds to an existing CUSIP, No for a new issue
+      - name: auction_format
+        type: string
+        nullable: true
+        comment: Single-Price or Multiple-Price
+      - name: inflation_index_security
+        type: string
+        nullable: true
+        comment: Yes for TIPS
+      - name: floating_rate
+        type: string
+        nullable: true
+        comment: Yes for floating-rate notes
+      - name: cash_management_bill_cmb
+        type: string
+        nullable: true
+        comment: Yes for a cash management bill
+      - name: offering_amt
+        type: double
+        nullable: true
+        comment: Amount offered, in dollars
+      - name: total_tendered
+        type: double
+        nullable: true
+        comment: Total bids received (competitive, noncompetitive, FIMA, SOMA), in dollars
+      - name: total_accepted
+        type: double
+        nullable: true
+        comment: Total amount accepted, in dollars
+      - name: bid_to_cover_ratio
+        type: double
+        nullable: true
+        comment: Treasury's published bid-to-cover (competitive tendered divided by competitive accepted); null until the auction settles
+      - name: comp_tendered
+        type: double
+        nullable: true
+        comment: Competitive bids received, in dollars
+      - name: comp_accepted
+        type: double
+        nullable: true
+        comment: Competitive bids accepted, in dollars
+      - name: noncomp_accepted
+        type: double
+        nullable: true
+        comment: Noncompetitive bids accepted, in dollars
+      - name: primary_dealer_tendered
+        type: double
+        nullable: true
+        comment: Bids from primary dealers, in dollars
+      - name: primary_dealer_accepted
+        type: double
+        nullable: true
+        comment: Amount accepted from primary dealers, in dollars
+      - name: direct_bidder_tendered
+        type: double
+        nullable: true
+        comment: Bids from direct bidders, in dollars
+      - name: direct_bidder_accepted
+        type: double
+        nullable: true
+        comment: Amount accepted from direct bidders, in dollars
+      - name: indirect_bidder_tendered
+        type: double
+        nullable: true
+        comment: Bids from indirect bidders (foreign central banks and funds bidding through dealers), in dollars
+      - name: indirect_bidder_accepted
+        type: double
+        nullable: true
+        comment: Amount accepted from indirect bidders, in dollars
+      - name: soma_tendered
+        type: double
+        nullable: true
+        comment: Federal Reserve System Open Market Account add-on bids, in dollars
+      - name: soma_accepted
+        type: double
+        nullable: true
+        comment: Amount accepted from the Federal Reserve SOMA, in dollars
+      - name: treas_retail_accepted
+        type: double
+        nullable: true
+        comment: Treasury retail (TreasuryDirect) amount accepted, in dollars
+      - name: high_yield
+        type: double
+        nullable: true
+        comment: Highest accepted yield, percent (notes, bonds, TIPS); the stop-out yield
+      - name: low_yield
+        type: double
+        nullable: true
+        comment: Lowest accepted yield, percent
+      - name: avg_med_yield
+        type: double
+        nullable: true
+        comment: Average (median) accepted yield, percent
+      - name: high_discnt_rate
+        type: double
+        nullable: true
+        comment: Highest accepted discount rate, percent (bills)
+      - name: low_discnt_rate
+        type: double
+        nullable: true
+        comment: Lowest accepted discount rate, percent (bills)
+      - name: avg_med_discnt_rate
+        type: double
+        nullable: true
+        comment: Average (median) accepted discount rate, percent (bills)
+      - name: high_investment_rate
+        type: double
+        nullable: true
+        comment: Highest accepted investment (bond-equivalent) rate, percent (bills)
+      - name: high_price
+        type: double
+        nullable: true
+        comment: Price per 100 at the high yield or rate
+      - name: int_rate
+        type: double
+        nullable: true
+        comment: Coupon rate, percent; null for bills
+      - name: spread
+        type: double
+        nullable: true
+        comment: Spread over the index for floating-rate notes, percent
+      - name: soma_holdings
+        type: double
+        nullable: true
+        comment: Federal Reserve SOMA holdings of the security at auction, in dollars
+      - name: est_pub_held_mat_by_type_amt
+        type: double
+        nullable: true
+        comment: Estimated publicly held maturing amount of this security type, in dollars
+
+    source:
+      type: http
+      url: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/auctions_query"
+      method: GET
+      parameters:
+        filter: "auction_date:gte:{year}-01-01,auction_date:lte:{year}-12-31"
+        sort: "auction_date"
+        page[size]: "10000"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.TreasuryAuctionsTransformer"
+
+    dimensions:
+      type:
+        - treasury_auction_results
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:1979}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=treasury_auction_results/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 5000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: treasury_auction_results
+        catalogType: hadoop
+        overwritePartitions: true
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -8333,6 +8571,9 @@ partitionedTables:
 # ============================================================================
 
 constraints:
+
+  treasury_auction_results:
+    primaryKey: [auction_date, cusip]
 
   soi_income_by_zip:
     # state_fips is REQUIRED in the key: zipcode=00000 is a per-state total row, so

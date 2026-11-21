@@ -2310,6 +2310,47 @@ FROM (SELECT e.chk, MAX(a.value) AS v, e.expected
     ON a.dataset = e.dataset AND a.vintage = e.vintage AND a.fiscal_year = e.fiscal_year AND a.variable = e.variable
   GROUP BY e.chk, e.expected);
 
+-- treasury_auction_results
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'treasury_auction_results', 'T1_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END, n, 100,
+  'Fiscal Data returns 163 auctions for 1990, 440 for 2024, 444 for 2025'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/treasury_auction_results', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'treasury_auction_results', 'T2_security_types',
+  CASE WHEN n = 3 THEN 'pass' ELSE 'fail' END, n, 3, 'Distinct security_type: Bill, Note, Bond (TIPS/FRN/CMB are flag columns)'
+FROM (SELECT COUNT(DISTINCT security_type) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/treasury_auction_results', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'treasury_auction_results', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null auction_date or cusip'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/treasury_auction_results', allow_moved_paths := true) WHERE auction_date IS NULL OR cusip IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'treasury_auction_results', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (auction_date, cusip) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT auction_date, cusip FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/treasury_auction_results', allow_moved_paths := true) GROUP BY auction_date, cusip HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'treasury_auction_results', 'T7_bid_to_cover_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Settled auctions with bid_to_cover outside 0.5-15'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/treasury_auction_results', allow_moved_paths := true) WHERE bid_to_cover_ratio IS NOT NULL AND (bid_to_cover_ratio < 0.5 OR bid_to_cover_ratio > 15));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'treasury_auction_results', 'T7_null_marker_text',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Treasury "null" text must be SQL NULL, not a string'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/treasury_auction_results', allow_moved_paths := true) WHERE security_term = 'null' OR reopening = 'null' OR auction_format = 'null');
+
+-- Known value: 2024-05-01 17-Week bill (CUSIP 912797LA3) bid-to-cover 3.02, offering $60bn.
+INSERT INTO dq_results
+SELECT 'fiscal', 'treasury_auction_results', 'T7_known_auction',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1, '912797LA3 on 2024-05-01: bid_to_cover 3.02, offering 60bn'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/treasury_auction_results', allow_moved_paths := true)
+  WHERE cusip = '912797LA3' AND auction_date = DATE '2024-05-01'
+    AND ABS(bid_to_cover_ratio - 3.02) < 0.001 AND offering_amt = 60000000000);
+
 -- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
