@@ -17,7 +17,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -31,6 +36,10 @@ import java.util.Map;
  * {@code ssaNodeCommand}, {@code ssaChromeExecutable}, {@code ssaRequestDelayMs},
  * {@code ssaEntryPageUrl}); a missing or unusable one throws {@link IllegalStateException}
  * naming the cause. There is no fallback to a plain HTTP client.
+ *
+ * <p>Concurrent workers each own a browser session, but ssa.gov sees one client address, so every
+ * request is serialised across processes by an exclusive lock on a file in the temp directory and
+ * spaced {@code ssaRequestDelayMs} after the previous request of any worker.
  */
 final class SsaBrowserSession {
 
@@ -41,12 +50,17 @@ final class SsaBrowserSession {
 
   private static SsaBrowserSession current;
 
+  private static final File LOCK_FILE =
+      new File(System.getProperty("java.io.tmpdir"), "govdata-ssa-fetch.lock");
+
   private final String key;
   private final BrowserHelperProcess helper;
+  private final long delayMs;
 
-  private SsaBrowserSession(String key, BrowserHelperProcess helper) {
+  private SsaBrowserSession(String key, BrowserHelperProcess helper, long delayMs) {
     this.key = key;
     this.helper = helper;
+    this.delayMs = delayMs;
   }
 
   /** The shared session for the source parameters in {@code context}, started if needed. */
@@ -67,7 +81,7 @@ final class SsaBrowserSession {
     }
     BrowserHelperProcess h = BrowserHelperProcess.start(LABEL, node, script, INSTALL_HINT,
         Arrays.asList(entry, delay, chrome == null ? "" : chrome));
-    current = new SsaBrowserSession(key, h);
+    current = new SsaBrowserSession(key, h, Long.parseLong(delay));
     return current;
   }
 
@@ -84,7 +98,29 @@ final class SsaBrowserSession {
   synchronized String fetchText(String url) throws IOException {
     ObjectNode req = MAPPER.createObjectNode();
     req.put("url", url);
-    JsonNode reply = helper.call(req);
+    JsonNode reply;
+    try (RandomAccessFile file = new RandomAccessFile(LOCK_FILE, "rw");
+        FileChannel channel = file.getChannel();
+        FileLock lock = channel.lock()) {
+      ByteBuffer stamp = ByteBuffer.allocate(Long.BYTES);
+      long last = channel.read(stamp, 0) == Long.BYTES
+          ? ((ByteBuffer) stamp.flip()).getLong() : 0L;
+      long wait = last + delayMs - System.currentTimeMillis();
+      if (wait > 0) {
+        try {
+          Thread.sleep(wait);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new IOException(LABEL + ": interrupted while waiting for the shared request slot", e);
+        }
+      }
+      try {
+        reply = helper.call(req);
+      } finally {
+        channel.write((ByteBuffer) ByteBuffer.allocate(Long.BYTES)
+            .putLong(System.currentTimeMillis()).flip(), 0);
+      }
+    }
     if (reply.path("status").asInt() == 404) {
       return null;
     }
