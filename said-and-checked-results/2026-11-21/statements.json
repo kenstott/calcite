@@ -4,7 +4,8 @@
   "lede": [
     "President Trump held a long White House news conference on Nov. 20 after returning from Asia, where he met Chinese President Xi Jinping and Russian President Vladimir Putin. He spoke about Putin, a reported Iranian dirty-bomb plot, a week of technology outages including the FAA's nationwide ground stop, AI data centers and an AI agreement with Xi. Secretary of State Marco Rubio spoke at the same event about the three countries' nuclear arsenals.",
     "Pennsylvania Gov. Josh Shapiro, in a PBS NewsHour interview the same day, spoke about the Asia summit, the war with Iran, U.S. military aid to Israel, his state's election results and minimum wage, and measles deaths in Pennsylvania. One of his statements, that the president did not address AI on the trip, is paired with Trump's account of an AI agreement with Xi.",
-    "On the Senate floor, Sen. Chuck Grassley spoke about welfare and Medicaid work requirements, Sen. John Thune about South Dakota Guard and Reserve units, and Sens. Shelley Moore Capito and Sheldon Whitehouse about the Bipartisan American Affordability and Jobs Act of 2026, a permitting bill."
+    "On the Senate floor, Sen. Chuck Grassley spoke about welfare and Medicaid work requirements, Sen. John Thune about South Dakota Guard and Reserve units, and Sens. Shelley Moore Capito and Sheldon Whitehouse about the Bipartisan American Affordability and Jobs Act of 2026, a permitting bill.",
+    "Of the 26 checkable statements on this page, 12 were supported by warehouse or primary-source data, 12 were unsettled because the evidence found did not decide them, and 2 were unsupported because no evidence was found. None was rated contradicted or false. The other 22 statements are opinions, predictions, promises or a personal remark, which are listed but not checked."
   ],
   "stories": [
     {
@@ -1823,10 +1824,25 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The Congressional Record confirms the remark, and the introduced text of S. 5653 read on govinfo.gov contains no provision found that gives senators or Congress standing to enforce understandings with the Defense or Interior Departments; the engrossed text that passed was not read. Whether senators would have standing turns on how courts apply standing doctrine and on what 'standing' the speaker meant, which the bill text does not decide.",
+      "evidence": [
+        {
+          "label": "law.bills (title search: Affordability and Jobs Act)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "select bill_type, bill_number, title from law.bills where congress=119 and title ilike '%Affordability and Jobs%' fetch first 5 rows only"
+        },
+        {
+          "label": "S. 5653 as introduced (BILLS-119s5653is), govinfo.gov",
+          "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/html/BILLS-119s5653is.htm"
+        },
+        {
+          "label": "Congressional Record, Nov. 20, 2026, Senate, Whitehouse remarks",
+          "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+        }
+      ],
+      "check_run": "q216/askamerica/2026-11-21"
     },
     {
       "id": 49,
