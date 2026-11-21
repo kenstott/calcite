@@ -42,7 +42,8 @@ import java.net.URI;
  * <p>The workbook is at {@code statistics/{year}/xls/hm71.xls} for 2022 and earlier and
  * {@code hm71.xlsx} from 2023 (verified 2026-11-19), so the URL is built from the
  * {@code effective_year} dimension and the HTTP body is ignored. Areas are spread over eight
- * data sheets named {@code A} to {@code H}; each row is: A area name, B census population,
+ * data sheets named {@code A} to {@code H} (2012-2015 workbooks name the last one {@code I});
+ * each row is: A area name, B census population,
  * C-J lane-miles (interstate, other freeways and expressways, other principal arterial, minor
  * arterial, major collector, minor collector, local, total), K-R daily VMT in thousands for
  * the same eight classes. Zero values are shown as a dash by the
@@ -75,7 +76,7 @@ public class FhwaUrbanizedAreaVmtTransformer implements ResponseTransformer {
         for (int i = 0; i < wb.getNumberOfSheets(); i++) {
           Sheet sheet = wb.getSheetAt(i);
           String sn = sheet.getSheetName();
-          if (sn.length() != 1 || sn.charAt(0) < 'A' || sn.charAt(0) > 'H') {
+          if (sn.length() != 1 || sn.charAt(0) < 'A' || sn.charAt(0) > 'I') {
             continue;
           }
           sheets++;
