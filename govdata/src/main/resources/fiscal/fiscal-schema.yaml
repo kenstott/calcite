@@ -245,9 +245,13 @@ dimension_values:
   # schema — no dedicated override var, to avoid a second knob that could
   # silently diverge from the range everything else is scoped to.
   govfin_year_range: &govfin_year_range
-    type: range
+    type: yearRange
     start: "${GOVDATA_START_YEAR:2012}"
+    minYear: 2012
     end: "${GOVDATA_END_YEAR:2024}"
+    # Data ceiling: the year is part of the Census landing-page URL, so a vintage
+    # Census has not posted has no page to fetch. Raise when the next vintage posts.
+    maxYear: 2024
 
   # Census STC (state_corporate_income_tax_collections) timeseries API: confirmed
   # live 2026-09-06 the published range is 2016-2025 (time=2015 and time=2026 both
