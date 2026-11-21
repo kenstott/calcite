@@ -872,10 +872,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The joint U.S.-Russia-China declaration from the Nov. 19 Shenzhen summit says nothing on AI, Ukraine or Chinese economic practices. A White House release quotes Trump saying in a Fox News interview that he and Xi 'talked about' super intelligence at the summit dinner, but that is the president's own account rather than a record of the talks, so whether AI was addressed, and the Ukraine and economic points, stay open.",
+      "evidence": [
+        {
+          "label": "White House, U.S.-Russia-China Heads of State Declaration toward Peace (Nov. 19, 2026)",
+          "url": "https://www.whitehouse.gov/briefings-statements/2026/11/u-s-russia-china-heads-of-state-declaration-toward-peace/"
+        },
+        {
+          "label": "White House, ICYMI: President Trump talks China, Iran, Super Intelligence in interview from Shenzhen",
+          "url": "https://www.whitehouse.gov/releases/2026/11/icymi-president-trump-talks-china-iran-super-intelligence-and-the-path-ahead-in-exclusive-interview-from-shenzhen/"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-21"
     },
     {
       "id": 25,
@@ -904,10 +913,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Shipping through the Strait of Hormuz was sharply reduced but not stopped: UKMTO, as reported by Gulf News, put transits about 65% below pre-conflict levels and 'well below normal but not stalled', and Lloyd's List counted 550 non-Iranian-linked transits in October. That fits neither a closed strait nor normal operation, and the UKMTO figures could not be read directly from a UKMTO document.",
+      "evidence": [
+        {
+          "label": "Gulf News, Hormuz shipping below normal but not stalled: UKMTO",
+          "url": "https://gulfnews.com/world/mena/hormuz-shipping-below-normal-but-not-stalled-ukmto-1.500741839"
+        },
+        {
+          "label": "Lloyd's List Intelligence, Strait of Hormuz Brief (Nov. 19, 2026)",
+          "url": "https://www.lloydslistintelligence.com/resources/blog/strait-of-hormuz-brief-19-november-2026"
+        }
+      ],
+      "check_run": "q207/askamerica/2026-11-21"
     },
     {
       "id": 26,
@@ -936,10 +954,27 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's EIA data show the U.S. average regular gasoline price rising from $2.937 on Feb. 23, 2026 to $3.805 on Nov. 16 after peaking at $4.50 in May, and the unadjusted CPI rising about 3.3% from February (326.785) to October (337.511). EIA's Short-Term Energy Outlook ties the roughly $100 Brent crude price to the Middle East conflict; no official source read separates the war's exact share from other causes.",
+      "evidence": [
+        {
+          "label": "energy.eia_retail_gasoline_prices (U.S. regular, 2026 weekly)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM energy.eia_retail_gasoline_prices WHERE series_id='EMM_EPMR_PTE_NUS_DPG' AND report_date>='2026-01-01' ORDER BY report_date"
+        },
+        {
+          "label": "econ.fred_indicators (CPIAUCNS, monthly from Oct. 2025)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+          "askamerica": true,
+          "sql": "SELECT \"date\", \"value\" FROM econ.fred_indicators WHERE series='CPIAUCNS' AND \"date\">='2025-10-01' ORDER BY \"date\""
+        },
+        {
+          "label": "EIA, Short-Term Energy Outlook",
+          "url": "https://www.eia.gov/outlooks/steo/"
+        }
+      ],
+      "check_run": "q207/askamerica/2026-11-21"
     },
     {
       "id": 27,
@@ -968,10 +1003,23 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Trump said in a Fox News interview, as reported on Nov. 3, 2026, that he and Netanyahu agreed to stop the roughly $4 billion a year in aid, while Netanyahu's own stated position (January 2026) is to taper U.S. aid to zero within ten years. A plan to end aid fits Trump's remarks, but Netanyahu's position is a phase-down, and no direct Netanyahu confirmation of an end date was read; the current aid agreement runs through September 2028.",
+      "evidence": [
+        {
+          "label": "Israel Hayom, Trump: Netanyahu and I agreed to stop $4 billion U.S. aid to Israel (Nov. 3, 2026)",
+          "url": "https://www.israelhayom.com/2026/11/03/trump-netanyahu-and-i-agreed-to-stop-4-billion-us-aid-to-israel/"
+        },
+        {
+          "label": "The National, Trump claims he will end military aid to Israel (Nov. 3, 2026)",
+          "url": "https://www.thenationalnews.com/news/mena/2026/11/03/trump-claims-he-will-end-military-aid-to-israel-but-figures-tell-a-different-story/"
+        },
+        {
+          "label": "NBC News, Netanyahu hopes to taper Israel's U.S. military aid over a decade (Jan. 10, 2026)",
+          "url": "https://www.nbcnews.com/world/israel/netanyahu-hopes-taper-israel-us-military-aid-decade-rcna253301"
+        }
+      ],
+      "check_run": "q208/askamerica/2026-11-21"
     },
     {
       "id": 28,
@@ -1066,10 +1114,17 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's presidential results show Trump carrying Pennsylvania in 2016 (2,970,733 to 2,926,441) and 2024 (3,543,308 to 3,423,042), and Biden carrying it in 2020 (3,458,229 to 3,377,674): two of the last three.",
+      "evidence": [
+        {
+          "label": "officials.presidential_state_winners (Pennsylvania, 2016-2024)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#presidential_state_winners-view",
+          "askamerica": true,
+          "sql": "SELECT * FROM officials.presidential_state_winners WHERE \"year\" IN (2016,2020,2024) AND state_name ILIKE 'Pennsylvania'"
+        }
+      ],
+      "check_run": "q209/askamerica/2026-11-21"
     },
     {
       "id": 31,
@@ -1100,10 +1155,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's governor results show Shapiro's 2022 total of 3,031,137 votes as the most any Pennsylvania candidate for governor had received through 2022 (Wolf, 2018: 2,895,652), and unofficial 2026 reports put his new total near 3.04 million. Certified 2026 results and his attorney general races were not available, the statement does not name which record, and a search result reports a 2024 statewide total above his, so 'a record every election' cannot be matched to one official measure.",
+      "evidence": [
+        {
+          "label": "officials.governor_election_results (Pennsylvania, 2006-2022)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#governor_election_results-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM officials.governor_election_results WHERE state_name ILIKE 'Pennsylvania' ORDER BY \"year\", candidate_votes DESC"
+        },
+        {
+          "label": "Spotlight PA, Pennsylvania governor election results (Nov. 2026)",
+          "url": "https://www.spotlightpa.org/news/2026/11/election-results-pennsylvania-governor-josh-shapiro-stacy-garrity-elections/"
+        }
+      ],
+      "check_run": "q209/askamerica/2026-11-21"
     },
     {
       "id": 32,
@@ -1166,10 +1232,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Labor Department's state minimum wage table lists Pennsylvania's basic minimum rate as $7.25 an hour, and AskAmerica's minimum wage history shows Pennsylvania at $7.25, the federal rate, in each year from 2022 to 2024. Only the premise was checked, not the prediction about the first bill.",
+      "evidence": [
+        {
+          "label": "fiscal.state_minimum_wage_history (Pennsylvania and federal, 2022-2024)",
+          "url": "https://askamerica.ai/catalog/schemas/fiscal/#state_minimum_wage_history-table",
+          "askamerica": true,
+          "sql": "SELECT \"year\", jurisdiction_name, raw_wage_text, wage_amount FROM fiscal.state_minimum_wage_history WHERE jurisdiction_name IN ('Pennsylvania','Federal (FLSA)') AND \"year\" >= 2022 ORDER BY jurisdiction_name, \"year\""
+        },
+        {
+          "label": "U.S. Department of Labor, State Minimum Wage Laws",
+          "url": "https://www.dol.gov/agencies/whd/minimum-wage/state"
+        }
+      ],
+      "check_run": "q210/askamerica/2026-11-21"
     },
     {
       "id": 34,
@@ -1200,10 +1277,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Pennsylvania Department of Health's Nov. 18, 2026 release confirms the state's eighth measles-associated death of 2026, and CDC's measles history page says the U.S. eliminated measles in 2000, 26 years earlier.",
+      "evidence": [
+        {
+          "label": "Pennsylvania Department of Health, confirms eighth measles-associated death (Nov. 18, 2026)",
+          "url": "https://www.pa.gov/agencies/health/newsroom/pa-department-of-health-confirms-eighth-measles-associated-death"
+        },
+        {
+          "label": "CDC, History of Measles",
+          "url": "https://www.cdc.gov/measles/about/history.html"
+        }
+      ],
+      "check_run": "q211/askamerica/2026-11-21"
     },
     {
       "id": 35,
@@ -1232,10 +1318,27 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's CDC school vaccination data show national kindergarten MMR coverage falling from 95.2% in 2019-20 to 92.4% in 2025-26 and the share with any exemption rising from 2.5% to 4.2%, and KFF says skepticism and misinformation have contributed to declining coverage. No official source or peer-reviewed study read isolates misinformation as the cause of measles' return.",
+      "evidence": [
+        {
+          "label": "health.cdc_school_vaccination_coverage (kindergarten MMR, U.S. and Pennsylvania)",
+          "url": "https://askamerica.ai/catalog/schemas/health/#cdc_school_vaccination_coverage-table",
+          "askamerica": true,
+          "sql": "select geography, school_year, vaccine, dose, coverage_estimate from health.cdc_school_vaccination_coverage where vaccine='MMR' and geography in ('United States','Pennsylvania') and school_year in ('2019-20','2025-26','2010-11') order by geography, school_year"
+        },
+        {
+          "label": "health.cdc_school_vaccination_coverage (kindergarten exemptions, U.S.)",
+          "url": "https://askamerica.ai/catalog/schemas/health/#cdc_school_vaccination_coverage-table",
+          "askamerica": true,
+          "sql": "select school_year, dose, coverage_estimate, number_of_exemptions from health.cdc_school_vaccination_coverage where vaccine='Exemption' and geography='United States' and dose='Any Exemption' order by school_year"
+        },
+        {
+          "label": "KFF, U.S. measles outbreaks: a new abnormal in a time of vaccine hesitancy",
+          "url": "https://www.kff.org/quick-take/u-s-measles-outbreaks-a-new-abnormal-in-a-time-of-vaccine-hesitancy/"
+        }
+      ],
+      "check_run": "q211/askamerica/2026-11-21"
     },
     {
       "id": 36,
@@ -1264,10 +1367,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "KFF's February 2026 poll finds trust in the CDC for vaccine information at its lowest since the pandemic (47%) after the changes to the advisory panel and childhood schedule, but also that at least eight in ten adults remain confident in MMR and polio vaccine safety. Kennedy's record before 2025 was not read from primary sources, and no survey read shows general vaccine confidence falling or attributes a change to him.",
+      "evidence": [
+        {
+          "label": "KFF, Trust in CDC and views of federal childhood vaccine schedule changes",
+          "url": "https://www.kff.org/health-information-trust/trust-in-cdc-and-views-of-federal-childhood-vaccine-schedule-changes/"
+        }
+      ],
+      "check_run": "q211/askamerica/2026-11-21"
     },
     {
       "id": 37,
