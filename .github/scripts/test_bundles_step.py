@@ -31,7 +31,11 @@ case "$1 $2" in
     n=$(cat "$d/polls" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$d/polls"
     # the listed assets: the first $APPEAR_AFTER polls show only what is in present.txt
     if [ "$n" -gt "$(cat "$d/appear_after")" ]; then cat "$d/all.txt"; else cat "$d/present.txt"; fi ;;
-  "run list") cat "$d/in_flight" ;;
+  "run list")
+    if [ -f "$d/runs.json" ]; then
+      while [ $# -gt 0 ]; do [ "$1" = "--jq" ] && { jq -r "$2" "$d/runs.json"; exit 0; }; shift; done
+    fi
+    cat "$d/in_flight" ;;
   "workflow run") echo "dispatched" >> "$d/dispatched" ;;
   "release download")
     dir=""; pats=()
@@ -91,6 +95,17 @@ class BundlesStepTest(unittest.TestCase):
 
     def test_missing_with_a_build_in_flight_waits_and_does_not_dispatch(self):
         open(os.path.join(self.d, "in_flight"), "w").write("1")
+        open(os.path.join(self.d, "appear_after"), "w").write("7")
+        r = self.run_step()
+        self.assertEqual(0, r.returncode, r.stdout + r.stderr)
+        self.assertFalse(self.dispatched())
+        self.assertIn("already in flight", r.stdout)
+
+    def test_release_event_run_titled_with_the_tag_counts_as_in_flight(self):
+        # a run started by 'release: published' has no inputs.version; its title carries the tag
+        runs = [{"status": "in_progress", "conclusion": None, "updatedAt": "2000-01-01T00:00:00Z",
+                 "displayTitle": "pgwire-adapters release engine-v" + VERSION}]
+        open(os.path.join(self.d, "runs.json"), "w").write(__import__("json").dumps(runs))
         open(os.path.join(self.d, "appear_after"), "w").write("7")
         r = self.run_step()
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
