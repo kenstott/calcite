@@ -619,6 +619,75 @@ FROM dq_results
 ORDER BY schema, tbl, test;
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cfpb_mortgage_performance (CFPB Mortgage Performance Trends snapshot; partition col: type)
+-- national + 51 states + ~310 metros + 33 nonmetro remainders + ~509 counties, 2008-01 onward (~219+ months) = ~200k rows.
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T2_row_count',
+  CASE WHEN n >= 150000 THEN 'pass' ELSE 'fail' END, n, 150000, 'Expected >=150000 geography x month rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true) WHERE geo_level = 'county' AND geo_fips = '01073' ORDER BY month LIMIT 5;
+
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T3_levels_present',
+  CASE WHEN n = 5 THEN 'pass' ELSE 'fail' END, n, 5, 'Distinct geo_level values (national, state, metro, nonmetro, county)'
+FROM (SELECT COUNT(DISTINCT geo_level) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true));
+
+-- state_abbr is populated only for county rows, so it is legitimately null for the other levels
+-- (not fully null overall); no exclusion needed for T4.
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL geo_level, geo_fips or month rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true)
+  WHERE geo_level IS NULL OR geo_fips IS NULL OR month IS NULL);
+
+-- T7: values are percents of mortgages (0-100). The national 90+ rate peaked near 8% in 2010
+-- and sits near 0.5-1% now; a counts/fractions mix-up shows as a range failure. County FIPS must
+-- be 5 digits and state FIPS 2 digits (quote-stripping), months must start at 2008-01.
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with a pct outside [0,100], bad FIPS length, or month before 2008-01'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true)
+  WHERE pct_30_89_delinquent < 0 OR pct_30_89_delinquent > 100
+    OR pct_90_plus_delinquent < 0 OR pct_90_plus_delinquent > 100
+    OR (geo_level = 'county' AND LENGTH(geo_fips) <> 5)
+    OR (geo_level = 'state' AND LENGTH(geo_fips) <> 2)
+    OR month < '2008-01');
+
+-- T8: (geo_level, geo_fips, month) must be unique (the two bucket files must merge, not duplicate).
+INSERT INTO dq_results
+SELECT 'housing', 'cfpb_mortgage_performance', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (geo_level, geo_fips, month) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT geo_level, geo_fips, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/cfpb_mortgage_performance', allow_moved_paths := true)
+  GROUP BY geo_level, geo_fips, month HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: hvs_homeownership_by_age (Census HVS Table 12 snapshot; partition col: type)
 -- 18 age groups x 1982-latest (~44 years) = ~790 rows expected.
 -- ─────────────────────────────────────────────────────────────

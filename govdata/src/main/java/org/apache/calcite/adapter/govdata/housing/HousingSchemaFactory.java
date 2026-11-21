@@ -74,6 +74,7 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     // tables are never token-gated — only narrowed by the enabledSources operand.
     m.put("hmda_loans", "cfpb");
     m.put("hmda_applicant_demographics", "cfpb");
+    m.put("cfpb_mortgage_performance", "cfpb");
     m.put("opportunity_zones", "arcgis");
     m.put("hud_subsidized_housing", "arcgis");
     m.put("hud_subsidized_county", "hud_files");
