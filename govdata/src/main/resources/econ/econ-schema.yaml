@@ -2699,6 +2699,127 @@ partitionedTables:
         compactionMinFiles: 5
         overwritePartitions: true
 
+  # --- CENSUS BUSINESS FORMATION STATISTICS ---
+  - name: business_formation_statistics
+    # Census Bureau Business Formation Statistics (BFS), monthly file
+    # https://www.census.gov/econ/bfs/csv/bfs_monthly.csv (keyless, confirmed live 21 Nov 2026).
+    # One file holds every month since July 2004; BusinessFormationStatisticsTransformer downloads
+    # it once per run and emits the months belonging to the year dimension, melting the jan..dec
+    # columns into rows. Cells the file leaves blank or flags S / D / NA have no row.
+    pattern: "type=business_formation_statistics/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Census Bureau Business Formation Statistics (BFS): monthly counts of new business
+      applications (IRS Form SS-4 EIN applications) and of the employer businesses formed from
+      them, for the nation, the four Census regions and the states, DC and Puerto Rico, from July
+      2004 (a series that starts later has no earlier rows); the NAICS-sector breakdown is
+      national only. Long format, one row per (series_code, seasonally_adjusted, naics_sector,
+      geo_code, period). series_code: BA_BA business applications (all); BA_HBA high-propensity
+      business applications (likely to turn into employers); BA_WBA the high-propensity
+      applications that state a first wages-paid date (planned wages); BA_CBA the high-propensity
+      applications from corporations; BF_BF4Q / BF_BF8Q employer businesses formed within 4 / 8
+      quarters of the application month (actual, only for months old enough to observe);
+      BF_PBF4Q / BF_PBF8Q the model-projected formations within 4 / 8 quarters; BF_SBF4Q /
+      BF_SBF8Q the spliced series (actual where observed, projected after), the one to use for a
+      complete projected-formations line; BF_DUR4Q / BF_DUR8Q average quarters from application
+      to formation (unadjusted only). naics_sector TOTAL is all sectors. seasonally_adjusted
+      true is the adjusted series, false the unadjusted count. A calendar-year total is the sum of
+      the twelve unadjusted months (BA_BA, TOTAL, US, 2025 is about 5.70 million; BA_HBA about
+      1.69 million); adjusted months do not add to the unadjusted total. The latest months and
+      the projected series are revised each month, and the formation series each year at the
+      December release. Not included: the weekly national series and the annual county-level file.
+
+    dimensions:
+      type:
+        - business_formation_statistics
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2004}"
+        minYear: 2004
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
+    columns:
+      - name: series_code
+        type: string
+        nullable: false
+        comment: >
+          BA_BA, BA_HBA, BA_WBA, BA_CBA, BF_BF4Q, BF_BF8Q, BF_PBF4Q, BF_PBF8Q, BF_SBF4Q, BF_SBF8Q,
+          BF_DUR4Q or BF_DUR8Q (PK part)
+      - name: seasonally_adjusted
+        type: boolean
+        nullable: false
+        comment: true for the seasonally adjusted series, false for the unadjusted series (PK part)
+      - name: naics_sector
+        type: string
+        nullable: false
+        comment: >
+          TOTAL (all sectors), a two-digit NAICS sector such as NAICS23 (construction), the
+          groupings NAICSMNF (manufacturing), NAICSRET (retail trade) and NAICSTW
+          (transportation and warehousing), or NONAICS (no industry reported) (PK part)
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: national, region or state (state includes DC and Puerto Rico)
+      - name: geo_code
+        type: string
+        nullable: false
+        comment: US, a Census region code (NO northeast, MW midwest, SO south, WE west) or a USPS state code (PK part)
+      - name: fips
+        type: string
+        nullable: true
+        comment: Two-digit state FIPS code, 00 for the nation, null for the four regions
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year (PK part)
+      - name: month
+        type: integer
+        nullable: false
+        comment: Calendar month 1-12 (PK part)
+      - name: period
+        type: string
+        nullable: false
+        comment: Year and month label, for example 2025-03
+      - name: value
+        type: double
+        nullable: false
+        comment: Count of applications or employer formations for every series except BF_DUR4Q and BF_DUR8Q, which are average quarters
+
+    source:
+      type: http
+      url: "https://www.census.gov/econ/bfs/csv/bfs_monthly.csv"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BusinessFormationStatisticsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=business_formation_statistics/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
   # --- CFOI STATE x INDUSTRY FATAL INJURY RATES ---
   - name: cfoi_state_industry_rates
     pattern: "type=cfoi_state_industry_rates/year=*/*.parquet"
