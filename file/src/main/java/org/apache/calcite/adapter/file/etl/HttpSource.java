@@ -3429,6 +3429,12 @@ public class HttpSource implements DataSource {
    * to make concurrent requests while respecting the global rate limit.
    */
   private void enforceRateLimit() {
+    HttpSourceConfig.RateLimitConfig limit = config.getRateLimit();
+    if (limit.isHostWide() && limit.getRequestsPerSecond() > 0 && config.getUrl() != null) {
+      CrossProcessRateLimiter.acquire(java.net.URI.create(config.getUrl()).getHost(),
+          1000L / limit.getRequestsPerSecond());
+      return;
+    }
     long slotOpensAt = reserveRateLimitSlot();
     if (slotOpensAt == NO_RATE_LIMIT) {
       return;

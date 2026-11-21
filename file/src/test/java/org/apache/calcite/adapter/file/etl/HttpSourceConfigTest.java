@@ -321,4 +321,12 @@ class HttpSourceConfigTest {
       assertTrue(e.getMessage().contains("not found on classpath"));
     }
   }
+
+  @Test void rateLimitHostWideIsOptIn() {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("requestsPerSecond", 2);
+    assertFalse(HttpSourceConfig.RateLimitConfig.fromMap(map).isHostWide());
+    map.put("hostWide", Boolean.TRUE);
+    assertTrue(HttpSourceConfig.RateLimitConfig.fromMap(map).isHostWide());
+  }
 }
