@@ -2,7 +2,7 @@
 -- U.S. Federal Fiscal Data Quality Checks
 -- Schema: fiscal
 -- Tables: soi_income_by_zip, soi_income_by_county, county_migration_flows,
---         exempt_org_master, exempt_org_990, usaspending_by_agency,
+--         exempt_org_master, exempt_org_990, exempt_org_990_schedule_h, usaspending_by_agency,
 --         usaspending_account_balances,
 --         usaspending_by_state, usaspending_by_district,
 --         usaspending_recipients_by_district,
@@ -437,6 +437,77 @@ FROM (
   FROM (SELECT CAST(getvariable('y_latest') AS VARCHAR) AS y, COUNT(*) AS listed FROM read_csv(getvariable('url_latest'), all_varchar = true, strict_mode = false)
         UNION ALL
         SELECT CAST(CAST(getvariable('y_latest') AS INTEGER) - 1 AS VARCHAR), COUNT(*) FROM read_csv(getvariable('url_prior'), all_varchar = true, strict_mode = false)));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: exempt_org_990_schedule_h (IRS Form 990 Schedule H; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END, n, 100, 'Expected >=100 Schedule H filings (DQ-sampled)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+-- return_type is 990 on every Schedule H filer (only a full Form 990 attaches Schedule H): a real constant.
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'return_type')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL object_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true) WHERE object_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T7_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, object_id) rows'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT (year, object_id)) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T8_line7k_equals_7d_plus_7j',
+  CASE WHEN pct <= 10 THEN 'pass' ELSE 'warn' END, pct, 10,
+  'Percent of rows where line 7k net differs from 7d net + 7j net by more than $1 (filer arithmetic errors exist in the source)'
+FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE abs(total_community_benefit_net - total_financial_assistance_net - total_other_benefits_net) > 1)
+         / NULLIF(COUNT(*), 0) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true)
+  WHERE total_community_benefit_net IS NOT NULL AND total_financial_assistance_net IS NOT NULL
+    AND total_other_benefits_net IS NOT NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T9_medicare_shortfall_is_revenue_minus_cost',
+  CASE WHEN pct <= 10 THEN 'pass' ELSE 'warn' END, pct, 10,
+  'Percent of rows where Part III line 7 differs from line 5 minus line 6 by more than $1'
+FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE abs(medicare_shortfall - (medicare_revenue - medicare_cost)) > 1)
+         / NULLIF(COUNT(*), 0) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true)
+  WHERE medicare_shortfall IS NOT NULL AND medicare_revenue IS NOT NULL AND medicare_cost IS NOT NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990_schedule_h', 'T10_total_community_benefit_populated',
+  CASE WHEN pct >= 90 THEN 'pass' ELSE 'fail' END, pct, 90,
+  'Percent of rows carrying the line 7k total community benefit expense'
+FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE total_community_benefit_cost IS NOT NULL) / NULLIF(COUNT(*), 0) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990_schedule_h', allow_moved_paths := true));
+
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: usaspending_by_agency (USAspending; partition cols: type, year)

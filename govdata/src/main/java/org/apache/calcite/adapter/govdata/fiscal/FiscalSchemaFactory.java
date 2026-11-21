@@ -58,6 +58,7 @@ public class FiscalSchemaFactory implements GovDataSubSchemaFactory {
     m.put("irs_gross_collections_by_state_year", "irs");
     m.put("exempt_org_master", "irs");
     m.put("exempt_org_990", "irs");
+    m.put("exempt_org_990_schedule_h", "irs");
     m.put("usaspending_by_agency", "usaspending");
     m.put("usaspending_account_balances", "usaspending");
     m.put("usaspending_by_state", "usaspending");

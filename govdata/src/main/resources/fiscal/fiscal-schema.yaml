@@ -2733,6 +2733,272 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # IRS FORM 990 SCHEDULE H (HOSPITALS) — same TEOS zips as exempt_org_990
+  # ---------------------------------------------------------------------------
+  - name: exempt_org_990_schedule_h
+    # Same freshness gate as exempt_org_990: the e-Postcard XML index page.
+    freshness:
+      type: last_modified
+    pattern: "type=exempt_org_990_schedule_h/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Form 990 Schedule H (Hospitals) community benefit, one row per filing (OBJECT_ID) that
+      carries the schedule, for the IRS receipt year, from the e-file XML the exempt_org_990 table
+      reads. Part I line 7 community benefit table, lines 7a-7k: financial assistance at cost,
+      unreimbursed Medicaid, other means-tested government programs, community health improvement,
+      health professions education, subsidized health services, research, cash and in-kind
+      contributions and the totals, each as total expense, direct offsetting revenue and net
+      expense; Part II community building total; Part III bad debt expense and Medicare revenue,
+      cost and shortfall. Medicaid shortfall is medicaid_net and Medicare shortfall is
+      medicare_shortfall (Medicare is reported in Part III and is not in the line 7k total).
+      Hospital facility names and addresses (Part V) are not loaded; only their count.
+      Hospitals file one Schedule H per organization, so a system filing for several facilities
+      appears as one row. Joins exempt_org_990 on ein + tax_year (and object_id within a receipt
+      year) and exempt_org_master on ein. Receipt years 2019 on, as exempt_org_990.
+      Source: apps.irs.gov/pub/epostcard/990/xml/{YEAR}/.
+    dqRowLimit: 5000
+
+    dimensions:
+      type:
+        - exempt_org_990_schedule_h
+      year: *efile990_year_range
+
+    columns:
+      - name: ein
+        type: string
+        nullable: true
+        comment: "Filer EIN (9-digit; joins exempt_org_990.ein and exempt_org_master.ein)"
+      - name: org_name
+        type: string
+        nullable: true
+        comment: "Organization name (filer BusinessNameLine1Txt)"
+      - name: return_type
+        type: string
+        nullable: true
+        comment: "Return type (990 for a Schedule H filer)"
+      - name: tax_period_end
+        type: string
+        nullable: true
+        comment: "Tax period end date (YYYY-MM-DD)"
+      - name: tax_year
+        type: integer
+        nullable: true
+        comment: "Tax year of the return; with ein joins exempt_org_990"
+      - name: financial_assistance_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7a, total community benefit expense: financial assistance at cost (free and discounted care) (US dollars)"
+      - name: financial_assistance_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7a, direct offsetting revenue: financial assistance at cost (free and discounted care) (US dollars). Null where the line has no offsetting-revenue column"
+      - name: financial_assistance_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7a, net community benefit expense: financial assistance at cost (free and discounted care) (US dollars)"
+      - name: medicaid_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7b, total community benefit expense: unreimbursed Medicaid (US dollars)"
+      - name: medicaid_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7b, direct offsetting revenue: unreimbursed Medicaid (US dollars). Null where the line has no offsetting-revenue column"
+      - name: medicaid_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7b, net community benefit expense: unreimbursed Medicaid (US dollars)"
+      - name: other_means_tested_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7c, total community benefit expense: unreimbursed cost of other means-tested government programs (US dollars)"
+      - name: other_means_tested_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7c, direct offsetting revenue: unreimbursed cost of other means-tested government programs (US dollars). Null where the line has no offsetting-revenue column"
+      - name: other_means_tested_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7c, net community benefit expense: unreimbursed cost of other means-tested government programs (US dollars)"
+      - name: total_financial_assistance_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7d, total community benefit expense: total financial assistance and means-tested government programs (US dollars)"
+      - name: total_financial_assistance_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7d, direct offsetting revenue: total financial assistance and means-tested government programs (US dollars). Null where the line has no offsetting-revenue column"
+      - name: total_financial_assistance_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7d, net community benefit expense: total financial assistance and means-tested government programs (US dollars)"
+      - name: community_health_improvement_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7e, total community benefit expense: community health improvement services and community benefit operations (US dollars)"
+      - name: community_health_improvement_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7e, direct offsetting revenue: community health improvement services and community benefit operations (US dollars). Null where the line has no offsetting-revenue column"
+      - name: community_health_improvement_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7e, net community benefit expense: community health improvement services and community benefit operations (US dollars)"
+      - name: health_professions_education_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7f, total community benefit expense: health professions education (US dollars)"
+      - name: health_professions_education_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7f, direct offsetting revenue: health professions education (US dollars). Null where the line has no offsetting-revenue column"
+      - name: health_professions_education_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7f, net community benefit expense: health professions education (US dollars)"
+      - name: subsidized_health_services_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7g, total community benefit expense: subsidized health services (US dollars)"
+      - name: subsidized_health_services_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7g, direct offsetting revenue: subsidized health services (US dollars). Null where the line has no offsetting-revenue column"
+      - name: subsidized_health_services_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7g, net community benefit expense: subsidized health services (US dollars)"
+      - name: research_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7h, total community benefit expense: research (US dollars)"
+      - name: research_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7h, direct offsetting revenue: research (US dollars). Null where the line has no offsetting-revenue column"
+      - name: research_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7h, net community benefit expense: research (US dollars)"
+      - name: cash_in_kind_contributions_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7i, total community benefit expense: cash and in-kind contributions for community benefit (US dollars)"
+      - name: cash_in_kind_contributions_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7i, direct offsetting revenue: cash and in-kind contributions for community benefit (US dollars). Null where the line has no offsetting-revenue column"
+      - name: cash_in_kind_contributions_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7i, net community benefit expense: cash and in-kind contributions for community benefit (US dollars)"
+      - name: total_other_benefits_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7j, total community benefit expense: total other community benefits (US dollars)"
+      - name: total_other_benefits_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7j, direct offsetting revenue: total other community benefits (US dollars). Null where the line has no offsetting-revenue column"
+      - name: total_other_benefits_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7j, net community benefit expense: total other community benefits (US dollars)"
+      - name: total_community_benefit_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7k, total community benefit expense: total community benefit (financial assistance plus other benefits) (US dollars)"
+      - name: total_community_benefit_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7k, direct offsetting revenue: total community benefit (financial assistance plus other benefits) (US dollars). Null where the line has no offsetting-revenue column"
+      - name: total_community_benefit_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7k, net community benefit expense: total community benefit (financial assistance plus other benefits) (US dollars)"
+      - name: community_building_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part II, total community benefit expense: community building activities, total (US dollars)"
+      - name: community_building_offsetting_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part II, direct offsetting revenue: community building activities, total (US dollars). Null where the line has no offsetting-revenue column"
+      - name: community_building_net
+        type: double
+        nullable: true
+        comment: "Schedule H Part II, net community benefit expense: community building activities, total (US dollars)"
+      - name: total_community_benefit_pct_expenses
+        type: double
+        nullable: true
+        comment: "Schedule H Part I line 7k, net community benefit as a percent of total expenses (as filed, e.g. 6.81 means 6.81 percent)"
+      - name: bad_debt_expense
+        type: double
+        nullable: true
+        comment: "Schedule H Part III line 2: bad debt expense reported (US dollars; not part of community benefit)"
+      - name: bad_debt_attributable_to_financial_assistance
+        type: double
+        nullable: true
+        comment: "Schedule H Part III line 3: portion of bad debt expense attributable to patients eligible under the financial assistance policy (US dollars)"
+      - name: medicare_revenue
+        type: double
+        nullable: true
+        comment: "Schedule H Part III line 5: Medicare allowable costs revenue, including DSH and IME (US dollars)"
+      - name: medicare_cost
+        type: double
+        nullable: true
+        comment: "Schedule H Part III line 6: total Medicare allowable costs of care (US dollars)"
+      - name: medicare_shortfall
+        type: double
+        nullable: true
+        comment: "Schedule H Part III line 7: Medicare surplus or (shortfall), revenue minus cost (US dollars; negative is a shortfall; the filer decides whether to count it as community benefit)"
+      - name: hospital_facilities_count
+        type: integer
+        nullable: true
+        comment: "Schedule H Part V: number of hospital facilities the filer operated"
+      - name: object_id
+        type: string
+        nullable: false
+        comment: "IRS filing object id — PK"
+
+    source:
+      type: http
+      url: "https://apps.irs.gov/pub/epostcard/990/xml/"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.Irs990ScheduleHProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=exempt_org_990_schedule_h/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: exempt_org_990_schedule_h
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # USASPENDING BY AGENCY — /api/v2/spending/ (delta by fiscal year)
   # ---------------------------------------------------------------------------
   - name: usaspending_by_agency
@@ -8761,6 +9027,13 @@ constraints:
         targetColumns: [state_abbr]
 
   exempt_org_990:
+    primaryKey: [year, object_id]
+    foreignKeys:
+      - columns: [ein]
+        targetTable: exempt_org_master
+        targetColumns: [ein]
+
+  exempt_org_990_schedule_h:
     primaryKey: [year, object_id]
     foreignKeys:
       - columns: [ein]

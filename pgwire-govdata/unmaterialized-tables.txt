@@ -12,6 +12,7 @@ econ.treasury_foreign_holdings
 fiscal.appropriations_timeliness_by_fy
 fiscal.cbo_budget_projections
 fiscal.continuing_resolutions
+fiscal.exempt_org_990_schedule_h
 fiscal.federal_funding_gaps
 fiscal.treasury_auction_results
 health.cdc_state_injury_mortality

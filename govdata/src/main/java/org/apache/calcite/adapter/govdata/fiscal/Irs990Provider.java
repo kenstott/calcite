@@ -83,6 +83,28 @@ public class Irs990Provider implements CachingDataProvider {
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
+    return fetchReturns(variables, rawCache, new RowParser() {
+      @Override public Map<String, Object> parse(byte[] xml, String objectId) {
+        return parseReturn(xml, objectId);
+      }
+    });
+  }
+
+  /**
+   * Turns one return's XML into the table row, or null when the return carries nothing for the
+   * table. A null still counts the filing as read for the year's completeness check.
+   */
+  interface RowParser {
+    Map<String, Object> parse(byte[] xml, String objectId);
+  }
+
+  /**
+   * Reads a receipt year's index and zips and yields the rows {@code parser} derives from each
+   * return. Shared by every table built from the 990 e-file zips, so each reads the same zips
+   * through the same completeness check.
+   */
+  static Iterator<Map<String, Object>> fetchReturns(Map<String, String> variables,
+      RawCache rawCache, RowParser parser) throws IOException {
     String year = variables.get("effective_year");
     if (year == null || year.isEmpty()) {
       year = variables.get("year");
@@ -103,7 +125,7 @@ public class Irs990Provider implements CachingDataProvider {
     ZipSet zips = discoverZips(base, yr, index, new HeadProbe());
     LOGGER.info("exempt_org_990: year {} is read from {} zips ({} layout): {}", yr,
         zips.paths.size(), zips.legacy ? "legacy" : "monthly", zips.paths);
-    return rows(base, zips, index, rawCache, yr);
+    return rows(base, zips, index, rawCache, yr, KNOWN_ABSENT, parser);
   }
 
   /** Builds the row iterator over the given zips. Package-private for tests. */
@@ -112,10 +134,20 @@ public class Irs990Provider implements CachingDataProvider {
     return rows(base, zips, index, rawCache, year, KNOWN_ABSENT);
   }
 
+
   /** As {@link #rows(String, ZipSet, Index, RawCache, String)} with an explicit exclusion list. */
   static Iterator<Map<String, Object>> rows(String base, ZipSet zips, Index index,
       RawCache rawCache, String year, Map<String, String> knownAbsent) {
-    return new BatchIterator(base, zips, index, rawCache, year, knownAbsent);
+    return rows(base, zips, index, rawCache, year, knownAbsent, new RowParser() {
+      @Override public Map<String, Object> parse(byte[] xml, String objectId) {
+        return parseReturn(xml, objectId);
+      }
+    });
+  }
+
+  static Iterator<Map<String, Object>> rows(String base, ZipSet zips, Index index,
+      RawCache rawCache, String year, Map<String, String> knownAbsent, RowParser parser) {
+    return new BatchIterator(base, zips, index, rawCache, year, knownAbsent, parser);
   }
 
   /**
@@ -331,6 +363,7 @@ public class Irs990Provider implements CachingDataProvider {
     private final List<String> batchNames;
     private final boolean legacy;
     private final Map<String, String> knownAbsent;
+    private final RowParser parser;
     private final Set<String> written = new HashSet<String>();
     private int skippedUnindexed;
     private int skippedRepeated;
@@ -341,7 +374,8 @@ public class Irs990Provider implements CachingDataProvider {
     private boolean done;
 
     BatchIterator(String base, ZipSet zips, Index index, RawCache rawCache, String year,
-        Map<String, String> knownAbsent) {
+        Map<String, String> knownAbsent, RowParser parser) {
+      this.parser = parser;
       this.base = base;
       this.knownAbsent = knownAbsent;
       this.index = index;
@@ -464,8 +498,11 @@ public class Irs990Provider implements CachingDataProvider {
                 + year + " is in more than one zip (again in " + batchNames.get(batchPos) + ")");
           }
           byte[] xml = readEntry(zis);
-          Map<String, Object> row = parseReturn(xml, objectId);
+          Map<String, Object> row = parser.parse(xml, objectId);
           batchWritten++;
+          if (row == null) {
+            continue;  // read and counted, but the return has nothing for this table
+          }
           nextRow = row;
           return;
         }
@@ -520,7 +557,7 @@ public class Irs990Provider implements CachingDataProvider {
    * become a row. A part absent from the return leaves its fields
    * null; nothing is zero-filled.
    */
-  private static Map<String, Object> parseReturn(byte[] xml, String objectId) {
+  static Map<String, Object> parseReturn(byte[] xml, String objectId) {
     Map<String, Object> out = new LinkedHashMap<String, Object>();
     double[] vii = new double[3];
     int[] viiSeen = new int[3];
