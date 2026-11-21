@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The MIT Technology Review article's claims about Southwest hydropower, Lake Powell and Lake Mead are accurate; 1 claim could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The MIT Technology Review article's claims about Southwest hydropower, Lake Powell and Lake Mead are accurate; 1 claim could not be confirmed.</h1>
+<p class="subtitle">Warehouse: energy.eia_electricity_generation (EIA-923, hydro HYC, Arizona, Apr-Aug); primary: EIA Today in Energy Nov 13 2026</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.technologyreview.com/2026/11/17/1148742/hydropower-drought-colorado-river/">https://www.technologyreview.com/2026/11/17/1148742/hydropower-drought-colorado-river/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Arizona hydropower, April-August (thousand MWh)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="298" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="298" viewBox="0 0 412 298" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="298" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">AZ hydro Apr-Aug generation</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="44" y1="56" x2="44" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="44" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0</text>
+      <line class="grid" x1="93.43" y1="56" x2="93.43" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="93.43" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">500</text>
+      <line class="grid" x1="142.86" y1="56" x2="142.86" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="142.86" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1,000</text>
+      <line class="grid" x1="192.29" y1="56" x2="192.29" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="192.29" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1,500</text>
+      <line class="grid" x1="241.71" y1="56" x2="241.71" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="241.71" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2,000</text>
+      <line class="grid" x1="291.14" y1="56" x2="291.14" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="291.14" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2,500</text>
+      <line class="grid" x1="340.57" y1="56" x2="340.57" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-6" class="tick" x="340.57" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3,000</text>
+      <line class="grid" x1="390" y1="56" x2="390" y2="230" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-7" class="tick" x="390" y="246" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3,500</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="44" y1="56" x2="44" y2="230" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="44" y1="230" x2="390" y2="230" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-value-axis-title" class="axis-title" x="217" y="274" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">thousand MWh</text>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-2016" class="tick" x="36" y="67.91" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2016</text>
+      <text id="p1-xtick-2017" class="tick" x="36" y="83.73" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2017</text>
+      <text id="p1-xtick-2018" class="tick" x="36" y="99.55" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="36" y="115.36" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="36" y="131.18" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="36" y="147" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="36" y="162.82" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="36" y="178.64" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="36" y="194.45" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2024</text>
+      <text id="p1-xtick-2025" class="tick" x="36" y="210.27" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2025</text>
+      <text id="p1-xtick-2026" class="tick" x="36" y="226.09" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2026</text>
+    </g>
+    <g id="p1-series-thousand-mwh" class="series">
+      <g class="hover">
+        <title>2016 — Thousand MWh: 3,225.7</title>
+        <rect id="p1-mark-thousand-mwh-2016" class="bar" x="44" y="58.85" width="318.88" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="55.41" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2017 — Thousand MWh: 3,132.1</title>
+        <rect id="p1-mark-thousand-mwh-2017" class="bar" x="44" y="74.67" width="309.63" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="71.23" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2018 — Thousand MWh: 3,212.1</title>
+        <rect id="p1-mark-thousand-mwh-2018" class="bar" x="44" y="90.48" width="317.54" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="87.05" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2019 — Thousand MWh: 2,968.1</title>
+        <rect id="p1-mark-thousand-mwh-2019" class="bar" x="44" y="106.30" width="293.42" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="102.86" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2020 — Thousand MWh: 2,964.9</title>
+        <rect id="p1-mark-thousand-mwh-2020" class="bar" x="44" y="122.12" width="293.10" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="118.68" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Thousand MWh: 2,735.9</title>
+        <rect id="p1-mark-thousand-mwh-2021" class="bar" x="44" y="137.94" width="270.46" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="134.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Thousand MWh: 2,442.1</title>
+        <rect id="p1-mark-thousand-mwh-2022" class="bar" x="44" y="153.76" width="241.42" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="150.32" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Thousand MWh: 3,385.9</title>
+        <rect id="p1-mark-thousand-mwh-2023" class="bar" x="44" y="169.57" width="334.72" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="166.14" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Thousand MWh: 2,634.4</title>
+        <rect id="p1-mark-thousand-mwh-2024" class="bar" x="44" y="185.39" width="260.43" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="181.95" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2025 — Thousand MWh: 2,390.6</title>
+        <rect id="p1-mark-thousand-mwh-2025" class="bar" x="44" y="201.21" width="236.33" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="197.77" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2026 — Thousand MWh: 1,937.6</title>
+        <rect id="p1-mark-thousand-mwh-2026" class="bar" x="44" y="217.03" width="191.55" height="9.12" fill="#2563eb"/>
+        <rect class="hit" x="44" y="213.59" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="375" fill="#6b7280">2026 is the lowest of 2010-2026; -19% vs 2025</text>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62824/a/8d70501136400834405bc9638abef782.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: 0 Pinocchios (engine-computed from the claim grades). The core EIA-based figures (28% below the 10-year average, Powell 3,518 ft, Mead 9% above minimum, EIA projections) are accurate and the warehouse confirms a record-low Arizona hydro summer. One figure does not reconcile and is flagged: that the two plants made nearly 7 TWh and served over 2 million people. EIA-based reporting puts them near 5.5 TWh, and no primary plant-level source was found.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>9 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>8</strong> true &middot; <strong>1</strong> unsupported &middot; <strong>9</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-unsupported"><td>4</td><td>Together, the two plants produced nearly seven terawatt-hours of electricity in 2025, enough to serve over 2 million people.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://coyotegulch.blog/2026/08/17/glen-canyon-dam-hydropower-whats-it-good-for-plus-a-deeper-look-at-the-wests-energy-mix-jonathan-p-thompson-landdesk-org/">Land Desk via Coyote Gulch</a>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA</a></td></tr><tr class="verdict-true"><td>1</td><td>The US Southwest generated 28% less electricity via hydropower between April and August than the 10-year average, according to new data from the US Energy Information Administration.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>2</td><td>At the end of September, Lake Powell's depth was 3,518 feet, less than 1% above the level required to run the water through turbines that produce electricity at the Glen Canyon power plant. The Hoover Dam power plant requires 950 feet in Lake Mead, and that reservoir was 9% above the minimum in September.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>3</td><td>Hydropower production is likely to be at its lowest level in over a decade in 2026 and tick even lower in 2027, according to projections from the EIA.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>5</td><td>Snowfall in the Rocky Mountains provides about 85% of the annual flow of the Colorado River.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.usgs.gov/centers/geosciences-and-environmental-change-science-center/science/how-much-snow-colorado-river">USGS how much snow for Colorado River flow</a></td></tr><tr class="verdict-true"><td>6</td><td>Low water levels have been an ongoing struggle for the region, which has been in a drought for 27 years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.everycrsreport.com/reports/R45546.html">CRS R45546</a></td></tr><tr class="verdict-true"><td>7</td><td>Heavy rains brought floods to the region in October and early November, and the water levels in Lake Powell rose more than 20 feet from their mid-September low.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.kunc.org/news/2026-11-09/floods-bring-rare-relief-to-us-southwest-reservoirs-as-lake-powell-rises-20-feet">KUNC/AP</a></td></tr><tr class="verdict-true"><td>8</td><td>In 2023, energy-related greenhouse-gas emissions rose by 1.1% globally. A worldwide shortfall in hydropower generation accounted for about 40% of that rise, according to a report from the International Energy Agency.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.iea.org/news/major-growth-of-clean-energy-limited-the-rise-in-global-emissions-in-2023">IEA news</a></td></tr><tr class="verdict-true"><td>9</td><td>Rising temperatures bring more droughts, warmer winters means less snow and ice to fill the reservoirs, and more variability in precipitation can lead to alternating floods and droughts.</td><td><strong>true</strong></td><td>Checked against: <a href="https://news.climate.columbia.edu/2022/07/28/global-review-assesses-hydropowers-vulnerability-to-climate-change/">Columbia Climate School coverage</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>9</td><td>Rising temperatures bring more droughts, warmer winters means less snow and ice to fill the reservoirs, and more variability in precipitation can lead to alternating floods and droughts.</td><td><strong>true</strong></td><td>Checked against: <a href="https://news.climate.columbia.edu/2022/07/28/global-review-assesses-hydropowers-vulnerability-to-climate-change/">Columbia Climate School coverage</a></td></tr><tr class="verdict-true"><td>8</td><td>In 2023, energy-related greenhouse-gas emissions rose by 1.1% globally. A worldwide shortfall in hydropower generation accounted for about 40% of that rise, according to a report from the International Energy Agency.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.iea.org/news/major-growth-of-clean-energy-limited-the-rise-in-global-emissions-in-2023">IEA news</a></td></tr><tr class="verdict-true"><td>7</td><td>Heavy rains brought floods to the region in October and early November, and the water levels in Lake Powell rose more than 20 feet from their mid-September low.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.kunc.org/news/2026-11-09/floods-bring-rare-relief-to-us-southwest-reservoirs-as-lake-powell-rises-20-feet">KUNC/AP</a></td></tr><tr class="verdict-true"><td>6</td><td>Low water levels have been an ongoing struggle for the region, which has been in a drought for 27 years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.everycrsreport.com/reports/R45546.html">CRS R45546</a></td></tr><tr class="verdict-true"><td>5</td><td>Snowfall in the Rocky Mountains provides about 85% of the annual flow of the Colorado River.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.usgs.gov/centers/geosciences-and-environmental-change-science-center/science/how-much-snow-colorado-river">USGS how much snow for Colorado River flow</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Together, the two plants produced nearly seven terawatt-hours of electricity in 2025, enough to serve over 2 million people.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://coyotegulch.blog/2026/08/17/glen-canyon-dam-hydropower-whats-it-good-for-plus-a-deeper-look-at-the-wests-energy-mix-jonathan-p-thompson-landdesk-org/">Land Desk via Coyote Gulch</a>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA</a></td></tr><tr class="verdict-true"><td>3</td><td>Hydropower production is likely to be at its lowest level in over a decade in 2026 and tick even lower in 2027, according to projections from the EIA.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>2</td><td>At the end of September, Lake Powell's depth was 3,518 feet, less than 1% above the level required to run the water through turbines that produce electricity at the Glen Canyon power plant. The Hoover Dam power plant requires 950 feet in Lake Mead, and that reservoir was 9% above the minimum in September.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>1</td><td>The US Southwest generated 28% less electricity via hydropower between April and August than the 10-year average, according to new data from the US Energy Information Administration.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>2</td><td>At the end of September, Lake Powell's depth was 3,518 feet, less than 1% above the level required to run the water through turbines that produce electricity at the Glen Canyon power plant. The Hoover Dam power plant requires 950 feet in Lake Mead, and that reservoir was 9% above the minimum in September.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>7</td><td>Heavy rains brought floods to the region in October and early November, and the water levels in Lake Powell rose more than 20 feet from their mid-September low.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.kunc.org/news/2026-11-09/floods-bring-rare-relief-to-us-southwest-reservoirs-as-lake-powell-rises-20-feet">KUNC/AP</a></td></tr><tr class="verdict-true"><td>3</td><td>Hydropower production is likely to be at its lowest level in over a decade in 2026 and tick even lower in 2027, according to projections from the EIA.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>8</td><td>In 2023, energy-related greenhouse-gas emissions rose by 1.1% globally. A worldwide shortfall in hydropower generation accounted for about 40% of that rise, according to a report from the International Energy Agency.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.iea.org/news/major-growth-of-clean-energy-limited-the-rise-in-global-emissions-in-2023">IEA news</a></td></tr><tr class="verdict-true"><td>6</td><td>Low water levels have been an ongoing struggle for the region, which has been in a drought for 27 years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.everycrsreport.com/reports/R45546.html">CRS R45546</a></td></tr><tr class="verdict-true"><td>9</td><td>Rising temperatures bring more droughts, warmer winters means less snow and ice to fill the reservoirs, and more variability in precipitation can lead to alternating floods and droughts.</td><td><strong>true</strong></td><td>Checked against: <a href="https://news.climate.columbia.edu/2022/07/28/global-review-assesses-hydropowers-vulnerability-to-climate-change/">Columbia Climate School coverage</a></td></tr><tr class="verdict-true"><td>5</td><td>Snowfall in the Rocky Mountains provides about 85% of the annual flow of the Colorado River.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.usgs.gov/centers/geosciences-and-environmental-change-science-center/science/how-much-snow-colorado-river">USGS how much snow for Colorado River flow</a></td></tr><tr class="verdict-true"><td>1</td><td>The US Southwest generated 28% less electricity via hydropower between April and August than the 10-year average, according to new data from the US Energy Information Administration.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Together, the two plants produced nearly seven terawatt-hours of electricity in 2025, enough to serve over 2 million people.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://coyotegulch.blog/2026/08/17/glen-canyon-dam-hydropower-whats-it-good-for-plus-a-deeper-look-at-the-wests-energy-mix-jonathan-p-thompson-landdesk-org/">Land Desk via Coyote Gulch</a>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-true"><td>1</td><td>The US Southwest generated 28% less electricity via hydropower between April and August than the 10-year average, according to new data from the US Energy Information Administration.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>2</td><td>At the end of September, Lake Powell's depth was 3,518 feet, less than 1% above the level required to run the water through turbines that produce electricity at the Glen Canyon power plant. The Hoover Dam power plant requires 950 feet in Lake Mead, and that reservoir was 9% above the minimum in September.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>3</td><td>Hydropower production is likely to be at its lowest level in over a decade in 2026 and tick even lower in 2027, according to projections from the EIA.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>5</td><td>Snowfall in the Rocky Mountains provides about 85% of the annual flow of the Colorado River.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.usgs.gov/centers/geosciences-and-environmental-change-science-center/science/how-much-snow-colorado-river">USGS how much snow for Colorado River flow</a></td></tr><tr class="verdict-true"><td>6</td><td>Low water levels have been an ongoing struggle for the region, which has been in a drought for 27 years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.everycrsreport.com/reports/R45546.html">CRS R45546</a></td></tr><tr class="verdict-true"><td>7</td><td>Heavy rains brought floods to the region in October and early November, and the water levels in Lake Powell rose more than 20 feet from their mid-September low.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.kunc.org/news/2026-11-09/floods-bring-rare-relief-to-us-southwest-reservoirs-as-lake-powell-rises-20-feet">KUNC/AP</a></td></tr><tr class="verdict-true"><td>8</td><td>In 2023, energy-related greenhouse-gas emissions rose by 1.1% globally. A worldwide shortfall in hydropower generation accounted for about 40% of that rise, according to a report from the International Energy Agency.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.iea.org/news/major-growth-of-clean-energy-limited-the-rise-in-global-emissions-in-2023">IEA news</a></td></tr><tr class="verdict-true"><td>9</td><td>Rising temperatures bring more droughts, warmer winters means less snow and ice to fill the reservoirs, and more variability in precipitation can lead to alternating floods and droughts.</td><td><strong>true</strong></td><td>Checked against: <a href="https://news.climate.columbia.edu/2022/07/28/global-review-assesses-hydropowers-vulnerability-to-climate-change/">Columbia Climate School coverage</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Together, the two plants produced nearly seven terawatt-hours of electricity in 2025, enough to serve over 2 million people.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://coyotegulch.blog/2026/08/17/glen-canyon-dam-hydropower-whats-it-good-for-plus-a-deeper-look-at-the-wests-energy-mix-jonathan-p-thompson-landdesk-org/">Land Desk via Coyote Gulch</a>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>9</td><td>Rising temperatures bring more droughts, warmer winters means less snow and ice to fill the reservoirs, and more variability in precipitation can lead to alternating floods and droughts.</td><td><strong>true</strong></td><td>Checked against: <a href="https://news.climate.columbia.edu/2022/07/28/global-review-assesses-hydropowers-vulnerability-to-climate-change/">Columbia Climate School coverage</a></td></tr><tr class="verdict-true"><td>6</td><td>Low water levels have been an ongoing struggle for the region, which has been in a drought for 27 years.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.everycrsreport.com/reports/R45546.html">CRS R45546</a></td></tr><tr class="verdict-true"><td>2</td><td>At the end of September, Lake Powell's depth was 3,518 feet, less than 1% above the level required to run the water through turbines that produce electricity at the Glen Canyon power plant. The Hoover Dam power plant requires 950 feet in Lake Mead, and that reservoir was 9% above the minimum in September.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>1</td><td>The US Southwest generated 28% less electricity via hydropower between April and August than the 10-year average, according to new data from the US Energy Information Administration.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>3</td><td>Hydropower production is likely to be at its lowest level in over a decade in 2026 and tick even lower in 2027, according to projections from the EIA.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_electricity_generation</code>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></td></tr><tr class="verdict-true"><td>8</td><td>In 2023, energy-related greenhouse-gas emissions rose by 1.1% globally. A worldwide shortfall in hydropower generation accounted for about 40% of that rise, according to a report from the International Energy Agency.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.iea.org/news/major-growth-of-clean-energy-limited-the-rise-in-global-emissions-in-2023">IEA news</a></td></tr><tr class="verdict-true"><td>7</td><td>Heavy rains brought floods to the region in October and early November, and the water levels in Lake Powell rose more than 20 feet from their mid-September low.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.kunc.org/news/2026-11-09/floods-bring-rare-relief-to-us-southwest-reservoirs-as-lake-powell-rises-20-feet">KUNC/AP</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>Together, the two plants produced nearly seven terawatt-hours of electricity in 2025, enough to serve over 2 million people.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://coyotegulch.blog/2026/08/17/glen-canyon-dam-hydropower-whats-it-good-for-plus-a-deeper-look-at-the-wests-energy-mix-jonathan-p-thompson-landdesk-org/">Land Desk via Coyote Gulch</a>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA</a></td></tr><tr class="verdict-true"><td>5</td><td>Snowfall in the Rocky Mountains provides about 85% of the annual flow of the Colorado River.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.usgs.gov/centers/geosciences-and-environmental-change-science-center/science/how-much-snow-colorado-river">USGS how much snow for Colorado River flow</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The US Southwest generated 28% less electricity via hydropower between April and August than the 10-year average, according to new data from the US Energy Information Administration.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>AZ Apr-Aug 2026 1,938 vs 2025 2,391 thousand MWh (-19%), lowest 2010-2026; AZ-only vs 10-yr mean about -33% (state proxy) <code>energy.eia_electricity_generation</code></dd>
+<dt>Independent evidence</dt><dd>EIA: 19% below last year, 28% below 10-yr average, record low<ul class="claim-sources"><li><a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT generation_year, state_abbr, SUM(generation_thousand_mwh) FROM energy.eia_electricity_generation WHERE geo_level='state' AND sector_code='99' AND energy_source_code='HYC' AND state_abbr IN ('AZ','NM','NV') AND generation_month BETWEEN 4 AND 8 GROUP BY generation_year, state_abbr</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; At the end of September, Lake Powell's depth was 3,518 feet, less than 1% above the level required to run the water through turbines that produce electricity at the Glen Canyon power plant. The Hoover Dam power plant requires 950 feet in Lake Mead, and that reservoir was 9% above the minimum in September.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>EIA: Powell 3,518 ft vs 3,490 ft (0.8%); Mead 1,038 ft vs 950 ft (9.3%)<ul class="claim-sources"><li><a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Hydropower production is likely to be at its lowest level in over a decade in 2026 and tick even lower in 2027, according to projections from the EIA.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>AZ Apr-Aug lowest of 2010-2026 <code>energy.eia_electricity_generation</code></dd>
+<dt>Independent evidence</dt><dd>EIA STEO Nov 2026 (projection): SW 6.13 BkWh in 2026 (24% below 10-yr avg); 2027 6.1 BkWh, 0.5% lower<ul class="claim-sources"><li><a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see first claim</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#4 &middot; <strong>unsupported</strong> &mdash; Together, the two plants produced nearly seven terawatt-hours of electricity in 2025, enough to serve over 2 million people.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://coyotegulch.blog/2026/08/17/glen-canyon-dam-hydropower-whats-it-good-for-plus-a-deeper-look-at-the-wests-energy-mix-jonathan-p-thompson-landdesk-org/">Land Desk via Coyote Gulch</a></li><li><a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>No primary plant-level figure found. The only EIA-based reporting read (Land Desk via Coyote Gulch) gives Glen Canyon 2.75 TWh (269,370 homes) and Hoover 'about the same', roughly 5.5 TWh, which would not be nearly seven; EIA's whole Southwest region total in 2025 is about 6.7 BkWh, so the piece may have used the regional figure. Warehouse state totals (AZ 4,783, NV 1,881 thousand MWh in 2025) include other plants and cannot isolate the dams.</dd>
+<dt>Warehouse searched for</dt><dd>hydroelectric net generation monthly by state</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Snowfall in the Rocky Mountains provides about 85% of the annual flow of the Colorado River.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>USGS Circular 1502 as relayed by secondary sources: high mountain terrain (~15% of Upper Basin) yields ~85% of annual flow; other estimates 70-80% (definition-dependent)<ul class="claim-sources"><li><a href="https://www.usgs.gov/centers/geosciences-and-environmental-change-science-center/science/how-much-snow-colorado-river">USGS how much snow for Colorado River flow</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Colorado River snowpack provides about 85% of annual flow Rocky Mountains</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Low water levels have been an ongoing struggle for the region, which has been in a drought for 27 years.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reclamation/CRS describe continuous drought since 2000 (26-27 years)<ul class="claim-sources"><li><a href="https://www.everycrsreport.com/reports/R45546.html">CRS R45546</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Colorado River Basin drought 2000 2026 megadrought Reclamation</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Heavy rains brought floods to the region in October and early November, and the water levels in Lake Powell rose more than 20 feet from their mid-September low.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reports: Powell up 20-22 feet since mid-September record low, still about 26% full<ul class="claim-sources"><li><a href="https://www.kunc.org/news/2026-11-09/floods-bring-rare-relief-to-us-southwest-reservoirs-as-lake-powell-rises-20-feet">KUNC/AP</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Lake Powell elevation rise October November 2026 storms flooding</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; In 2023, energy-related greenhouse-gas emissions rose by 1.1% globally. A worldwide shortfall in hydropower generation accounted for about 40% of that rise, according to a report from the International Energy Agency.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>IEA: +1.1% (410 Mt), hydropower shortfall about 170 Mt (~41%); IEA report page returned 403, confirmed via IEA news page in search<ul class="claim-sources"><li><a href="https://www.iea.org/news/major-growth-of-clean-energy-limited-the-rise-in-global-emissions-in-2023">IEA news</a></li></ul></dd>
+<dt>Web searches run</dt><dd>IEA CO2 Emissions in 2023 hydropower shortfall 40%</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; Rising temperatures bring more droughts, warmer winters means less snow and ice to fill the reservoirs, and more variability in precipitation can lead to alternating floods and droughts.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Wasti et al. 2022 WIREs Climate Change review identifies glacier loss, reduced seasonal snow storage, greater variability and higher evaporation as the main pathways (via Columbia Climate School coverage; Wiley page 403)<ul class="claim-sources"><li><a href="https://news.climate.columbia.edu/2022/07/28/global-review-assesses-hydropowers-vulnerability-to-climate-change/">Columbia Climate School coverage</a></li></ul></dd>
+<dt>Web searches run</dt><dd>2022 review climate change impacts on hydropower WIREs wcc.757</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Misleading framing</h2>
+<p>'Southwest' means EIA's supply region (AZ, NM, small parts of NV/CA), and hydropower is only about 4% of its generation mix, which the piece omits. The 2023 global emissions statistic sits beside a regional story and implies a larger regional emissions effect than the data support. The 'nearly seven TWh' figure appears to be the regional total attributed to two plants.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 51 rows — 12175 ms</summary><pre><code>SELECT generation_year, state_abbr, SUM(generation_thousand_mwh) AS mwh FROM energy.eia_electricity_generation WHERE geo_level='state' AND sector_code='99' AND energy_source_code='HYC' AND state_abbr IN ('AZ','NM','NV') AND generation_month BETWEEN 4 AND 8 GROUP BY generation_year, state_abbr ORDER BY generation_year, state_abbr</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 1003 ms</summary><pre><code>SELECT state_abbr, SUM(generation_thousand_mwh) AS mwh FROM energy.eia_electricity_generation WHERE geo_level='state' AND sector_code='99' AND energy_source_code='HYC' AND state_abbr IN ('AZ','NM','NV') AND generation_year=2025 GROUP BY state_abbr</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.eia.gov/todayinenergy/detail.php?id=68445">EIA Today in Energy, Nov 13 2026</a></li>
+<li><a href="https://www.iea.org/news/major-growth-of-clean-energy-limited-the-rise-in-global-emissions-in-2023">IEA CO2 Emissions in 2023</a></li>
+<li><a href="https://coyotegulch.blog/2026/08/17/glen-canyon-dam-hydropower-whats-it-good-for-plus-a-deeper-look-at-the-wests-energy-mix-jonathan-p-thompson-landdesk-org/">Land Desk via Coyote Gulch</a></li>
+<li><a href="https://www.kunc.org/news/2026-11-09/floods-bring-rare-relief-to-us-southwest-reservoirs-as-lake-powell-rises-20-feet">KUNC Lake Powell rise</a></li>
+</ol>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Grist article's claims about the MSHA silica proposal, black lung prevalence and the 2024 rule are mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Grist article's claims about the MSHA silica proposal, black lung prevalence and the 2024 rule are mostly accurate.</h1>
+<p class="subtitle">Checked 2026-11-21 against MSHA proposed rule (91 FR 73062), FR 2026-06584, DOL 2024 release, NIH/PMC, CDC Stacks, NPR</p>
+<p class="under-review"><span>Article under review</span><a href="https://grist.org/health/as-black-lung-disease-surges-the-trump-administration-proposes-deregulatory-protections-for-miners/">https://grist.org/health/as-black-lung-disease-surges-the-trump-administration-proposes-deregulatory-protections-for-miners/</a></p>
+</header>
+<section>
+<h2>Summary</h2>
+<p>Rating: 1 Pinocchio. Grist's article is mostly accurate: the 50 ug/m3 limit is retained, a uniform 21 percent error factor is proposed, new metal/nonmetal exams become voluntary, estimated savings are $28.7M/yr ($2.43M coal), the proposal was published Nov 12 with comments due Jan 11, 2027 and a Dec 15 hearing, and the court stay dates from April 2025. Weak spots: the NIOSH prevalence line (NPR reports 32.5 percent over five years among miners with 25+ years underground, versus 'more than 1 in 3 ... past three years' for Central Appalachian miners) and the claim that the 2024 rule required sampling every six months (it required six-month periodic evaluations and exposure-tiered sampling). Omitted context: the proposal also adds mandatory exams for overexposed sampled miners, and the 21 percent factor codifies existing enforcement while replacing method-specific factors; the National Mining Association's rebuttal on prevalence is absent.</p><p>AskAmerica's warehouse has no black lung, silica sampling or rulemaking tables (search_catalog returned only energy.eia_coal_mines, MSHA coal production), so all claims were graded from primary documents. The AJRCCM journal page and OSHA PDF returned HTTP 403 and the public-inspection index returned 403; the Federal Register mirror and the public-inspection PDFs were read instead. The legacy ~100 ug/m3 figure and the 'age groups' finding were not verified.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 84/100 — mostly honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>8 claims graded, 0 not gradable, 2 fell short. In this article only.</p></div>
+<p><strong>6</strong> true &middot; <strong>1</strong> partially false &middot; <strong>1</strong> mostly false &middot; <strong>8</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Its proposal would retain the 50-microgram silica limit while changing several requirements governing how mines monitor exposure and protect workers.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a>; <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a></td></tr><tr class="verdict-mostly-false"><td>8</td><td>In routine health screenings by the agency during the past three years, more than 1 in 3 miners in Central Appalachia once again tested positive for the disease</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.npr.org/2026/08/05/nx-s1-5894884/appalachia-black-lung-coal-miners-silica-dust">NPR Aug 5 2026</a>; <a href="https://academic.oup.com/ajrccm/advance-article-abstract/doi/10.1093/ajrccm/aamag401/8750197">AJRCCM abstract (HTTP 403)</a></td></tr><tr class="verdict-partially-false"><td>3</td><td>The 2024 rule enforced regular silica monitoring by requiring air sampling in each underground mine every six months.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>2</td><td>Among them is a 21 percent margin of error in testing, meaning companies would only be fined if a sample exceeded the 50 microgram limit by at least that amount.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>4</td><td>The proposed rule also would also make medical exams voluntary for new metal and nonmetal miners; the 2024 rule made them mandatory.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>5</td><td>MSHA estimates the proposed rule will save the industry $28.7 million per year, mostly from changes in monitoring. Of that, coal companies would save $2.43 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>6</td><td>The new rule was published in the Federal Register on November 12 and will be open for public comment until January 11.</td><td><strong>true</strong></td><td>Checked against: <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a>; <a href="https://public-inspection.federalregister.gov/">public-inspection index (HTTP 403)</a></td></tr><tr class="verdict-true"><td>7</td><td>But a federal appeals court put the rule on hold last year while it considered legal challenges filed by the mining industry.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-06584.pdf">FR 2026-06584</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-false"><td>8</td><td>In routine health screenings by the agency during the past three years, more than 1 in 3 miners in Central Appalachia once again tested positive for the disease</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.npr.org/2026/08/05/nx-s1-5894884/appalachia-black-lung-coal-miners-silica-dust">NPR Aug 5 2026</a>; <a href="https://academic.oup.com/ajrccm/advance-article-abstract/doi/10.1093/ajrccm/aamag401/8750197">AJRCCM abstract (HTTP 403)</a></td></tr><tr class="verdict-true"><td>7</td><td>But a federal appeals court put the rule on hold last year while it considered legal challenges filed by the mining industry.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-06584.pdf">FR 2026-06584</a></td></tr><tr class="verdict-true"><td>6</td><td>The new rule was published in the Federal Register on November 12 and will be open for public comment until January 11.</td><td><strong>true</strong></td><td>Checked against: <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a>; <a href="https://public-inspection.federalregister.gov/">public-inspection index (HTTP 403)</a></td></tr><tr class="verdict-true"><td>5</td><td>MSHA estimates the proposed rule will save the industry $28.7 million per year, mostly from changes in monitoring. Of that, coal companies would save $2.43 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>4</td><td>The proposed rule also would also make medical exams voluntary for new metal and nonmetal miners; the 2024 rule made them mandatory.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-partially-false"><td>3</td><td>The 2024 rule enforced regular silica monitoring by requiring air sampling in each underground mine every six months.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>2</td><td>Among them is a 21 percent margin of error in testing, meaning companies would only be fined if a sample exceeded the 50 microgram limit by at least that amount.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>1</td><td>Its proposal would retain the 50-microgram silica limit while changing several requirements governing how mines monitor exposure and protect workers.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a>; <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>2</td><td>Among them is a 21 percent margin of error in testing, meaning companies would only be fined if a sample exceeded the 50 microgram limit by at least that amount.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-partially-false"><td>3</td><td>The 2024 rule enforced regular silica monitoring by requiring air sampling in each underground mine every six months.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>4</td><td>The proposed rule also would also make medical exams voluntary for new metal and nonmetal miners; the 2024 rule made them mandatory.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>6</td><td>The new rule was published in the Federal Register on November 12 and will be open for public comment until January 11.</td><td><strong>true</strong></td><td>Checked against: <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a>; <a href="https://public-inspection.federalregister.gov/">public-inspection index (HTTP 403)</a></td></tr><tr class="verdict-mostly-false"><td>8</td><td>In routine health screenings by the agency during the past three years, more than 1 in 3 miners in Central Appalachia once again tested positive for the disease</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.npr.org/2026/08/05/nx-s1-5894884/appalachia-black-lung-coal-miners-silica-dust">NPR Aug 5 2026</a>; <a href="https://academic.oup.com/ajrccm/advance-article-abstract/doi/10.1093/ajrccm/aamag401/8750197">AJRCCM abstract (HTTP 403)</a></td></tr><tr class="verdict-true"><td>1</td><td>Its proposal would retain the 50-microgram silica limit while changing several requirements governing how mines monitor exposure and protect workers.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a>; <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a></td></tr><tr class="verdict-true"><td>5</td><td>MSHA estimates the proposed rule will save the industry $28.7 million per year, mostly from changes in monitoring. Of that, coal companies would save $2.43 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>7</td><td>But a federal appeals court put the rule on hold last year while it considered legal challenges filed by the mining industry.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-06584.pdf">FR 2026-06584</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>8</td><td>In routine health screenings by the agency during the past three years, more than 1 in 3 miners in Central Appalachia once again tested positive for the disease</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.npr.org/2026/08/05/nx-s1-5894884/appalachia-black-lung-coal-miners-silica-dust">NPR Aug 5 2026</a>; <a href="https://academic.oup.com/ajrccm/advance-article-abstract/doi/10.1093/ajrccm/aamag401/8750197">AJRCCM abstract (HTTP 403)</a></td></tr><tr class="verdict-partially-false"><td>3</td><td>The 2024 rule enforced regular silica monitoring by requiring air sampling in each underground mine every six months.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>2</td><td>Among them is a 21 percent margin of error in testing, meaning companies would only be fined if a sample exceeded the 50 microgram limit by at least that amount.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>4</td><td>The proposed rule also would also make medical exams voluntary for new metal and nonmetal miners; the 2024 rule made them mandatory.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>5</td><td>MSHA estimates the proposed rule will save the industry $28.7 million per year, mostly from changes in monitoring. Of that, coal companies would save $2.43 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>6</td><td>The new rule was published in the Federal Register on November 12 and will be open for public comment until January 11.</td><td><strong>true</strong></td><td>Checked against: <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a>; <a href="https://public-inspection.federalregister.gov/">public-inspection index (HTTP 403)</a></td></tr><tr class="verdict-true"><td>7</td><td>But a federal appeals court put the rule on hold last year while it considered legal challenges filed by the mining industry.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-06584.pdf">FR 2026-06584</a></td></tr><tr class="verdict-true"><td>1</td><td>Its proposal would retain the 50-microgram silica limit while changing several requirements governing how mines monitor exposure and protect workers.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a>; <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>6</td><td>The new rule was published in the Federal Register on November 12 and will be open for public comment until January 11.</td><td><strong>true</strong></td><td>Checked against: <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a>; <a href="https://public-inspection.federalregister.gov/">public-inspection index (HTTP 403)</a></td></tr><tr class="verdict-true"><td>7</td><td>But a federal appeals court put the rule on hold last year while it considered legal challenges filed by the mining industry.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-06584.pdf">FR 2026-06584</a></td></tr><tr class="verdict-partially-false"><td>3</td><td>The 2024 rule enforced regular silica monitoring by requiring air sampling in each underground mine every six months.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>2</td><td>Among them is a 21 percent margin of error in testing, meaning companies would only be fined if a sample exceeded the 50 microgram limit by at least that amount.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>4</td><td>The proposed rule also would also make medical exams voluntary for new metal and nonmetal miners; the 2024 rule made them mandatory.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>5</td><td>MSHA estimates the proposed rule will save the industry $28.7 million per year, mostly from changes in monitoring. Of that, coal companies would save $2.43 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr><tr class="verdict-true"><td>1</td><td>Its proposal would retain the 50-microgram silica limit while changing several requirements governing how mines monitor exposure and protect workers.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a>; <a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a></td></tr><tr class="verdict-mostly-false"><td>8</td><td>In routine health screenings by the agency during the past three years, more than 1 in 3 miners in Central Appalachia once again tested positive for the disease</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.npr.org/2026/08/05/nx-s1-5894884/appalachia-black-lung-coal-miners-silica-dust">NPR Aug 5 2026</a>; <a href="https://academic.oup.com/ajrccm/advance-article-abstract/doi/10.1093/ajrccm/aamag401/8750197">AJRCCM abstract (HTTP 403)</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Brendan Muckian-Bates — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>0 claims graded, 1 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> not checkable here &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>12</td><td>“However, they’ve provided these measures to effectively nullify that.”</td><td><strong>not checkable here</strong> &middot; central claim</td><td>Checked against: <a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>3</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-mostly-true"><td>9</td><td>Central Appalachian coal miners have experienced an acute increase in exposure and the most severe forms of lung disease associated with it, including progressive massive fibrosis.</td><td><strong>mostly true</strong></td></tr>
+<tr class="verdict-mostly-true"><td>10</td><td>In the 1960s and 1970s, according to the National Institutes of Health, as many as 1 in 3 miners with more than 25 years of work experience were testing positive for black lung.</td><td><strong>mostly true</strong></td></tr>
+<tr class="verdict-true"><td>11</td><td>The agency noted in the Federal Register that &quot;this rule, if finalized, is expected to be a deregulatory action&quot;</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Its proposal would retain the 50-microgram silica limit while changing several requirements governing how mines monitor exposure and protect workers.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Proposal p.6: MSHA is not proposing any changes to the 50 ug/m3 PEL<ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></li><li><a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>black lung coal miners MSHA</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Among them is a 21 percent margin of error in testing, meaning companies would only be fined if a sample exceeded the 50 microgram limit by at least that amount.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Uniform 21 percent error factor proposed (21.385 percent UCL); p.38<ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></li></ul></dd>
+<dt>Why</dt><dd>Matches proposed 21 percent uniform error factor; context omitted (codifies current enforcement) is covered in the narrative, not a factual error in the claim.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#3 &middot; <strong>partially false</strong> &mdash; The 2024 rule enforced regular silica monitoring by requiring air sampling in each underground mine every six months.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Proposal pp.30,113: periodic evaluation at least every 6 months; sampling quarterly when at/above action level<ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says sampling every six months; the evidence says the 2024 rule required periodic evaluations at least every 6 months and exposure-tiered sampling (quarterly at or above the action level).</dd>
+<dt>Windows tested</dt><dd>2024 rule section 60.12(c) periodic evaluation: every 6 months; 2024 rule sampling when at/above action level: every 3 months</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The proposed rule also would also make medical exams voluntary for new metal and nonmetal miners; the 2024 rule made them mandatory.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Proposal p.48: change from mandatory to voluntary exams for miners new to MNM. Omitted: adds mandatory exams for sampled miners above PEL.<ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; MSHA estimates the proposed rule will save the industry $28.7 million per year, mostly from changes in monitoring. Of that, coal companies would save $2.43 million.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>$28.7M total; $26.3M MNM, $2.43M coal (p.97)<ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></li></ul></dd>
+<dt>Why</dt><dd>Agency estimate, 2024 dollars at 7 percent discount; matches.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; The new rule was published in the Federal Register on November 12 and will be open for public comment until January 11.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>91 FR 73062, published Nov 12, 2026; comments by Jan 11, 2027<ul class="claim-sources"><li><a href="https://thefederalregister.org/documents/2026-23048/respirable-crystalline-silica-and-respiratory-protection">91 FR 73062 mirror</a></li><li><a href="https://public-inspection.federalregister.gov/">public-inspection index (HTTP 403)</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; But a federal appeals court put the rule on hold last year while it considered legal challenges filed by the mining industry.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Eighth Circuit stay April 11, 2025<ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-06584.pdf">FR 2026-06584</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#8 &middot; <strong>mostly false</strong> &mdash; In routine health screenings by the agency during the past three years, more than 1 in 3 miners in Central Appalachia once again tested positive for the disease</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>32.5 percent over five years, 25+ years tenure<ul class="claim-sources"><li><a href="https://www.npr.org/2026/08/05/nx-s1-5894884/appalachia-black-lung-coal-miners-silica-dust">NPR Aug 5 2026</a></li><li><a href="https://academic.oup.com/ajrccm/advance-article-abstract/doi/10.1093/ajrccm/aamag401/8750197">AJRCCM abstract (HTTP 403)</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says more than 1 in 3 miners over three years; NPR reports 32.5 percent (91 of 280) over five years among miners with 25+ years underground, slightly under 1 in 3 and a long-tenure subgroup.</dd>
+<dt>Windows tested</dt><dd>NIOSH five-year window, 25+ years tenure: 32.5%; article's three-year window: not reported by NPR</dd>
+<dt>Web searches run</dt><dd>NIOSH black lung prevalence Central Appalachia more than 1 in 3 long-tenured miners 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#9 &middot; <strong>mostly true</strong> &mdash; Central Appalachian coal miners have experienced an acute increase in exposure and the most severe forms of lung disease associated with it, including progressive massive fibrosis.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>CDC Stacks 103887: PR 6.0 (95% CI 4.6-7.9)<ul class="claim-sources"><li><a href="https://stacks.cdc.gov/view/cdc/103887">CDC Stacks 103887</a></li></ul></dd>
+<dt>Inaccuracy</dt><dd>The cited CDC paper reports rising r-type opacities (silica-linked), PR 6.0 in central Appalachia 2010-2018 vs 1980s; it does not itself measure exposure or PMF.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; In the 1960s and 1970s, according to the National Institutes of Health, as many as 1 in 3 miners with more than 25 years of work experience were testing positive for black lung.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>PMC4710586: early 1970s, about one-third of miners with 25+ years<ul class="claim-sources"><li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4710586/">NIH PMC4710586</a></li></ul></dd>
+<dt>Inaccuracy</dt><dd>NIH says the early 1970s, around one-third; the article widens the period to the 1960s and 1970s.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; The agency noted in the Federal Register that &quot;this rule, if finalized, is expected to be a deregulatory action&quot;</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>p.147: 'This rule, if finalized, is expected to be a deregulatory action under E.O. 14192.'<ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></li><li><a href="https://www.whitehouse.gov/presidential-actions/2025/01/unleashing-prosperity-through-deregulation/">White House EO text</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#12 &middot; <strong>not checkable here</strong> &mdash; “However, they’ve provided these measures to effectively nullify that.”</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Brendan Muckian-Bates — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://public-inspection.federalregister.gov/2026-23048.pdf">MSHA proposed rule FR 2026-23048</a></li></ul></dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: Advocate's interpretation of agency intent and effect; no data can test it.</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Why</dt><dd>Advocate's interpretation of agency intent and effect; no data can test it.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>NIOSH journal letter read directly</strong>: HTTP 403; relied on NPR coverage</li></ul>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

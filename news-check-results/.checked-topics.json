@@ -1915,5 +1915,145 @@
       "everyman"
     ],
     "note": "askamerica 0 (engine), expert 1, everyman 1; $650k not in CoBank report; filed #1377 barge fleet"
+  },
+  {
+    "topic_slug": "opb-oregon-chronic-absenteeism-32-percent-vs-21-national",
+    "headline": "Poor school attendance persists in Oregon, remains among lowest in nation post-COVID-19",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q1/askamerica/2026-11-21",
+    "pinocchios": 2,
+    "source_url": "https://www.opb.org/article/2026/11/19/poor-school-attendance-persists-in-oregon-remains-among-lowest-in-nation-post-covid-19/",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "askamerica 2 (engine), expert 1, everyman 1; askamerica caught count/rate mismatch but graded national 21% unsupported; CRDC ends 2021-22, filed #1406"
+  },
+  {
+    "topic_slug": "ap-afbf-thanksgiving-dinner-58-63-first-rise-since-2022",
+    "headline": "Here's how much more Americans are expected to pay for Thanksgiving dinners this year",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q2/askamerica/2026-11-21",
+    "pinocchios": 1,
+    "source_url": "https://www.wcax.com/2026/11/18/heres-how-much-more-americans-are-expected-pay-thanksgiving-dinners-this-year/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 1 (engine), expert 0, everyman 1; 'record turkey prices' lede holds only for USDA wholesale, retail per-lb below 2022; diesel record matches EIA $6.529"
+  },
+  {
+    "topic_slug": "mit-tech-review-colorado-river-hydropower-lowest-decade",
+    "headline": "Colorado River drought and Southwest hydropower (MIT Technology Review, Casey Crownhart; exact title not captured)",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q3/askamerica/2026-11-21",
+    "pinocchios": 0,
+    "source_url": "https://www.technologyreview.com/2026/11/17/1148742/hydropower-drought-colorado-river/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine; own view 1), expert 0, everyman 1; '7 TWh from two dams' likely the regional total (~6.7) vs ~5.5 for the plants; filed #1408 EIA-923"
+  },
+  {
+    "topic_slug": "fortune-harvard-jchs-middle-income-renters-cost-burdened",
+    "headline": "Housing squeeze reaching middle-class renters (Fortune headline paraphrased)",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q4/askamerica/2026-11-21",
+    "pinocchios": 0,
+    "source_url": "https://fortune.com/2026/11/16/housing-squeeze-middle-class-renters-cost-burdened-harvard-bofa/",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine; BofA quote regrouped to subject_claims via resume), expert 0, everyman 1; JCHS income bands unsupported for askamerica (403, no B25074) -> filed #1409"
+  },
+  {
+    "topic_slug": "fortune-us-chamber-bradley-gdp-2-percent-business-starts",
+    "headline": "US Chamber of Commerce official on midterms and growth (Fortune headline paraphrased)",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q5/askamerica/2026-11-21",
+    "pinocchios": 0,
+    "source_url": "https://fortune.com/2026/11/16/us-chamber-neil-bradley-midterms-growth-easy-button-price-controls/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine; Bradley subject_claims added via resume), expert 0, everyman 1; Bradley 'business starts' = applications, partially false; filed #1410 BFS"
+  },
+  {
+    "topic_slug": "cnbc-property-tax-revolt-homeowners-bills",
+    "headline": "There's a growing 'property tax revolt' as homeowners face rising costs",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q6/askamerica/2026-11-21",
+    "pinocchios": 0,
+    "source_url": "https://www.cnbc.com/2026/11/16/property-tax-relief-homeowners-bills.html",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine), expert 0-1, everyman 1; 2020 $300k is NAR all-types not single-family; NACo real bills +9% 2010-24 omitted; filed #1411 B25103"
+  },
+  {
+    "topic_slug": "cnbc-trump-accounts-751-trades-september-21000-in-2025",
+    "headline": "Trump bought Nvidia, Palantir, SpaceX in September as federal deals, White House ties grew",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q7/askamerica/2026-11-21",
+    "pinocchios": 1,
+    "source_url": "https://www.cnbc.com/2026/11/19/trump-nvidia-spacex-palantir-stock-trades-september.html",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 1 (engine), expert 1, everyman 1-2; Palantir $32.1M+$10.4M confirmed in fiscal.usaspending_contracts; Palantir got ~$217M in Sept, CNBC cites only the two after trades"
+  },
+  {
+    "topic_slug": "grist-black-lung-surge-msha-silica-proposal",
+    "headline": "As black lung disease surges, the Trump administration proposes 'deregulatory' protections for miners",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q8/askamerica/2026-11-21",
+    "pinocchios": 1,
+    "source_url": "https://grist.org/health/as-black-lung-disease-surges-the-trump-administration-proposes-deregulatory-protections-for-miners/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "all 1 Pinocchio; '1 in 3' = 32.5% over five years, mostly false; 2024 rule six-month sampling claim partially false; filed #1412 MSHA dust/CWHSP"
+  },
+  {
+    "topic_slug": "bridge-michigan-fecal-levels-75-percent-rivers",
+    "headline": "Pure Michigan has a poop problem: Dangerous fecal levels befoul 3 of 4 rivers",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q9/askamerica/2026-11-21",
+    "pinocchios": 0,
+    "source_url": "https://bridgemi.com/michigan-environment-watch/pure-michigan-has-a-poop-problem-dangerous-fecal-levels-befoul-3-of-4-rivers/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 (engine), expert 2, everyman 1; WQP proxy 78% of 1,493 MI sites >300 E. coli; EGLE page still says ~half; filed #1414 ATTAINS"
+  },
+  {
+    "topic_slug": "fierce-lown-nonprofit-hospital-tax-breaks-exceed-community-spending",
+    "headline": "Most nonprofit hospitals' tax breaks outpaced their community spending in 2023: Lown Institute",
+    "checked_date": "2026-11-21",
+    "run_subpath": "q10/askamerica/2026-11-21",
+    "pinocchios": null,
+    "source_url": "https://www.fiercehealthcare.com/providers/most-nonprofit-hospitals-tax-breaks-outpaced-their-community-spending-2023-lown-institue",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "article 403 for all arms; askamerica no engine rating (2 graded claims, own view 1), expert 1, everyman 1; net gap ~-$1.7B after surplus hospitals; filed #1415 Schedule H"
   }
 ]

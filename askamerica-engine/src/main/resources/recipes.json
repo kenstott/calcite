@@ -487,7 +487,7 @@
     },
     {
       "id": "trade-war-payment-program-official-vs-press-name",
-      "title": "A press/colloquial name for a farm-payment program (e.g. \"Farmer Bridge Assistance\") often differs from its official USDA program_description",
+      "title": "Farm trade-war payment programs are stored under official FSA program_description labels that differ from press names and change between rounds",
       "triggers": [
         "trade war payments",
         "farmer bridge assistance",
@@ -496,9 +496,15 @@
         "market facilitation program",
         "did farmers get compensated",
         "trade aid payments",
-        "farm payments cover losses"
+        "farm payments cover losses",
+        "mfp 2019",
+        "2019 trade aid",
+        "how much did farmers receive",
+        "trade war farm losses",
+        "tariff aid to farmers",
+        "tmp/mfp"
       ],
-      "body": "A question naming a farm trade-war compensation program by its press/colloquial name (e.g. \"Farmer Bridge Assistance\" for the 2025-26 round) will not necessarily match anything in search_catalog or in a table name search - the official USDA FSA program_description used inside ag.fsa_commodity_payments is often a different, more bureaucratic name than what news coverage calls it. Measured directly in this harness: the actual 2025 disbursements for the currently-active round appear under program_description = 'EMERGENCY COMMODITY ASSISTANCE PROGRAM' ($9.36B in 2025), not under any table or program name matching \"Farmer Bridge Assistance\" - an agent that searched for the press name and found nothing incorrectly concluded no data existed for the current round.\n\nBefore concluding a named farm-payment program has no data in the corpus: query `SELECT DISTINCT program_description FROM ag.fsa_commodity_payments WHERE \"year\" >= <most recent 1-2 years>` and scan the returned list for a plausible official-name match, rather than relying on search_catalog or a table-name search finding the press name directly. This applies generally whenever a question names an event or program colloquially (an informal or press shorthand) rather than by its official government designation - check the underlying table's own category/program values for the current period before concluding the program isn't covered.\n\nAlso, when a question names an ambiguous or unscoped event (\"the trade war\", not a specific year), and the domain has more than one live or recent episode as of the question's own date, address ALL currently-relevant episodes rather than only the most historically-documented one - a still-actively-disbursing current-year program is at least as relevant as a well-documented older one, and skipping it is a real completeness gap even if the older episode is answered thoroughly."
+      "body": "A question naming a farm trade-war compensation program by its press or colloquial name will not necessarily match anything in search_catalog, in a table name, or in a program_description LIKE filter built from that name. Inside ag.fsa_commodity_payments each round carries its own official FSA label, and the label format changes between rounds. Measured in this warehouse (all-years totals):\n\n  2018 round (MFP 2018): 'MARKET FACILITATION PROGRAM - CROPS' ($8.21B), 'MARKET FACILITATION PROGRAM - DAHG' ($0.36B), 'MARKET FACILITATION PROG-SPECIALTY CROPS' ($0.08B) -> about $8.65B\n  2019 round (MFP 2019): 'TMP/MFP 2019 NON SPECIALTY CROPS' ($13.55B), 'TMP/MFP 2019 LIVESTOCK' ($0.58B), 'TMP/MFP 2019 SPECIALITY CROPS' ($0.34B), 'TMP/MFP 2019 NON-SPECIALITY CROPS-A' ($0.06B) -> about $14.52B\n  Both rounds together: about $23.2B, consistent with GAO-22-468's $23.0B.\n\nA filter such as program_description ILIKE 'MARKET FACILITATION%' finds only the 2018 round; measured 2026-11-21, an agent used exactly that filter, found only $8.64B, and wrongly reported that the 2019 round was not loaded. Payments for one program year are also disbursed across several calendar years (the 2019 round paid out mostly in 2019 and 2020), so group by program_year, not \"year\", when totalling a round.\n\nBefore concluding any named farm-payment program is absent: run SELECT program_description, MIN(\"year\"), MAX(\"year\"), SUM(payments) FROM ag.fsa_commodity_payments WHERE \"year\" BETWEEN <episode start> AND <episode end + 2> GROUP BY program_description ORDER BY SUM(payments) DESC, and scan the largest labels for the program, rather than relying on a LIKE filter built from the program's press name. Use the episode's own years, not only the most recent ones.\n\nThe 2025 'EMERGENCY COMMODITY ASSISTANCE PROGRAM' ($9.36B in 2025) is economic and input-cost relief authorized by the American Relief Act of December 2024. It is not the 2025-26 Farmer Bridge Assistance trade package; do not count it as trade aid. If the current round's payments have no label yet, say the warehouse does not yet hold its disbursements and use USDA's announced rates instead.\n\nWhen a question names an unscoped event (\"the trade war\", not a specific year) and the domain has more than one recent episode as of the question's own date, address every relevant episode rather than only the best documented one."
     },
     {
       "id": "check-gross-vs-net-before-treating-as-disagreement",

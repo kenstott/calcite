@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The CNBC article's claims about Trump's September trades, Palantir contracts and SpaceX/NASA timing are mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The CNBC article's claims about Trump's September trades, Palantir contracts and SpaceX/NASA timing are mostly accurate.</h1>
+<p class="subtitle">Checked against OGE 278-T (Nov 2026), fiscal.usaspending_contracts, NASA release, wire coverage; 2026-11-21</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.cnbc.com/2026/11/19/trump-nvidia-spacex-palantir-stock-trades-september.html">https://www.cnbc.com/2026/11/19/trump-nvidia-spacex-palantir-stock-trades-september.html</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 461" width="880" height="461" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="461" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Palantir federal contract actions over $1M, September 2026</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">fiscal.usaspending_contracts, federal_action_obligation, $M</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="12" style="font-size:12px" font-weight="600" text-anchor="middle">CNBC-cited awards vs all other Palantir actions &gt;$1M</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="84" y1="232" x2="390" y2="232" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="76" y="236" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$0.0</text>
+      <line class="grid" x1="84" y1="188" x2="390" y2="188" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="76" y="192" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$50.0</text>
+      <line class="grid" x1="84" y1="144" x2="390" y2="144" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="76" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$100.0</text>
+      <line class="grid" x1="84" y1="100" x2="390" y2="100" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="76" y="104" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$150.0</text>
+      <line class="grid" x1="84" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="76" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$200.0</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="84" y1="56" x2="84" y2="232" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="84" y1="232" x2="390" y2="232" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="144" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 144)">$ millions</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-two-awards-cnbc-cites" class="tick" x="160.50" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Two awards CNBC cites</text>
+      <text id="p1-xtick-other-palantir-actions-1m" class="tick" x="313.50" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Other Palantir actions</text>
+      <text id="p1-xtick-other-palantir-actions-1m-2" class="tick" x="313.50" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">&gt;$1M</text>
+    </g>
+    <g id="p1-series-m" class="series">
+      <g class="hover">
+        <title>Two awards CNBC cites — $M: $42.5</title>
+        <rect id="p1-mark-m-two-awards-cnbc-cites" class="bar" x="111.54" y="194.60" width="96.92" height="37.40" fill="#2563eb"/>
+        <rect class="hit" x="111.54" y="56" width="96.92" height="176" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Other Palantir actions &gt;$1M — $M: $174.4</title>
+        <rect id="p1-mark-m-other-palantir-actions-1m" class="bar" x="264.54" y="78.53" width="96.92" height="153.47" fill="#2563eb"/>
+        <rect class="hit" x="264.54" y="56" width="96.92" height="176" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="footnote" x="20" y="408" fill="#6b7280">20 actions total about $217M; some are modifications of older awards.</text>
+  <g id="brand">
+  <svg x="20" y="420" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="435" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:55464/a/13f45dcb5fa425b01bf77ea80c52b8ff.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Every figure tested matched primary sources: OGE filing dates and ranges, HUD $10.4M and DHS $32.1M Palantir awards (warehouse), NASA $946M/$5.92B. The framing is selective: Palantir had about 20 contract actions over $1M in September 2026 totaling roughly $217M, so the $42.5M cited is a fraction. Rating: 1 Pinocchio.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — mostly honest (capped by central claim #11; 96 before the cap)</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>12 claims graded, 0 not gradable, 1 fell short. In this article only. <strong>Citejacking:</strong> #11 leans on cited evidence that does not carry it.</p></div>
+<p><strong>11</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>12</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>11</td><td>His accounts bought Palantir shares before $42.5 million in federal contract awards.</td><td><strong>mostly true</strong> &middot; central claim</td><td>#1, #3 — overreach<br>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>1</td><td>On Sept. 29, the Department of Homeland Security awarded Palantir another $32.1 million software contract, bringing the two awards to roughly $42.5 million.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>2</td><td>A week later, the Department of Housing and Urban Development awarded Palantir a contract with $10.4 million in initial obligations for AI-powered grant oversight and fraud detection.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>3</td><td>Trump's accounts bought between $15,001 and $50,000 in Palantir shares on Sept. 2, followed by another purchase of between $1,001 and $15,000 on Sept. 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://extapps2.oge.gov/">OGE site root (returned empty)</a></td></tr><tr class="verdict-true"><td>4</td><td>On Sept. 1, the accounts purchased between $100,001 and $250,000 in SpaceX debt carrying a 5.35% interest rate. Eight days later, they bought between $1,001 and $15,000 in shares.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>6</td><td>Six days after the announcement, Trump's accounts bought another $15,001 to $50,000 in SpaceX shares on the same day Musk attended Trump's White House state dinner for Chinese President Xi Jinping.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/09/25/heres-who-is-attending-the-trump-xi-state-dinner.html">CNBC state dinner list</a></td></tr><tr class="verdict-true"><td>7</td><td>The September filing shows four Nvidia purchases totaling between $152,004 and $380,000, including two on Sept. 2 worth as much as $350,000 combined. The accounts also sold between $1,001 and $15,000 in Nvidia shares on Sept. 24. The trades bring Trump's Nvidia transactions to at least 108 since his return to office, worth between $27.2 million and $97.9 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16 Nvidia analysis</a></td></tr><tr class="verdict-true"><td>8</td><td>Huang resigned Nov. 12 following revelations about his personal relationships.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000082/nvidiaannouncesceotransiti.htm">Nvidia 8-K</a>; <a href="https://www.cnbc.com/2026/11/08/jensen-huang-nvidia-china-spy-congress.html">CNBC Nov 8</a></td></tr><tr class="verdict-true"><td>9</td><td>The New York Times reported that intelligence officials warned Trump about Huang's relationship with a suspected Chinese spy. Trump has denied being briefed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nytimes.com/2026/11/10/us/politics/trump-china-trip-nvidia.html">NYT (403)</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>10</td><td>The largest reported transaction was a Sept. 23 purchase of between $5 million and $25 million in Vanguard Dividend Appreciation ETF shares. That same day, Trump's accounts sold between $1 million and $5 million each in Comcast, McDonald's, Home Depot and Fidelity National Information Services, along with between $500,001 and $1 million each in Nike and Constellation Brands. They purchased between $250,001 and $500,000 in TJX on each of Sept. 15 and 16, and between $117,004 and $330,000 in Tesla across four transactions.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>12</td><td>The filing shows 751 purchases and sales totaling between roughly $40.9 million and $148.1 million, according to a CNBC analysis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>13</td><td>His accounts reported more than 21,000 trades in 2025, compared with roughly 500 during his entire first term.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>13</td><td>His accounts reported more than 21,000 trades in 2025, compared with roughly 500 during his entire first term.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>12</td><td>The filing shows 751 purchases and sales totaling between roughly $40.9 million and $148.1 million, according to a CNBC analysis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>His accounts bought Palantir shares before $42.5 million in federal contract awards.</td><td><strong>mostly true</strong> &middot; central claim</td><td>#1, #3 — overreach<br>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>10</td><td>The largest reported transaction was a Sept. 23 purchase of between $5 million and $25 million in Vanguard Dividend Appreciation ETF shares. That same day, Trump's accounts sold between $1 million and $5 million each in Comcast, McDonald's, Home Depot and Fidelity National Information Services, along with between $500,001 and $1 million each in Nike and Constellation Brands. They purchased between $250,001 and $500,000 in TJX on each of Sept. 15 and 16, and between $117,004 and $330,000 in Tesla across four transactions.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>9</td><td>The New York Times reported that intelligence officials warned Trump about Huang's relationship with a suspected Chinese spy. Trump has denied being briefed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nytimes.com/2026/11/10/us/politics/trump-china-trip-nvidia.html">NYT (403)</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>8</td><td>Huang resigned Nov. 12 following revelations about his personal relationships.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000082/nvidiaannouncesceotransiti.htm">Nvidia 8-K</a>; <a href="https://www.cnbc.com/2026/11/08/jensen-huang-nvidia-china-spy-congress.html">CNBC Nov 8</a></td></tr><tr class="verdict-true"><td>7</td><td>The September filing shows four Nvidia purchases totaling between $152,004 and $380,000, including two on Sept. 2 worth as much as $350,000 combined. The accounts also sold between $1,001 and $15,000 in Nvidia shares on Sept. 24. The trades bring Trump's Nvidia transactions to at least 108 since his return to office, worth between $27.2 million and $97.9 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16 Nvidia analysis</a></td></tr><tr class="verdict-true"><td>6</td><td>Six days after the announcement, Trump's accounts bought another $15,001 to $50,000 in SpaceX shares on the same day Musk attended Trump's White House state dinner for Chinese President Xi Jinping.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/09/25/heres-who-is-attending-the-trump-xi-state-dinner.html">CNBC state dinner list</a></td></tr><tr class="verdict-true"><td>4</td><td>On Sept. 1, the accounts purchased between $100,001 and $250,000 in SpaceX debt carrying a 5.35% interest rate. Eight days later, they bought between $1,001 and $15,000 in shares.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>3</td><td>Trump's accounts bought between $15,001 and $50,000 in Palantir shares on Sept. 2, followed by another purchase of between $1,001 and $15,000 on Sept. 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://extapps2.oge.gov/">OGE site root (returned empty)</a></td></tr><tr class="verdict-true"><td>2</td><td>A week later, the Department of Housing and Urban Development awarded Palantir a contract with $10.4 million in initial obligations for AI-powered grant oversight and fraud detection.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>1</td><td>On Sept. 29, the Department of Homeland Security awarded Palantir another $32.1 million software contract, bringing the two awards to roughly $42.5 million.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>2</td><td>A week later, the Department of Housing and Urban Development awarded Palantir a contract with $10.4 million in initial obligations for AI-powered grant oversight and fraud detection.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-mostly-true"><td>11</td><td>His accounts bought Palantir shares before $42.5 million in federal contract awards.</td><td><strong>mostly true</strong> &middot; central claim</td><td>#1, #3 — overreach<br>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>13</td><td>His accounts reported more than 21,000 trades in 2025, compared with roughly 500 during his entire first term.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>8</td><td>Huang resigned Nov. 12 following revelations about his personal relationships.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000082/nvidiaannouncesceotransiti.htm">Nvidia 8-K</a>; <a href="https://www.cnbc.com/2026/11/08/jensen-huang-nvidia-china-spy-congress.html">CNBC Nov 8</a></td></tr><tr class="verdict-true"><td>4</td><td>On Sept. 1, the accounts purchased between $100,001 and $250,000 in SpaceX debt carrying a 5.35% interest rate. Eight days later, they bought between $1,001 and $15,000 in shares.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>1</td><td>On Sept. 29, the Department of Homeland Security awarded Palantir another $32.1 million software contract, bringing the two awards to roughly $42.5 million.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>6</td><td>Six days after the announcement, Trump's accounts bought another $15,001 to $50,000 in SpaceX shares on the same day Musk attended Trump's White House state dinner for Chinese President Xi Jinping.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/09/25/heres-who-is-attending-the-trump-xi-state-dinner.html">CNBC state dinner list</a></td></tr><tr class="verdict-true"><td>12</td><td>The filing shows 751 purchases and sales totaling between roughly $40.9 million and $148.1 million, according to a CNBC analysis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>10</td><td>The largest reported transaction was a Sept. 23 purchase of between $5 million and $25 million in Vanguard Dividend Appreciation ETF shares. That same day, Trump's accounts sold between $1 million and $5 million each in Comcast, McDonald's, Home Depot and Fidelity National Information Services, along with between $500,001 and $1 million each in Nike and Constellation Brands. They purchased between $250,001 and $500,000 in TJX on each of Sept. 15 and 16, and between $117,004 and $330,000 in Tesla across four transactions.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>9</td><td>The New York Times reported that intelligence officials warned Trump about Huang's relationship with a suspected Chinese spy. Trump has denied being briefed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nytimes.com/2026/11/10/us/politics/trump-china-trip-nvidia.html">NYT (403)</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>7</td><td>The September filing shows four Nvidia purchases totaling between $152,004 and $380,000, including two on Sept. 2 worth as much as $350,000 combined. The accounts also sold between $1,001 and $15,000 in Nvidia shares on Sept. 24. The trades bring Trump's Nvidia transactions to at least 108 since his return to office, worth between $27.2 million and $97.9 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16 Nvidia analysis</a></td></tr><tr class="verdict-true"><td>3</td><td>Trump's accounts bought between $15,001 and $50,000 in Palantir shares on Sept. 2, followed by another purchase of between $1,001 and $15,000 on Sept. 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://extapps2.oge.gov/">OGE site root (returned empty)</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>11</td><td>His accounts bought Palantir shares before $42.5 million in federal contract awards.</td><td><strong>mostly true</strong> &middot; central claim</td><td>#1, #3 — overreach<br>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>1</td><td>On Sept. 29, the Department of Homeland Security awarded Palantir another $32.1 million software contract, bringing the two awards to roughly $42.5 million.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>2</td><td>A week later, the Department of Housing and Urban Development awarded Palantir a contract with $10.4 million in initial obligations for AI-powered grant oversight and fraud detection.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>3</td><td>Trump's accounts bought between $15,001 and $50,000 in Palantir shares on Sept. 2, followed by another purchase of between $1,001 and $15,000 on Sept. 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://extapps2.oge.gov/">OGE site root (returned empty)</a></td></tr><tr class="verdict-true"><td>4</td><td>On Sept. 1, the accounts purchased between $100,001 and $250,000 in SpaceX debt carrying a 5.35% interest rate. Eight days later, they bought between $1,001 and $15,000 in shares.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>6</td><td>Six days after the announcement, Trump's accounts bought another $15,001 to $50,000 in SpaceX shares on the same day Musk attended Trump's White House state dinner for Chinese President Xi Jinping.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/09/25/heres-who-is-attending-the-trump-xi-state-dinner.html">CNBC state dinner list</a></td></tr><tr class="verdict-true"><td>7</td><td>The September filing shows four Nvidia purchases totaling between $152,004 and $380,000, including two on Sept. 2 worth as much as $350,000 combined. The accounts also sold between $1,001 and $15,000 in Nvidia shares on Sept. 24. The trades bring Trump's Nvidia transactions to at least 108 since his return to office, worth between $27.2 million and $97.9 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16 Nvidia analysis</a></td></tr><tr class="verdict-true"><td>8</td><td>Huang resigned Nov. 12 following revelations about his personal relationships.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000082/nvidiaannouncesceotransiti.htm">Nvidia 8-K</a>; <a href="https://www.cnbc.com/2026/11/08/jensen-huang-nvidia-china-spy-congress.html">CNBC Nov 8</a></td></tr><tr class="verdict-true"><td>9</td><td>The New York Times reported that intelligence officials warned Trump about Huang's relationship with a suspected Chinese spy. Trump has denied being briefed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nytimes.com/2026/11/10/us/politics/trump-china-trip-nvidia.html">NYT (403)</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>10</td><td>The largest reported transaction was a Sept. 23 purchase of between $5 million and $25 million in Vanguard Dividend Appreciation ETF shares. That same day, Trump's accounts sold between $1 million and $5 million each in Comcast, McDonald's, Home Depot and Fidelity National Information Services, along with between $500,001 and $1 million each in Nike and Constellation Brands. They purchased between $250,001 and $500,000 in TJX on each of Sept. 15 and 16, and between $117,004 and $330,000 in Tesla across four transactions.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>12</td><td>The filing shows 751 purchases and sales totaling between roughly $40.9 million and $148.1 million, according to a CNBC analysis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>13</td><td>His accounts reported more than 21,000 trades in 2025, compared with roughly 500 during his entire first term.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>11</td><td>His accounts bought Palantir shares before $42.5 million in federal contract awards.</td><td><strong>mostly true</strong> &middot; central claim</td><td>#1, #3 — overreach<br>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>13</td><td>His accounts reported more than 21,000 trades in 2025, compared with roughly 500 during his entire first term.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>1</td><td>On Sept. 29, the Department of Homeland Security awarded Palantir another $32.1 million software contract, bringing the two awards to roughly $42.5 million.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>2</td><td>A week later, the Department of Housing and Urban Development awarded Palantir a contract with $10.4 million in initial obligations for AI-powered grant oversight and fraud detection.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.usaspending_contracts</code></td></tr><tr class="verdict-true"><td>8</td><td>Huang resigned Nov. 12 following revelations about his personal relationships.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000082/nvidiaannouncesceotransiti.htm">Nvidia 8-K</a>; <a href="https://www.cnbc.com/2026/11/08/jensen-huang-nvidia-china-spy-congress.html">CNBC Nov 8</a></td></tr><tr class="verdict-true"><td>9</td><td>The New York Times reported that intelligence officials warned Trump about Huang's relationship with a suspected Chinese spy. Trump has denied being briefed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nytimes.com/2026/11/10/us/politics/trump-china-trip-nvidia.html">NYT (403)</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></td></tr><tr class="verdict-true"><td>4</td><td>On Sept. 1, the accounts purchased between $100,001 and $250,000 in SpaceX debt carrying a 5.35% interest rate. Eight days later, they bought between $1,001 and $15,000 in shares.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>10</td><td>The largest reported transaction was a Sept. 23 purchase of between $5 million and $25 million in Vanguard Dividend Appreciation ETF shares. That same day, Trump's accounts sold between $1 million and $5 million each in Comcast, McDonald's, Home Depot and Fidelity National Information Services, along with between $500,001 and $1 million each in Nike and Constellation Brands. They purchased between $250,001 and $500,000 in TJX on each of Sept. 15 and 16, and between $117,004 and $330,000 in Tesla across four transactions.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>12</td><td>The filing shows 751 purchases and sales totaling between roughly $40.9 million and $148.1 million, according to a CNBC analysis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></td></tr><tr class="verdict-true"><td>7</td><td>The September filing shows four Nvidia purchases totaling between $152,004 and $380,000, including two on Sept. 2 worth as much as $350,000 combined. The accounts also sold between $1,001 and $15,000 in Nvidia shares on Sept. 24. The trades bring Trump's Nvidia transactions to at least 108 since his return to office, worth between $27.2 million and $97.9 million.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16 Nvidia analysis</a></td></tr><tr class="verdict-true"><td>6</td><td>Six days after the announcement, Trump's accounts bought another $15,001 to $50,000 in SpaceX shares on the same day Musk attended Trump's White House state dinner for Chinese President Xi Jinping.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://www.cnbc.com/2026/09/25/heres-who-is-attending-the-trump-xi-state-dinner.html">CNBC state dinner list</a></td></tr><tr class="verdict-true"><td>3</td><td>Trump's accounts bought between $15,001 and $50,000 in Palantir shares on Sept. 2, followed by another purchase of between $1,001 and $15,000 on Sept. 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a>; <a href="https://extapps2.oge.gov/">OGE site root (returned empty)</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>5</td><td>On Sept. 18, NASA announced a $946 million expansion of its SpaceX contract, adding three astronaut missions to the International Space Station and bringing the agreement's total value to $5.92 billion. The agency had signaled plans for additional missions in May.</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; On Sept. 29, the Department of Homeland Security awarded Palantir another $32.1 million software contract, bringing the two awards to roughly $42.5 million.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>HUD $10,427,242 (2026-09-16) + DHS $32,106,350 (2026-09-29) = $42.53M <code>fiscal.usaspending_contracts</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select contract_award_unique_key, action_date, federal_action_obligation from fiscal.usaspending_contracts where &quot;year&quot;=2026 and contract_award_unique_key in ('CONT_AWD_86615426F00004_8600_47QTCA24D004L_4732','CONT_AWD_70RCSJ26FC0000028_7001_70RTAC26A00000001_7001')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; A week later, the Department of Housing and Urban Development awarded Palantir a contract with $10.4 million in initial obligations for AI-powered grant oversight and fraud detection.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>HUD action 2026-09-16 obligation $10,427,242 <code>fiscal.usaspending_contracts</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>same query as claim 1</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Trump's accounts bought between $15,001 and $50,000 in Palantir shares on Sept. 2, followed by another purchase of between $1,001 and $15,000 on Sept. 9.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>OGE 278-T PDF pp.12 and 14: Palantir 9/9 $1,001-15,000; 9/2 $15,001-50,000<ul class="claim-sources"><li><a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></li><li><a href="https://extapps2.oge.gov/">OGE site root (returned empty)</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; On Sept. 1, the accounts purchased between $100,001 and $250,000 in SpaceX debt carrying a 5.35% interest rate. Eight days later, they bought between $1,001 and $15,000 in shares.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>OGE p.18: Space Exploration Technologies senior notes 5.350% due 2031, purchased 9/1, $100,001-250,000; p.12: SpaceX shares 9/9 $1,001-15,000<ul class="claim-sources"><li><a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; On Sept. 18, NASA announced a $946 million expansion of its SpaceX contract, adding three astronaut missions to the International Space Station and bringing the agreement's total value to $5.92 billion. The agency had signaled plans for additional missions in May.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>NASA release Sept 18, 2026: $946M, three missions, $5.92B total; notice of intent in May<ul class="claim-sources"><li><a href="https://www.nasa.gov/missions/station/commercial-crew/nasa-awards-spacex-three-crew-flights-to-space-station/">NASA release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Six days after the announcement, Trump's accounts bought another $15,001 to $50,000 in SpaceX shares on the same day Musk attended Trump's White House state dinner for Chinese President Xi Jinping.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>OGE p.6: SpaceX purchase 9/24 $15,001-50,000; state dinner Sept 24 with Musk at head table (CNBC guest list, Reuters/Irish Times)<ul class="claim-sources"><li><a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></li><li><a href="https://www.cnbc.com/2026/09/25/heres-who-is-attending-the-trump-xi-state-dinner.html">CNBC state dinner list</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; The September filing shows four Nvidia purchases totaling between $152,004 and $380,000, including two on Sept. 2 worth as much as $350,000 combined. The accounts also sold between $1,001 and $15,000 in Nvidia shares on Sept. 24. The trades bring Trump's Nvidia transactions to at least 108 since his return to office, worth between $27.2 million and $97.9 million.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>OGE: Nvidia 9/2 $100,001-250,000, 9/9 and 9/10 $1,001-15,000 each, 9/24 sale $1,001-15,000. CNBC Nov 16: 103 transactions, $27M-$97.5M; plus 5 trades and $0.15M-$0.40M gives about 108 and $27.2M-$97.9M.<ul class="claim-sources"><li><a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></li><li><a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16 Nvidia analysis</a></li></ul></dd>
+<dt>Why</dt><dd>Components seen in the filing match; the cumulative 108 / $27.2M-$97.9M is consistent with CNBC's Nov 16 tally (103, $27M-$97.5M) plus five September trades.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; Huang resigned Nov. 12 following revelations about his personal relationships.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Nvidia 8-K and press: resignation announced Nov 12, 2026 after affair revelations; CNBC Nov 8 and Nov 16 corroborate<ul class="claim-sources"><li><a href="https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000082/nvidiaannouncesceotransiti.htm">Nvidia 8-K</a></li><li><a href="https://www.cnbc.com/2026/11/08/jensen-huang-nvidia-china-spy-congress.html">CNBC Nov 8</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Jensen Huang resigns Nvidia CEO</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; The New York Times reported that intelligence officials warned Trump about Huang's relationship with a suspected Chinese spy. Trump has denied being briefed.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CNBC Nov 16: NYT reported Rubio briefed Trump; Trump said 'I haven't heard that'. NYT page returned HTTP 403; graded on CNBC's account of it.<ul class="claim-sources"><li><a href="https://www.nytimes.com/2026/11/10/us/politics/trump-china-trip-nvidia.html">NYT (403)</a></li><li><a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; The largest reported transaction was a Sept. 23 purchase of between $5 million and $25 million in Vanguard Dividend Appreciation ETF shares. That same day, Trump's accounts sold between $1 million and $5 million each in Comcast, McDonald's, Home Depot and Fidelity National Information Services, along with between $500,001 and $1 million each in Nike and Constellation Brands. They purchased between $250,001 and $500,000 in TJX on each of Sept. 15 and 16, and between $117,004 and $330,000 in Tesla across four transactions.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>OGE pp.2, 18-19: all dates and ranges match; Tesla ranges (9/1 $100,001-250,000; 9/2 $15,001-50,000; 9/9 and 9/10 $1,001-15,000) sum to $117,004-$330,000 exactly<ul class="claim-sources"><li><a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#11 &middot; <strong>mostly true</strong> &mdash; His accounts bought Palantir shares before $42.5 million in federal contract awards.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>20 Palantir actions &gt;$1M in Sept 2026 totaling about $217M <code>fiscal.usaspending_contracts</code></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Rests on</dt><dd>#1, #3</dd>
+<dt>What that evidence found</dt><dd>Palantir had about 20 contract actions over $1M in Sept 2026 totaling roughly $217M; the two cited are a selective subset, and the purchases ($2,002-$65,000 combined) were tiny against the filing's $40.9M-$148.1M monthly total</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim implies the $42.5M awards are what followed the trades; the warehouse shows roughly $217M across about 20 Palantir actions that month, so the cited awards are a cherry-picked fraction</dd>
+<dt>Warehouse searched for</dt><dd>USAspending federal contract awards recipient Palantir</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select contract_award_unique_key, action_date, federal_action_obligation from fiscal.usaspending_contracts where &quot;year&quot;=2026 and recipient_name ilike 'PALANTIR%' and action_date between '2026-09-01' and '2026-09-30' and federal_action_obligation&gt;1000000</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; The filing shows 751 purchases and sales totaling between roughly $40.9 million and $148.1 million, according to a CNBC analysis.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>OGE PDF item numbering through p.24 consistent with 751<ul class="claim-sources"><li><a href="https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/20A6220DE9740AF085258EB400334364/$FILE/Donald-J-Trump-11.01.2026-278T%20optimized%20version.pdf">OGE 278-T</a></li></ul></dd>
+<dt>Why</dt><dd>A CNBC analysis estimate; OGE PDF item numbering reaches item 739 on page 24 of 25, consistent with 751. Not recomputed.</dd>
+<dt>Warehouse searched for</dt><dd>Trump financial disclosure September 2026 transactions</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#13 &middot; <strong>true</strong> &mdash; His accounts reported more than 21,000 trades in 2025, compared with roughly 500 during his entire first term.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CNBC Nov 16: 'more than 21,000 trades in 2025 alone, compared with roughly 500 during his entire first term, according to CNBC's analysis'<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/16/trump-nvidia-stock-trades-jensen-huang.html">CNBC Nov 16</a></li></ul></dd>
+<dt>Why</dt><dd>CNBC's own analysis figure, matched by CNBC's Nov 16 article; no independent count found.</dd>
+<dt>Warehouse searched for</dt><dd>Trump 2025 stock trades count financial disclosure</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>$25</strong> &mdash; appears only in the Vanguard $5M-$25M range graded in claim 9</li></ul>
+</section>
+<section>
+<h2>Materially misleading framing</h2>
+<p>Choosing the two awards that followed the trades implies timing significance, but the Palantir purchases were $2,002-$65,000 combined against a $40.9M-$148.1M monthly total, and Palantir wins awards continually. CNBC does state there is no evidence Trump directed trades or that managers knew of decisions. NASA had flagged the SpaceX missions in May. The NYT page returned HTTP 403; its claims were graded on CNBC's account. usaspending.gov pages returned empty; award values came from the warehouse table with the same award IDs. CNBC quote pages and videos linked in the article were fetched and carry no claim bearing on the article.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Recompute CNBC aggregates (751 trades, $40.9-148.1M, 21,000 trades in 2025)</strong>: Not independently recomputed; only cross-checked for consistency with CNBC's earlier piece and OGE item numbering</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 4 rows — 21098 ms</summary><pre><code>select contract_award_unique_key, recipient_name, awarding_agency_name, action_date, federal_action_obligation, total_dollars_obligated from fiscal.usaspending_contracts where &quot;year&quot;=2026 and contract_award_unique_key in ('CONT_AWD_86615426F00004_8600_47QTCA24D004L_4732','CONT_AWD_70RCSJ26FC0000028_7001_70RTAC26A00000001_7001') order by action_date</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 8157 ms</summary><pre><code>select contract_award_unique_key, recipient_name, awarding_agency_name, action_date, federal_action_obligation from fiscal.usaspending_contracts where &quot;year&quot;=2026 and recipient_name ilike 'PALANTIR%' and action_date between '2026-09-01' and '2026-09-30' and federal_action_obligation&gt;1000000 order by action_date</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
