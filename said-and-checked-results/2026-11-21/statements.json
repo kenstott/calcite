@@ -1680,10 +1680,25 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Senate's roll call vote 270 records passage of H.R. 2347 as amended by Capito's substitute, 62-33, at 9:30 p.m. on Nov. 19, 2026, and the Congressional Record of Nov. 20 has Capito naming the bill passed 'last night' as the Bipartisan American Affordability and Jobs Act of 2026; AskAmerica's bill table lists that title for S. 5653. No page read states the title of H.R. 2347 as amended, so the link between the vote and the name rests on the floor remarks.",
+      "evidence": [
+        {
+          "label": "law.bills (title search: Affordability and Jobs Act)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT congress, bill_type, bill_number, title FROM law.bills WHERE title ILIKE '%Affordability and Jobs%' FETCH FIRST 5 ROWS ONLY"
+        },
+        {
+          "label": "U.S. Senate, Roll Call Vote 270, 119th Congress, 2nd Session (Nov. 19, 2026)",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00270.xml"
+        },
+        {
+          "label": "Congressional Record, Nov. 20, 2026, Senate, Capito remarks",
+          "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+        }
+      ],
+      "check_run": "q215/askamerica/2026-11-21"
     },
     {
       "id": 45,
