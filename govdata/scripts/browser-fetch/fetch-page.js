@@ -78,7 +78,7 @@ async function main() {
         reply = {error: 'HTTP ' + reply.status + ' from ' + url};
       }
     } catch (e) {
-      reply = {error: e.message};
+      reply = {error: e.name + ': ' + e.message + ' (' + line.trim() + ')'};
     }
     process.stdout.write(JSON.stringify(reply) + '\n');
   }
