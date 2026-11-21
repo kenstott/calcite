@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata;
 
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,7 +37,15 @@ import java.util.List;
 public final class BrowserHelperProcess {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(BrowserHelperProcess.class);
+  /** Largest single reply body (one file as one JSON string); Jackson's default is 20 million. */
+  private static final int MAX_REPLY_CHARS = 200_000_000;
+
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  static {
+    MAPPER.getFactory().setStreamReadConstraints(
+        StreamReadConstraints.builder().maxStringLength(MAX_REPLY_CHARS).build());
+  }
 
   private final String label;
   private final Process process;

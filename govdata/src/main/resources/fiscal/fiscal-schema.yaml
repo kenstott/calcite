@@ -7887,6 +7887,134 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # U.S. FOREIGN ASSISTANCE BY COUNTRY x AGENCY x ACCOUNT x FISCAL YEAR — ForeignAssistance.gov
+  # ---------------------------------------------------------------------------
+  - name: foreign_assistance_by_country
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=foreign_assistance_by_country/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      U.S. foreign assistance by recipient country, funding agency, funding account, transaction
+      type and fiscal year, FY2001-FY2026 (ForeignAssistance.gov bulk file
+      us_foreign_aid_funding.csv, about 144,000 rows), in whole US dollars as current_amount
+      (nominal) and constant_amount (inflation-adjusted by the source). transaction_type is
+      Obligations, Disbursements, Appropriated and Planned, or President's Budget Requests; sum
+      one type at a time, never across types, since an obligation, its later disbursement and its
+      appropriation are the same money. Military aid is identified by funding account, not by a
+      flag: State accounts 11x1082 Foreign Military Financing Program (the main military grant
+      and loan account, for example Israel 3.3 billion dollars disbursed in FY2023), 11x1081
+      International Military Education and Training, 11x1085 Foreign Military Financing Direct
+      Loan Program Account (FY2003-18), and DOD 97xDEDA Excess Defense Articles and 11x1080
+      Military Assistance Programs (Old Code, FY2001-11); Peacekeeping Operations and other
+      security accounts are separate accounts in the same table. The agency acronym State/USAID
+      appears for FY2006-24 rows where the source combined the two agencies. This is aid reported
+      to ForeignAssistance.gov, not total security cooperation: it omits aid that is not reported
+      by country, and the most recent fiscal years are partial and revised. The site is behind a
+      Cloudflare challenge that answers HTTP 403 to non-browser clients, so the file is read
+      through a headed browser session. Source: https://foreignassistance.gov/data (public
+      domain).
+
+    dimensions:
+      type:
+        - foreign_assistance_by_country
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September); PK.
+      - name: funding_agency_id
+        type: integer
+        nullable: false
+        comment: ForeignAssistance.gov funding agency id; PK.
+      - name: funding_agency_acronym
+        type: string
+        nullable: false
+        comment: Funding agency acronym (USAID, STATE, DOD, State/USAID for the combined agency years, and others)
+      - name: funding_agency_name
+        type: string
+        nullable: false
+        comment: Funding agency name
+      - name: funding_account_id
+        type: string
+        nullable: false
+        comment: Treasury-style funding account id such as 11x1082 (Foreign Military Financing); PK.
+      - name: funding_account_name
+        type: string
+        nullable: false
+        comment: Funding account name such as Foreign Military Financing Program
+      - name: country_code
+        type: string
+        nullable: false
+        comment: >
+          ForeignAssistance.gov country code (mostly ISO 3166 alpha-3; it also carries codes for
+          regional and world totals); PK.
+      - name: country_name
+        type: string
+        nullable: false
+        comment: Recipient country or region name
+      - name: transaction_type_id
+        type: integer
+        nullable: false
+        comment: Transaction type id (1 Appropriated and Planned, 2 Obligations, 3 Disbursements, 18 President's Budget Requests); PK.
+      - name: transaction_type
+        type: string
+        nullable: false
+        comment: Obligations, Disbursements, Appropriated and Planned, or President's Budget Requests
+      - name: current_amount
+        type: double
+        nullable: false
+        comment: Amount in nominal (current) US dollars; negative for net de-obligations or repayments
+      - name: constant_amount
+        type: double
+        nullable: false
+        comment: Amount in constant (inflation-adjusted) US dollars as computed by ForeignAssistance.gov
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads the CSV through a
+      # headed browser session (foreignassistance.gov answers HTTP 403 to non-browser clients).
+      # Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY).
+      url: "https://foreignassistance.gov/static/us_foreign_aid_funding.csv"
+      method: GET
+      parameters:
+        browserScript: "${SSA_BROWSER_SCRIPT:}"
+        browserNodeCommand: "${SSA_NODE_COMMAND:node}"
+        browserChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        browserRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        browserEntryPageUrl: "https://foreignassistance.gov/data"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.ForeignAssistanceFundingTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=foreign_assistance_by_country/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 10000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: foreign_assistance_by_country
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   - name: federal_funding_gaps
     dataset_type: snapshot
     freshness:
@@ -8785,6 +8913,9 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_abbr]
+
+  foreign_assistance_by_country:
+    primaryKey: [fiscal_year, funding_agency_id, funding_account_id, country_code, transaction_type_id]
 
   usaspending_assistance:
     primaryKey: [year, assistance_transaction_unique_key]
