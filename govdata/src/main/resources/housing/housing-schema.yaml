@@ -1954,6 +1954,107 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # CFPB MORTGAGE PERFORMANCE TRENDS — state / metro / county delinquency (snapshot, CSV)
+  # ---------------------------------------------------------------------------
+  - name: cfpb_mortgage_performance
+    timeColumn: data_year  # observation year; this table has no column named 'year'
+    # Freshness gate: the CFPB adds a new quarter's six CSV links to the download page, which
+    # changes its length; a Content-Length probe skips the re-fetch when nothing was added.
+    # The CSV names embed the quarter (thru-YYYY-MM), so the provider discovers the latest from
+    # this page. Table-level, as house_price_index.
+    freshness:
+      type: size
+    pattern: "type=cfpb_mortgage_performance/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      CFPB Mortgage Performance Trends (built on the National Mortgage Database, a 5% sample of
+      first-lien mortgages): the share of mortgages that are 30-89 days delinquent and the share
+      90+ days delinquent, monthly from 2008-01 to the latest published quarter. One row per
+      (geo_level, geo_fips, month). geo_level is national (geo_fips 'US'), state (2-digit state
+      FIPS), metro (CBSA code, about 310 metros), nonmetro (the non-metropolitan remainder of a state, code like '01-non', 33 states) or county (5-digit state+county FIPS, only the
+      roughly 510 largest counties - the CFPB publishes a county only when enough mortgages are
+      sampled, so most counties are absent). Both measures are percent of active mortgages
+      (e.g. 1.5 means 1.5%), never a count; they are measured on loans in the sample, not on all
+      households, and are not additive across geographies. Joins to HMDA and ACS county tables
+      on geo_fips = county FIPS. Typical use: county-level distress against local
+      unemployment, or the 2008-2012 delinquency peak against today. The county subset is a
+      selection of larger counties, so county averages over-represent urban areas. Snapshot
+      table: all six CSVs are re-fetched and overwritten each run; the CFPB refreshes quarterly
+      with about a one-quarter lag. Source: consumerfinance.gov/data-research/
+      mortgage-performance-trends/download-the-data/.
+
+    dimensions:
+      type:
+        - cfpb_mortgage_performance
+
+    columns:
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: "national, state, metro, nonmetro or county; part of the primary key"
+      - name: geo_fips
+        type: string
+        nullable: false
+        comment: "US for national, 2-digit state FIPS, CBSA code for metro, <state FIPS>-non for nonmetro, 5-digit county FIPS; part of the primary key"
+      - name: geo_name
+        type: string
+        nullable: false
+        comment: "Place name as published, e.g. 'Jefferson County', 'Alabama', 'Abilene, TX', 'United States'"
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: "Two-letter state abbreviation; populated for county rows only, null for national, state and metro rows"
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the observation month
+      - name: month
+        type: string
+        nullable: false
+        comment: "Observation month as YYYY-MM; part of the primary key"
+      - name: pct_30_89_delinquent
+        type: double
+        nullable: false
+        comment: "Percent of active mortgages 30-89 days past due (1.5 = 1.5%)"
+      - name: pct_90_plus_delinquent
+        type: double
+        nullable: false
+        comment: "Percent of active mortgages 90 or more days past due, including foreclosure-process loans (1.5 = 1.5%)"
+
+    source:
+      type: http
+      url: "https://www.consumerfinance.gov/data-research/mortgage-performance-trends/download-the-data/"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.CfpbMortgagePerformanceDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cfpb_mortgage_performance/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: cfpb_mortgage_performance
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # HUD PICTURE OF SUBSIDIZED HOUSEHOLDS — county workbook (delta year, xlsx)
   # ---------------------------------------------------------------------------
   - name: hud_subsidized_county
