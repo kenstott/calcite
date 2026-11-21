@@ -12,7 +12,7 @@ name: pgwire-adapters release
 # built and the installer jobs hung the full 45 minutes before failing.
 # A run that does not publish must NOT carry the version in its title: that step would take it
 # for the publishing run of that version and wait for assets it never attaches.
-run-name: "${{ (github.event_name == 'release' || inputs.publish == true) && format('pgwire-adapters release {0}', inputs.version || 'auto') || format('pgwire-adapters check, not published ({0})', github.ref_name) }}"
+run-name: "${{ (github.event_name == 'release' || inputs.publish == true) && format('pgwire-adapters release {0}', inputs.version || github.event.release.tag_name) || format('pgwire-adapters check, not published ({0})', github.ref_name) }}"
 
 on:
   workflow_dispatch:
