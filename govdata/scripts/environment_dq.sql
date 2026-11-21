@@ -691,5 +691,91 @@ SELECT 'environment', 'ocean_sst_monthly', 'T8_pk_duplicates',
 FROM (SELECT COUNT(*) AS n FROM (SELECT lme_number, year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true)
   GROUP BY lme_number, year, month HAVING COUNT(*) > 1));
 
+-- ------------------------------------------------------------
+-- TABLE: attains_state_use_summary (partition cols: type, reporting_cycle, organization_id)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'attains_state_use_summary', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'attains_state_use_summary', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END, n, 100, 'Expected >=100 rows (many states x water types x uses)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'attains_state_use_summary', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'reporting_cycle', 'organization_id')));
+INSERT INTO dq_results
+SELECT 'environment', 'attains_state_use_summary', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'reporting_cycle', 'organization_id')));
+INSERT INTO dq_results
+SELECT 'environment', 'attains_state_use_summary', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows (organization_id, reporting_cycle, water_type, use_name, attainment_category)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true) WHERE organization_id IS NULL OR reporting_cycle IS NULL OR water_type IS NULL OR use_name IS NULL OR attainment_category IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'attains_state_use_summary', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'size < 0, unit_count < 0, units not Miles/Acres/Square Miles, or cycle odd/out of range'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true)
+  WHERE size < 0 OR unit_count < 0 OR units NOT IN ('Miles','Acres','Square Miles') OR reporting_cycle % 2 <> 0 OR reporting_cycle < 2018);
+INSERT INTO dq_results
+SELECT 'environment', 'attains_state_use_summary', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (organization_id, reporting_cycle, water_type, use_name, attainment_category) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_state_use_summary', allow_moved_paths := true)
+  GROUP BY organization_id, reporting_cycle, water_type, use_name, attainment_category HAVING COUNT(*) > 1));
+
+-- ------------------------------------------------------------
+-- TABLE: attains_cause_summary (partition cols: type, reporting_cycle, organization_id)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'attains_cause_summary', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'attains_cause_summary', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END, n, 100, 'Expected >=100 rows (many states x water types x uses)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'attains_cause_summary', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'reporting_cycle', 'organization_id')));
+INSERT INTO dq_results
+SELECT 'environment', 'attains_cause_summary', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'reporting_cycle', 'organization_id')));
+INSERT INTO dq_results
+SELECT 'environment', 'attains_cause_summary', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows (organization_id, reporting_cycle, water_type, use_name, parameter_group, attainment_category)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true) WHERE organization_id IS NULL OR reporting_cycle IS NULL OR water_type IS NULL OR use_name IS NULL OR parameter_group IS NULL OR attainment_category IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'attains_cause_summary', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'size < 0, unit_count < 0, units not Miles/Acres/Square Miles, or cycle odd/out of range'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true)
+  WHERE size < 0 OR unit_count < 0 OR units NOT IN ('Miles','Acres','Square Miles') OR reporting_cycle % 2 <> 0 OR reporting_cycle < 2018);
+INSERT INTO dq_results
+SELECT 'environment', 'attains_cause_summary', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (organization_id, reporting_cycle, water_type, use_name, parameter_group, attainment_category) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true)
+  GROUP BY organization_id, reporting_cycle, water_type, use_name, parameter_group, attainment_category HAVING COUNT(*) > 1));
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results ORDER BY schema, tbl, test;

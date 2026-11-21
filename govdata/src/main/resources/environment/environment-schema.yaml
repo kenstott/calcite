@@ -193,6 +193,41 @@ dimension_values:
     end: "2015"
     descending: true
 
+  # EPA ATTAINS reporting cycles are biennial (even years). Cycles before 2018 return HTTP 500
+  # from api.epa.gov for some states (verified 2026-11-21: 2016 for IL_EPA and 21MICH), so the
+  # window starts at 2018.
+  attains_cycle_range: &attains_cycle_range
+    type: yearRange
+    cadenceStart: 2018
+    cadenceLength: 2
+    start: "${GOVDATA_START_YEAR:2018}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    minYear: 2018
+    dataLag: 0
+    descending: true
+
+  # ATTAINS state/territory assessment agencies (organizationId), from the `domains?domainName=OrgName`
+  # call, state-type organizations only (tribes excluded).
+  attains_organizations: &attains_organizations
+    type: list
+    values: ["CA_SWRCB","WYDEQ","RIDEM","PR_LAKES","21SC60WQ","DOEE","WVDEP","MNPCA","OREGONDEQ",
+             "21NEB001","21KY","21OHIO","OKDEQ","21IND","21VASWCB","TCEQMAIN","11113300","USVIST",
+             "21ARIZ","UTAHDWQ","IL_EPA","1VTDECWQ","MTDEQ","21MSWQ","SDDENR","21NYDECA","ARDEQH2O",
+             "WA_ECOLOGY","21COL001","IDEQ","21MICH","MEDEP","21NEV1","21AWIC","21DELAWQ","21GAEPD",
+             "21IOWA","WIDNR","21NC01WQ","TDECWR","21KAN001","21AS","21NMEX","AKDECWQ","LADEQWPD",
+             "21NJDEP1","CT_DEP01","21FL303D","21GUAM","21HI","MDE_EASP","MDNR","MA_DEP","21AQ",
+             "21NDHDWQ","21PA"]
+
+  attains_partitions: &attains_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - name: reporting_cycle
+        type: INTEGER
+        storedDigits: 4
+      - name: organization_id
+        type: VARCHAR
+
   # EPA AQS pollutant parameter codes (daily files are one per pollutant-year).
   aqi_pollutants: &aqi_pollutants
     - '88101'  # PM2.5 - Local Conditions
@@ -2937,6 +2972,219 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: attains_state_use_summary
+    pattern: "type=attains_state_use_summary/reporting_cycle=*/organization_id=*/*.parquet"
+    partitions: *attains_partitions
+    comment: >
+      EPA ATTAINS (Clean Water Act 305(b)/303(d) integrated reports) assessed and impaired
+      waters by state, reporting cycle, water type and designated use. One row per
+      (state agency, cycle, water type, use, assessment category); size is miles for streams and
+      shorelines and acres for lakes and estuaries (units column), unit_count the number of
+      assessment units. Assessment categories include Fully Supporting, Not Supporting,
+      Insufficient Information and Not Assessed; the share of assessed waters impaired for a use
+      is Not Supporting / (Fully Supporting + Not Supporting), and the denominator choice
+      matters: states differ on how much of their waters is assessed at all, so "percent of
+      assessed miles" and "percent of all miles" differ widely. Use names are state-defined
+      (Full Body Contact is the recreation use that E. coli and other pathogen impairments
+      attach to). Source is the keyed api.epa.gov/attains usesStateSummary service (api.data.gov
+      key, public domain). Biennial cycles from 2018; a state appears only for cycles it has
+      submitted and EPA has made public. Cause detail is in attains_cause_summary.
+    dqRowLimit: 5000
+
+    dimensions:
+      type:
+        - attains_state_use_summary
+      reporting_cycle: *attains_cycle_range
+      organization_id: *attains_organizations
+
+    columns:
+      - name: organization_id
+        type: string
+        nullable: false
+        comment: ATTAINS organization id of the state or territory water-quality agency (e.g. 21IND Indiana, IL_EPA Illinois, 21MICH Michigan)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: USPS state or territory code of the reporting agency (joins geo.state_ref)
+      - name: reporting_cycle
+        type: integer
+        nullable: false
+        comment: Integrated Report cycle year (biennial, even years; the cycle label, not the data collection year)
+      - name: cycle_status
+        type: string
+        nullable: false
+        comment: Status of the report in EPA's review (e.g. EPA Final Action)
+      - name: water_type
+        type: string
+        nullable: false
+        comment: ATTAINS water type code (STREAM, LAKE FRESHWATER, ESTUARY, GREAT LAKES SHORELINE, ...)
+      - name: units
+        type: string
+        nullable: false
+        comment: Unit of size for the water type (Miles for streams and shorelines, Acres for lakes and estuaries, Square Miles)
+      - name: use_name
+        type: string
+        nullable: false
+        comment: Designated use as named by the state (e.g. Full Body Contact, Warm Water Aquatic Life, Public Water Supply); names are state-specific, not a national vocabulary
+      - name: attainment_category
+        type: string
+        nullable: false
+        comment: ATTAINS use-attainment category (Fully Supporting, Not Supporting, Insufficient Information, Not Assessed, ...)
+      - name: size
+        type: double
+        nullable: false
+        comment: Size in the water type's units (miles or acres) in this category
+      - name: unit_count
+        type: long
+        nullable: false
+        comment: Number of assessment units behind size
+
+    source:
+      type: http
+      url: "https://api.epa.gov/attains/usesStateSummary"
+      method: GET
+      parameters:
+        organizationId: "{organization_id}"
+        reportingCycle: "{reporting_cycle}"
+        api_key: "${API_DATA_GOV}"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.environment.AttainsUsesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=attains_state_use_summary/reporting_cycle=*/organization_id=*/"
+      partition:
+        columns: [type, reporting_cycle, organization_id]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: attains_state_use_summary
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [reporting_cycle]
+        incrementalKeys: [reporting_cycle]
+        overwritePartitions: true
+
+  - name: attains_cause_summary
+    pattern: "type=attains_cause_summary/reporting_cycle=*/organization_id=*/*.parquet"
+    partitions: *attains_partitions
+    comment: >
+      EPA ATTAINS (Clean Water Act 305(b)/303(d) integrated reports) causes of impairment by
+      state, reporting cycle, water type and designated use. One row per (state agency, cycle,
+      water type, use, parameter group, category), from the parameter groups nested under each
+      use in the usesStateSummary service, e.g. PATHOGENS (E. coli, fecal coliform) under Full
+      Body Contact, NUTRIENTS, MERCURY, PCBS, METALS. attainment_category is Cause (waters
+      impaired by that parameter group) or Meeting Criteria (assessed for it and meeting
+      criteria); size is miles or acres per the units column. A water impaired by several
+      parameter groups is counted under each, so size does not sum to the impaired total in
+      attains_state_use_summary. Biennial cycles from 2018; same source, keying and caveats as
+      attains_state_use_summary.
+    dqRowLimit: 5000
+
+    dimensions:
+      type:
+        - attains_cause_summary
+      reporting_cycle: *attains_cycle_range
+      organization_id: *attains_organizations
+
+    columns:
+      - name: organization_id
+        type: string
+        nullable: false
+        comment: ATTAINS organization id of the state or territory water-quality agency (e.g. 21IND Indiana, IL_EPA Illinois, 21MICH Michigan)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: USPS state or territory code of the reporting agency (joins geo.state_ref)
+      - name: reporting_cycle
+        type: integer
+        nullable: false
+        comment: Integrated Report cycle year (biennial, even years; the cycle label, not the data collection year)
+      - name: cycle_status
+        type: string
+        nullable: false
+        comment: Status of the report in EPA's review (e.g. EPA Final Action)
+      - name: water_type
+        type: string
+        nullable: false
+        comment: ATTAINS water type code (STREAM, LAKE FRESHWATER, ESTUARY, GREAT LAKES SHORELINE, ...)
+      - name: units
+        type: string
+        nullable: false
+        comment: Unit of size for the water type (Miles for streams and shorelines, Acres for lakes and estuaries, Square Miles)
+      - name: use_name
+        type: string
+        nullable: false
+        comment: Designated use as named by the state (e.g. Full Body Contact, Warm Water Aquatic Life, Public Water Supply); names are state-specific, not a national vocabulary
+      - name: parameter_group
+        type: string
+        nullable: false
+        comment: ATTAINS parameter group (PATHOGENS, NUTRIENTS, MERCURY, METALS (OTHER THAN MERCURY), ...)
+      - name: attainment_category
+        type: string
+        nullable: false
+        comment: ATTAINS parameter category (Cause = impaired by this parameter group, Meeting Criteria = assessed and meeting criteria)
+      - name: size
+        type: double
+        nullable: false
+        comment: Size in the water type's units (miles or acres) in this category
+      - name: unit_count
+        type: long
+        nullable: false
+        comment: Number of assessment units behind size
+
+    source:
+      type: http
+      url: "https://api.epa.gov/attains/usesStateSummary"
+      method: GET
+      parameters:
+        organizationId: "{organization_id}"
+        reportingCycle: "{reporting_cycle}"
+        api_key: "${API_DATA_GOV}"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.environment.AttainsCausesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=attains_cause_summary/reporting_cycle=*/organization_id=*/"
+      partition:
+        columns: [type, reporting_cycle, organization_id]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: attains_cause_summary
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [reporting_cycle]
+        incrementalKeys: [reporting_cycle]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -3051,6 +3299,22 @@ constraints:
 
   ocean_sst_monthly:
     primaryKey: [lme_number, year, month]
+
+  attains_state_use_summary:
+    primaryKey: [organization_id, reporting_cycle, water_type, use_name, attainment_category]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  attains_cause_summary:
+    primaryKey: [organization_id, reporting_cycle, water_type, use_name, parameter_group, attainment_category]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
 
   water_withdrawals:
     primaryKey: [county_fips, year, sector]
