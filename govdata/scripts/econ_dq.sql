@@ -2898,3 +2898,99 @@ FROM (
          (SELECT COUNT(*) FROM sh a JOIN sh b ON a.year = b.year AND a.industry_code = '334' AND b.industry_code = '5412OP' WHERE a.share > b.share) AS hi_ok
   FROM sh
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: osha_inspections (DOL OSHA enforcement bulk file; partition col: type; dqRowLimit 50000 —
+-- single-fetch snapshot, so the DQ sample is the leading rows of the file, not a cross-section)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '10000',
+  'Expected >=10000 rows (DQ-sampled single fetch)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, CAST(cnt AS VARCHAR), '0',
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'NULL activity_nr rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) WHERE activity_nr IS NULL);
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'Duplicate (activity_nr) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT activity_nr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) GROUP BY activity_nr HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_inspections', 'T7_expected_values',
+  CASE WHEN bad_state = 0 AND bad_year = 0 AND bad_dates = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad_state AS VARCHAR) || '/' || CAST(bad_year AS VARCHAR) || '/' || CAST(bad_dates AS VARCHAR), '0/0/0',
+  'rows with site_state not 2 letters / open_year outside 1970..current+1 / case closed before opened'
+FROM (SELECT
+  COUNT(*) FILTER (WHERE site_state IS NOT NULL AND LENGTH(site_state) <> 2) AS bad_state,
+  COUNT(*) FILTER (WHERE open_year < 1970 OR open_year > EXTRACT(year FROM current_date) + 1) AS bad_year,
+  COUNT(*) FILTER (WHERE close_case_date IS NOT NULL AND open_date IS NOT NULL AND close_case_date < open_date) AS bad_dates
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: osha_violations (DOL OSHA enforcement bulk file; partition col: type; dqRowLimit 50000 —
+-- single-fetch snapshot, so the DQ sample is the leading rows of the file, not a cross-section)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '10000',
+  'Expected >=10000 rows (DQ-sampled single fetch)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, CAST(cnt AS VARCHAR), '0',
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'NULL activity_nr or citation_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) WHERE activity_nr IS NULL OR citation_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'Duplicate (activity_nr, citation_id) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT activity_nr, citation_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) GROUP BY activity_nr, citation_id HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'osha_violations', 'T7_expected_values',
+  CASE WHEN bad_type = 0 AND bad_pen = 0 AND bad_year = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad_type AS VARCHAR) || '/' || CAST(bad_pen AS VARCHAR) || '/' || CAST(bad_year AS VARCHAR), '0/0/0',
+  'viol_type outside S/W/R/O/U / negative penalty / issuance_year outside 1970..current+1'
+FROM (SELECT
+  COUNT(*) FILTER (WHERE viol_type IS NOT NULL AND viol_type NOT IN ('S','W','R','O','U')) AS bad_type,
+  COUNT(*) FILTER (WHERE current_penalty < 0 OR initial_penalty < 0) AS bad_pen,
+  COUNT(*) FILTER (WHERE issuance_year < 1970 OR issuance_year > EXTRACT(year FROM current_date) + 1) AS bad_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true));

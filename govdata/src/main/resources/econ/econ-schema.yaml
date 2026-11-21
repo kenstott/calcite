@@ -2825,6 +2825,409 @@ partitionedTables:
         compactionMinFiles: 5
         overwritePartitions: true
 
+  # --- OSHA ENFORCEMENT: OSHA_INSPECTIONS ---
+  - name: osha_inspections
+    timeColumn: open_year
+    # DOL publishes the full history as one zip on a fixed path; a Last-Modified probe skips the
+    # re-download and re-materialize on unchanged runs.
+    freshness:
+      type: last_modified
+    # DQ sample cap: in DQ mode (GOVDATA_DQ=true) materialize at most this many rows (single fetch,
+    # so the sample is the first rows of the first chunk, not a cross-section). Ignored in prod.
+    dqRowLimit: 50000
+    pattern: "type=osha_inspections/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      U.S. Department of Labor OSHA inspection records, federal and state-plan, from the 1970s to
+      the present (one row per inspection, PK activity_nr). Carries the establishment (name,
+      address, city, state, ZIP), NAICS/SIC industry, inspection type (complaint, accident,
+      programmed, follow-up), scope, ownership, union status, employee count, and open/close dates.
+      Answers "which employers were inspected, where and why". Violations and penalties are in
+      osha_violations (join on activity_nr). site_state/site_zip locate the plant for joins to
+      geo; naics_code (6-digit, 000000 when not recorded) identifies manufacturing (31-33).
+      Snapshot: DOL republishes the whole file nightly, so the table is fully re-ingested when
+      the zip's Last-Modified changes. Source: data.dol.gov OSHA Enforcement bulk file
+      https://data.dol.gov/data-catalog/OSHA/inspection/OSHA_inspection.zip (no API key).
+    columns:
+      - name: activity_nr
+        type: string
+        nullable: false
+        comment: "OSHA activity (inspection) number - PK; joins osha_violations.activity_nr"
+      - name: reporting_id
+        type: string
+        nullable: true
+        comment: "OSHA reporting id: area office (first digit = region, rest = office) that conducted the inspection"
+      - name: state_flag
+        type: string
+        nullable: true
+        comment: "Y when inspected by a state-plan agency rather than federal OSHA"
+      - name: estab_name
+        type: string
+        nullable: true
+        comment: "Establishment (employer site) name as recorded by the inspector"
+      - name: site_address
+        type: string
+        nullable: true
+        comment: "Site street address"
+      - name: site_city
+        type: string
+        nullable: true
+        comment: "Site city"
+      - name: site_state
+        type: string
+        nullable: true
+        comment: "Site state (USPS abbreviation)"
+      - name: site_zip
+        type: string
+        nullable: true
+        comment: "Site ZIP code"
+      - name: owner_type
+        type: string
+        nullable: true
+        comment: "Ownership: A private, B local government, C state government, D federal"
+      - name: owner_code
+        type: string
+        nullable: true
+        comment: "Government owner code (0000 for private)"
+      - name: adv_notice
+        type: string
+        nullable: true
+        comment: "Advance notice given: Y/N"
+      - name: safety_hlth
+        type: string
+        nullable: true
+        comment: "Inspection type: S safety, H health"
+      - name: sic_code
+        type: string
+        nullable: true
+        comment: "Standard Industrial Classification code (legacy; set on older inspections)"
+      - name: naics_code
+        type: string
+        nullable: true
+        comment: "NAICS industry code of the establishment (000000 when not recorded)"
+      - name: insp_type
+        type: string
+        nullable: true
+        comment: "Inspection type code: A accident, B complaint, C referral, D monitoring, E variance, F follow-up, G unprogrammed related, H programmed planned, I programmed related, J unprogrammed other, K other, L other-Z"
+      - name: insp_scope
+        type: string
+        nullable: true
+        comment: "Scope: A complete, B partial, C records only, D no inspection"
+      - name: why_no_insp
+        type: string
+        nullable: true
+        comment: "Reason no inspection was made (when insp_scope is D)"
+      - name: union_status
+        type: string
+        nullable: true
+        comment: "Union status: Y union, N non-union, A both"
+      - name: safety_manuf
+        type: string
+        nullable: true
+        comment: "Safety manufacturing emphasis flag"
+      - name: safety_const
+        type: string
+        nullable: true
+        comment: "Safety construction emphasis flag"
+      - name: safety_marit
+        type: string
+        nullable: true
+        comment: "Safety maritime emphasis flag"
+      - name: health_manuf
+        type: string
+        nullable: true
+        comment: "Health manufacturing emphasis flag"
+      - name: health_const
+        type: string
+        nullable: true
+        comment: "Health construction emphasis flag"
+      - name: health_marit
+        type: string
+        nullable: true
+        comment: "Health maritime emphasis flag"
+      - name: migrant
+        type: string
+        nullable: true
+        comment: "Migrant-worker establishment flag"
+      - name: mail_street
+        type: string
+        nullable: true
+        comment: "Employer mailing street"
+      - name: mail_city
+        type: string
+        nullable: true
+        comment: "Employer mailing city"
+      - name: mail_state
+        type: string
+        nullable: true
+        comment: "Employer mailing state"
+      - name: mail_zip
+        type: string
+        nullable: true
+        comment: "Employer mailing ZIP"
+      - name: host_est_key
+        type: string
+        nullable: true
+        comment: "Host establishment key (multi-employer worksites)"
+      - name: nr_in_estab
+        type: integer
+        nullable: true
+        comment: "Number of employees in the establishment"
+      - name: open_date
+        type: date
+        nullable: true
+        comment: "Date the inspection opened"
+      - name: open_year
+        type: integer
+        nullable: true
+        comment: "Calendar year of open_date (time column)"
+      - name: case_mod_date
+        type: date
+        nullable: true
+        comment: "Date the case record was last modified"
+      - name: close_conf_date
+        type: date
+        nullable: true
+        comment: "Date of the closing conference"
+      - name: close_case_date
+        type: date
+        nullable: true
+        comment: "Date the case closed"
+
+    source:
+      type: http
+      url: "https://data.dol.gov/data-catalog/OSHA/inspection/OSHA_inspection.zip"
+      method: GET
+      # StreamingResponseTransformer downloads the zip itself and streams its CSV chunks; the
+      # framework does not pre-fetch, so rawCache does not apply.
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.OshaInspectionsTransformer"
+
+    dimensions:
+      type:
+        - osha_inspections
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=osha_inspections/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
+  # --- OSHA ENFORCEMENT: OSHA_VIOLATIONS ---
+  - name: osha_violations
+    timeColumn: issuance_year
+    # DOL publishes the full history as one zip on a fixed path; a Last-Modified probe skips the
+    # re-download and re-materialize on unchanged runs.
+    freshness:
+      type: last_modified
+    # DQ sample cap: in DQ mode (GOVDATA_DQ=true) materialize at most this many rows (single fetch,
+    # so the sample is the first rows of the first chunk, not a cross-section). Ignored in prod.
+    dqRowLimit: 50000
+    pattern: "type=osha_violations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      U.S. Department of Labor OSHA citations (violations) issued in inspections, federal and
+      state-plan, 1970s to present: one row per citation (PK activity_nr + citation_id). Carries the
+      standard cited, violation type (serious / willful / repeat / other-than-serious), issuance
+      date, abatement dates, initial and current penalty in dollars, instances, employees exposed
+      and contest/final-order dates. Join to osha_inspections on activity_nr for the establishment,
+      location and industry. Rows with delete_flag = 'X' were deleted from the case record: filter
+      them out for counts and penalty totals. Snapshot: the whole file is re-ingested when DOL's
+      zip Last-Modified changes. Source: data.dol.gov OSHA Enforcement bulk file
+      https://data.dol.gov/data-catalog/OSHA/violation/OSHA_violation.zip (no API key).
+    columns:
+      - name: activity_nr
+        type: string
+        nullable: false
+        comment: "OSHA activity (inspection) number - PK; joins osha_violations.activity_nr"
+      - name: citation_id
+        type: string
+        nullable: false
+        comment: "Citation id within the inspection (e.g. 01001A) - PK component"
+      - name: delete_flag
+        type: string
+        nullable: true
+        comment: "X when the citation was deleted from the case record"
+      - name: standard
+        type: string
+        nullable: true
+        comment: "OSHA standard cited (29 CFR part+section, e.g. 19100134 for respiratory protection; 1926 construction = 19260...)"
+      - name: viol_type
+        type: string
+        nullable: true
+        comment: "Violation type: S serious, W willful, R repeat, O other-than-serious, U unclassified"
+      - name: issuance_date
+        type: date
+        nullable: true
+        comment: "Date the citation was issued"
+      - name: issuance_year
+        type: integer
+        nullable: true
+        comment: "Calendar year of issuance_date (time column)"
+      - name: abate_date
+        type: date
+        nullable: true
+        comment: "Date by which the hazard had to be abated"
+      - name: abate_complete
+        type: string
+        nullable: true
+        comment: "X when abatement is complete"
+      - name: current_penalty
+        type: double
+        nullable: true
+        comment: "Current proposed/final penalty in dollars (after settlement/adjudication)"
+      - name: initial_penalty
+        type: double
+        nullable: true
+        comment: "Penalty in dollars as originally proposed"
+      - name: contest_date
+        type: date
+        nullable: true
+        comment: "Date the employer contested the citation"
+      - name: final_order_date
+        type: date
+        nullable: true
+        comment: "Date the citation became a final order"
+      - name: nr_instances
+        type: integer
+        nullable: true
+        comment: "Number of instances of the violation"
+      - name: nr_exposed
+        type: integer
+        nullable: true
+        comment: "Number of employees exposed"
+      - name: rec
+        type: string
+        nullable: true
+        comment: "Record/penalty-reason code"
+      - name: gravity
+        type: string
+        nullable: true
+        comment: "Gravity-based penalty rating"
+      - name: emphasis
+        type: string
+        nullable: true
+        comment: "Emphasis-program code"
+      - name: hazcat
+        type: string
+        nullable: true
+        comment: "Hazard category code"
+      - name: fta_insp_nr
+        type: string
+        nullable: true
+        comment: "Failure-to-abate follow-up inspection number"
+      - name: fta_issuance_date
+        type: date
+        nullable: true
+        comment: "Failure-to-abate citation issue date"
+      - name: fta_penalty
+        type: double
+        nullable: true
+        comment: "Failure-to-abate penalty in dollars"
+      - name: fta_contest_date
+        type: date
+        nullable: true
+        comment: "Failure-to-abate contest date"
+      - name: fta_final_order_date
+        type: date
+        nullable: true
+        comment: "Failure-to-abate final order date"
+      - name: hazsub1
+        type: string
+        nullable: true
+        comment: "Hazardous-substance code 1 involved in the violation"
+      - name: hazsub2
+        type: string
+        nullable: true
+        comment: "Hazardous-substance code 2 involved in the violation"
+      - name: hazsub3
+        type: string
+        nullable: true
+        comment: "Hazardous-substance code 3 involved in the violation"
+      - name: hazsub4
+        type: string
+        nullable: true
+        comment: "Hazardous-substance code 4 involved in the violation"
+      - name: hazsub5
+        type: string
+        nullable: true
+        comment: "Hazardous-substance code 5 involved in the violation"
+
+    source:
+      type: http
+      url: "https://data.dol.gov/data-catalog/OSHA/violation/OSHA_violation.zip"
+      method: GET
+      # StreamingResponseTransformer downloads the zip itself and streams its CSV chunks; the
+      # framework does not pre-fetch, so rawCache does not apply.
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.OshaViolationsTransformer"
+
+    dimensions:
+      type:
+        - osha_violations
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=osha_violations/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
   # --- NATIONAL INDUSTRY-BY-OCCUPATION EMPLOYMENT MIX ---
   - name: industry_occupation_employment
     # Same BLS OEWS survey as state_occupation_employment, same snapshot caveat: BLS
