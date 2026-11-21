@@ -1,0 +1,1631 @@
+{
+  "date": "2026-11-21",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 20 or 21, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 21 at about 09:07 ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (House and Senate floor speeches from the Congressional Record of Nov. 20). Three NPR stories and two White House statements returned too little text to use. Transcripts from Nov. 14 to 19 were searched only to confirm quotes. PBS NewsHour carries Associated Press reporting. Quotes under five words were left out, as were commentators' accounts of what officials said, one official's account of what another said, and statements by officials outside the offices in scope. Statements are worded as the outlet reported them; entries beginning \"Reported as\" are the reporter's wording.",
+  "lede": [
+    "President Trump held a long White House news conference on Nov. 20 after returning from Asia, where he met Chinese President Xi Jinping and Russian President Vladimir Putin. He spoke about Putin, a reported Iranian dirty-bomb plot, a week of technology outages including the FAA's nationwide ground stop, AI data centers and an AI agreement with Xi. Secretary of State Marco Rubio spoke at the same event about the three countries' nuclear arsenals.",
+    "Pennsylvania Gov. Josh Shapiro, in a PBS NewsHour interview the same day, spoke about the Asia summit, the war with Iran, U.S. military aid to Israel, his state's election results and minimum wage, and measles deaths in Pennsylvania. One of his statements, that the president did not address AI on the trip, is paired with Trump's account of an AI agreement with Xi.",
+    "On the Senate floor, Sen. Chuck Grassley spoke about welfare and Medicaid work requirements, Sen. John Thune about South Dakota Guard and Reserve units, and Sens. Shelley Moore Capito and Sheldon Whitehouse about the Bipartisan American Affordability and Jobs Act of 2026, a permitting bill."
+  ],
+  "stories": [
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-defends-calling-putin-a-friend-saying-they-have-a-very-good-personal-relationship",
+      "headline": "WATCH: After calling Putin his friend, Trump 'can't speak to' whether Putin is a friend to America",
+      "published": "2026-11-20T14:09-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-we-will-not-allow-that-to-happen-trump-says-of-reported-iran-dirty-bomb-threat",
+      "headline": "WATCH: 'We will not allow that to happen,' Trump says of reported Iran dirty bomb threat",
+      "published": "2026-11-20T15:12-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-trump-says-he-would-love-former-nvidia-ceo-jensen-huang-to-be-given-a-second-chance",
+      "headline": "WATCH: Trump says he would love former Nvidia CEO Jensen Huang to 'be given a second chance'",
+      "published": "2026-11-20T15:34-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-cascade-of-tech-outages-separate-events-and-under-control-trump-says",
+      "headline": "WATCH: Cascade of tech outages 'separate events' and 'under control,' Trump says",
+      "published": "2026-11-20T16:13-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-trump-on-data-centers-take-advantage-dont-shut-them-off",
+      "headline": "WATCH: Trump on data centers: 'Take advantage, don't shut them off'",
+      "published": "2026-11-20T16:25-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/20/nx-s1-6047636/trump-presser",
+      "headline": "The latest from Trump's press conference",
+      "published": "2026-11-20T16:38-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions",
+      "headline": "Josh Shapiro on foreign policy, Democratic wins and his 2028 ambitions",
+      "published": "2026-11-20T18:40-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/what-trump-addressed-during-his-lengthy-white-house-news-conference",
+      "headline": "What Trump addressed during his lengthy White House news conference",
+      "published": "2026-11-20T18:55-05:00"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm",
+      "headline": "[Congressional Record Volume 172, Number 177 (Friday, November 20, 2026)]",
+      "published": "2026-11-20"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5828-3.htm",
+      "headline": "[Congressional Record Volume 172, Number 177 (Friday, November 20, 2026)]",
+      "published": "2026-11-20"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm",
+      "headline": "[Congressional Record Volume 172, Number 177 (Friday, November 20, 2026)]",
+      "published": "2026-11-20"
+    }
+  ],
+  "statements": [
+    {
+      "id": 1,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, after his Asia trip, Trump described Russian President Vladimir Putin's wish to end the war in Ukraine.",
+      "topic": "Ukraine war and Putin",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "He'd love to end the war,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-defends-calling-putin-a-friend-saying-they-have-a-very-good-personal-relationship"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 2,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump described the Russia investigation of the 2016 election and its effect on his relationship with Putin.",
+      "topic": "Russia investigation",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "It was a hoax made up by the Democrats",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-defends-calling-putin-a-friend-saying-they-have-a-very-good-personal-relationship"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Justice Department and FBI investigation of Russia and the 2016 election was originated by Democrats. False if the official record shows it was opened by the FBI and continued by a special counsel appointed by Trump's own Justice Department, with no Democratic origin. Cannot be determined if the record shows mixed origins (for example, Democratic-funded opposition research that played a part) that leave 'made up by the Democrats' open to reading.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 3,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump spoke about his ability to deal with the heads of China and Russia.",
+      "topic": "Asia summit with Xi and Putin",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "You know, you're very lucky to have somebody that has a relationship with the heads of the most powerful countries,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-defends-calling-putin-a-friend-saying-they-have-a-very-good-personal-relationship"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 4,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, asked about a reported Iranian plan for a radiological 'dirty bomb' in the United States, Trump said the U.S. would not allow it.",
+      "topic": "Iran",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We will not allow that to happen,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-we-will-not-allow-that-to-happen-trump-says-of-reported-iran-dirty-bomb-threat"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 5,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, asked about a reported Iranian dirty bomb plot, Trump described what the U.S. knows about Iran.",
+      "topic": "Iran",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We know everything they say. We know who they are, where they are. We'll find out about it.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-we-will-not-allow-that-to-happen-trump-says-of-reported-iran-dirty-bomb-threat"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 7,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump spoke about former Nvidia chief executive Jensen Huang, who resigned the prior week.",
+      "topic": "Nvidia and chips",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We have to protect our brilliant people. Jensen is one of them,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-trump-says-he-would-love-former-nvidia-ceo-jensen-huang-to-be-given-a-second-chance"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 8,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump explained a week of technology outages, including the FAA's nationwide ground stop.",
+      "topic": "Tech outages and air traffic control",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: President Donald Trump said numerous technology outages across companies and government agencies within the past week are \"all separate events\" and \"all under control.\"",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-cascade-of-tech-outages-separate-events-and-under-control-trump-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the past week's outages at companies and agencies, including the FAA ground stop, had separate causes and had been resolved by Nov. 20, 2026. False if official accounts show a shared cause or an outage still unresolved. Cannot be determined if the causes have not been officially stated.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 9,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump said companies are upgrading their systems, in explaining a week of technology outages.",
+      "topic": "Tech outages and air traffic control",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We have thousands of companies that are upgrading right now,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-cascade-of-tech-outages-separate-events-and-under-control-trump-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if there is evidence that thousands of companies are upgrading their technology systems at present. False if evidence shows otherwise. Cannot be determined if no source counts such upgrades.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 10,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump gave the cause of the FAA's nationwide ground stop the prior week, as reported by PBS NewsHour.",
+      "topic": "Tech outages and air traffic control",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Trump said Friday during a briefing at the White House that the Federal Aviation Administration's rare nationwide ground stop last week was due to an \"ancient\" and \"obsolete\" technology.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-cascade-of-tech-outages-separate-events-and-under-control-trump-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the FAA or DOT attributes the nationwide ground stop of the prior week to old or obsolete equipment or software. False if the FAA attributes it to another cause and rules out the age of the system. Cannot be determined if no cause has been officially stated.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 11,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump said he gave Transportation Secretary Sean Duffy an instruction on air traffic control spending, as reported by PBS NewsHour.",
+      "topic": "Tech outages and air traffic control",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Trump said he told Transportation Secretary Sean Duffy not to spend money \"to patch up all over the place\" until receiving funding to overhaul air traffic control nationwide.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-cascade-of-tech-outages-separate-events-and-under-control-trump-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official record or Duffy's own statement confirms that Trump told him not to spend on patching air traffic control systems until overhaul funding arrives. False if a record shows the opposite instruction. Cannot be determined if no record of the conversation exists beyond Trump's account.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 12,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump commented on Congress and funding to overhaul air traffic control after the FAA ground stop.",
+      "topic": "Tech outages and air traffic control",
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "If there's any silver lining to what happened last week, it's that Congress seems to be very receptive now to giving us the money,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-cascade-of-tech-outages-separate-events-and-under-control-trump-says"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 13,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump urged communities to accept AI data centers and said what the centers would bring.",
+      "topic": "Data centers and AI",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Make them pay your community, but take advantage,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-trump-on-data-centers-take-advantage-dont-shut-them-off"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 14,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump said what data centers would do for communities, as reported by PBS NewsHour.",
+      "topic": "Data centers and AI",
+      "broad_topic": "Energy",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: During a briefing at the White House on Friday, Trump said data centers will reduce taxes, lower electricity costs and make \"a lot of money\" in a pitch for communities to allow them to be constructed.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-trump-on-data-centers-take-advantage-dont-shut-them-off"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if evidence shows data centers lower local taxes for residents and lower electricity costs where they are built. False if official data show electricity prices rising where data centers concentrate, with no tax relief. Cannot be determined if the evidence is mixed or does not isolate data centers' effect.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 15,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump said what his administration would do about companies that build AI data centers outside the United States.",
+      "topic": "Data centers and AI",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "We're not going to allow companies to build data centers in other countries. If they do that, they can, but we're going to put a tremendous tax on them if they do it. We want them to build it here.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/what-trump-addressed-during-his-lengthy-white-house-news-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 16,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump spoke about an agreement with Chinese President Xi Jinping on artificial intelligence.",
+      "topic": "Data centers and AI",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "So President Xi and I agree that we're going to do some joint guardrails, the two of us, 'cause there really is no third place.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/20/nx-s1-6047636/trump-presser"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [
+        24
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 17,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump summed up the U.S. position entering his Asia trip, which included meetings with Xi Jinping and Vladimir Putin.",
+      "topic": "Asia summit with Xi and Putin",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "The United States entered this trip from a position of unmatched economic and diplomatic strength.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/20/nx-s1-6047636/trump-presser"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 18,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump explained his removal of the White House cybersecurity director, Sean Cairncross.",
+      "topic": "Cybersecurity leadership",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I don't think that person was good enough.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/20/nx-s1-6047636/trump-presser"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 19,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At a White House news conference on Nov. 20, 2026, Trump said how he would deal with the incoming Democratic House majority and Hakeem Jeffries, as described by PBS NewsHour's Liz Landers.",
+      "topic": "Working with House Democrats",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Today, he said that he thinks that the incoming likely speaker, Hakeem Jeffries, is smart and that, if Democrats want to work with him, then he will be willing to do that.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/what-trump-addressed-during-his-lengthy-white-house-news-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 20,
+      "speaker": "Marco Rubio",
+      "office": "Secretary of State",
+      "party": "R",
+      "context": "Rubio spoke at the Nov. 20, 2026 White House news conference about the relationship between the leaders of the U.S., Russia and China.",
+      "topic": "Asia summit with Xi and Putin",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I want everybody to understand the relationships between heads of state are invaluable,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-defends-calling-putin-a-friend-saying-they-have-a-very-good-personal-relationship"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 21,
+      "speaker": "Marco Rubio",
+      "office": "Secretary of State",
+      "party": "R",
+      "context": "Rubio spoke at the Nov. 20, 2026 White House news conference about the number of nuclear weapons held by the United States, Russia and China.",
+      "topic": "Asia summit with Xi and Putin",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "These three countries, the United States, Russia, and China, between these three countries possess the overwhelming majority of nuclear weapons on this planet.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/what-trump-addressed-during-his-lengthy-white-house-news-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the United States, Russia and China together hold more than half (an overwhelming majority) of the world's nuclear warheads by published estimates. False if they hold half or less. Cannot be determined if no published estimate exists.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 22,
+      "speaker": "Marco Rubio",
+      "office": "Secretary of State",
+      "party": "R",
+      "context": "Rubio, during the Asia trip in November 2026, commented to reporters on a reported Iranian plot involving a radiological 'dirty bomb' in the United States.",
+      "topic": "Iran",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Secretary of State Marco Rubio downplayed concerns about the plot during the trip in Asia, telling reporters there is no \"imminent threat\" to the U.S. homeland.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-we-will-not-allow-that-to-happen-trump-says-of-reported-iran-dirty-bomb-threat"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if U.S. officials' published assessments say there was no imminent threat to the U.S. homeland from the reported Iranian dirty-bomb plot. False if a published official assessment called the threat imminent. Cannot be determined if no official assessment has been published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 23,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro described President Trump's meetings with Chinese and Russian leaders in Asia.",
+      "topic": "Asia summit with Xi and Putin",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "he showed himself to be profoundly and pathetically weak on the international stage",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 24,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro listed what President Trump did not do in his meetings with Chinese and Russian leaders.",
+      "topic": "Asia summit with Xi and Putin",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "The problem is, the president didn't address it, didn't address AI, didn't push back on the Russians and their aggressions toward Ukraine, didn't do anything to push back on the work that China is doing to undermine our economy.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official readouts and records of Trump's meetings with Xi and Putin show no discussion of AI, no pushback on Russia over Ukraine and no action on Chinese economic practices. False if official readouts show any of these was raised. Cannot be determined if the readouts are silent or do not say what was discussed.",
+      "premise": null,
+      "counter_statements": [
+        16
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 25,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro said what the new Democratic majorities in Congress should do about the war with Iran.",
+      "topic": "Iran",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "they've got to use their leverage to end this war and reopen the Strait of Hormuz.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "Premise only. True if the Strait of Hormuz was closed or effectively closed to commercial shipping as of Nov. 20, 2026. False if shipping through it was operating normally. Cannot be determined if reports conflict on its status.",
+      "premise": "The Strait of Hormuz is closed to shipping.",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 26,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro described the effect of the U.S. war with Iran on prices in the United States.",
+      "topic": "Iran",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "a war that is driving up prices for people here at home.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if consumer prices in the United States, notably energy, rose after the U.S. war with Iran began and official sources tie the rise to the war. False if prices fell or held flat over that period. Cannot be determined if prices rose but the war's share cannot be separated from other causes.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 27,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro described what the U.S. president and Israel's prime minister have said about U.S. military aid to Israel.",
+      "topic": "Military aid to Israel",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "You saw before that the president and the current prime minister in Israel have indicated that they are planning to end the military aid that's existed for decades to Israel.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Trump and the current Israeli prime minister have publicly indicated plans to end U.S. military aid to Israel. False if both have said aid will continue with no plan to end it. Cannot be determined if statements are ambiguous (for example, a phase-down rather than an end).",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 28,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro gave his position on ending U.S. military aid to Israel.",
+      "topic": "Military aid to Israel",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "I think it is important to end that military aid.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 29,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro described the lasting effect of President Trump's foreign policy.",
+      "topic": "Asia summit with Xi and Putin",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "The destruction that Trump has done I think is going to take maybe generations to be able to repair.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 30,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro described Pennsylvania's presidential voting record.",
+      "topic": "Midterm results and Democratic agenda",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "PA",
+      "about_states": [
+        "PA"
+      ],
+      "quote": "Donald Trump has won it two of the last three times.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Donald Trump won Pennsylvania's electoral votes in two of the last three presidential elections (2016, 2020, 2024). False if he won it in fewer or more than two of those three.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 31,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro described his own election record in Pennsylvania.",
+      "topic": "Midterm results and Democratic agenda",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "PA",
+      "about_states": [
+        "PA"
+      ],
+      "quote": "I've now set a record every election I've run in and just set another one.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Shapiro set a record (for example, most votes received) in every statewide election he has run in, including his 2026 reelection. False if official results show a race of his that set no record. Cannot be determined if 'record' cannot be matched to an official measure.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 32,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro characterized the results of the November 2026 midterm elections.",
+      "topic": "Midterm results and Democratic agenda",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "it was obviously a great night for Democrats and a complete rejection, not just of Donald Trump, but his enablers.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 33,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro said what the first bill reaching his desk in January 2027 would do for Pennsylvania's minimum wage.",
+      "topic": "Pennsylvania minimum wage",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "PA",
+      "about_states": [
+        "PA"
+      ],
+      "quote": "the first bill that will reach my desk in January will be to raise our minimum wage from a paltry $7.25 an hour to at least 15 bucks an hour.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "Premise only. True if Pennsylvania's minimum wage was $7.25 an hour as of Nov. 20, 2026. False if the state's minimum wage was higher.",
+      "premise": "Pennsylvania's minimum wage is $7.25 an hour.",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 34,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro cited measles deaths in Pennsylvania and the age of the disease's U.S. elimination.",
+      "topic": "Measles and vaccines",
+      "broad_topic": "Health",
+      "speaker_state": "PA",
+      "about_states": [
+        "PA"
+      ],
+      "quote": "eight deaths as well, so eight families here in Pennsylvania without a loved one because of a disease that was eliminated 26 years ago in America",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Pennsylvania recorded eight measles deaths in the current outbreak and measles was declared eliminated in the United States in 2000 (26 years ago). False if official counts show a different number of Pennsylvania deaths or a different elimination year. Cannot be determined if no official count of Pennsylvania measles deaths is published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 35,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro gave a cause for the return of measles in the United States.",
+      "topic": "Measles and vaccines",
+      "broad_topic": "Health",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "It's come roaring back because of vaccine misinformation and disinformation",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if public health authorities or peer-reviewed studies attribute the return of measles to falling vaccination driven by misinformation. False if official sources attribute it mainly to other causes. Cannot be determined if the evidence links lower vaccination to the outbreaks but does not establish misinformation as the cause.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 36,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "In a PBS NewsHour interview on Nov. 20, 2026, Shapiro described what Health Secretary Robert F. Kennedy Jr. has done about confidence in vaccines.",
+      "topic": "Measles and vaccines",
+      "broad_topic": "Health",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "have spent now a generation, and now over the last two years as the health secretary, undermining people's confidence in medicine, undermining their confidence in vaccines.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/josh-shapiro-on-foreign-policy-democratic-wins-and-his-2028-ambitions"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Robert F. Kennedy Jr.'s public record over two decades and as health secretary includes statements or actions questioning vaccine safety, and surveys show confidence in vaccines falling over that time. False if his record shows no such statements or actions. Cannot be determined if the record exists but the effect on public confidence cannot be attributed.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 37,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Grassley described the change in welfare caseloads since the 1996 welfare reform law, citing the American Enterprise Institute.",
+      "topic": "Welfare and Medicaid work requirements",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "IA",
+      "about_states": [],
+      "quote": "caseloads dropped 85 percent since the 1996 reforms, and that is according to the American Enterprise Institute's analysis of government data from the Administration for Children and Families.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the AEI analysis of ACF data finds that welfare (AFDC/TANF) caseloads fell about 85 percent since 1996. False if the AEI analysis or ACF data show a substantially different decline. Cannot be determined if the AEI analysis cannot be found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 38,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Grassley described the effect of the 1996 welfare reform law on adults receiving welfare and on child poverty.",
+      "topic": "Welfare and Medicaid work requirements",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "IA",
+      "about_states": [],
+      "quote": "So not only did the number of adults receiving welfare assistance from the government drop, but child poverty rates were also reduced.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official data show both the number of adults receiving cash welfare and the child poverty rate fell after the 1996 law. False if either rose. Cannot be determined if the data do not cover the period.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 39,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Grassley described what he said happens to people who enter poverty programs.",
+      "topic": "Welfare and Medicaid work requirements",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "IA",
+      "about_states": [],
+      "quote": "once you are on a poverty program, you will be in poverty the rest of your life.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 40,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Grassley described a July 2026 Administration for Children and Families brief on families receiving Temporary Assistance for Needy Families.",
+      "topic": "Welfare and Medicaid work requirements",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": "IA",
+      "about_states": [],
+      "quote": "In July of 2026, a brief published by the Administration for Children and Families detailed that many families receiving TANF are not actually engaged in work or work activities.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an ACF brief published in July 2026 reports that many families receiving TANF are not engaged in work or work activities. False if no such brief exists or it reports the opposite. Cannot be determined if the brief exists but 'many' cannot be matched to its figures.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 41,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Grassley described what research shows about the effect of a Medicaid work requirement on poverty.",
+      "topic": "Welfare and Medicaid work requirements",
+      "broad_topic": "Health",
+      "speaker_state": "IA",
+      "about_states": [],
+      "quote": "New evidence shows that a Medicaid work requirement will lift nearly 3 million people out of poverty.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published study estimates that a Medicaid work requirement would lift nearly 3 million people out of poverty. False if no such estimate exists or the estimate is much lower. Cannot be determined if the study cannot be found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 42,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Grassley said when Iowa plans to start its Medicaid work requirements.",
+      "topic": "Welfare and Medicaid work requirements",
+      "broad_topic": "Health",
+      "speaker_state": "IA",
+      "about_states": [
+        "IA"
+      ],
+      "quote": "My home State of Iowa plans to implement its work requirements on December 1,",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5827-7.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Iowa's official plan sets Dec. 1 (2026) as the start of its Medicaid work requirements. False if Iowa's plan sets another start date. Cannot be determined if no official date is published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 43,
+      "speaker": "John Thune",
+      "office": "U.S. Senator and Senate Majority Leader",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Thune described military ceremonies he attended in fall 2026 for South Dakota National Guard and Army Reserve units.",
+      "topic": "Military families",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "SD",
+      "about_states": [
+        "SD"
+      ],
+      "quote": "I attended two ceremonies this fall for the South Dakota National Guard: an activation ceremony for members of the 155th Engineer Company and a welcome home ceremony for the 665th Support Maintenance Company.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5828-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5828-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the South Dakota National Guard held an activation ceremony for the 155th Engineer Company and a welcome-home ceremony for the 665th Support Maintenance Company in fall 2026, with Thune present. False if either ceremony or unit did not exist. Cannot be determined if the ceremonies are recorded but his attendance is not.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 44,
+      "speaker": "Shelley Moore Capito",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Capito said the Senate had passed the Bipartisan American Affordability and Jobs Act of 2026 the previous night.",
+      "topic": "Permitting reform bill",
+      "broad_topic": "Energy",
+      "speaker_state": "WV",
+      "about_states": [],
+      "quote": "last night, the Senate passed the Bipartisan American Affordability and Jobs Act of 2026",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Senate passed the Bipartisan American Affordability and Jobs Act of 2026 on the night of Nov. 19, 2026. False if the Senate record shows no passage vote that night. Cannot be determined if the record for that date is not available.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 45,
+      "speaker": "Shelley Moore Capito",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "On the Senate floor on Nov. 20, 2026, Capito characterized the Bipartisan American Affordability and Jobs Act of 2026, passed by the Senate the night before.",
+      "topic": "Permitting reform bill",
+      "broad_topic": "Energy",
+      "speaker_state": "WV",
+      "about_states": [],
+      "quote": "This is an affordability bill. This is jobs for the future. This is building America infrastructure quicker and faster and more efficiently.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 46,
+      "speaker": "Sheldon Whitehouse",
+      "office": "U.S. Senator",
+      "party": "D",
+      "context": "On the Senate floor on Nov. 20, 2026, Whitehouse said how his Democratic colleagues view the Bipartisan American Affordability and Jobs Act of 2026.",
+      "topic": "Permitting reform bill",
+      "broad_topic": "Energy",
+      "speaker_state": "RI",
+      "about_states": [],
+      "quote": "There is considerable dispute about this bill on our side of the aisle and about what it means.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 47,
+      "speaker": "Sheldon Whitehouse",
+      "office": "U.S. Senator",
+      "party": "D",
+      "context": "On the Senate floor on Nov. 20, 2026, Whitehouse said Republican colleagues helped correct Trump administration behavior on energy permitting during work on the 2026 permitting bill.",
+      "topic": "Permitting reform bill",
+      "broad_topic": "Energy",
+      "speaker_state": "RI",
+      "about_states": [],
+      "quote": "one of the pleasant things about this process has been the extent to which my Republican colleagues rallied to the cause to get that behavior corrected.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 48,
+      "speaker": "Sheldon Whitehouse",
+      "office": "U.S. Senator",
+      "party": "D",
+      "context": "On the Senate floor on Nov. 20, 2026, Whitehouse said how Democrats can enforce understandings with the Defense and Interior Departments reached during talks on the 2026 permitting bill.",
+      "topic": "Permitting reform bill",
+      "broad_topic": "Energy",
+      "speaker_state": "RI",
+      "about_states": [],
+      "quote": "We actually have standing to enforce",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if law or the bill text gives senators or Congress legal standing to enforce the permitting understandings with the Defense and Interior Departments. False if the bill text and law give no such standing. Cannot be determined if it turns on how standing doctrine would apply.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 49,
+      "speaker": "Sheldon Whitehouse",
+      "office": "U.S. Senator",
+      "party": "D",
+      "context": "On the Senate floor on Nov. 20, 2026, Whitehouse said what he and colleagues would do about Defense and Interior Department permitting behavior under the 2026 permitting bill.",
+      "topic": "Permitting reform bill",
+      "broad_topic": "Energy",
+      "speaker_state": "RI",
+      "about_states": [],
+      "quote": "and we intend to do that.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-20/html/CREC-2026-11-20-pt1-PgS5832-4.htm",
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    }
+  ]
+}
