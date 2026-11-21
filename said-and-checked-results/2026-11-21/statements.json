@@ -760,10 +760,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Federation of American Scientists estimates for early 2026 put U.S. warheads at 5,042, Russia's at 5,420 and China's at 620, together 11,082 of about 12,187 worldwide (about 91%); counting military stockpiles only, they hold 8,720 of 9,745 (about 89.5%).",
+      "evidence": [
+        {
+          "label": "Federation of American Scientists, Status of World Nuclear Forces 2026",
+          "url": "https://fas.org/initiatives/status-world-nuclear-forces/"
+        }
+      ],
+      "check_run": "q204/askamerica/2026-11-21"
     },
     {
       "id": 22,
@@ -792,10 +797,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A White House statement, as reported by CNN Newsource, said the U.S. was monitoring potential threats but 'at this time there are no credible threats to the homeland', and no published official assessment calling the reported plot an imminent threat was found. The White House statement could not be read directly on a government page, and its wording is 'no credible threats' rather than 'imminent'.",
+      "evidence": [
+        {
+          "label": "CNN Newsource via WOWT, U.S. monitoring reported Iran dirty bomb plans; White House says no credible threats (Nov. 17, 2026)",
+          "url": "https://www.wowt.com/2026/11/17/us-monitoring-reported-iran-dirty-bomb-plans-white-house-says-no-credible-threats/"
+        },
+        {
+          "label": "Reuters via Al-Monitor, Rubio says no imminent threat to Washington",
+          "url": "https://www.al-monitor.com/originals/2026/11/rubio-says-no-imminent-threat-washington-after-report-possible-iranian-dirty-bomb"
+        }
+      ],
+      "check_run": "q205/askamerica/2026-11-21"
     },
     {
       "id": 23,
