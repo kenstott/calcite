@@ -2101,6 +2101,65 @@ FROM (SELECT a.state_abbr, SUM(a.amount) AS t, COUNT(DISTINCT a.fiscal_year) AS 
   GROUP BY a.state_abbr, e.expected);
 
 -- ─────────────────────────────────────────────────────────────
+-- foreign_assistance_by_country (ForeignAssistance.gov funding file; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'foreign_assistance_by_country', 'T1_row_count',
+  CASE WHEN n >= 140000 THEN 'pass' ELSE 'fail' END, n, 140000, 'Source file had 143,963 rows at build time'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'foreign_assistance_by_country', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'foreign_assistance_by_country', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'foreign_assistance_by_country', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Null fiscal_year/funding_agency_id/funding_account_id/country_code/transaction_type_id'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true)
+  WHERE fiscal_year IS NULL OR funding_agency_id IS NULL OR funding_account_id IS NULL
+    OR country_code IS NULL OR transaction_type_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'foreign_assistance_by_country', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate (fiscal_year, funding_agency_id, funding_account_id, country_code, transaction_type_id) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true)
+  GROUP BY fiscal_year, funding_agency_id, funding_account_id, country_code, transaction_type_id
+  HAVING COUNT(*) > 1));
+
+-- Known value: Israel Foreign Military Financing disbursed in FY2023 was 3.3 billion dollars.
+INSERT INTO dq_results
+SELECT 'fiscal', 'foreign_assistance_by_country', 'T7_israel_fmf_fy2023',
+  CASE WHEN ABS(t - 3.3e9) <= 1e6 THEN 'pass' ELSE 'fail' END, t, 3.3e9,
+  'Israel, account 11x1082, Disbursements, FY2023 current_amount (expect 3.3e9 within 1M)'
+FROM (SELECT COALESCE(SUM(current_amount), 0) AS t FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true)
+  WHERE country_name = 'Israel' AND funding_account_id = '11x1082'
+    AND transaction_type = 'Disbursements' AND fiscal_year = 2023);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'foreign_assistance_by_country', 'T7_fiscal_year_range',
+  CASE WHEN lo = 2001 AND hi >= 2025 THEN 'pass' ELSE 'fail' END, hi, 2025,
+  'fiscal_year spans 2001 to at least 2025 (min ' || lo || ')'
+FROM (SELECT MIN(fiscal_year) AS lo, MAX(fiscal_year) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/foreign_assistance_by_country', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: federal_funding_gaps (CRS report table; partition col: type)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
