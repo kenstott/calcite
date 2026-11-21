@@ -1404,10 +1404,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AEI's analysis says the AFDC/TANF caseload 'has declined by 85 percent since reform', from 13.7 million recipients in fiscal 1995 to 2.1 million in fiscal 2025, citing ACF's Office of Family Assistance; the ACF caseload tables were not read directly.",
+      "evidence": [
+        {
+          "label": "American Enterprise Institute, Lessons from the 1996 welfare reform law",
+          "url": "https://cosm.aei.org/lessons-from-the-1996-welfare-reform-law-approaching-its-30th-anniversary/"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-21"
     },
     {
       "id": 38,
@@ -1436,10 +1441,25 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Census Bureau's historical poverty table shows the poverty rate for people under 18 falling from 20.5% in 1996 to 16.2% in 2000 and 14.4% in 2024, and AskAmerica's national series shows the all-ages rate falling from 13.7% to 10.7% over 1996-2024. Adult cash-welfare recipients fell from 4.38 million (fiscal 1995) to 570,000 (fiscal 2024), as reported by AEI from ACF data.",
+      "evidence": [
+        {
+          "label": "census.poverty_history_national (all ages, 1993-2024)",
+          "url": "https://askamerica.ai/catalog/schemas/census/#poverty_history_national-table",
+          "askamerica": true,
+          "sql": "SELECT \"year\", poverty_rate_pct FROM census.poverty_history_national WHERE \"year\" IN (1993,1996,2000,2019,2023,2024) ORDER BY \"year\""
+        },
+        {
+          "label": "Census Bureau, Historical Poverty Tables, Table 3 (people under 18)",
+          "url": "https://www2.census.gov/programs-surveys/cps/tables/time-series/historical-poverty-people/hstpov3.xlsx"
+        },
+        {
+          "label": "American Enterprise Institute, Lessons from the 1996 welfare reform law",
+          "url": "https://cosm.aei.org/lessons-from-the-1996-welfare-reform-law-approaching-its-30th-anniversary/"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-21"
     },
     {
       "id": 39,
@@ -1500,10 +1520,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "ACF published a TANF brief on July 20, 2026 on the caseload reduction credit, but only its landing page could be read, not the brief's text; a June 29, 2026 ACF brief is the one reported to find that most work-eligible families logged no work hours, and its text could not be read directly either. Whether the July brief says many families are not engaged in work is not decided.",
+      "evidence": [
+        {
+          "label": "ACF Peer TA, TANF and Work: The Caseload Reduction Credit and How States Exploit It (July 20, 2026)",
+          "url": "https://peerta.acf.hhs.gov/content/tanf-and-work-caseload-reduction-credit-and-how-states-exploit-it"
+        },
+        {
+          "label": "ACF Peer TA, TANF and Work: The Gap Between Perception and Reality (June 29, 2026)",
+          "url": "https://peerta.acf.hhs.gov/content/tanf-and-work-gap-between-perception-and-reality"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-21"
     },
     {
       "id": 41,
@@ -1532,10 +1561,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "An HHS (ASPE) issue brief of June 2026 is reported to estimate that Medicaid work requirements could reduce poverty by 1.6 to 2.9 million people, the upper figure assuming all 5.8 million adults not working enough begin working. The ASPE brief could not be read directly (HTTP 502), so the figures are as reported in search results, and a Health Affairs analysis says they should not be read as a likely impact.",
+      "evidence": [
+        {
+          "label": "CBPP research note on the HHS Medicaid work requirement estimate (June 16, 2026)",
+          "url": "https://www.cbpp.org/sites/default/files/6-16-26health-researchnote.pdf"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-21"
     },
     {
       "id": 42,
@@ -1566,10 +1600,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Iowa HHS's Medicaid work requirements page says the state's community engagement requirements take effect Dec. 1, 2026 for people who apply on or after that date, when the reporting portal also opens; current members are phased in separately.",
+      "evidence": [
+        {
+          "label": "Iowa HHS, Iowa Health and Wellness Plan work requirements",
+          "url": "https://hhs.iowa.gov/medicaid/plans-programs/iowa-health-wellness-plan/work-requirements"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-21"
     },
     {
       "id": 43,
