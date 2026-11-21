@@ -204,6 +204,19 @@ jobs:
           # the same release by pgwire-calcite-release.yml).
           echo "$VERSION" > src/pgwire_calcite/ENGINE_VERSION
           uv run --python "${PY_VERSION}" python scripts/build_catalog_cache.py ../pgwire-govdata/model.json
+      - name: List the warehouse paths of the declared tables the walk did not reach
+        if: env.GOVDATA == 'true' && always()
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_OVERRIDE: ${{ secrets.AWS_ENDPOINT_OVERRIDE }}
+          AWS_DEFAULT_REGION:    auto
+          GOVDATA_PARQUET_DIR:   ${{ secrets.GOVDATA_PARQUET_DIR }}
+        run: |
+          set -euo pipefail
+          # Read only: aws s3 ls. Evidence for unmaterialized-tables.txt.
+          PYTHONPATH=pgwire-calcite/src:pgwire-calcite/scripts uv run --no-project --with pyyaml python pgwire-calcite/scripts/list_missing_warehouse.py \
+            catalog-cache/catalog-cache-*.pkl govdata/src/main/resources/*/*-schema.yaml
       - name: Check the cache against the schema YAMLs
         if: env.GOVDATA == 'true'
         run: |
