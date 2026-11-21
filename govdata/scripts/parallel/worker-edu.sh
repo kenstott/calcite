@@ -140,6 +140,7 @@ run_ungrouped_edu_tables() {
     "f33|f33_district_finance" \
     "idea|district_special_ed_counts" \
     "crdc-el|district_el_enrollment" \
+    "edfacts-ca|edfacts_chronic_absenteeism" \
     "scorecard|college_scorecard,college_scorecard_programs" \
     "fsa|fsa_pslf_discharge_summary,fsa_loan_portfolio_status,fsa_loan_delinquency" \
     "sevis|sevis_student_counts")" || return 1
@@ -187,6 +188,8 @@ run_historical_cadence() {
     '"district_special_ed_counts"' "$START" "$END"
   run_edu_model "edu-initial-crdc-el" \
     '"district_el_enrollment"' "$START" "$END"
+  run_edu_model "edu-initial-edfacts-ca" \
+    '"edfacts_chronic_absenteeism"' "$START" "$END"
 
   if [ -n "${API_DATA_GOV:-}" ]; then
     run_edu_model "edu-initial-scorecard" \
@@ -257,6 +260,11 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "district_special_ed_counts"; then
     run_edu_model "edu-annual-idea" \
       '"district_special_ed_counts"' "$START"
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "edfacts_chronic_absenteeism"; then
+    run_edu_model "edu-annual-edfacts-ca" \
+      '"edfacts_chronic_absenteeism"' "$START"
   fi
 
   # fsa_pslf_discharge_summary: no releaseWindow (freshness: etag skips the re-fetch itself
