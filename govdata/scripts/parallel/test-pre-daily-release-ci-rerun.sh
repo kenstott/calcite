@@ -31,7 +31,7 @@ G
   echo x > govdata/src/main/java/A.java
   git add -A; git commit -qm base; git remote add origin "$tmp/origin.git"; git push -q origin main
   git tag engine-v0.1.0; git push -q origin --tags
-  : > "$tmp/gh.log"; rm -f "$tmp/rerun-fail" "$tmp/log-fail"
+  : > "$tmp/gh.log"; rm -f "$tmp/rerun-fail" "$tmp/log-fail" "$tmp/net-fail" "$tmp/hard-fail"
   echo "$SETUP_LOG" > "$tmp/failed.log"
   # run list pops the first queued file while more than one remains, then keeps returning the last
   cat > "$tmp/bin/gh" <<G
@@ -39,6 +39,8 @@ G
 echo "\$*" >> "$tmp/gh.log"
 case "\${1:-} \${2:-}" in
   "run list")
+    if [ -s "$tmp/net-fail" ]; then c=\$(cat "$tmp/net-fail"); echo \$((c-1)) > "$tmp/net-fail"; [ "\$c" -gt 0 ] && { echo "Get \"https://api.github.com/x\": dial tcp 140.82.114.5:443: connect: network is unreachable" >&2; exit 1; }; fi
+    [ -e "$tmp/hard-fail" ] && { echo "HTTP 401: Bad credentials" >&2; exit 1; }
     f=\$(ls "$tmp/q" | head -1); n=\$(ls "$tmp/q" | wc -l)
     cat "$tmp/q/\$f"; [ "\$n" -gt 1 ] && rm "$tmp/q/\$f"; exit 0 ;;
   "run view") [ -e "$tmp/log-fail" ] && { echo "HTTP 500" >&2; exit 1; }; cat "$tmp/failed.log" ;;
@@ -91,5 +93,20 @@ setup; queue "$FAILED" "$FAILED" "$FAILED" "$RUNNING" "$GREEN"; run --build-only
 setup; queue "$FAILED"; START=2 run --build-only
 [ "$(cat "$tmp/rc")" -ne 0 ] && [ "$(reruns)" -eq 1 ] && ! staged && grep -q "did not start within 2s" "$tmp/out.log" \
   && ok "rerun never starts: bounded wait, refused" || bad "rerun never starts: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+
+# 9. two transport failures, then a green run: retried, gate passes
+setup; echo 2 > "$tmp/net-fail"; queue "$GREEN"; run --build-only
+[ "$(cat "$tmp/rc")" -eq 0 ] && staged && [ "$(grep -c 'transport error reading CI' "$tmp/out.log")" -eq 2 ] \
+  && ok "transport errors retried, then green" || bad "transport retry: rc=$(cat "$tmp/rc") $(tail -5 "$tmp/out.log")"
+
+# 10. transport error that never clears: aborts only once the wait budget is spent
+setup; echo 1000 > "$tmp/net-fail"; queue "$GREEN"; run --build-only
+[ "$(cat "$tmp/rc")" -ne 0 ] && ! staged && grep -q "transport error persisted" "$tmp/out.log" \
+  && ok "persistent transport error: refused after budget" || bad "persistent transport: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+
+# 11. non-transport read error (auth) aborts at once, no retry
+setup; touch "$tmp/hard-fail"; queue "$GREEN"; run --build-only
+[ "$(cat "$tmp/rc")" -ne 0 ] && ! staged && ! grep -q "transport error reading CI" "$tmp/out.log" \
+  && ok "non-transport error: no retry" || bad "hard error: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
 
 exit $fail
