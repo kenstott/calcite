@@ -232,12 +232,16 @@ CI_RERUN_SETTLE_SECS="${CI_RERUN_SETTLE_SECS:-30}"
 GENERATED_SUBJECTS='^(chore\(govdata\): rebuild the DuckDB seed for changed schema models|chore\(govdata\): refresh observed-coverage metadata)'
 
 # ci_query <sha>: prints "<status>\t<conclusion>\t<url>" for the newest CI run of <sha>
-# ("none" when it has no run); non-zero with the reason on stdout when it cannot be read.
+# ("none" when it has no run); non-zero with the reason on stdout when it cannot be read: 2 for a
+# transport error (no verdict, retry), 1 for any other failure.
+CI_TRANSPORT_ERR='network is unreachable|no route to host|could not resolve|no such host|temporary failure in name resolution|unexpected EOF|connection (reset|refused|timed out)|i/o timeout|timeout|timed out|TLS handshake|HTTP 5[0-9][0-9]|50[0-4] '
 ci_query() {
   local runs
   if ! runs="$(gh run list --repo "$FORK" --workflow "$CI_WORKFLOW" --commit "$1" \
                  --limit 20 --json status,conclusion,url,createdAt 2>&1)"; then
-    echo "CI for $1 could not be read: $runs"; return 1
+    echo "CI for $1 could not be read: $runs"
+    grep -qiE "$CI_TRANSPORT_ERR" <<<"$runs" && return 2
+    return 1
   fi
   python3 -I -c '
 import json, sys
@@ -268,7 +272,7 @@ ci_setup_failure() {
 # in progress is waited for, up to CI_WAIT_SECS; a head with no run yet gets CI_NONE_GRACE_SECS
 # for GitHub to start one. --dry-run never waits.
 ci_gate() {
-  local code_sha subject head state waited=0 rerun_done=false rerun_pending=false rerun_waited=0 limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
+  local code_sha subject head state qrc waited=0 rerun_done=false rerun_pending=false rerun_waited=0 limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
   code_sha=""
   while IFS=$'\t' read -r sha subject; do
     if ! grep -qE "$GENERATED_SUBJECTS" <<<"$subject"; then code_sha="$sha"; break; fi
@@ -284,7 +288,16 @@ ci_gate() {
   head="$(git rev-parse origin/main)"
   if $DRY_RUN; then limit=0; grace=0; fi
   while :; do
-    if ! state="$(ci_query "$head")"; then ci_reason="$state"; return 1; fi
+    state="$(ci_query "$head")"; qrc=$?
+    if [ "$qrc" -eq 2 ]; then
+      # A transport error is not a CI result: retry on the poll interval until the wait budget is spent.
+      if [ "$waited" -ge "$limit" ]; then
+        ci_reason="$state (transport error persisted for ${waited}s)"; return 1
+      fi
+      log "CI gate: transport error reading CI for $head, retrying in ${CI_POLL_SECS}s (${waited}s waited): ${state//$'\n'/ }"
+      sleep "$CI_POLL_SECS"; waited=$((waited + CI_POLL_SECS)); continue
+    fi
+    if [ "$qrc" -ne 0 ]; then ci_reason="$state"; return 1; fi
     IFS=$'\t' read -r run_status run_conclusion run_url <<<"$state"
     case "$run_status" in
       completed)
