@@ -157,6 +157,7 @@ FROM (
   UNION ALL SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_mortgage_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',      allow_moved_paths := true)), 10000
   UNION ALL SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)), 10000
+  UNION ALL SELECT 'acs_rent_burden_by_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_rent_burden_by_income', allow_moved_paths := true)), 3000
   UNION ALL SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)), 9000
   UNION ALL SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)), 10000
   UNION ALL SELECT 'decennial_housing',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',       allow_moved_paths := true)), 5000

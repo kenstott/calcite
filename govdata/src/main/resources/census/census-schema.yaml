@@ -3882,6 +3882,217 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS RENT BURDEN BY INCOME - B25074 renter households by income band x gross rent as % of income
+  # ---------------------------------------------------------------------------
+  # New table: acs_congressional_district carries only B25070 totals (all incomes pooled), and
+  # adding columns to a production table risks a purge-and-recreate (see acs_housing_year_built_detail).
+  - name: acs_rent_burden_by_income
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Renter cost burden by household income band at national, state and county grain, from
+      ACS 5-year table B25074 (Household Income by Gross Rent as a Percentage of Household
+      Income in the Past 12 Months). Seven income bands (under $10,000; $10,000-19,999;
+      $20,000-34,999; $35,000-49,999; $50,000-74,999; $75,000-99,999; $100,000+), each with
+      total renter households, households paying 30.0-49.9 percent of income on rent, 50.0
+      percent or more (severely burdened), and burden-not-computed. Cost-burdened (30%+) =
+      burden_30_to_49 + burden_50_plus; share = that divided by (renters - burden_not_computed).
+      ACS bands are fixed by Census, so custom bands such as $45,000-74,999 cannot be rebuilt
+      exactly. Geography: us, state, county (geography column); the us row has no state/county
+      codes. Vintage = year (5-year window ends that year, published each December).
+      Owner equivalent tables are B25101/B25106 and are not in this table.
+
+    dimensions:
+      type:
+        - acs
+      year: *acs_year_range
+      geography:
+        - us
+        - state
+        - county
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: renter_households_total
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_001E" AS BIGINT)'
+        comment: B25074 total renter households paying cash rent (all income bands, includes burden not computed)
+      - name: renters_lt_10k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_002E" AS BIGINT)'
+        comment: Renter households with household income less than $10,000 (ACS B25074 line 002)
+      - name: burden_30_to_49_lt_10k
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25074_006E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_007E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_008E" AS BIGINT),0)'
+        comment: Renter households with income less than $10,000 paying 30.0 to 49.9 percent of income on gross rent (B25074 lines 006+007+008)
+      - name: burden_50_plus_lt_10k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_009E" AS BIGINT)'
+        comment: Renter households with income less than $10,000 paying 50.0 percent or more of income on gross rent (B25074 line 009)
+      - name: burden_not_computed_lt_10k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_010E" AS BIGINT)'
+        comment: Renter households with income less than $10,000 whose gross-rent burden is not computed (B25074 line 010); exclude from the burden-share denominator
+      - name: renters_10k_to_20k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_011E" AS BIGINT)'
+        comment: Renter households with household income $10,000 to $19,999 (ACS B25074 line 011)
+      - name: burden_30_to_49_10k_to_20k
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25074_015E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_016E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_017E" AS BIGINT),0)'
+        comment: Renter households with income $10,000 to $19,999 paying 30.0 to 49.9 percent of income on gross rent (B25074 lines 015+016+017)
+      - name: burden_50_plus_10k_to_20k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_018E" AS BIGINT)'
+        comment: Renter households with income $10,000 to $19,999 paying 50.0 percent or more of income on gross rent (B25074 line 018)
+      - name: burden_not_computed_10k_to_20k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_019E" AS BIGINT)'
+        comment: Renter households with income $10,000 to $19,999 whose gross-rent burden is not computed (B25074 line 019); exclude from the burden-share denominator
+      - name: renters_20k_to_35k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_020E" AS BIGINT)'
+        comment: Renter households with household income $20,000 to $34,999 (ACS B25074 line 020)
+      - name: burden_30_to_49_20k_to_35k
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25074_024E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_025E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_026E" AS BIGINT),0)'
+        comment: Renter households with income $20,000 to $34,999 paying 30.0 to 49.9 percent of income on gross rent (B25074 lines 024+025+026)
+      - name: burden_50_plus_20k_to_35k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_027E" AS BIGINT)'
+        comment: Renter households with income $20,000 to $34,999 paying 50.0 percent or more of income on gross rent (B25074 line 027)
+      - name: burden_not_computed_20k_to_35k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_028E" AS BIGINT)'
+        comment: Renter households with income $20,000 to $34,999 whose gross-rent burden is not computed (B25074 line 028); exclude from the burden-share denominator
+      - name: renters_35k_to_50k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_029E" AS BIGINT)'
+        comment: Renter households with household income $35,000 to $49,999 (ACS B25074 line 029)
+      - name: burden_30_to_49_35k_to_50k
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25074_033E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_034E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_035E" AS BIGINT),0)'
+        comment: Renter households with income $35,000 to $49,999 paying 30.0 to 49.9 percent of income on gross rent (B25074 lines 033+034+035)
+      - name: burden_50_plus_35k_to_50k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_036E" AS BIGINT)'
+        comment: Renter households with income $35,000 to $49,999 paying 50.0 percent or more of income on gross rent (B25074 line 036)
+      - name: burden_not_computed_35k_to_50k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_037E" AS BIGINT)'
+        comment: Renter households with income $35,000 to $49,999 whose gross-rent burden is not computed (B25074 line 037); exclude from the burden-share denominator
+      - name: renters_50k_to_75k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_038E" AS BIGINT)'
+        comment: Renter households with household income $50,000 to $74,999 (ACS B25074 line 038)
+      - name: burden_30_to_49_50k_to_75k
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25074_042E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_043E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_044E" AS BIGINT),0)'
+        comment: Renter households with income $50,000 to $74,999 paying 30.0 to 49.9 percent of income on gross rent (B25074 lines 042+043+044)
+      - name: burden_50_plus_50k_to_75k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_045E" AS BIGINT)'
+        comment: Renter households with income $50,000 to $74,999 paying 50.0 percent or more of income on gross rent (B25074 line 045)
+      - name: burden_not_computed_50k_to_75k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_046E" AS BIGINT)'
+        comment: Renter households with income $50,000 to $74,999 whose gross-rent burden is not computed (B25074 line 046); exclude from the burden-share denominator
+      - name: renters_75k_to_100k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_047E" AS BIGINT)'
+        comment: Renter households with household income $75,000 to $99,999 (ACS B25074 line 047)
+      - name: burden_30_to_49_75k_to_100k
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25074_051E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_052E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_053E" AS BIGINT),0)'
+        comment: Renter households with income $75,000 to $99,999 paying 30.0 to 49.9 percent of income on gross rent (B25074 lines 051+052+053)
+      - name: burden_50_plus_75k_to_100k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_054E" AS BIGINT)'
+        comment: Renter households with income $75,000 to $99,999 paying 50.0 percent or more of income on gross rent (B25074 line 054)
+      - name: burden_not_computed_75k_to_100k
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_055E" AS BIGINT)'
+        comment: Renter households with income $75,000 to $99,999 whose gross-rent burden is not computed (B25074 line 055); exclude from the burden-share denominator
+      - name: renters_100k_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_056E" AS BIGINT)'
+        comment: Renter households with household income $100,000 or more (ACS B25074 line 056)
+      - name: burden_30_to_49_100k_plus
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25074_060E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_061E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25074_062E" AS BIGINT),0)'
+        comment: Renter households with income $100,000 or more paying 30.0 to 49.9 percent of income on gross rent (B25074 lines 060+061+062)
+      - name: burden_50_plus_100k_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_063E" AS BIGINT)'
+        comment: Renter households with income $100,000 or more paying 50.0 percent or more of income on gross rent (B25074 line 063)
+      - name: burden_not_computed_100k_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25074_064E" AS BIGINT)'
+        comment: Renter households with income $100,000 or more whose gross-rent burden is not computed (B25074 line 064); exclude from the burden-share denominator
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B25074_001E,B25074_002E,B25074_003E,B25074_004E,B25074_005E,B25074_006E,B25074_007E,B25074_008E,B25074_009E,B25074_010E,B25074_011E,B25074_012E,B25074_013E,B25074_014E,B25074_015E,B25074_016E,B25074_017E,B25074_018E,B25074_019E,B25074_020E,B25074_021E,B25074_022E,B25074_023E,B25074_024E,B25074_025E,B25074_026E,B25074_027E,B25074_028E,B25074_029E,B25074_030E,B25074_031E,B25074_032E,B25074_033E,B25074_034E,B25074_035E,B25074_036E,B25074_037E,B25074_038E,B25074_039E,B25074_040E,B25074_041E,B25074_042E,B25074_043E,B25074_044E,B25074_045E,B25074_046E,B25074_047E,B25074_048E,B25074_049E,B25074_050E,B25074_051E,B25074_052E,B25074_053E,B25074_054E,B25074_055E,B25074_056E,B25074_057E,B25074_058E,B25074_059E,B25074_060E,B25074_061E,B25074_062E,B25074_063E,B25074_064E&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_rent_burden_by_income
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS HOUSING YEAR BUILT DETAIL - Bracketed housing-unit counts by decade built
   # ---------------------------------------------------------------------------
   # New table rather than new columns on acs_housing_tenure: that table is already in
