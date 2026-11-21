@@ -501,3 +501,42 @@ def test_a_source_that_declares_no_keys_gets_empty_results_not_an_error():
     assert _rows(state, _FK_OUTBOUND) == []
     assert _rows(state, _FK_INBOUND) == []
     catalog.invalidate_catalog_cache()
+
+
+# --------------------------------------------------------------------------- 7
+# current_setting() inside a wider query is answered by the catalog, not the bare shortcut.
+
+#: DuckDB 2.0.1's postgres_scanner runs this at ATTACH (PostgresCatalog::InitializeRemotePushdown,
+#: the form for a server reporting version 14). The bare current_setting() shortcut answered any
+#: query containing current_setting with one column, so DuckDB's read of column 1 failed
+#: ("Postgres scanner - failed to fetch value for row 0 col 1") and every ATTACH broke.
+_DUCKDB_ATTACH_PUSHDOWN_PROBE = (
+    "SELECT datcollate, datctype, 'c', NULL, pg_encoding_to_char(encoding), "
+    "current_setting('TimeZone') FROM pg_database WHERE datname = current_database()"
+)
+
+
+def test_duckdb_attach_pushdown_probe_answers_every_column():
+    state = _keyed_state(StubBackend())
+    result = catalog.answer(_DUCKDB_ATTACH_PUSHDOWN_PROBE, "tester", state)
+    assert len(result.column_names) == 6, result.column_names
+    assert [tuple(r) for r in result.rows] == [
+        ("en_US.UTF-8", "en_US.UTF-8", "c", None, "UTF8", catalog.setting_value("timezone"))
+    ]
+    catalog.invalidate_catalog_cache()
+
+
+def test_two_current_settings_answer_two_columns():
+    state = _keyed_state(StubBackend())
+    assert _rows(
+        state, "SELECT current_setting('max_identifier_length'), current_setting('TimeZone')"
+    ) == [("63", catalog.setting_value("timezone"))]
+    catalog.invalidate_catalog_cache()
+
+
+def test_a_bare_current_setting_keeps_its_alias():
+    state = _keyed_state(StubBackend())
+    result = catalog.answer("SELECT current_setting('max_identifier_length') AS mil", "tester", state)
+    assert result.column_names == ["mil"]
+    assert [tuple(r) for r in result.rows] == [("63",)]
+    catalog.invalidate_catalog_cache()
