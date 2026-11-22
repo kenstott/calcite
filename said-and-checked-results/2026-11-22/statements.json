@@ -593,10 +593,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Commerce Department's Bureau of Industry and Security published an interim final rule, \"Addressing Remote Access to Advanced Semiconductors\" (2026-23529), in the Federal Register on Nov. 19, 2026. It requires licenses for exports to overseas data centers that remotely supply significant computing power to companies headquartered in China, Macau or other Country Group D:5 nations. No withdrawal was found, and the rule's effective date was not read.",
+   "evidence": [
+    {
+     "label": "Federal Register 2026-23529 (Nov. 19, 2026)",
+     "url": "https://www.federalregister.gov/documents/2026/11/19/2026-23529/addressing-remote-access-to-advanced-semiconductors"
+    }
+   ],
+   "check_run": "q204/askamerica/2026-11-22"
   },
   {
    "id": 16,
@@ -625,10 +630,23 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "A Federal Register search for Megaspeed returns no documents, and the Commerce Department's 2026 Entity List rules contain no Megaspeed addition, so Commerce had not listed it as of mid-November 2026. On ABC's This Week on Nov. 15, Bessent said Treasury, War, USTR and State had favored listing it for months.",
+   "evidence": [
+    {
+     "label": "Federal Register search: Megaspeed (no documents)",
+     "url": "https://www.federalregister.gov/api/v1/documents.json?conditions[term]=Megaspeed&per_page=20&order=newest"
+    },
+    {
+     "label": "Federal Register: BIS Entity List documents, 2026",
+     "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bagencies%5D%5B%5D=industry-and-security-bureau&conditions%5Bpublication_date%5D%5Bgte%5D=2026-01-01&conditions%5Bterm%5D=%22Entity%20List%22&per_page=20&order=newest"
+    },
+    {
+     "label": "ABC This Week transcript (Nov. 15, 2026)",
+     "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+    }
+   ],
+   "check_run": "q204/askamerica/2026-11-22"
   },
   {
    "id": 17,
@@ -657,10 +675,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Export Control Reform Act, 50 U.S.C. 4813(a), gives the Secretary of Commerce authority over the export control lists, in consultation with State, Defense and Energy. BIS Entity List rules describe additions as decided by an interagency End-User Review Committee, in which Treasury takes part where appropriate but does not hold the authority.",
+   "evidence": [
+    {
+     "label": "50 U.S.C. 4813 (GovInfo)",
+     "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title50/html/USCODE-2023-title50-chap58-subchapI-sec4813.htm"
+    },
+    {
+     "label": "Federal Register: BIS Entity List rules, 2026",
+     "url": "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bagencies%5D%5B%5D=industry-and-security-bureau&conditions%5Bpublication_date%5D%5Bgte%5D=2026-01-01&conditions%5Bterm%5D=%22Entity%20List%22&per_page=20&order=newest"
+    }
+   ],
+   "check_run": "q204/askamerica/2026-11-22"
   },
   {
    "id": 18,
