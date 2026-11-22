@@ -41,6 +41,8 @@ import java.util.Set;
  *       keyed by document_number (join to fr_documents); sourced directly from the
  *       Federal Register API's own {@code significant} JSON field, which fr_documents'
  *       govinfo.gov bulk-XML source does not carry.</li>
+ *   <li>{@code presidential_documents} — remarks, statements, interviews and messages from GPO's
+ *       Daily Compilation of Presidential Documents (needs {@code API_DATA_GOV}).</li>
  *   <li>{@code fr_agencies} — static agency registry with slug join key.</li>
  * </ul>
  *
@@ -71,7 +73,8 @@ public class FedRegisterSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(FedRegisterSchemaFactory.class);
 
   private static final Set<String> DOCUMENT_TABLES =
-      new HashSet<>(Arrays.asList("fr_documents", "fr_document_text", "fr_significance"));
+      new HashSet<>(Arrays.asList("fr_documents", "fr_document_text", "fr_significance",
+          "presidential_documents"));
 
   private static final Set<String> AGENCY_TABLES =
       new HashSet<>(Collections.singletonList("fr_agencies"));
