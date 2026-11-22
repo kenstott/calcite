@@ -951,3 +951,131 @@ SELECT 'disasters', 'wildfire_occurrence_by_state_year', 'T8_pk_duplicates',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'No duplicate (year, country, state_abbr, incident_type_category)'
 FROM (SELECT COUNT(*) AS n FROM (SELECT year, country, state_abbr, incident_type_category FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true)
   GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fema_nfhl_lomrs (static snapshot, FEMA NFHL, sourcing #1431)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T2_row_count',
+  CASE WHEN n >= 9000 THEN 'pass' ELSE 'fail' END, n, 9000, 'Expected ~10,200 LOMR polygons'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL global_id/dfirm_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true)
+      WHERE global_id IS NULL OR dfirm_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate global_id rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT global_id, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true)
+  GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T7_fips_and_bbox',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with malformed county_fips/state_fips or a bbox outside the US/territories or inverted'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true)
+      WHERE county_fips NOT SIMILAR TO '[0-9]{5}' OR state_fips <> SUBSTR(county_fips, 1, 2)
+         OR min_lon > max_lon OR min_lat > max_lat
+         OR center_lat NOT BETWEEN -15 AND 72 OR center_lon NOT BETWEEN -180 AND 180
+         OR (min_lon IS NULL) <> (center_lat IS NULL));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_nfhl_lomrs', 'T7_effective_dates',
+  CASE WHEN n_future = 0 AND n_recent > 0 THEN 'pass' ELSE 'fail' END, n_recent, 1,
+  'LOMRs effective 2020-2026 (must exist) and effective dates after 2027-01-01 (must be 0): ' || n_future
+FROM (SELECT COUNT(*) FILTER (WHERE effective_date >= DATE '2020-01-01') AS n_recent,
+             COUNT(*) FILTER (WHERE effective_date > DATE '2027-01-01') AS n_future
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nfhl_lomrs', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fema_firm_panels (static snapshot, FEMA NFHL, sourcing #1431)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T2_row_count',
+  CASE WHEN n >= 150000 THEN 'pass' ELSE 'fail' END, n, 150000, 'Expected ~184,000 FIRM panels'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL global_id/dfirm_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true)
+      WHERE global_id IS NULL OR dfirm_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate global_id rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT global_id, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true)
+  GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T7_fips_and_bbox',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with malformed county_fips/state_fips or a bbox outside the US/territories or inverted'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true)
+      WHERE county_fips NOT SIMILAR TO '[0-9]{5}' OR state_fips <> SUBSTR(county_fips, 1, 2)
+         OR min_lon > max_lon OR min_lat > max_lat
+         OR center_lat NOT BETWEEN -15 AND 72 OR center_lon NOT BETWEEN -180 AND 180
+         OR (min_lon IS NULL) <> (center_lat IS NULL));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'fema_firm_panels', 'T7_effective_dates',
+  CASE WHEN n_future = 0 AND n_recent > 0 THEN 'pass' ELSE 'fail' END, n_recent, 1,
+  'Panels effective 2020+ (must exist) and effective dates after 2027-01-01 (must be 0): ' || n_future
+FROM (SELECT COUNT(*) FILTER (WHERE effective_date >= DATE '2020-01-01') AS n_recent,
+             COUNT(*) FILTER (WHERE effective_date > DATE '2027-01-01') AS n_future
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_firm_panels', allow_moved_paths := true));

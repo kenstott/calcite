@@ -2326,6 +2326,263 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  - name: fema_nfhl_lomrs
+    # FEMA's NFHL LOMR layer is re-published in place as revisions are issued, with no Last-Modified;
+    # the hash probe skips the write when the layer is unchanged. snapshot makes a zero-row run fail.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=fema_nfhl_lomrs/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA National Flood Hazard Layer (NFHL) Letters of Map Revision — one row per LOMR polygon
+      (~10,200), the revisions FEMA has issued to the effective flood map (Flood Insurance Rate Map,
+      FIRM) after it was published. A LOMR is how a parcel or reach is added to or removed from the
+      Special Flood Hazard Area (SFHA) between full map updates; effective_date is when the revision
+      took effect, so effective_date >= a given date lists new revisions since then. Attributes only
+      identify the revision (case_no, status, scale); the layer does not say whether a polygon
+      added or removed SFHA acreage, and the flood-zone polygons themselves (6M, layer 28) are not
+      loaded. min/max/center lon/lat are the polygon's WGS84 bounding box (bbox centre, not an
+      area centroid), about 1% of LOMR records have no polygon in the source, so the bounding box is null for them; where present it is enough to place a LOMR in a census tract or county by point-in-polygon with
+      geo tract boundaries. county_fips comes from the first 5 digits of dfirm_id, the FIRM
+      database id (county-wide ids end in C; community-level ids can span a county part). Source:
+      hazards.fema.gov NFHL MapServer layer 1, keyless. Joins to fema_firm_panels on dfirm_id.
+
+    dimensions:
+      type:
+        - fema_nfhl_lomrs
+
+    columns:
+      - name: global_id
+        type: string
+        nullable: false
+        comment: FEMA/Esri GlobalID of the feature, braces removed (PK; lomr_id/firm_id repeat within a FIRM database)
+      - name: lomr_id
+        type: string
+        nullable: true
+        comment: FEMA LOMR id within the FIRM database, e.g. 01003C_1. Not unique (one id can cover several LOMRs, e.g. 48041C_1 has 8 case numbers) and null on a few rows; use global_id as the key
+      - name: dfirm_id
+        type: string
+        nullable: false
+        comment: FIRM database id, 5-digit county FIPS plus a suffix letter (e.g. 01003C)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: case_no
+        type: string
+        nullable: true
+        comment: FEMA case number of the revision request, e.g. 19-04-6434P (YY-region-sequence, P = physical map revision)
+      - name: effective_date
+        type: date
+        nullable: true
+        comment: Date the revision took effect on the flood map
+      - name: status
+        type: string
+        nullable: true
+        comment: Revision status in the layer (e.g. Effective)
+      - name: map_scale
+        type: string
+        nullable: true
+        comment: Scale denominator of the map the revision was drawn on (e.g. 6000 = 1:6,000)
+      - name: source_citation
+        type: string
+        nullable: true
+        comment: FEMA source-citation id of the LOMR determination document
+      - name: min_lon
+        type: double
+        nullable: true
+        comment: Polygon bounding box west edge, WGS84 degrees
+      - name: min_lat
+        type: double
+        nullable: true
+        comment: Polygon bounding box south edge, WGS84 degrees
+      - name: max_lon
+        type: double
+        nullable: true
+        comment: Polygon bounding box east edge, WGS84 degrees
+      - name: max_lat
+        type: double
+        nullable: true
+        comment: Polygon bounding box north edge, WGS84 degrees
+      - name: center_lon
+        type: double
+        nullable: true
+        comment: Bounding box centre longitude, WGS84 degrees
+      - name: center_lat
+        type: double
+        nullable: true
+        comment: Bounding box centre latitude, WGS84 degrees
+
+    source:
+      type: http
+      url: "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/1/query?where=1%3D1&outFields=GlobalID,LOMR_ID,DFIRM_ID,EFF_DATE,CASE_NO,SCALE,STATUS,SOURCE_CIT,OBJECTID&returnGeometry=true&outSR=4326&maxAllowableOffset=0.0005&orderByFields=OBJECTID&f=json"
+      method: GET
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          offsetParam: resultOffset
+          limitParam: resultRecordCount
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaNfhlLomrTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fema_nfhl_lomrs/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: fema_nfhl_lomrs
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  - name: fema_firm_panels
+    # Same NFHL service; panels are republished when a county's effective map changes. The layer holds
+    # one blank placeholder row (OBJECTID 451726); where=DFIRM_ID IS NOT NULL excludes it server-side
+    # because a transformer that drops a row shortens its page and ends the OFFSET paging early.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=fema_firm_panels/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA National Flood Hazard Layer FIRM panels — one row per Flood Insurance Rate Map panel
+      (~184,000) in the effective national map, with the date that panel's map took effect
+      (effective_date) and the date of the map it replaced (prior_effective_date; null when FEMA
+      records none, and FEMA's 8888-08-08 / 9999 placeholder dates are loaded as null). A panel whose effective_date is recent marks an area whose flood zones, and so
+      its Special Flood Hazard Area (SFHA, the 1%-annual-chance floodplain that triggers the
+      mandatory flood-insurance purchase requirement), were redrawn then; compare it to
+      prior_effective_date or filter on effective_date to find newly remapped places. panel_type
+      'Countywide, Not Printed' rows are digital-only panels. min/max/center lon/lat are the
+      panel's WGS84 bounding box (bbox centre, not an area centroid). county_fips comes from the
+      first 5 digits of dfirm_id. This table dates the map; it does not say which parcels entered or
+      left the SFHA (the flood-zone polygons, 6M, are not loaded). Source: hazards.fema.gov NFHL
+      MapServer layer 3, keyless. Joins to fema_nfhl_lomrs on dfirm_id.
+
+    dimensions:
+      type:
+        - fema_firm_panels
+
+    columns:
+      - name: global_id
+        type: string
+        nullable: false
+        comment: FEMA/Esri GlobalID of the feature, braces removed (PK; lomr_id/firm_id repeat within a FIRM database)
+      - name: firm_id
+        type: string
+        nullable: true
+        comment: FEMA panel row id within the FIRM database, e.g. 01003C_1. Not unique (a few ids repeat across panels); use global_id as the key
+      - name: dfirm_id
+        type: string
+        nullable: false
+        comment: FIRM database id, 5-digit county FIPS plus a suffix letter (e.g. 01003C)
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: firm_panel
+        type: string
+        nullable: true
+        comment: FIRM panel number including suffix, e.g. 01003C1100M
+      - name: panel_type
+        type: string
+        nullable: true
+        comment: Panel type (e.g. 'Countywide, Not Printed', printed panel)
+      - name: effective_date
+        type: date
+        nullable: true
+        comment: Date the panel's current map took effect
+      - name: prior_effective_date
+        type: date
+        nullable: true
+        comment: Date of the map this panel replaced; null when FEMA records none
+      - name: map_scale
+        type: string
+        nullable: true
+        comment: Scale denominator of the panel (e.g. 24000 = 1:24,000)
+      - name: not_printed_reason
+        type: string
+        nullable: true
+        comment: Reason a panel is not printed (e.g. OUTSIDE COUNTY BOUNDARY); null for printed panels
+      - name: source_citation
+        type: string
+        nullable: true
+        comment: FEMA source-citation id of the flood study behind the panel
+      - name: min_lon
+        type: double
+        nullable: true
+        comment: Panel bounding box west edge, WGS84 degrees
+      - name: min_lat
+        type: double
+        nullable: true
+        comment: Panel bounding box south edge, WGS84 degrees
+      - name: max_lon
+        type: double
+        nullable: true
+        comment: Panel bounding box east edge, WGS84 degrees
+      - name: max_lat
+        type: double
+        nullable: true
+        comment: Panel bounding box north edge, WGS84 degrees
+      - name: center_lon
+        type: double
+        nullable: true
+        comment: Bounding box centre longitude, WGS84 degrees
+      - name: center_lat
+        type: double
+        nullable: true
+        comment: Bounding box centre latitude, WGS84 degrees
+
+    source:
+      type: http
+      url: "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/3/query?where=DFIRM_ID+IS+NOT+NULL&outFields=GlobalID,FIRM_ID,DFIRM_ID,FIRM_PAN,PANEL_TYP,EFF_DATE,PRE_DATE,SCALE,PNP_REASON,SOURCE_CIT,OBJECTID&returnGeometry=true&outSR=4326&maxAllowableOffset=0.005&orderByFields=OBJECTID&f=json"
+      method: GET
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          offsetParam: resultOffset
+          limitParam: resultRecordCount
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaNfhlFirmPanelTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fema_firm_panels/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: fema_firm_panels
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   - name: billion_dollar_events
     # NOAA retired the product in May 2025; the 1980-2024 event file is a closed archive, so the
     # hash probe writes once and thereafter skips. snapshot makes a zero-row run fail loudly.
