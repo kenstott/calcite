@@ -7,6 +7,8 @@
 # materialized but missing from the cache means the cache is stale -- regenerate it instead.
 census.acs_real_estate_taxes
 census.acs_rent_burden_by_income
+disasters.fema_firm_panels
+disasters.fema_nfhl_lomrs
 econ.business_formation_statistics
 econ.osha_inspections
 econ.osha_violations
