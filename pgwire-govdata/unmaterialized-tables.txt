@@ -18,6 +18,7 @@ energy.eia_plant_generation
 environment.attains_cause_summary
 environment.attains_state_use_summary
 environment.ucmr_results
+fedregister.presidential_documents
 fiscal.appropriations_timeliness_by_fy
 fiscal.cbo_budget_projections
 fiscal.continuing_resolutions
