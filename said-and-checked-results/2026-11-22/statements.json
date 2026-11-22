@@ -1,0 +1,1002 @@
+{
+ "date": "2026-11-22",
+ "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 21 or 22, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 22 at about 08:07 ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (none was). Transcripts from Nov. 15 to 20 were searched only to confirm quotes. PBS NewsHour carries Associated Press reporting. Two of the eleven stories quoted no officeholder in scope. Greetings and procedural remarks, quotes under five words, commentators' accounts of what officials said, and statements by officials outside the offices in scope were left out. Statements are worded as the outlet reported them; entries beginning \"Reported as\" are the reporter's wording.",
+ "lede": [
+  "Ten officeholders in scope were quoted in the Nov. 21 and 22 political coverage of NPR and PBS NewsHour, for 28 statements in all. Most came from a White House news conference at which President Trump, Vice President JD Vance and Secretary of State Marco Rubio recapped Trump's trip to Asia and his meeting with the leaders of China and Russia, and took questions about the Iran war and the 2028 Republican field.",
+  "Treasury Secretary Scott Bessent spoke about export restrictions on Nvidia chips to China and about the Commerce Department's handling of Megaspeed International. Trump spoke in a Fox News Channel interview about the apparent hack of an FBI criminal justice database and about capping credit card interest rates, a proposal Sens. Elizabeth Warren and Josh Hawley have also backed.",
+  "Reps. Robert Garcia and Jamie Raskin responded to Trump's order telling federal contractors to check with the White House before answering Congress. Rep. Greg Murphy described how North Carolina's redrawn congressional map changed his district, and Rep. Hakeem Jeffries addressed voters after the midterm elections."
+ ],
+ "stories": [
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/21/nx-s1-6044237/electoral-college-national-popular-vote-interstate-compact",
+   "headline": "An effort to circumvent the Electoral College may be within reach. But hurdles remain",
+   "published": "2026-11-21T05:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/21/nx-s1-6044778/how-a-gop-redistricting-dummymander-in-north-carolina-backfired-by-2-seats",
+   "headline": "How a GOP redistricting 'dummymander' in North Carolina backfired by 2 seats",
+   "published": "2026-11-21T07:40-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/21/nx-s1-6047580/the-new-yorkers-jason-zengerle-on-hakeem-jeffries-rise-to-first-black-house-speaker",
+   "headline": "The New Yorker's Jason Zengerle on Hakeem Jeffries' rise to first Black House speaker",
+   "published": "2026-11-21T07:40-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/21/nx-s1-6047376/week-in-politics-trump-returns-from-asia-hails-trip-as-one-of-best-in-history",
+   "headline": "Week in Politics: Trump returns from Asia; hails trip as one of best in history",
+   "published": "2026-11-21T07:40-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/bessent-says-no-further-restrictions-are-needed-for-nvidia-chip-exports-to-china",
+   "headline": "Bessent says no further restrictions are needed for Nvidia chip exports to China",
+   "published": "2026-11-21T11:28-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/trump-auditions-potential-successors-as-rubio-and-vance-join-him-for-white-house-briefing",
+   "headline": "Trump auditions potential successors as Rubio and Vance join him for White House briefing",
+   "published": "2026-11-21T12:32-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/trump-orders-federal-contractors-to-check-with-white-house-before-responding-to-congress",
+   "headline": "Trump orders federal contractors to check with White House before responding to Congress",
+   "published": "2026-11-21T14:29-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/ap-source-fbi-investigating-apparent-hack-of-its-key-national-criminal-justice-database",
+   "headline": "AP source: FBI investigating apparent hack of its key national criminal justice database",
+   "published": "2026-11-21T15:55-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/trump-vows-to-work-with-democrats-to-cap-credit-card-interest-rates-at-10",
+   "headline": "Trump vows to work with Democrats to cap credit card interest rates at 10%",
+   "published": "2026-11-21T16:20-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/21/g-s1-154966/trump-contractors-congress",
+   "headline": "Trump orders federal contractors to check with White House before responding to Congress",
+   "published": "2026-11-21T17:40-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/for-families-of-the-fallen-trumps-proposed-arch-casts-a-shadow-over-arlington-national-cemetery",
+   "headline": "For families of the fallen, Trump's proposed arch casts a shadow over Arlington National Cemetery",
+   "published": "2026-11-21T17:52-05:00"
+  }
+ ],
+ "statements": [
+  {
+   "id": 1,
+   "speaker": "Greg Murphy",
+   "office": "U.S. Representative",
+   "party": "R",
+   "context": "Murphy, the Republican congressman for North Carolina's 3rd District, described his district after the Republican-drawn map moved four counties into it.",
+   "topic": "North Carolina congressional map",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "NC",
+   "about_states": [
+    "NC"
+   ],
+   "quote": "It made us the weakest Republican district in the state.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/21/nx-s1-6044778/how-a-gop-redistricting-dummymander-in-north-carolina-backfired-by-2-seats"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if, under the congressional map in force for the 2026 election, North Carolina's 3rd District has the lowest Republican vote share or partisan lean of the state's Republican-leaning districts. False if another Republican-leaning North Carolina district is weaker for Republicans on the same measure. Cannot be determined if no district-level vote or lean data for the new map is available.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "unsettled",
+   "finding": "Figures attributed to the North Carolina General Assembly, as reported by Roll Call and WFAE (the Assembly's district file could not be read directly), put Trump's 2024 margin in the redrawn 3rd District at about 14 points, down from 22, but about 12 points in the 1st and 10 points in the unchanged 11th. Whether the 3rd is the weakest depends on whether 'Republican district' means seats Republicans held or seats the map leans Republican, and on the measure used.",
+   "evidence": [
+    {
+     "label": "NPR (Nov. 21, 2026)",
+     "url": "https://www.npr.org/2026/11/21/nx-s1-6044778/how-a-gop-redistricting-dummymander-in-north-carolina-b"
+    },
+    {
+     "label": "Roll Call (Oct. 22, 2025)",
+     "url": "https://rollcall.com/2025/10/22/north-carolina-congressional-map-republicans-election/"
+    },
+    {
+     "label": "WFAE (Nov. 13, 2026)",
+     "url": "https://www.wfae.org/2026-11-13/raymond-smith-dummymander-nc-3"
+    },
+    {
+     "label": "Wikipedia: North Carolina's 11th congressional district",
+     "url": "https://en.wikipedia.org/wiki/North_Carolina%27s_11th_congressional_district"
+    }
+   ],
+   "check_run": "q201/askamerica/2026-11-22"
+  },
+  {
+   "id": 2,
+   "speaker": "Greg Murphy",
+   "office": "U.S. Representative",
+   "party": "R",
+   "context": "Murphy, the Republican congressman for North Carolina's 3rd District, described the redrawn congressional maps' effect on his district.",
+   "topic": "North Carolina congressional map",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "NC",
+   "about_states": [
+    "NC"
+   ],
+   "quote": "There was obviously a radical change with those maps.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/21/nx-s1-6044778/how-a-gop-redistricting-dummymander-in-north-carolina-backfired-by-2-seats"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 3,
+   "speaker": "Hakeem Jeffries",
+   "office": "U.S. Representative",
+   "party": "D",
+   "context": "Jeffries, the House Democratic nominee for speaker, addressed voters after the midterm elections.",
+   "topic": "House Democratic agenda",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "And House Democrats are committed to making life better for you.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/21/nx-s1-6047580/the-new-yorkers-jason-zengerle-on-hakeem-jeffries-rise-to-first-black-house-speaker"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 4,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Trump, asked at a White House news conference about comparisons of his meeting with the Chinese and Russian leaders to the 1945 Yalta Conference, described his thinking before the trip.",
+   "topic": "Trump's Asia trip and summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I didn't go having us talk about Yalta, and if you look, Winston Churchill, Stalin, FDR - which was a big one - I didn't think about it.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/21/nx-s1-6047376/week-in-politics-trump-returns-from-asia-hails-trip-as-one-of-best-in-history"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if records of the trip show no Yalta comparison or agenda item raised by Trump or the White House before or during the trilateral meeting. False if Trump or the White House is on record invoking Yalta before the meeting. Cannot be determined if no record speaks to what Trump planned or thought before the trip.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 5,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Trump, at a White House news conference after his Asia trip, described his relationship with the Chinese and Russian leaders.",
+   "topic": "Trump's Asia trip and summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I get along great with these two people.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/21/nx-s1-6047376/week-in-politics-trump-returns-from-asia-hails-trip-as-one-of-best-in-history"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 6,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Trump, at a White House news conference, described the meeting he attended with the Chinese and Russian leaders.",
+   "topic": "Trump's Asia trip and summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "It was an amazing event.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/21/nx-s1-6047376/week-in-politics-trump-returns-from-asia-hails-trip-as-one-of-best-in-history"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 7,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "NPR reported what Trump said about his Asia trip on returning to the United States.",
+   "topic": "Trump's Asia trip and summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: President Trump returned from his trip to Asia, saying it was one of the most successful presidential visits to that continent — or anywhere else — in American history.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/21/nx-s1-6047376/week-in-politics-trump-returns-from-asia-hails-trip-as-one-of-best-in-history"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 8,
+   "speaker": "Marco Rubio",
+   "office": "Secretary of State",
+   "party": "R",
+   "context": "Rubio, the Secretary of State, spoke at a White House news conference recapping Trump's Asia trip and defending Trump's meeting with the leaders of China and Russia.",
+   "topic": "Trump's Asia trip and summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "If these leaders can't get along and can't engage with one another and don't have a positive relationship, it is impossible to get anything good done for the country and the safety of the world,",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-auditions-potential-successors-as-rubio-and-vance-join-him-for-white-house-briefing"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 9,
+   "speaker": "JD Vance",
+   "office": "Vice President of the United States",
+   "party": "R",
+   "context": "Vance, the Vice President, spoke at a White House news conference about responsibility for the Iran war.",
+   "topic": "Iran war",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I think the president is the one who makes the decision",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-auditions-potential-successors-as-rubio-and-vance-join-him-for-white-house-briefing"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 10,
+   "speaker": "JD Vance",
+   "office": "Vice President of the United States",
+   "party": "R",
+   "context": "Vance, the Vice President, spoke at a White House news conference about whether Trump would take the same Iran war decision again.",
+   "topic": "Iran war",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "the president has said he would do it again",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-auditions-potential-successors-as-rubio-and-vance-join-him-for-white-house-briefing"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Trump is on record saying he would make the same decision on the Iran war again. False if Trump is on record saying he would not do it again or regrets the decision. Cannot be determined if no such statement by Trump can be found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 11,
+   "speaker": "Marco Rubio",
+   "office": "Secretary of State",
+   "party": "R",
+   "context": "AP reported what Rubio has said about running for president in 2028 relative to Vance.",
+   "topic": "2028 Republican succession",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Rubio has said he won't run if Vance does.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-auditions-potential-successors-as-rubio-and-vance-join-him-for-white-house-briefing"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 12,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Trump, at the end of a White House news conference, introduced chief of staff Stephen Miller and compared him with Vance and Rubio.",
+   "topic": "2028 Republican succession",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "We have breaking news — he was better than these two guys,",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-auditions-potential-successors-as-rubio-and-vance-join-him-for-white-house-briefing"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 13,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "AP reported what Trump said at a White House news conference about Vance's statement distancing himself from the Iran war and blaming it for Republican midterm losses.",
+   "topic": "Iran war",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Trump said Vance's statement distancing himself from the war in Iran and blaming it for the GOP's midterm losses was \"fine\" and \"accurate.\"",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-auditions-potential-successors-as-rubio-and-vance-join-him-for-white-house-briefing"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 14,
+   "speaker": "Scott Bessent",
+   "office": "Secretary of the Treasury",
+   "party": "R",
+   "context": "Bessent, the Treasury Secretary, spoke to CNBC after the Asia trip about chip restrictions on China following the administration's move to block China's remote access to advanced chips.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "The proper chip restrictions are in place,",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/bessent-says-no-further-restrictions-are-needed-for-nvidia-chip-exports-to-china"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 15,
+   "speaker": "Scott Bessent",
+   "office": "Secretary of the Treasury",
+   "party": "R",
+   "context": "Bessent, the Treasury Secretary, spoke to CNBC after the Asia trip about Chinese firms' remote access to Nvidia chips.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "And the remote access has been curtailed.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/bessent-says-no-further-restrictions-are-needed-for-nvidia-chip-exports-to-china"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the administration took a published action in November 2026 restricting Chinese firms' remote access to advanced Nvidia chips. False if no such restriction was issued or it was withdrawn. Cannot be determined if only reports of a planned action exist with no official text.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 16,
+   "speaker": "Scott Bessent",
+   "office": "Secretary of the Treasury",
+   "party": "R",
+   "context": "AP reported what Bessent said the previous week about the Commerce Department and chip export restrictions on Megaspeed International.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Last week, Bessent said he was frustrated with the Commerce Department's delay in placing restrictions on Nvidia chip exports to Megaspeed International, which is under investigation by the U.S. for potentially diverting restricted Nvidia AI chips to China.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/bessent-says-no-further-restrictions-are-needed-for-nvidia-chip-exports-to-china"
+   },
+   "source": {
+    "status": "paraphrased",
+    "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+    "note": "ABC This Week (Nov. 15) carries Bessent saying Treasury, War, USTR and State favored putting Megaspeed on the entity list for months but Commerce has the pen; the word 'frustrated' and the 'rebuke' framing are AP's, not in that transcript."
+   },
+   "kind": "premised_prediction",
+   "test": "True if, as of mid-November 2026, Megaspeed International had not been added to the Commerce Department's Entity List or otherwise restricted by Commerce. False if Commerce had already placed Megaspeed on the Entity List or imposed export restrictions on it before then. Cannot be determined if the Entity List status and timing cannot be established.",
+   "premise": "The Commerce Department had not placed export restrictions on Megaspeed International as of mid-November 2026, though Treasury wanted them.",
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 17,
+   "speaker": "Scott Bessent",
+   "office": "Secretary of the Treasury",
+   "party": "R",
+   "context": "AP reported what Bessent said about which department controlled export restrictions on Megaspeed International.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: In an unusually public rebuke of a fellow Cabinet member, Bessent said his department wanted to place export controls on Megaspeed, but Commerce was in charge of the matter.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/bessent-says-no-further-restrictions-are-needed-for-nvidia-chip-exports-to-china"
+   },
+   "source": {
+    "status": "paraphrased",
+    "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+    "note": "ABC This Week (Nov. 15) carries Bessent saying Treasury, War, USTR and State favored putting Megaspeed on the entity list for months but Commerce has the pen; the word 'frustrated' and the 'rebuke' framing are AP's, not in that transcript."
+   },
+   "kind": "factual",
+   "test": "True if the Commerce Department (its Bureau of Industry and Security) holds the authority to add companies such as Megaspeed to the Entity List and impose export controls, rather than Treasury. False if Treasury or another department holds that authority. Cannot be determined if the relevant authority cannot be established from primary sources.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 18,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "AP reported what Trump told reporters on Friday about his confidence in Commerce Secretary Howard Lutnick.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Speaking to reporters on Friday, Trump said he has \"not lost confidence\" in Lutnick.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/bessent-says-no-further-restrictions-are-needed-for-nvidia-chip-exports-to-china"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 19,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "AP reported how Trump described Commerce Secretary Howard Lutnick's work.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Calling him a \"different kind of guy,\" Trump said he \"has a natural business instinct\" and has \"done a very good job.\"",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/bessent-says-no-further-restrictions-are-needed-for-nvidia-chip-exports-to-china"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 20,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Trump, in a Fox News Channel interview, was asked about the apparent hack of the FBI's National Crime Information Center database.",
+   "topic": "FBI database hack",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "We just heard about it",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/ap-source-fbi-investigating-apparent-hack-of-its-key-national-criminal-justice-database"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the apparent hack of the FBI's National Crime Information Center became public or was reported to the president only shortly before the Nov. 21, 2026 interview. False if official records show the president or the public was told of it well before then. Cannot be determined if no record shows when the president learned of it.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 21,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Trump, in a Fox News Channel interview, was asked about the apparent hack of the FBI's National Crime Information Center database.",
+   "topic": "FBI database hack",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I will say that it's not good.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/ap-source-fbi-investigating-apparent-hack-of-its-key-national-criminal-justice-database"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 22,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "AP reported what Trump said in a Fox News Channel interview about working with the incoming Democratic Congress on a credit card interest rate cap.",
+   "topic": "Credit card interest rate cap",
+   "broad_topic": "Banking and Finance",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: President Donald Trump said Saturday that he would work with the incoming Democratic Congress to cap credit card interest rates, hoping to fulfill a promise he made on the 2024 campaign trail but couldn't deliver on because of industry pressure and a lack of interest from his fellow Republicans.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-vows-to-work-with-democrats-to-cap-credit-card-interest-rates-at-10"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 23,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Trump, in a Fox News Channel interview, spoke about credit card companies while discussing a credit card interest rate cap.",
+   "topic": "Credit card interest rate cap",
+   "broad_topic": "Banking and Finance",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "These credit card companies have made a lot",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-vows-to-work-with-democrats-to-cap-credit-card-interest-rates-at-10"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if credit card issuers' profits or interest income are high by official measures (for example Federal Reserve or FDIC data on card-bank returns or card interest income). False if official data show credit card lending was unprofitable or earned unusually little. Cannot be determined if the loose term 'a lot' leaves the data open to more than one reading.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 24,
+   "speaker": "Elizabeth Warren",
+   "office": "U.S. Senator",
+   "party": "D",
+   "context": "Warren, a Democratic senator expected to chair the Senate Banking Committee, responded to Trump's Fox News interview on capping credit card interest rates.",
+   "topic": "Credit card interest rate cap",
+   "broad_topic": "Banking and Finance",
+   "speaker_state": "MA",
+   "about_states": [],
+   "quote": "Let's cap credit card interest rates and save Americans money.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-vows-to-work-with-democrats-to-cap-credit-card-interest-rates-at-10"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 25,
+   "speaker": "Josh Hawley",
+   "office": "U.S. Senator",
+   "party": "R",
+   "context": "Hawley, a Republican senator, spoke about his bill to cap credit card interest rates when Trump proposed a cap earlier this year.",
+   "topic": "Credit card interest rate cap",
+   "broad_topic": "Banking and Finance",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "Congress should pass my bipartisan bill to cap these rates and deliver relief right away,",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-vows-to-work-with-democrats-to-cap-credit-card-interest-rates-at-10"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "premised_prediction",
+   "test": "True if Congress's records show a bill sponsored by Hawley to cap credit card interest rates with at least one cosponsor from the other party. False if Hawley has no such bill, or his bill has no cosponsor from the other party. Cannot be determined if bill records are unavailable.",
+   "premise": "Hawley has introduced a bipartisan bill to cap credit card interest rates.",
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 26,
+   "speaker": "Robert Garcia",
+   "office": "U.S. Representative",
+   "party": "D",
+   "context": "Garcia, the top Democrat on the House Oversight Committee, responded to Trump's executive order on federal contractors' responses to congressional inquiries.",
+   "topic": "Congressional oversight and contractors order",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "blatant attack on Congress' constitutional right to conduct oversight.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-orders-federal-contractors-to-check-with-white-house-before-responding-to-congress"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "blatant attack on Congress' constitutional right to conduct oversight.",
+     "outlet": "NPR",
+     "url": "https://www.npr.org/2026/11/21/g-s1-154966/trump-contractors-congress"
+    }
+   ],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 27,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative",
+   "party": "D",
+   "context": "Raskin, a Democratic congressman who leads House Judiciary Committee Democrats' investigations, responded to Trump's executive order on federal contractors' responses to congressional inquiries.",
+   "topic": "Congressional oversight and contractors order",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "totally unprecedented and blatantly unlawful.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-orders-federal-contractors-to-check-with-white-house-before-responding-to-congress"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 28,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative",
+   "party": "D",
+   "context": "Raskin, a Democratic congressman who leads House Judiciary Committee Democrats' investigations, spoke about federal contractors' obligations when Congress seeks information.",
+   "topic": "Congressional oversight and contractors order",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "duty and a right to speak truthfully when Congress calls.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-orders-federal-contractors-to-check-with-white-house-before-responding-to-congress"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  }
+ ]
+}
