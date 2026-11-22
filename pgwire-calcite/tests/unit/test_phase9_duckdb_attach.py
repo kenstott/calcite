@@ -116,7 +116,7 @@ def test_scan_reads_a_binary_column_as_blob(attached):
         "WHERE table_catalog = 'pg' AND table_name = 'bintypes' AND column_name = 'c_bin'"
     ).fetchall()
     assert typ == [("BLOB",)], typ
-    rows = attached.execute('SELECT * FROM pg."WIDEBIN"."bintypes" ORDER BY 1').fetchall()
+    rows = attached.execute('SELECT * FROM pg."WIDEBIN"."bintypes" ORDER BY "ID"').fetchall()
     assert rows == [(1, b"\xde\xad\xbe\xef"), (2, b"\xde\xad\xbe\xef"), (3, b"\xde\xad\xbe\xef")]
 
 
@@ -127,7 +127,7 @@ def test_scan_reads_every_supported_type_through_binary_copy(attached):
     8-byte body) misaligns every following field, so an all-columns scan of a
     wide row is the assertion that catches it.
     """
-    rows = attached.execute('SELECT * FROM pg."WIDE"."WIDETYPES" ORDER BY 1').fetchall()
+    rows = attached.execute('SELECT * FROM pg."WIDE"."WIDETYPES" ORDER BY "ID"').fetchall()
     assert rows == _WIDE_EXPECTED
 
 
@@ -152,17 +152,17 @@ def test_filter_pushdown_reaches_the_server(attached, caplog):
     copy_sql = [r.getMessage() for r in caplog.records if "[COPY]" in r.getMessage()]
     assert copy_sql, "the scan went through the COPY dispatcher"
     assert any('"c_int"' in m and "42" in m for m in copy_sql), copy_sql
-    # ... and DuckDB projected only the columns it needs, so the scan is not a full read
-    assert any("ncols=2" in m for m in copy_sql), copy_sql
+    # ... and DuckDB projected only the selected column: the filter column is applied server-side
+    assert any("ncols=1" in m for m in copy_sql), copy_sql
 
 
 def test_a_string_filter_reads_through_duckdb(attached, caplog):
-    """DuckDB pushes a string comparison as ``= 'hello' COLLATE "C"``; the server must answer it
-    with the filtered rows, not a parse failure ("Failed to prepare COPY ... COLLATE")."""
+    """A string comparison DuckDB pushes down (older versions as ``= 'hello' COLLATE "C"``) must be
+    answered with the filtered rows, not a parse failure ("Failed to prepare COPY ... COLLATE")."""
     with caplog.at_level(logging.INFO, logger="pgwire_calcite.binary_copy"):
         rows = attached.execute(
             'SELECT "ID" FROM pg."WIDE"."WIDETYPES" WHERE "C_STRING" = \'hello\''
         ).fetchall()
     assert rows == [(1,)], rows
     copy_sql = [r.getMessage() for r in caplog.records if "[COPY]" in r.getMessage()]
-    assert any("COLLATE" in m for m in copy_sql), copy_sql  # DuckDB did push it as COLLATE "C"
+    assert any('"c_string"' in m and "hello" in m for m in copy_sql), copy_sql
