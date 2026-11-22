@@ -2114,6 +2114,121 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # NFHL LOMRs — FEMA National Flood Hazard Layer, Letters of Map Revision
+  # ---------------------------------------------------------------------------
+  - name: nfhl_lomr
+    timeColumn: effective_year  # observation time; this table has no column named 'year'
+    pattern: "type=nfhl_lomr/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA National Flood Hazard Layer (NFHL) Letters of Map Revision (LOMR) — one
+      row per LOMR polygon (about 10k) marking an area where FEMA revised the
+      effective flood map, with effective_date/effective_year (1994 to the present),
+      status (Effective, Incorporated, Superseded, Revalidated), FEMA case_number,
+      the map scale, a simplified WGS84 polygon (geometry_wkt) and its centroid.
+      county_fips and state_fips come from the first five characters of dfirm_id
+      (the FIRM database id). Answers "where and when did FEMA change the flood map":
+      count or filter by county_fips and effective_year to find recently re-mapped
+      counties, then join to nfip_claims / nfip_policies (flood_zone per record),
+      housing.hmda_lar (by tract) or geo.counties. Snapshot table with no year
+      partition (refreshed via overwritePartitions) — each refresh replaces the
+      previous NFHL snapshot, so objectid is stable only within one snapshot and a
+      case can span several polygons (case_number repeats; lomr_id is null on a few
+      rows). It covers LOMR polygons only, not the full flood-zone (SFHA) layer, so it
+      shows where the map changed, not the resulting zone or tract-level SFHA share.
+      Source: hazards.fema.gov NFHL MapServer layer 1 (keyless, public domain).
+
+    dimensions:
+      type:
+        - nfhl_lomr
+
+    columns:
+      - name: objectid
+        type: long
+        nullable: false
+        comment: NFHL layer OBJECTID (PK within one snapshot; not stable across refreshes)
+      - name: dfirm_id
+        type: string
+        nullable: true
+        comment: FIRM database id (6 chars, e.g. 16001C); first 5 chars are the county FIPS
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: lomr_id
+        type: string
+        nullable: true
+        comment: FEMA LOMR identifier (dfirm_id plus sequence); not unique across polygons, null on a few rows
+      - name: case_number
+        type: string
+        nullable: true
+        comment: FEMA LOMR case number (e.g. 25-10-0502P); repeats when one case has several polygons
+      - name: effective_date
+        type: date
+        nullable: true
+        comment: Date the map revision took effect
+      - name: effective_year
+        type: integer
+        nullable: true
+        comment: Year of effective_date
+      - name: status
+        type: string
+        nullable: true
+        comment: Effective / Incorporated / Revalidated / Superseded (spelled both Superceded and Superseded by the source) / NP
+      - name: scale
+        type: string
+        nullable: true
+        comment: Map scale denominator (e.g. 6000 for 1:6,000)
+      - name: version_id
+        type: string
+        nullable: true
+        comment: NFHL data model version of the source database
+      - name: source_citation
+        type: string
+        nullable: true
+        comment: Source citation id for the revision (e.g. 16001C_LOMC98)
+      - name: centroid_lat
+        type: double
+        nullable: true
+        comment: Polygon centroid latitude (WGS84)
+      - name: centroid_lon
+        type: double
+        nullable: true
+        comment: Polygon centroid longitude (WGS84)
+      - <<: *geometry_wkt_column
+
+    source:
+      type: http
+      url: "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/1/query"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.NfhlLomrStreamingTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nfhl_lomr/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: nfhl_lomr
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # WILDFIRE OCCURRENCE BY STATE x YEAR — NIFC WFIGS Incident Locations
   # (server-side GROUP BY on the ArcGIS FeatureServer, one request per discovery year)
   # ---------------------------------------------------------------------------
