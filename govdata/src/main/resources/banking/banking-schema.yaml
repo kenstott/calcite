@@ -1126,9 +1126,13 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       Annual FDIC industry summary — bank count, net income, interest income,
-      liabilities, and equity, either per-state or (when state_abbr is absent) a
-      nationwide rollup. One row per (year, state_abbr); windowed by the literal
-      YEAR field. Small table (~8K rows nationwide). Many fields are legitimately
+      liabilities, and equity, split by charter class (commercial banks vs
+      savings institutions). One row per (year, state_abbr, charter_class).
+      Nationwide rollups are rows whose state_abbr is 'US' (the 50 states and DC)
+      or 'USA' (all states and territories); state_abbr is never null. Filter
+      charter_class to one value, or sum both, before comparing to a single
+      industry total. Windowed by the literal YEAR field. Small table (~8K rows
+      nationwide). Many fields are legitimately
       null in 1930s-40s records because call reports genuinely did not collect them
       then — real historical sparsity, not an ETL defect. Source:
       api.fdic.gov/banks/summary.
@@ -1147,8 +1151,14 @@ partitionedTables:
           to int.
       - <<: *state_abbr_column
         comment: >
-          2-char USPS state abbreviation. Null/absent means a nationwide rollup row,
-          not a per-state one — FDIC's own aggregation grain, not a data defect.
+          2-char USPS state abbreviation, or a nationwide rollup code: 'US' is the
+          50 states plus DC, 'USA' is all states and territories.
+      - name: charter_class
+        type: string
+        nullable: true
+        comment: >
+          FDIC institution class of the row: 'CB' commercial banks or 'SI' savings
+          institutions. Each (year, state_abbr) appears once per class.
       - name: num_banks
         type: integer
         nullable: true

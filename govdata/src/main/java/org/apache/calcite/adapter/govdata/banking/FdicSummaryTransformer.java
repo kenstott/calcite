@@ -15,8 +15,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Maps FDIC BankFind Suite {@code /banks/summary} records into {@code summary} rows — annual
- * industry aggregates, either a per-state row or (when {@code STALP} is absent) a nationwide
- * rollup. Windowed by the literal {@code YEAR} field, which FDIC returns as a numeric string
+ * industry aggregates per state and charter class ({@code CB_SI}: commercial banks or savings
+ * institutions). Nationwide rollups arrive as {@code STALP} {@code US} and {@code USA}. Windowed by the literal {@code YEAR} field, which FDIC returns as a numeric string
  * (e.g. {@code "1934"}); {@link #putInt} parses it. Many fields are legitimately null in
  * 1930s-40s records because call reports genuinely did not collect them then.
  */
@@ -25,6 +25,7 @@ public class FdicSummaryTransformer extends AbstractFdicTransformer {
   @Override protected void mapRow(JsonNode rec, ObjectNode row) {
     putInt(row, "year", rec, "YEAR");
     putText(row, "state_abbr", rec, "STALP");
+    putText(row, "charter_class", rec, "CB_SI");
     putInt(row, "num_banks", rec, "BANKS");
     putLong(row, "net_income_thousands", rec, "NETINC");
     putLong(row, "total_interest_income_thousands", rec, "INTINC");

@@ -510,16 +510,29 @@ FROM (
   WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')
 );
 
--- T6: pk_nulls. No single-column PK — grain is year x state with state_abbr nullable for the
--- nationwide rollup — so check year (the one column guaranteed non-null on every row) instead.
+-- T6: pk_nulls. Grain is year x state_abbr x charter_class; nationwide rollups are state_abbr
+-- 'US' and 'USA', so every key column must be non-null.
 INSERT INTO dq_results
 SELECT 'banking', 'summary', 'pk_nulls',
   CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
-  n, 0, 'NULL year (grain is year x state; state_abbr IS NULL is expected for nationwide rollup rows, not a defect)'
+  n, 0, 'NULL year, state_abbr or charter_class'
 FROM (
   SELECT COUNT(*) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/summary', allow_moved_paths := true)
-  WHERE year IS NULL
+  WHERE year IS NULL OR state_abbr IS NULL OR charter_class IS NULL
+);
+
+-- T7: pk_dupes. One row per (year, state_abbr, charter_class).
+INSERT INTO dq_results
+SELECT 'banking', 'summary', 'pk_dupes',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  n, 0, 'duplicate (year, state_abbr, charter_class) keys'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT year, state_abbr, charter_class
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/summary', allow_moved_paths := true)
+    GROUP BY 1, 2, 3 HAVING COUNT(*) > 1
+  )
 );
 
 -- ============================================================================
