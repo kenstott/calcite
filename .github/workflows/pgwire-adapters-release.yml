@@ -139,6 +139,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
+
       - name: Build adapter jars + resolve runtime classpath
         run: |
           ./gradlew :${{ matrix.adapter.module }}:jar :core:jar :linq4j:jar \
@@ -214,6 +218,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
       - uses: astral-sh/setup-uv@v5
       # Same GPG_PRIVATE_KEY/GPG_KEY_ID/GPG_PASSPHRASE secrets askamerica-engine.yml and
       # publish-govdata.yml already use to sign the Maven Central bundle -- these tarballs get
