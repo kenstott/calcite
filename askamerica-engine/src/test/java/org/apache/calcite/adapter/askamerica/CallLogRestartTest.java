@@ -109,6 +109,16 @@ class CallLogRestartTest {
     assertNull(gate(), "the reloaded query satisfies the check");
   }
 
+  @Test void queriesBeyondTheIdleGapStillCountAfterARestart(@TempDir Path dir) throws Exception {
+    Path file = dir.resolve("log.jsonl");
+    write(file, call("search_catalog", 1, 40 * 60_000L), call("query", 2, 35 * 60_000L));
+
+    McpServer.restoreCallLog(file, System.currentTimeMillis());
+
+    assertEquals(2, callLog().size(), "calls 35 minutes old are reloaded");
+    assertNull(gate(), "the reloaded query satisfies the check");
+  }
+
   @Test void theCutAtThePreviousSuccessfulPreviewSurvivesARestart(@TempDir Path dir)
       throws Exception {
     Path file = dir.resolve("log.jsonl");
