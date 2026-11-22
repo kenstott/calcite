@@ -219,10 +219,23 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "An Anadolu Agency explainer dated Nov. 18, the day before the meeting, attributes the Yalta comparisons to news outlets, Ukrainian President Zelenskyy and Kremlin spokesman Peskov, not to Trump or the White House. Newsweek reports that Trump called the meeting \"bigger than Yalta\" and posted a Yalta image only after the meeting. No White House record of the trip could be read directly, and no record shows what Trump thought before the trip.",
+   "evidence": [
+    {
+     "label": "NPR, Week in Politics (Nov. 21, 2026)",
+     "url": "https://www.npr.org/2026/11/21/nx-s1-6047376/week-in-politics-trump-returns-from-asia-hails-trip-as-"
+    },
+    {
+     "label": "Anadolu Agency explainer (Nov. 18, 2026)",
+     "url": "https://www.aa.com.tr/en/world/explainer-what-was-the-yalta-conference-and-why-is-it-being-compared-to-the-trump-xi-putin-summit/4129804"
+    },
+    {
+     "label": "Newsweek, Trump shares Yalta comparison",
+     "url": "https://www.newsweek.com/trump-shares-yalta-comparison-featuring-himself-xi-and-putin-12752798"
+    }
+   ],
+   "check_run": "q202/askamerica/2026-11-22"
   },
   {
    "id": 5,
@@ -411,10 +424,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "According to AP's account of the interview, Trump said on Fox News's \"The Ingraham Angle\" on Sept. 10, 2026, \"If I had it do again, I would do exactly as I did,\" and that he does not believe in regret. The broadcast transcript itself was not read. No statement by Trump saying he would not do it again was found.",
+   "evidence": [
+    {
+     "label": "Business Today, Trump on Fox News (Sept. 11, 2026)",
+     "url": "https://www.businesstoday.in/world/story/would-do-exactly-as-i-did-donald-trump-says-he-doesnt-regret-the-iran-war-554745-2026-09-11"
+    },
+    {
+     "label": "Ynet (AP), Ingraham interview",
+     "url": "https://www.ynetnews.com/article/bywbt6gfme"
+    }
+   ],
+   "check_run": "q203/askamerica/2026-11-22"
   },
   {
    "id": 11,
