@@ -54,6 +54,9 @@ jobs:
             21
           distribution: temurin
 
+      - name: 'Warm Gradle plugins'
+        uses: ./.github/actions/warm-gradle-plugins
+
       - uses: gradle/actions/setup-gradle@v3
 
       - name: Determine version
