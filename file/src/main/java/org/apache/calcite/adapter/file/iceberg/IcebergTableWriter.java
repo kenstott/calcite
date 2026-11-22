@@ -75,6 +75,13 @@ public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
 
   /** Read-then-commit passes {@code deleteRows} makes before surfacing a concurrent-rewrite conflict. */
+  /**
+   * Row-group size for data files. Readers fetch whole column chunks of a row group, so on a wide
+   * table the Iceberg default (128MB) makes a one-row {@code SELECT *} pull every column of
+   * hundreds of thousands of rows; a small row group bounds that to a few MB per file.
+   */
+  private static final String DATA_ROW_GROUP_SIZE_BYTES = String.valueOf(8L * 1024 * 1024);
+
   private static final int DELETE_ROWS_MAX_ATTEMPTS = 3;
 
   /** Plan-rewrite-commit passes one partition's compaction makes before surfacing a conflict. */
@@ -1117,7 +1124,9 @@ public class IcebergTableWriter {
           .withSpec(spec)
           .withPartition(partitionKey)
           .createWriterFunc(GenericParquetWriter::buildWriter)
-          .overwrite()
+          .set(org.apache.iceberg.TableProperties.PARQUET_ROW_GROUP_SIZE_BYTES,
+                DATA_ROW_GROUP_SIZE_BYTES)
+            .overwrite()
           .build();
 
       for (Record record : icebergRecords) {
@@ -1178,7 +1187,9 @@ public class IcebergTableWriter {
         .withSpec(spec)
         .withPartition(partitionKey)
         .createWriterFunc(GenericParquetWriter::buildWriter)
-        .overwrite()
+        .set(org.apache.iceberg.TableProperties.PARQUET_ROW_GROUP_SIZE_BYTES,
+                DATA_ROW_GROUP_SIZE_BYTES)
+            .overwrite()
         .build();
     long kept = 0;
     int position = 0;
@@ -2378,7 +2389,9 @@ public class IcebergTableWriter {
             }
             currentWriter = Parquet.writeData(table.io().newOutputFile(outputPath))
                 .schema(schema).withSpec(spec).withPartition(partitionKey)
-                .createWriterFunc(GenericParquetWriter::buildWriter).overwrite().build();
+                .createWriterFunc(GenericParquetWriter::buildWriter).set(org.apache.iceberg.TableProperties.PARQUET_ROW_GROUP_SIZE_BYTES,
+                DATA_ROW_GROUP_SIZE_BYTES)
+            .overwrite().build();
             currentRecordCount = 0;
           }
           currentWriter.write(record);
@@ -2737,7 +2750,9 @@ public class IcebergTableWriter {
                   .withSpec(spec)
                   .withPartition(partitionKey)
                   .createWriterFunc(GenericParquetWriter::buildWriter)
-                  .overwrite()
+                  .set(org.apache.iceberg.TableProperties.PARQUET_ROW_GROUP_SIZE_BYTES,
+                DATA_ROW_GROUP_SIZE_BYTES)
+            .overwrite()
                   .build();
               currentRecordCount = 0;
             }
