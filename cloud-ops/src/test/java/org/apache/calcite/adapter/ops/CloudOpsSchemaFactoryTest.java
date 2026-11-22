@@ -166,4 +166,51 @@ public class CloudOpsSchemaFactoryTest {
             operands);
     assertThat(schema, instanceOf(CloudOpsSchema.class));
   }
+
+  @Test public void testProvidersLeavesOutOtherCloudsSettings() {
+    Map<String, Object> operands = new HashMap<>();
+    operands.put("providers", "aws");
+    operands.put("aws.accessKeyId", "test-key");
+    operands.put("aws.secretAccessKey", "test-secret");
+    operands.put("aws.accountIds", "account1");
+    // Settings of unlisted clouds, half configured, are not validated
+    operands.put("azure.tenantId", "test-tenant");
+    operands.put("gcp.projectIds", "project1");
+
+    Schema schema =
+        new CloudOpsSchemaFactory().create(Frameworks.createRootSchema(false), "cloud_ops",
+            operands);
+    assertThat(schema, instanceOf(CloudOpsSchema.class));
+  }
+
+  @Test public void testProvidersListingHalfConfiguredCloudIsRejected() {
+    Map<String, Object> operands = new HashMap<>();
+    operands.put("providers", "aws, azure");
+    operands.put("aws.accessKeyId", "test-key");
+    operands.put("aws.secretAccessKey", "test-secret");
+    operands.put("aws.accountIds", "account1");
+    operands.put("azure.tenantId", "test-tenant");
+
+    RuntimeException e =
+        assertThrows(RuntimeException.class,
+            () -> new CloudOpsSchemaFactory().create(Frameworks.createRootSchema(false),
+                "cloud_ops", operands));
+    assertThat(e.getCause().getMessage(),
+        containsString("Azure is configured without azure.clientId"));
+  }
+
+  @Test public void testProvidersNamingCloudWithoutSettingsIsRejected() {
+    Map<String, Object> operands = new HashMap<>();
+    operands.put("providers", "gcp");
+    operands.put("aws.accessKeyId", "test-key");
+    operands.put("aws.secretAccessKey", "test-secret");
+    operands.put("aws.accountIds", "account1");
+
+    RuntimeException e =
+        assertThrows(RuntimeException.class,
+            () -> new CloudOpsSchemaFactory().create(Frameworks.createRootSchema(false),
+                "cloud_ops", operands));
+    assertThat(e.getCause().getMessage(),
+        containsString("At least one cloud provider must be configured"));
+  }
 }

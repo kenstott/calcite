@@ -27,10 +27,21 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
   @Override public Schema create(SchemaPlus parentSchema, String name,
       Map<String, Object> operand) {
     try {
+      // Extract providers configuration. A model that names its clouds configures only those:
+      // the other clouds are neither read from the environment nor validated.
+      String providersStr = getConfigValue(operand, "providers", "CLOUD_OPS_PROVIDERS");
+      List<String> providers = null;
+      if (providersStr != null) {
+        providers = parseList(providersStr);
+      }
+
       // Extract Azure configuration
       CloudOpsConfig.AzureConfig azure = null;
-      String azureTenantId = getConfigValue(operand, "azure.tenantId", "AZURE_TENANT_ID");
-      if (azureTenantId != null) {
+      String azureTenantId = isListed(providers, "azure")
+          ? getConfigValue(operand, "azure.tenantId", "AZURE_TENANT_ID") : null;
+      if (!isListed(providers, "azure")) {
+        // not named by the model's providers
+      } else if (azureTenantId != null) {
         String azureClientId = getConfigValue(operand, "azure.clientId", "AZURE_CLIENT_ID");
         String azureClientSecret = getConfigValue(operand, "azure.clientSecret", "AZURE_CLIENT_SECRET");
         String azureSubscriptionIds = getConfigValue(operand, "azure.subscriptionIds", "AZURE_SUBSCRIPTION_IDS");
@@ -52,8 +63,11 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
 
       // Extract GCP configuration
       CloudOpsConfig.GCPConfig gcp = null;
-      String gcpCredentialsPath = getConfigValue(operand, "gcp.credentialsPath", "GCP_CREDENTIALS_PATH");
-      if (gcpCredentialsPath != null) {
+      String gcpCredentialsPath = isListed(providers, "gcp")
+          ? getConfigValue(operand, "gcp.credentialsPath", "GCP_CREDENTIALS_PATH") : null;
+      if (!isListed(providers, "gcp")) {
+        // not named by the model's providers
+      } else if (gcpCredentialsPath != null) {
         String gcpProjectIds = getConfigValue(operand, "gcp.projectIds", "GCP_PROJECT_IDS");
         requireAll("GCP", "gcp.projectIds", gcpProjectIds);
         gcp = new CloudOpsConfig.GCPConfig(parseList(gcpProjectIds), gcpCredentialsPath);
@@ -64,8 +78,11 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
 
       // Extract AWS configuration
       CloudOpsConfig.AWSConfig aws = null;
-      String awsAccessKeyId = getConfigValue(operand, "aws.accessKeyId", "AWS_ACCESS_KEY_ID");
-      if (awsAccessKeyId != null) {
+      String awsAccessKeyId = isListed(providers, "aws")
+          ? getConfigValue(operand, "aws.accessKeyId", "AWS_ACCESS_KEY_ID") : null;
+      if (!isListed(providers, "aws")) {
+        // not named by the model's providers
+      } else if (awsAccessKeyId != null) {
         String awsAccountIds = getConfigValue(operand, "aws.accountIds", "AWS_ACCOUNT_IDS");
         String awsRegion = getConfigValue(operand, "aws.region", "AWS_REGION");
         String awsSecretAccessKey = getConfigValue(operand, "aws.secretAccessKey", "AWS_SECRET_ACCESS_KEY");
@@ -88,13 +105,6 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
       Boolean cacheEnabled = getBooleanConfigValue(operand, "cache.enabled", "CLOUD_OPS_CACHE_ENABLED", true);
       Integer cacheTtlMinutes = getIntegerConfigValue(operand, "cache.ttlMinutes", "CLOUD_OPS_CACHE_TTL_MINUTES", 5);
       Boolean cacheDebugMode = getBooleanConfigValue(operand, "cache.debugMode", "CLOUD_OPS_CACHE_DEBUG_MODE", false);
-
-      // Extract providers configuration
-      String providersStr = getConfigValue(operand, "providers", "CLOUD_OPS_PROVIDERS");
-      List<String> providers = null;
-      if (providersStr != null) {
-        providers = parseList(providersStr);
-      }
 
       // Validate that at least one provider is configured
       if (azure == null && gcp == null && aws == null) {
@@ -211,6 +221,19 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
       throw new IllegalArgumentException(
           provider + " is configured without " + String.join(", ", missing));
     }
+  }
+
+  /** Whether the model's providers name the cloud; every cloud is named when none are given. */
+  private static boolean isListed(List<String> providers, String cloud) {
+    if (providers == null) {
+      return true;
+    }
+    for (String p : providers) {
+      if (cloud.equalsIgnoreCase(p.trim())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private List<String> parseList(String value) {
