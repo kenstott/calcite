@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.weather;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.PipelineClock;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
@@ -140,10 +141,28 @@ public class GhcndBulkDataProvider implements DataProvider {
 
     ensureStationsLoaded();
 
-    String gzPath = cachePath("ghcnd_bulk_" + year + ".csv.gz");
+    String gzPath = cachePath(bulkFileName(year, variables.get("refresh_month")));
     downloadIfAbsent(gzPath, BULK_URL_TEMPLATE.replace("{year}", year));
 
     return new BulkIterator(streamSortedFilteredLines(gzPath, year), year);
+  }
+
+  /**
+   * Cache file name for a by_year file. NCEI keeps appending to the current year's file and
+   * revising the previous year's, and the cache is never overwritten, so those two years are
+   * keyed by the {@code refresh_month} dimension: a new month is a cache miss and a fresh
+   * download. Older years are final and keep a single name.
+   */
+  static String bulkFileName(String year, String refreshMonth) {
+    boolean open = Integer.parseInt(year) >= PipelineClock.currentYear() - 1;
+    if (open) {
+      if (refreshMonth == null || refreshMonth.isEmpty()) {
+        throw new IllegalStateException(
+            "GhcndBulkDataProvider requires 'refresh_month' dimension for open year " + year);
+      }
+      return "ghcnd_bulk_" + year + "_m" + refreshMonth + ".csv.gz";
+    }
+    return "ghcnd_bulk_" + year + ".csv.gz";
   }
 
   // ---------------------------------------------------------------------------
