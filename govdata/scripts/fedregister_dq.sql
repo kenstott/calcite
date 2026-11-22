@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Federal Register Data Quality Checks
 -- Schema: fedregister
--- Tables: fr_documents, fr_document_text, fr_significance
+-- Tables: fr_documents, fr_document_text, fr_significance, presidential_documents
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 for fr_documents exclude partition columns 'year' and 'month'.
 -- T4/T5 for fr_significance exclude partition column 'year' and nullable 'significant'
@@ -294,6 +294,88 @@ FROM (
     ON s.document_number = d.document_number
   WHERE d.document_number IS NULL
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: presidential_documents
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true));
+
+-- T2: row_count (a President issues several hundred documents a year; DQ scope is a few months)
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T2_row_count',
+  CASE WHEN n >= 20 THEN 'pass' ELSE 'fail' END,
+  n, 20, 'Row count in DQ scope'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true));
+
+-- T3: sample
+SELECT package_id, date_issued, category, location, title, length(body_text) AS body_len
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true) LIMIT 5;
+
+-- T4: all-null columns (location, subjects, notes are legitimately absent on some documents but
+-- never on all of them)
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T4_all_null_cols',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Columns that are NULL in every row'
+FROM (SELECT (COUNT(category) = 0)::INT + (COUNT(subcategory) = 0)::INT + (COUNT(location) = 0)::INT
+             + (COUNT(president) = 0)::INT + (COUNT(pages) = 0)::INT + (COUNT(notes) = 0)::INT
+             + (COUNT(subjects) = 0)::INT + (COUNT(names) = 0)::INT + (COUNT(details_link) = 0)::INT AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true));
+
+-- T5: all-same-value (president is one value inside a single administration and DQ scope;
+-- year and month are partition columns)
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T5_all_same_value',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Columns with one distinct value across all rows (president excluded)'
+FROM (SELECT (COUNT(DISTINCT category) = 1)::INT + (COUNT(DISTINCT title) = 1)::INT
+             + (COUNT(DISTINCT body_text) = 1)::INT + (COUNT(DISTINCT date_issued) = 1)::INT AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true));
+
+-- T6: primary key not null and unique
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T6_pk_unique',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'NULL or duplicated package_id'
+FROM (
+  SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true) WHERE package_id IS NULL)
+       + (SELECT COUNT(*) - COUNT(DISTINCT package_id) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true)) AS bad
+);
+
+-- T7: package_id and date agree (DCPD-<year><sequence>, or DCPD-<year><INDEX NAME> for GPO's
+-- Checklist/Digest/Nominations/Acts Approved index documents) and dates are well formed
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T7_id_and_date_format',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows with a malformed package_id or date_issued, or a year that differs from the id'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true)
+      WHERE NOT regexp_matches(package_id, '^DCPD-(\d{9}|\d{4}[A-Z]+(-[A-Z]+)?)$')
+         OR NOT regexp_matches(date_issued, '^\d{4}-\d{2}-\d{2}$')
+         OR substr(package_id, 6, 4) <> substr(date_issued, 1, 4));
+
+-- T7: text is the real document, not a stub, and carries no markup residue
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T7_body_text',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows whose body_text is under 100 characters or contains HTML tags/entities'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true)
+      WHERE length(body_text) < 100
+         OR regexp_matches(body_text, '</?[a-zA-Z]+[ >/]')
+         OR regexp_matches(body_text, '&#?[a-z0-9]+;'));
+
+-- T7: remarks are the bulk of the compilation (guards against only instruments being loaded)
+INSERT INTO dq_results
+SELECT 'fedregister', 'presidential_documents', 'T7_remarks_present',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Documents whose title starts with Remarks, Statement or Interview'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fedregister/presidential_documents', allow_moved_paths := true)
+      WHERE regexp_matches(title, '^(Remarks|Statement|Interview|The President.s News Conference)'));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

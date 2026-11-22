@@ -25,8 +25,9 @@ comment: >
   2010 to present by default (start year configurable via GOVDATA_START_YEAR). Key
   cross-reference fields: cfr_references (links to affected CFR titles/parts by
   industry), rin (Regulatory Identifier Number — tracks rulemaking lifecycle from
-  NPRM to final rule), docket_ids (links to regulations.gov comment dockets). Three
-  tables in this schema: fr_documents (full document metadata from govinfo.gov bulk
+  NPRM to final rule), docket_ids (links to regulations.gov comment dockets). Four
+  tables in this schema: presidential_documents (remarks, statements and interviews from GPO's Daily
+  Compilation of Presidential Documents), fr_documents (full document metadata from govinfo.gov bulk
   XML), fr_document_text (summary and body text of each document, from the same XML) and fr_significance (OIRA EO 12866 economic-significance flag per document,
   sourced directly from the Federal Register API's own JSON field — join to
   fr_documents on document_number). See each table for its full column list.
@@ -393,6 +394,121 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # PRESIDENTIAL_DOCUMENTS — GPO Daily Compilation of Presidential Documents (DCPD)
+  # ---------------------------------------------------------------------------
+  # The Federal Register carries only the signed instruments (executive orders, proclamations,
+  # memoranda); remarks, news conferences, interviews, statements and messages are published only
+  # in the Daily Compilation. One row per DCPD package from the govinfo API (collection CPD,
+  # no bulk-data directory exists for it). Needs API_DATA_GOV (1,000 requests/hour per key; one
+  # summary call per document, so a first historical build is slow and resumes by year+month).
+  - name: presidential_documents
+    pattern: "year=*/month=*/*.parquet"
+    partitions: *year_month_partitions
+    comment: >
+      Official text of presidential remarks, addresses, news conferences, interviews, statements,
+      messages and signing statements from GPO's Daily Compilation of Presidential Documents
+      (govinfo collection CPD), one row per document, partitioned by the year and month of
+      date_issued. Complements fr_documents, which holds only the Federal Register instruments
+      (executive orders, proclamations, memoranda). body_text is the full transcript or text as
+      published; notes is GPO's own summary of who spoke, where and when, and who was mentioned;
+      subjects is GPO's subject index for the document ('level1 / level2' entries joined by '; ');
+      names lists the people named. category is GPO's document class (e.g. Addresses and Remarks,
+      Statements by the President, Interviews With the News Media, Messages to Congress,
+      Presidential Documents / Executive Orders), subcategory the specific event. The text is
+      published roughly one week after the event, so the newest days are not present. Besides
+      speeches and statements the compilation carries GPO's periodic index documents (Checklist of
+      White House Press Releases, Digest of Other White House Announcements, Nominations Submitted
+      to the Senate, Acts Approved by the President), whose package_id is DCPD-<year><NAME> rather
+      than a nine-digit number. Coverage
+      starts at GOVDATA_START_YEAR (default 2010).
+
+    dimensions:
+      year: *fr_year_range
+      month: *fr_months
+
+    columns:
+      - name: package_id
+        type: string
+        comment: govinfo package id (e.g., DCPD-202600688); stable identifier of the document
+      - name: date_issued
+        type: string
+        nullable: false
+        comment: Date of the document (YYYY-MM-DD)
+      - name: title
+        type: string
+        nullable: false
+        comment: Document title (e.g., 'Remarks at a Campaign Rally for ... in San Antonio, Texas')
+      - name: category
+        type: string
+        nullable: true
+        comment: GPO document class (dcpdCategory level 1), e.g. Addresses and Remarks
+      - name: subcategory
+        type: string
+        nullable: true
+        comment: GPO event description (dcpdCategory level 2)
+      - name: location
+        type: string
+        nullable: true
+        comment: Place the document was delivered or issued (e.g., 'San Antonio, TX'); NULL when GPO gives none
+      - name: president
+        type: string
+        nullable: true
+        comment: President of the administration the document belongs to
+      - name: pages
+        type: integer
+        nullable: true
+        comment: Page count of the printed compilation entry
+      - name: notes
+        type: string
+        nullable: true
+        comment: GPO editorial note - who spoke, when and where, whom the President referred to, when the transcript was released
+      - name: subjects
+        type: string
+        nullable: true
+        comment: GPO subject index entries ('level1 / level2 / level3'), joined by '; '
+      - name: names
+        type: string
+        nullable: true
+        comment: People named in the document ('Last, First'), joined by '; '
+      - name: details_link
+        type: string
+        nullable: true
+        comment: govinfo details page for the document
+      - name: body_text
+        type: string
+        nullable: false
+        comment: Full text of the document; paragraphs separated by blank lines, markup removed
+
+    source:
+      # Nominal URL: the DataProvider lists packages and fetches each document itself.
+      type: http
+      url: "https://api.govinfo.gov/published/{year}-{month:02d}-01"
+      method: GET
+      response:
+        format: json
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fedregister.PresidentialDocumentsDataProvider"
+
+    materialize:
+      format: iceberg
+      partition:
+        columns: [year, month]
+      output:
+        pattern: "year={year}/month={month}/"
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fedregister"
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -406,6 +522,8 @@ constraints:
       - columns: [document_number]
         targetTable: fr_documents
         targetColumns: [document_number]
+  presidential_documents:
+    primaryKey: [package_id]
   fr_significance:
     primaryKey: [document_number]
     foreignKeys:
