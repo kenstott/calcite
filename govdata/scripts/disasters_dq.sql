@@ -619,6 +619,68 @@ FROM (SELECT AVG(CASE WHEN geometry_wkt IS NOT NULL THEN 1.0 ELSE 0.0 END) AS pc
       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_perimeters', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: nfhl_lomr (static snapshot, FEMA NFHL LOMR layer)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true));
+
+-- NFHL layer 1 held 10,217 LOMR polygons when onboarded
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T2_row_count',
+  CASE WHEN n >= 9000 THEN 'pass' ELSE 'fail' END, n, 9000, 'Expected ~10k LOMR rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL objectid rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true) WHERE objectid IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate objectid rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT objectid, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true) GROUP BY objectid HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T7_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with malformed county_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true) WHERE county_fips IS NULL OR county_fips NOT SIMILAR TO '[0-9]{5}');
+
+-- effective_date: source minimum is 1994-06-15; the newest LOMRs carry dates days ahead of the snapshot
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T7_date_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with effective_date null or outside 1990 to next year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true)
+      WHERE effective_date IS NULL OR effective_year < 1990 OR effective_year > EXTRACT(year FROM CURRENT_DATE) + 1);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nfhl_lomr', 'T7_geometry_present',
+  CASE WHEN pct >= 0.95 THEN 'pass' ELSE 'warn' END, pct, 0.95, 'Fraction of rows with non-null geometry_wkt'
+FROM (SELECT AVG(CASE WHEN geometry_wkt IS NOT NULL THEN 1.0 ELSE 0.0 END) AS pct FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfhl_lomr', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: wildfire_risk_by_county (static snapshot, new 5 Sep 2026)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
