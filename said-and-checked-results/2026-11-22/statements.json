@@ -780,10 +780,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "AP reported that CNN first disclosed the apparent hack on Nov. 21, 2026, the day of the interview, and that the FBI declined to comment. No source that was read says when the FBI discovered the hack or when the president or the White House was told of it.",
+   "evidence": [
+    {
+     "label": "MPR News (AP), Nov. 21, 2026",
+     "url": "https://www.mprnews.org/story/2026/11/21/fbi-investigating-apparent-hack-of-a-key-criminal-justice-information-database"
+    }
+   ],
+   "check_run": "q205/askamerica/2026-11-22"
   },
   {
    "id": 21,
@@ -876,10 +881,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Federal Reserve's report to Congress on credit card profitability (latest edition read: July 2019, 2018 data) shows large credit card banks earned 3.79% of assets before taxes against 1.46% for all commercial banks, and lost money in only one year (2009) of 2001 to 2018. AskAmerica's data show the commercial bank credit card interest rate at about 21% from 2023 through August 2026 (21.19% latest), but no official profitability figure after 2018 was read.",
+   "evidence": [
+    {
+     "label": "econ.fred_indicators (card interest rate TERMCBCCALLNS and charge-off rate CORCCACBS, 2023 to 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+     "askamerica": true,
+     "sql": "SELECT series, \"date\", \"value\" FROM econ.fred_indicators WHERE series IN ('TERMCBCCALLNS','CORCCACBS') AND \"date\" >= '2023-01-01' ORDER BY series, \"date\""
+    },
+    {
+     "label": "Federal Reserve, Profitability of Credit Card Operations of Depository Institutions (July 2019)",
+     "url": "https://www.federalreserve.gov/publications/files/ccprofit2019.pdf"
+    }
+   ],
+   "check_run": "q206/askamerica/2026-11-22"
   },
   {
    "id": 24,
