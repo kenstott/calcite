@@ -131,20 +131,40 @@ public class FedRegisterBulkXmlDataProvider implements StorageAwareDataProvider 
         String.format(Locale.US, "fedregister/year=%d/month=%02d", year, month));
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-    downloadAndParse(url, cachePath, rows);
+    downloadAndParse(url, cachePath, year, month, rows);
 
     LOGGER.info("fr_documents: extracted {} rows for {}-{}", rows.size(), year,
         String.format("%02d", month));
     return rows.iterator();
   }
 
-  private void downloadAndParse(String urlString, String cachePath, List<Map<String, Object>> rows)
+  /**
+   * Months still being filled in. GPO re-publishes each month's ZIP as days are added and
+   * finalises it about nine days after month end, so a cached copy of a month in this window can
+   * be partial. Older months are immutable and served from the raw cache.
+   */
+  static final int OPEN_MONTH_WINDOW = 3;
+
+  static boolean isOpenMonth(int year, int month, java.time.LocalDate today) {
+    int monthsAgo = (today.getYear() - year) * 12 + (today.getMonthValue() - month);
+    return monthsAgo < OPEN_MONTH_WINDOW;
+  }
+
+  static java.io.File downloadMonthZip(String url, String prefix, String cachePath,
+      StorageProvider sp, int year, int month) throws IOException {
+    if (isOpenMonth(year, month, java.time.LocalDate.now(java.time.ZoneOffset.UTC))) {
+      return ZipDownloadUtils.downloadZipToTempDirRefreshed(url, null, prefix, cachePath, sp);
+    }
+    return ZipDownloadUtils.downloadZipToTempDirCached(url, null, prefix, cachePath, sp);
+  }
+
+  private void downloadAndParse(String urlString, String cachePath, int year, int month,
+      List<Map<String, Object>> rows)
       throws IOException {
 
     java.io.File tempDir;
     try {
-      tempDir = ZipDownloadUtils.downloadZipToTempDirCached(
-          urlString, null, "fr-bulk", cachePath, storageProvider());
+      tempDir = downloadMonthZip(urlString, "fr-bulk", cachePath, storageProvider(), year, month);
     } catch (IOException e) {
       if (e.getMessage() != null && e.getMessage().contains("HTTP 404")) {
         LOGGER.info("FR bulk ZIP not yet available (404): {}", urlString);
