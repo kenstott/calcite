@@ -1819,6 +1819,128 @@ partitionedTables:
         incrementalKeys: [listing]
         overwritePartitions: true
 
+  # ==========================================================================
+  # ENFORCEMENT ANNUAL RESULTS (SEC annual enforcement-results press releases)
+  # ==========================================================================
+  - name: enforcement_annual_results
+    pattern: "release=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: release
+          type: VARCHAR
+    comment: >
+      The SEC Division of Enforcement's published annual totals, one row per federal fiscal year
+      (October through September): actions filed split into standalone actions (civil actions plus
+      standalone administrative proceedings), follow-on administrative proceedings and delinquent
+      filings; trading suspensions; money ordered split into penalties and disgorgement (the
+      SEC's figure includes prejudgment interest from FY2026 on); and money distributed to harmed
+      investors. Use for year-over-year enforcement volume and money-ordered trends. Covers FY2019
+      to FY2024 (from the FY2024 release's six-year table, which carries FY2022 as revised to 463
+      standalone actions), FY2025 and FY2026. FY2025's addendum table is an image, so that row has
+      only what the release text states (action counts and the headline money total, which
+      includes $14.9 billion from one case, SEC v. Stanford International Bank); its penalties,
+      disgorgement, delinquent filings and distributions are null. offsets_millions (disgorgement
+      deemed satisfied by a court order in a separate non-SEC action) is published from FY2026
+      only, and trading_suspensions only where the release text states it (FY2026). Amounts are
+      in millions of dollars, rounded as the SEC rounds them, so components may not sum to the
+      total. Counts differ from sec.enforcement_actions, which counts listing rows. The SEC's
+      release for each year is a fixed entry in this table's dimension list; add the next fiscal
+      year's release slug when the SEC publishes it. Source: sec.gov press releases and their
+      addendum PDFs (keyless).
+
+    dimensions:
+      release:
+        - "2024-186"
+        - "2026-34"
+        - "2026-113-sec-announces-enforcement-annual-results-fiscal-year-2026"
+
+    columns:
+      - name: fiscal_year
+        type: int
+        nullable: false
+        comment: Federal fiscal year (October-September) the totals cover; FY2026 ended 2026-09-30
+      - name: standalone_actions
+        type: int
+        nullable: true
+        comment: Standalone enforcement actions filed (civil actions plus standalone administrative proceedings, excluding delinquent filings)
+      - name: follow_on_actions
+        type: int
+        nullable: true
+        comment: Follow-on administrative proceedings filed (bars or suspensions based on a criminal conviction, injunction or other order)
+      - name: delinquent_filings
+        type: int
+        nullable: true
+        comment: Delinquent-filings proceedings filed; null for FY2025, whose release text does not state it
+      - name: total_actions
+        type: int
+        nullable: false
+        comment: Total enforcement actions filed (standalone plus follow-on plus delinquent filings)
+      - name: trading_suspensions
+        type: int
+        nullable: true
+        comment: Trading suspensions instituted, where the release text states it (FY2026); null otherwise
+      - name: penalties_millions
+        type: bigint
+        nullable: true
+        comment: Civil penalties ordered, in millions of dollars; null for FY2025
+      - name: disgorgement_millions
+        type: bigint
+        nullable: true
+        comment: Disgorgement ordered, in millions of dollars (includes prejudgment interest from FY2026); null for FY2025
+      - name: total_money_ordered_millions
+        type: bigint
+        nullable: true
+        comment: Total money ordered, in millions of dollars, as published (for FY2025 the release's headline figure)
+      - name: offsets_millions
+        type: bigint
+        nullable: true
+        comment: Disgorgement deemed satisfied by a court order in a separate non-SEC action, in millions; published from FY2026
+      - name: distributed_to_investors_millions
+        type: bigint
+        nullable: true
+        comment: Money distributed to harmed investors, in millions of dollars; null for FY2025
+      - name: release_url
+        type: string
+        nullable: false
+        comment: URL of the SEC press release the row was parsed from
+      - name: addendum_url
+        type: string
+        nullable: false
+        comment: URL of the release's addendum PDF
+
+    source:
+      type: http
+      url: "https://www.sec.gov/newsroom/press-releases/{release}"
+      method: GET
+      parallel: 1
+      headers:
+        User-Agent: *edgar_user_agent
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.sec.SecEnforcementResultsTransformer"
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "release=*/"
+      partition:
+        columns: [release]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: enforcement_annual_results
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [release]
+        incrementalKeys: [release]
+        overwritePartitions: true
+
 
   # ==========================================================================
   # VECTORIZED CHUNKS (Optional)

@@ -49,6 +49,7 @@ officials.presidential_results_by_district
 patents.patent_publication_applicants
 patents.patent_publication_cpc
 sec.enforcement_actions
+sec.enforcement_annual_results
 transport.barge_lock_movements_monthly
 transport.barge_rates_weekly
 transport.usace_vessel_inventory
