@@ -814,6 +814,183 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # EPA UCMR 5 — Fifth Unregulated Contaminant Monitoring Rule occurrence data
+  # ---------------------------------------------------------------------------
+  - name: ucmr_results
+    freshness:
+      type: last_modified
+    pattern: "type=ucmr_results/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      EPA Fifth Unregulated Contaminant Monitoring Rule (UCMR 5) occurrence data —
+      one row per analytical result: a public water system sampling point, a sample
+      and one of 30 contaminants (29 PFAS plus lithium), collected January 2023
+      through 2026 at every large system (serving more than 10,000 people) and a
+      nationally representative sample of small systems (about 10,300 systems).
+      Non-detects are rows too: detected = false, result_value null, and mrl is the
+      minimum reporting level the result was below. About 3% of rows are detections,
+      so filter detected = true for occurrence, and compare result_value (ug/L)
+      against a health threshold for exceedances: a detection is not an MCL
+      exceedance (the PFOA and PFOS MCLs are 0.004 ug/L each, final rule 2024;
+      PFHxS, PFNA and HFPO-DA are 0.010 ug/L each). Join pwsid to drinking_water for
+      population_served_count, and to drinking_water_violations. Keyless bulk file
+      (UCMR5_All.txt in ucmr5-occurrence-data.zip on the EPA UCMR occurrence-data
+      page), refreshed by EPA as laboratories report; a full snapshot each load.
+      Earlier UCMR rounds (1-4, 2001-2020, different analytes) are separate zips on
+      the same page and are not loaded yet.
+
+    dimensions:
+      type:
+        - ucmr_results
+
+    columns:
+      - name: pwsid
+        type: string
+        nullable: false
+        expression: 'src."PWSID"'
+        comment: Public Water System id (FK to drinking_water.pwsid)
+      - name: pws_name
+        type: string
+        nullable: true
+        expression: 'CASE WHEN src."PWSName" LIKE ''"%"'' AND length(src."PWSName") > 1 THEN replace(substr(src."PWSName", 2, length(src."PWSName") - 2), ''""'', ''"'') ELSE src."PWSName" END'
+        comment: Public water system name
+      - name: system_size
+        type: string
+        nullable: true
+        expression: 'src."Size"'
+        comment: UCMR system size (L large, serving more than 10,000 people; S small, serving 10,000 or fewer)
+      - name: facility_id
+        type: string
+        nullable: true
+        expression: 'src."FacilityID"'
+        comment: State-assigned water facility id within the system. Null for the one facility EPA publishes with the id "NA" (Virgin Valley Water District, NV0000167, Treatment Plant #1A, 60 rows), because the CSV reader treats the literal NA as a null marker; facility_name still identifies it
+      - name: facility_name
+        type: string
+        nullable: true
+        expression: 'CASE WHEN src."FacilityName" LIKE ''"%"'' AND length(src."FacilityName") > 1 THEN replace(substr(src."FacilityName", 2, length(src."FacilityName") - 2), ''""'', ''"'') ELSE src."FacilityName" END'
+        comment: Water facility name
+      - name: facility_water_type
+        type: string
+        nullable: true
+        expression: 'src."FacilityWaterType"'
+        comment: Facility water type (GW groundwater, SW surface water, GU groundwater under direct influence of surface water, MX mixed)
+      - name: sampling_point_id
+        type: string
+        nullable: false
+        expression: 'src."SamplePointID"'
+        comment: Sampling point id within the facility
+      - name: sampling_point_name
+        type: string
+        nullable: true
+        expression: 'CASE WHEN src."SamplePointName" LIKE ''"%"'' AND length(src."SamplePointName") > 1 THEN replace(substr(src."SamplePointName", 2, length(src."SamplePointName") - 2), ''""'', ''"'') ELSE src."SamplePointName" END'
+        comment: Sampling point description
+      - name: sampling_point_type
+        type: string
+        nullable: true
+        expression: 'src."SamplePointType"'
+        comment: Sampling point type; EP (entry point to the distribution system) for every UCMR 5 row
+      - name: sample_id
+        type: string
+        nullable: false
+        expression: 'src."SampleID"'
+        comment: Laboratory sample id; with pwsid, facility_id, sampling_point_id, contaminant and collection_date it identifies a result row
+      - name: sample_event_code
+        type: string
+        nullable: true
+        expression: 'src."SampleEventCode"'
+        comment: Sample event code within the monitoring period (e.g. SE1 to SE4)
+      - name: collection_date
+        type: date
+        nullable: false
+        expression: 'CAST(strptime(src."CollectionDate", ''%m/%d/%Y'') AS DATE)'
+        comment: Sample collection date
+      - name: year
+        type: integer
+        nullable: false
+        expression: 'EXTRACT(year FROM strptime(src."CollectionDate", ''%m/%d/%Y''))'
+        comment: Calendar year of sample collection
+      - name: contaminant
+        type: string
+        nullable: false
+        expression: 'src."Contaminant"'
+        comment: Contaminant abbreviation (PFOA, PFOS, PFHxS, PFNA, HFPO-DA, PFBS and others, or lithium)
+      - name: mrl
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."MRL" AS DOUBLE)'
+        comment: Minimum reporting level in ug/L; a result below it is a non-detect
+      - name: method_id
+        type: string
+        nullable: true
+        expression: 'src."MethodID"'
+        comment: Analytical method (EPA 533, EPA 537.1, EPA 200.7)
+      - name: detected
+        type: boolean
+        nullable: false
+        expression: 'src."AnalyticalResultsSign" = ''='''
+        comment: True when the contaminant was detected at or above the MRL (result sign "="); false when the result was below the MRL
+      - name: result_value
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."AnalyticalResultValue" AS DOUBLE)'
+        comment: Measured concentration in ug/L (micrograms per liter); null for non-detects
+      - name: monitoring_requirement
+        type: string
+        nullable: true
+        expression: 'src."MonitoringRequirement"'
+        comment: Monitoring requirement code; AM (assessment monitoring) for every UCMR 5 row
+      - name: epa_region
+        type: string
+        nullable: true
+        expression: 'src."Region"'
+        comment: EPA region (1-10)
+      - name: state_code
+        type: string
+        nullable: true
+        expression: 'src."State"'
+        comment: State or territory code as published (two-digit FIPS-style code, or a tribal/territory code)
+
+    source:
+      type: http
+      url: "https://www.epa.gov/system/files/other-files/2023-08/ucmr5-occurrence-data.zip"
+      method: GET
+      extractPattern: "UCMR5_All.txt"
+      response:
+        format: csv
+        hasHeader: true
+        delimiter: "\t"
+        # Names hold literal inch marks (48" Line) mid-field, which RFC4180 parsing reads as an
+        # opening quote and swallows the rest of the line; the few fields EPA wraps in quotes are
+        # unwrapped in the column expressions instead.
+        quoted: false
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=ucmr_results/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: ucmr_results
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # EPA TRI — per-year Basic Data File CSV (delta by year)
   # ---------------------------------------------------------------------------
   - name: tri_releases
