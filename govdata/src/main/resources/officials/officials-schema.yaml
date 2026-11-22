@@ -1697,6 +1697,127 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ---------------------------------------------------------------------------
+  # PRESIDENTIAL_RESULTS_BY_DISTRICT — presidential vote by congressional district, The Downballot
+  # ---------------------------------------------------------------------------
+  - name: presidential_results_by_district
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=presidential_results_by_district/*.parquet"
+    partitions: *type_partition
+    comment: >
+      Presidential vote by U.S. House district: the 2024 Harris v Trump vote for all 435 districts
+      on the lines adopted for the 2026 midterms (district_lines '2026', includes the 2025-26
+      mid-decade redraws in NC, TX, MO, OH, CA and others as The Downballot has recalculated them;
+      the source is updated as maps change and a new fetch replaces the table), the 2020 Biden v
+      Trump vote on the same 2026 lines where the source has recomputed it (about 262 of 435
+      districts at the time of writing; blank in the source elsewhere, not filled here), and the
+      2024 vote on the lines used in the 2024 election (district_lines '2024', 435 rows). One row
+      per map, election year and district with exact vote counts, other-candidate votes, and
+      computed percentages and margin. other_votes is total minus the two major candidates; the source's own Other column differs from that by one vote in ten NC and TN districts. Use it for partisan lean of a district ('Trump carried
+      NC-03 by 13.6 points on the new map'), comparing old and new lines, and Cook-style PVI
+      inputs; officials.house_race_results has the House vote but no presidential vote, and
+      presidential_state_returns is state level only. Not published in this table: 2008-2016
+      presidential results by district (the same publisher has them as percent-only sheets),
+      2020 on the 2024 lines, and a district's incumbent. Source: calculations by The Downballot
+      (the-downballot.com, 'The Downballot's calculations of presidential election results by
+      congressional district'), published as public Google Sheets; it is a volunteer-compiled
+      private publication built from county and precinct returns, not a government file, so
+      re-verify if the sheet moves. Joins: state_postal to geo.state_ref; district to
+      officials.house_race_results.
+
+    dimensions:
+      type:
+        - presidential_results_by_district
+
+    columns:
+      - name: district_lines
+        type: string
+        nullable: false
+        comment: "Which congressional district map the votes are aggregated onto: '2026' the lines adopted for the 2026 midterms (includes the 2025-26 mid-decade redraws; changes as maps change) or '2024' the lines used in the 2024 election; PK component"
+      - name: election_year
+        type: integer
+        nullable: false
+        comment: "Presidential election year: 2024 for both maps, 2020 for the 2026 map only (and only for the districts the source has recomputed); PK component"
+      - name: district_code
+        type: string
+        nullable: false
+        comment: "STATE-NN district label as published, e.g. NC-03, or STATE-AL for an at-large state (AK-AL); PK component"
+      - name: state_postal
+        type: string
+        nullable: false
+        comment: "2-letter state postal code (join key to geo.state_ref)"
+      - name: district
+        type: string
+        nullable: false
+        comment: "District number as 2 digits ('03') or 'AL' for an at-large state; compare to officials.house_race_results district"
+      - name: dem_candidate
+        type: string
+        nullable: false
+        comment: "Democratic presidential candidate that year (Kamala Harris 2024, Joe Biden 2020)"
+      - name: rep_candidate
+        type: string
+        nullable: false
+        comment: "Republican presidential candidate that year (Donald Trump)"
+      - name: dem_votes
+        type: long
+        nullable: false
+        comment: "Votes for the Democratic candidate inside the district lines"
+      - name: rep_votes
+        type: long
+        nullable: false
+        comment: "Votes for the Republican candidate inside the district lines"
+      - name: other_votes
+        type: long
+        nullable: false
+        comment: "Votes for all other candidates: total_votes minus dem_votes minus rep_votes"
+      - name: total_votes
+        type: long
+        nullable: false
+        comment: "Presidential votes cast inside the district lines as published"
+      - name: dem_pct
+        type: double
+        nullable: false
+        comment: "dem_votes as a percent of total_votes, 2 decimals (computed here from the votes)"
+      - name: rep_pct
+        type: double
+        nullable: false
+        comment: "rep_votes as a percent of total_votes, 2 decimals (computed here from the votes)"
+      - name: margin_pct
+        type: double
+        nullable: false
+        comment: "dem_pct minus rep_pct computed from the votes; negative means the Republican carried the district"
+
+    source:
+      type: http
+      # Placeholder URL: PresidentialByDistrictProvider reads two Google Sheets CSV exports
+      # through rawCache itself.
+      url: "https://docs.google.com/spreadsheets/d/1eZfaFI-c-PFOoKx1-zZA2MP0_dxRq_LVK0re3BOQqy0/export?format=csv&gid=1491069057"
+      method: GET
+      response:
+        format: csv  # ignored: PresidentialByDistrictProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.officials.PresidentialByDistrictProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=presidential_results_by_district/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: presidential_results_by_district
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
   # GOVERNOR_ELECTION_RESULTS — statewide governor returns, Cha and Kuriwaki 2006-2024
   # ---------------------------------------------------------------------------
   - name: governor_election_results

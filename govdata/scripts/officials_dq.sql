@@ -1641,3 +1641,72 @@ SELECT 'officials', 'presidential_state_returns', 'T8_known_values',
   CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END,
   n, 4, 'Carter AL 1976 659,170; Trump MI 2016 2,279,543; Biden GA 2020 2,473,633; Trump PA 2024 3,543,308 (votes as published by the Lab)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_state_returns', allow_moved_paths := true) WHERE (year = 1976 AND state_postal = 'AL' AND candidate = 'CARTER, JIMMY' AND candidate_votes = 659170) OR (year = 2016 AND state_postal = 'MI' AND candidate = 'TRUMP, DONALD J.' AND candidate_votes = 2279543) OR (year = 2020 AND state_postal = 'GA' AND candidate = 'BIDEN, JOSEPH R. JR' AND candidate_votes = 2473633) OR (year = 2024 AND state_postal = 'PA' AND candidate = 'TRUMP, DONALD J.' AND candidate_votes = 3543308));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: presidential_results_by_district
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_results_by_district', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_results_by_district', 'T2_row_count',
+  CASE WHEN n >= 1100 THEN 'pass' ELSE 'fail' END,
+  n, 1100, '870 rows (435 districts on 2024 and 2026 lines for 2024) plus the 2020 rows on the 2026 lines (about 262)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_results_by_district', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value (rep_candidate is Donald Trump in every row by design)
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_results_by_district', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No constant columns' ELSE 'Constant columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true))
+    WHERE approx_unique = 1
+      AND column_name NOT IN ('type', 'rep_candidate')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_results_by_district', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'No null PK component (district_lines, election_year, district_code)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true) WHERE district_lines IS NULL OR election_year IS NULL OR district_code IS NULL);
+
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_results_by_district', 'T7_expected_values',
+  CASE WHEN n = 3 THEN 'pass' ELSE 'fail' END,
+  n, 3, 'NC-03 on the 2026 lines (147727 Harris, 194854 Trump, 345647 total), AK-AL on the 2024 lines (140026 / 184458), and 870 rows for 2024 (435 per map)'
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true) WHERE district_lines='2026' AND election_year=2024 AND district_code='NC-03' AND dem_votes=147727 AND rep_votes=194854 AND total_votes=345647) + (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true) WHERE district_lines='2024' AND election_year=2024 AND district_code='AK-AL' AND dem_votes=140026 AND rep_votes=184458) + (SELECT CASE WHEN COUNT(*) = 870 THEN 1 ELSE 0 END FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true) WHERE election_year = 2024) AS n);
+
+INSERT INTO dq_results
+SELECT 'officials', 'presidential_results_by_district', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'No duplicate (district_lines, election_year, district_code)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/presidential_results_by_district', allow_moved_paths := true) GROUP BY district_lines, election_year, district_code HAVING COUNT(*) > 1));
