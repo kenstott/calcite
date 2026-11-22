@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Urban Milwaukee article's claims about Wisconsin utility rate hikes, ownership and residential electricity costs are mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Urban Milwaukee article's claims about Wisconsin utility rate hikes, ownership and residential electricity costs are mostly accurate.</h1>
+<p class="subtitle">EIA-861 via energy.eia_utility_annual (loaded 2012-2023); PSC order via WPR. Overall: 1 Pinocchio</p>
+<p class="under-review"><span>Article under review</span><a href="https://urbanmilwaukee.com/2026/11/11/wisconsins-for-profit-electric-utilities-hike-rates-more-than-public-utilities/">https://urbanmilwaukee.com/2026/11/11/wisconsins-for-profit-electric-utilities-hike-rates-more-than-public-utilities/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Wisconsin residential revenue per kWh by ownership, 2020-2023 (ce…</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="13" style="font-size:13px" font-weight="600" text-anchor="middle">Aggregate residential cents/kWh (balanced panel)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="60" y1="252" x2="390" y2="252" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="52" y="256" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="203" x2="390" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="52" y="207" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+      <line class="grid" x1="60" y1="154" x2="390" y2="154" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="52" y="158" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="105" x2="390" y2="105" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="52" y="109" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">15</text>
+      <line class="grid" x1="60" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="252" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="252" x2="390" y2="252" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="154" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 154)">cents per kWh</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2020" class="tick" x="101.25" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="183.75" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="266.25" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="348.75" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+    </g>
+    <g id="p1-series-investor-owned" class="series">
+      <path id="p1-line-investor-owned" class="line" d="M 101.25 108.53 L 183.75 106.37 L 266.25 94.42 L 348.75 79.42" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>2020 — Investor-owned: 14.64</title>
+        <circle id="p1-mark-investor-owned-2020" class="point" cx="101.25" cy="108.53" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="101.25" cy="108.53" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Investor-owned: 14.86</title>
+        <circle id="p1-mark-investor-owned-2021" class="point" cx="183.75" cy="106.37" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="183.75" cy="106.37" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Investor-owned: 16.08</title>
+        <circle id="p1-mark-investor-owned-2022" class="point" cx="266.25" cy="94.42" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="266.25" cy="94.42" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Investor-owned: 17.61</title>
+        <circle id="p1-mark-investor-owned-2023" class="point" cx="348.75" cy="79.42" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="348.75" cy="79.42" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-cooperative" class="series">
+      <path id="p1-line-cooperative" class="line" d="M 101.25 111.57 L 183.75 111.76 L 266.25 106.76 L 348.75 102.26" fill="none" stroke="#ea580c" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>2020 — Cooperative: 14.33</title>
+        <circle id="p1-mark-cooperative-2020" class="point" cx="101.25" cy="111.57" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="101.25" cy="111.57" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Cooperative: 14.31</title>
+        <circle id="p1-mark-cooperative-2021" class="point" cx="183.75" cy="111.76" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="183.75" cy="111.76" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Cooperative: 14.82</title>
+        <circle id="p1-mark-cooperative-2022" class="point" cx="266.25" cy="106.76" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="266.25" cy="106.76" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Cooperative: 15.28</title>
+        <circle id="p1-mark-cooperative-2023" class="point" cx="348.75" cy="102.26" r="3" fill="#ea580c"/>
+        <circle class="hit" cx="348.75" cy="102.26" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-municipal" class="series">
+      <path id="p1-line-municipal" class="line" d="M 101.25 142.73 L 183.75 137.93 L 266.25 128.62 L 348.75 130.77" fill="none" stroke="#059669" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>2020 — Municipal: 11.15</title>
+        <circle id="p1-mark-municipal-2020" class="point" cx="101.25" cy="142.73" r="3" fill="#059669"/>
+        <circle class="hit" cx="101.25" cy="142.73" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Municipal: 11.64</title>
+        <circle id="p1-mark-municipal-2021" class="point" cx="183.75" cy="137.93" r="3" fill="#059669"/>
+        <circle class="hit" cx="183.75" cy="137.93" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Municipal: 12.59</title>
+        <circle id="p1-mark-municipal-2022" class="point" cx="266.25" cy="128.62" r="3" fill="#059669"/>
+        <circle class="hit" cx="266.25" cy="128.62" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Municipal: 12.37</title>
+        <circle id="p1-mark-municipal-2023" class="point" cx="348.75" cy="130.77" r="3" fill="#059669"/>
+        <circle class="hit" cx="348.75" cy="130.77" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-investor-owned" x="65.50" y="296" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-investor-owned" class="legend-label" x="81.50" y="305" fill="#1f2328" font-size="11" style="font-size:11px">Investor-owned</text>
+      <rect id="p1-legend-swatch-cooperative" x="182.50" y="296" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-cooperative" class="legend-label" x="198.50" y="305" fill="#1f2328" font-size="11" style="font-size:11px">Cooperative</text>
+      <rect id="p1-legend-swatch-municipal" x="279.50" y="296" width="11" height="11" fill="#059669"/>
+      <text id="p1-legend-label-municipal" class="legend-label" x="295.50" y="305" fill="#1f2328" font-size="11" style="font-size:11px">Municipal</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:60559/a/90d9ba927cd915e9f98145b3c9023496.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p><b>1 Pinocchio.</b> The article's numbers reproduce. In EIA-861 data (warehouse, 2012-2023), investor-owned utilities raised residential revenue per kWh 20.3% from 2020 to 2023 versus 6.7% for cooperatives and 10.9% for municipals; the article's 2020 base levels and customer shares match. 2024-2025 endpoints are not in the warehouse and were not verified. The framing is the weakness: it implies ownership drives the gap while scale, density, taxes and generation ownership are uncontrolled, and it omits that the PSC trimmed requested hikes (We Energies 3.9% and 3.5%, return cut 9.8% to 9.5%).</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 94/100 — honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>8 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>7</strong> true &middot; <strong>1</strong> partially false &middot; <strong>8</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>However, the investor-owned utilities have raised their rates by about twice as much as the municipally and cooperatively owned utilities.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-partially-false"><td>8</td><td>Costs like labor inflation, commodity prices and grid maintenance presumably affect all utilities more or less equally.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>2</td><td>Last week, the Wisconsin state utility regulator approved two more years of rate hikes for two of the state's largest for-profit electric utilities.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>3</td><td>Until 2020, Wisconsin's investor-owned utilities closely matched the cost of cooperatives, but they've since diverged.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>4</td><td>In total, 86.6% of these residential customers bought power from an investor-owned company, 8.1% from a municipal utility and 5.3% from a cooperative.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>5</td><td>Municipal utilities saved this customer about $488 in 2025, on average, relative to an investor-owned utility.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>6</td><td>Assuming the average residential consumption of 8,000 kWh, the electric bill since 2020 has grown $391 for customers of We Energies, $408 for Alliant Energy, $276 for the Wisconsin Public Service Corp. and $177 for Xcel Energy.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>7</td><td>The average residential customer in Wisconsin bought just over 8,000 kWh in 2025.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-partially-false"><td>8</td><td>Costs like labor inflation, commodity prices and grid maintenance presumably affect all utilities more or less equally.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>7</td><td>The average residential customer in Wisconsin bought just over 8,000 kWh in 2025.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>6</td><td>Assuming the average residential consumption of 8,000 kWh, the electric bill since 2020 has grown $391 for customers of We Energies, $408 for Alliant Energy, $276 for the Wisconsin Public Service Corp. and $177 for Xcel Energy.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>5</td><td>Municipal utilities saved this customer about $488 in 2025, on average, relative to an investor-owned utility.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>4</td><td>In total, 86.6% of these residential customers bought power from an investor-owned company, 8.1% from a municipal utility and 5.3% from a cooperative.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>3</td><td>Until 2020, Wisconsin's investor-owned utilities closely matched the cost of cooperatives, but they've since diverged.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>2</td><td>Last week, the Wisconsin state utility regulator approved two more years of rate hikes for two of the state's largest for-profit electric utilities.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>1</td><td>However, the investor-owned utilities have raised their rates by about twice as much as the municipally and cooperatively owned utilities.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>6</td><td>Assuming the average residential consumption of 8,000 kWh, the electric bill since 2020 has grown $391 for customers of We Energies, $408 for Alliant Energy, $276 for the Wisconsin Public Service Corp. and $177 for Xcel Energy.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-partially-false"><td>8</td><td>Costs like labor inflation, commodity prices and grid maintenance presumably affect all utilities more or less equally.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>1</td><td>However, the investor-owned utilities have raised their rates by about twice as much as the municipally and cooperatively owned utilities.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>4</td><td>In total, 86.6% of these residential customers bought power from an investor-owned company, 8.1% from a municipal utility and 5.3% from a cooperative.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>2</td><td>Last week, the Wisconsin state utility regulator approved two more years of rate hikes for two of the state's largest for-profit electric utilities.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>5</td><td>Municipal utilities saved this customer about $488 in 2025, on average, relative to an investor-owned utility.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>7</td><td>The average residential customer in Wisconsin bought just over 8,000 kWh in 2025.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>3</td><td>Until 2020, Wisconsin's investor-owned utilities closely matched the cost of cooperatives, but they've since diverged.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-partially-false"><td>8</td><td>Costs like labor inflation, commodity prices and grid maintenance presumably affect all utilities more or less equally.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>2</td><td>Last week, the Wisconsin state utility regulator approved two more years of rate hikes for two of the state's largest for-profit electric utilities.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>3</td><td>Until 2020, Wisconsin's investor-owned utilities closely matched the cost of cooperatives, but they've since diverged.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>4</td><td>In total, 86.6% of these residential customers bought power from an investor-owned company, 8.1% from a municipal utility and 5.3% from a cooperative.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>5</td><td>Municipal utilities saved this customer about $488 in 2025, on average, relative to an investor-owned utility.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>6</td><td>Assuming the average residential consumption of 8,000 kWh, the electric bill since 2020 has grown $391 for customers of We Energies, $408 for Alliant Energy, $276 for the Wisconsin Public Service Corp. and $177 for Xcel Energy.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>7</td><td>The average residential customer in Wisconsin bought just over 8,000 kWh in 2025.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>1</td><td>However, the investor-owned utilities have raised their rates by about twice as much as the municipally and cooperatively owned utilities.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>1</td><td>However, the investor-owned utilities have raised their rates by about twice as much as the municipally and cooperatively owned utilities.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>3</td><td>Until 2020, Wisconsin's investor-owned utilities closely matched the cost of cooperatives, but they've since diverged.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>4</td><td>In total, 86.6% of these residential customers bought power from an investor-owned company, 8.1% from a municipal utility and 5.3% from a cooperative.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>5</td><td>Municipal utilities saved this customer about $488 in 2025, on average, relative to an investor-owned utility.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>6</td><td>Assuming the average residential consumption of 8,000 kWh, the electric bill since 2020 has grown $391 for customers of We Energies, $408 for Alliant Energy, $276 for the Wisconsin Public Service Corp. and $177 for Xcel Energy.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-true"><td>7</td><td>The average residential customer in Wisconsin bought just over 8,000 kWh in 2025.</td><td><strong>true</strong></td><td>Checked against: <code>energy.eia_utility_annual</code>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></td></tr><tr class="verdict-partially-false"><td>8</td><td>Costs like labor inflation, commodity prices and grid maintenance presumably affect all utilities more or less equally.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr><tr class="verdict-true"><td>2</td><td>Last week, the Wisconsin state utility regulator approved two more years of rate hikes for two of the state's largest for-profit electric utilities.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; However, the investor-owned utilities have raised their rates by about twice as much as the municipally and cooperatively owned utilities.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2020-2023 IOU +20.3%, co-op +6.7%, muni +10.9% <code>energy.eia_utility_annual</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / 2012-2023</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Why</dt><dd>2020-2023 IOU +20.3%, co-op +6.7%, muni +10.9%; the article's 2025 figures (29/15/14%) continue the pattern; 2025 not in warehouse.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT report_year, entity_type, sum(revenue_residential_thousand)/sum(sales_residential_mwh) FROM energy.eia_utility_annual WHERE state_abbr='WI' AND service_type='Bundled' GROUP BY report_year, entity_type</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Last week, the Wisconsin state utility regulator approved two more years of rate hikes for two of the state's largest for-profit electric utilities.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>PSC approved Nov 6, 2026: We Energies 3.9% (2027), 3.5% (2028); WPS 0.3%, 2.9%; return cut 9.8% to 9.5%<ul class="claim-sources"><li><a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></li></ul></dd>
+<dt>Web searches run</dt><dd>WPR PSC approves We Energies WPS rate increases November 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Until 2020, Wisconsin's investor-owned utilities closely matched the cost of cooperatives, but they've since diverged.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2020: IOU 14.64c vs co-op 14.33c; 2023: 17.61c vs 15.28c <code>energy.eia_utility_annual</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / 2012-2023</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see central claim query</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; In total, 86.6% of these residential customers bought power from an investor-owned company, 8.1% from a municipal utility and 5.3% from a cooperative.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2023 panel: IOU 86.4%, muni ~8.1%, co-op ~5.5% <code>energy.eia_utility_annual</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / 2012-2023</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see central claim query</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Municipal utilities saved this customer about $488 in 2025, on average, relative to an investor-owned utility.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2023 IOU-muni gap 5.24c/kWh = $419 per 8,000 kWh <code>energy.eia_utility_annual</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / 2012-2023</dd>
+<dt>Why</dt><dd>Arithmetic 1513-1025=488; warehouse 2023 gap IOU 17.61c vs muni 12.37c = 5.2c x 8000 = $419, same direction and order of magnitude; 2025 not loaded.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see central claim query</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Assuming the average residential consumption of 8,000 kWh, the electric bill since 2020 has grown $391 for customers of We Energies, $408 for Alliant Energy, $276 for the Wisconsin Public Service Corp. and $177 for Xcel Energy.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2020-2023 rate rises of 3.3c, 2.8c, 2.8c, 2.7c <code>energy.eia_utility_annual</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / 2012-2023</dd>
+<dt>Why</dt><dd>2020-2023 rises (WEPCO 15.65 to 18.96c, WPL 13.37 to 16.14c, WPS 13.75 to 16.57c, NSP 13.34 to 16.03c) are consistent in direction and ordering; 2025 not loaded. Xcel's implied 2025 rate would sit below its 2023 rate, which is odd but unverified.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see utility-level query</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; The average residential customer in Wisconsin bought just over 8,000 kWh in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2023: WEPCO 7,500; WPS 7,246; WPL 8,289; NSP 8,667 kWh <code>energy.eia_utility_annual</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / 2012-2023</dd>
+<dt>Why</dt><dd>2023 customer-weighted usage for large IOUs 7,246-8,667 kWh; consistent with about 8,000.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see utility-level query</code></pre></details>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#8 &middot; <strong>partially false</strong> &mdash; Costs like labor inflation, commodity prices and grid maintenance presumably affect all utilities more or less equally.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Regulator allowed IOU return of 9.8% (cut to 9.5%); municipals buy wholesale and pay no income/property taxes<ul class="claim-sources"><li><a href="https://www.wpr.org/energy/regulators-rate-hikes-we-energies-wisconsin-public-service">WPR</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says costs hit all utilities about equally; the evidence shows ownership is confounded with scale, density, generation ownership, taxes and allowed return, so cost exposure differs (the author hedges with 'presumably').</dd>
+<dt>Web searches run</dt><dd>Wisconsin municipal utility vs investor-owned utility cost differences taxes generation</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>10%</strong> &mdash; Appears in a reader comment (pandemic usage drop), not in the article's own text</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>2024-2025 figures verified</strong>: Warehouse EIA-861 ends 2023; 2025 not independently fetched.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 16 rows — 1032 ms</summary><pre><code>WITH w AS (SELECT * FROM energy.eia_utility_annual WHERE state_abbr='WI' AND report_year BETWEEN 2012 AND 2023 AND customers_residential&gt;0 AND sales_residential_mwh&gt;0 AND service_type='Bundled'), full_ AS (SELECT utility_id FROM w WHERE report_year IN (2020,2023) GROUP BY utility_id HAVING count(*)=2) SELECT report_year, entity_type, count(*) n, sum(customers_residential) cust, sum(revenue_residential_thousand)/sum(sales_residential_mwh) AS cents_per_kwh_x10 FROM w WHERE utility_id IN (SELECT utility_id FROM full_) AND report_year IN (2020,2021,2022,2023) GROUP BY report_year, entity_type ORDER BY entity_type, report_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 14 rows — 651 ms</summary><pre><code>SELECT utility_name, entity_type, report_year, customers_residential, round(revenue_residential_thousand/sales_residential_mwh,4) AS usd_kwh, round(sales_residential_mwh*1000/customers_residential) kwh_per_cust FROM energy.eia_utility_annual WHERE state_abbr='WI' AND report_year IN (2020,2023) AND service_type='Bundled' AND (customers_residential&gt;100000 OR utility_name ILIKE '%Cedarburg%' OR utility_name ILIKE '%Grafton%') ORDER BY utility_name, report_year</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

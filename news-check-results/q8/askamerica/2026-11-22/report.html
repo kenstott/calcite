@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Water Online (EWG press release) article's claims about PFAS in tap water for 197 million Americans, the EPA UCMR 5 data and the EPA rollback are biased and mostly accurate; 5 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Water Online (EWG press release) article's claims about PFAS in tap water for 197 million Americans, the EPA UCMR 5 data and the EPA rollback are biased and mostly accurate; 5 claims could not be confirmed.</h1>
+<p class="subtitle">Checked 2026-11-22 against EPA pages (fetched), ATSDR (fetched) and web search; AskAmerica warehouse has no PFAS table</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.wateronline.com/doc/toxic-forever-chemicals-found-in-tap-water-of-m-americans-0001">https://www.wateronline.com/doc/toxic-forever-chemicals-found-in-tap-water-of-m-americans-0001</a></p>
+</header>
+<section>
+<h2>Summary</h2>
+<p>Rating: <strong>1 Pinocchio</strong>. The piece is an EWG press release republished with its source line. The regulatory history checks out, but the headline 197 million figure is EWG's own estimate presented as following from EPA data, and could not be verified. It treats any detection as 'contaminated', and says EPA is in the 'final stages' of a rollback that EPA's own pages show is still a proposal. These framing problems sit at the upper edge of the rating.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 79/100 — mostly honest</strong> &middot; <strong>Bias +50/100 — biased</strong></p><p>11 claims graded, 1 not gradable, 9 fell short. In this article only.</p></div>
+<p><strong>2</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>5</strong> unsupported &middot; <strong>1</strong> not checkable here &middot; <strong>12</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-unsupported"><td>1</td><td>About 197 million people in the U.S. drink drinking water contaminated with the toxic &quot;forever chemicals&quot; known as PFAS, according to test data released by the Environmental Protection Agency and recent state test results.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA Fifth Unregulated Contaminant Monitoring Rule</a>; <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>That's 23 million more Americans exposed to PFAS in drinking water than the EPA found in previous tests.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data page</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>The UCMR 5 data reveal 3,595 sites with detectable levels of PFAS, bringing the total number of known PFAS-contaminated sites to 13,459.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a>; <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The Centers for Disease Control and Prevention has detected PFAS in the blood of 99% of Americans, including newborn babies.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-unsupported"><td>13</td><td>EWG estimates nearly 30,000 industrial polluters could be discharging PFAS into the environment.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA UCMR 5 page (no match)</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>The agency is in the final stages of rolling back limits on four PFAS chemicals.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The agency plans to retain the PFOA and PFOS standards at 4 parts per trillion. But it also wants to extend the compliance deadline for meeting those standards to 2031.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfoa-and-pfos-compliance-extension-rule">EPA Proposed PFOA and PFOS Compliance Extension Rule</a></td></tr><tr class="verdict-mostly-true"><td>12</td><td>Very low doses of PFAS have been linked to suppression of the immune system. Studies show exposure to PFAS can also increase the risk of cancer, harm fetal development and reduce vaccine effectiveness.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-mostly-true"><td>14</td><td>The number aligns with findings from a 2020 paper by Environmental Working Group scientists that estimated PFAS was in the water of 200 million Americans.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.medicalnewstoday.com/articles/healthy/toxic-chemicals-may-contaminate-drinking-water-of-200-million-us-people">Medical News Today copy</a></td></tr><tr class="verdict-true"><td>7</td><td>In 2024, the Biden EPA finalized first-time limits on six PFAS in drinking water.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/and-polyfluoroalkyl-substances-pfas">EPA PFAS NPDWR</a></td></tr><tr class="verdict-true"><td>8</td><td>In a reversal last year, Trump's EPA announced plans to leave four PFAS unregulated - GenX, PFBS, PFNA and PFHxS.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>The EPA's plan to reverse the four MCLs also likely contradicts an anti-backsliding provision in the Safe Drinking Water Act.</td><td><strong>not checkable here</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>14</td><td>The number aligns with findings from a 2020 paper by Environmental Working Group scientists that estimated PFAS was in the water of 200 million Americans.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.medicalnewstoday.com/articles/healthy/toxic-chemicals-may-contaminate-drinking-water-of-200-million-us-people">Medical News Today copy</a></td></tr><tr class="verdict-unsupported"><td>13</td><td>EWG estimates nearly 30,000 industrial polluters could be discharging PFAS into the environment.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA UCMR 5 page (no match)</a></td></tr><tr class="verdict-mostly-true"><td>12</td><td>Very low doses of PFAS have been linked to suppression of the immune system. Studies show exposure to PFAS can also increase the risk of cancer, harm fetal development and reduce vaccine effectiveness.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The Centers for Disease Control and Prevention has detected PFAS in the blood of 99% of Americans, including newborn babies.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>The EPA's plan to reverse the four MCLs also likely contradicts an anti-backsliding provision in the Safe Drinking Water Act.</td><td><strong>not checkable here</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-true"><td>8</td><td>In a reversal last year, Trump's EPA announced plans to leave four PFAS unregulated - GenX, PFBS, PFNA and PFHxS.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-true"><td>7</td><td>In 2024, the Biden EPA finalized first-time limits on six PFAS in drinking water.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/and-polyfluoroalkyl-substances-pfas">EPA PFAS NPDWR</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The agency plans to retain the PFOA and PFOS standards at 4 parts per trillion. But it also wants to extend the compliance deadline for meeting those standards to 2031.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfoa-and-pfos-compliance-extension-rule">EPA Proposed PFOA and PFOS Compliance Extension Rule</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>The agency is in the final stages of rolling back limits on four PFAS chemicals.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>The UCMR 5 data reveal 3,595 sites with detectable levels of PFAS, bringing the total number of known PFAS-contaminated sites to 13,459.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a>; <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>That's 23 million more Americans exposed to PFAS in drinking water than the EPA found in previous tests.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data page</a></td></tr><tr class="verdict-unsupported"><td>1</td><td>About 197 million people in the U.S. drink drinking water contaminated with the toxic &quot;forever chemicals&quot; known as PFAS, according to test data released by the Environmental Protection Agency and recent state test results.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA Fifth Unregulated Contaminant Monitoring Rule</a>; <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>1</td><td>About 197 million people in the U.S. drink drinking water contaminated with the toxic &quot;forever chemicals&quot; known as PFAS, according to test data released by the Environmental Protection Agency and recent state test results.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA Fifth Unregulated Contaminant Monitoring Rule</a>; <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a></td></tr><tr class="verdict-unsupported"><td>13</td><td>EWG estimates nearly 30,000 industrial polluters could be discharging PFAS into the environment.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA UCMR 5 page (no match)</a></td></tr><tr class="verdict-true"><td>7</td><td>In 2024, the Biden EPA finalized first-time limits on six PFAS in drinking water.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/and-polyfluoroalkyl-substances-pfas">EPA PFAS NPDWR</a></td></tr><tr class="verdict-true"><td>8</td><td>In a reversal last year, Trump's EPA announced plans to leave four PFAS unregulated - GenX, PFBS, PFNA and PFHxS.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>That's 23 million more Americans exposed to PFAS in drinking water than the EPA found in previous tests.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data page</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>The agency is in the final stages of rolling back limits on four PFAS chemicals.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The agency plans to retain the PFOA and PFOS standards at 4 parts per trillion. But it also wants to extend the compliance deadline for meeting those standards to 2031.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfoa-and-pfos-compliance-extension-rule">EPA Proposed PFOA and PFOS Compliance Extension Rule</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The Centers for Disease Control and Prevention has detected PFAS in the blood of 99% of Americans, including newborn babies.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>The EPA's plan to reverse the four MCLs also likely contradicts an anti-backsliding provision in the Safe Drinking Water Act.</td><td><strong>not checkable here</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-mostly-true"><td>14</td><td>The number aligns with findings from a 2020 paper by Environmental Working Group scientists that estimated PFAS was in the water of 200 million Americans.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.medicalnewstoday.com/articles/healthy/toxic-chemicals-may-contaminate-drinking-water-of-200-million-us-people">Medical News Today copy</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>The UCMR 5 data reveal 3,595 sites with detectable levels of PFAS, bringing the total number of known PFAS-contaminated sites to 13,459.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a>; <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data</a></td></tr><tr class="verdict-mostly-true"><td>12</td><td>Very low doses of PFAS have been linked to suppression of the immune system. Studies show exposure to PFAS can also increase the risk of cancer, harm fetal development and reduce vaccine effectiveness.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>6</td><td>The agency plans to retain the PFOA and PFOS standards at 4 parts per trillion. But it also wants to extend the compliance deadline for meeting those standards to 2031.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfoa-and-pfos-compliance-extension-rule">EPA Proposed PFOA and PFOS Compliance Extension Rule</a></td></tr><tr class="verdict-mostly-true"><td>14</td><td>The number aligns with findings from a 2020 paper by Environmental Working Group scientists that estimated PFAS was in the water of 200 million Americans.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.medicalnewstoday.com/articles/healthy/toxic-chemicals-may-contaminate-drinking-water-of-200-million-us-people">Medical News Today copy</a></td></tr><tr class="verdict-mostly-true"><td>12</td><td>Very low doses of PFAS have been linked to suppression of the immune system. Studies show exposure to PFAS can also increase the risk of cancer, harm fetal development and reduce vaccine effectiveness.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>The EPA's plan to reverse the four MCLs also likely contradicts an anti-backsliding provision in the Safe Drinking Water Act.</td><td><strong>not checkable here</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>The agency is in the final stages of rolling back limits on four PFAS chemicals.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-true"><td>7</td><td>In 2024, the Biden EPA finalized first-time limits on six PFAS in drinking water.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/and-polyfluoroalkyl-substances-pfas">EPA PFAS NPDWR</a></td></tr><tr class="verdict-true"><td>8</td><td>In a reversal last year, Trump's EPA announced plans to leave four PFAS unregulated - GenX, PFBS, PFNA and PFHxS.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>That's 23 million more Americans exposed to PFAS in drinking water than the EPA found in previous tests.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data page</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>The UCMR 5 data reveal 3,595 sites with detectable levels of PFAS, bringing the total number of known PFAS-contaminated sites to 13,459.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a>; <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The Centers for Disease Control and Prevention has detected PFAS in the blood of 99% of Americans, including newborn babies.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-unsupported"><td>13</td><td>EWG estimates nearly 30,000 industrial polluters could be discharging PFAS into the environment.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA UCMR 5 page (no match)</a></td></tr><tr class="verdict-unsupported"><td>1</td><td>About 197 million people in the U.S. drink drinking water contaminated with the toxic &quot;forever chemicals&quot; known as PFAS, according to test data released by the Environmental Protection Agency and recent state test results.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA Fifth Unregulated Contaminant Monitoring Rule</a>; <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-unsupported"><td>11</td><td>The Centers for Disease Control and Prevention has detected PFAS in the blood of 99% of Americans, including newborn babies.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-mostly-true"><td>12</td><td>Very low doses of PFAS have been linked to suppression of the immune system. Studies show exposure to PFAS can also increase the risk of cancer, harm fetal development and reduce vaccine effectiveness.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></td></tr><tr class="verdict-unsupported"><td>1</td><td>About 197 million people in the U.S. drink drinking water contaminated with the toxic &quot;forever chemicals&quot; known as PFAS, according to test data released by the Environmental Protection Agency and recent state test results.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA Fifth Unregulated Contaminant Monitoring Rule</a>; <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a></td></tr><tr class="verdict-true"><td>7</td><td>In 2024, the Biden EPA finalized first-time limits on six PFAS in drinking water.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/and-polyfluoroalkyl-substances-pfas">EPA PFAS NPDWR</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>The agency is in the final stages of rolling back limits on four PFAS chemicals.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-true"><td>8</td><td>In a reversal last year, Trump's EPA announced plans to leave four PFAS unregulated - GenX, PFBS, PFNA and PFHxS.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>The EPA's plan to reverse the four MCLs also likely contradicts an anti-backsliding provision in the Safe Drinking Water Act.</td><td><strong>not checkable here</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The agency plans to retain the PFOA and PFOS standards at 4 parts per trillion. But it also wants to extend the compliance deadline for meeting those standards to 2031.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfoa-and-pfos-compliance-extension-rule">EPA Proposed PFOA and PFOS Compliance Extension Rule</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>That's 23 million more Americans exposed to PFAS in drinking water than the EPA found in previous tests.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data page</a></td></tr><tr class="verdict-unsupported"><td>13</td><td>EWG estimates nearly 30,000 industrial polluters could be discharging PFAS into the environment.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA UCMR 5 page (no match)</a></td></tr><tr class="verdict-mostly-true"><td>14</td><td>The number aligns with findings from a 2020 paper by Environmental Working Group scientists that estimated PFAS was in the water of 200 million Americans.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.medicalnewstoday.com/articles/healthy/toxic-chemicals-may-contaminate-drinking-water-of-200-million-us-people">Medical News Today copy</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>The UCMR 5 data reveal 3,595 sites with detectable levels of PFAS, bringing the total number of known PFAS-contaminated sites to 13,459.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a>; <a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Scott Faber (EWG) — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>0 claims graded, 1 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> not checkable here &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>15</td><td>This isn't just a regulatory change, it's a public health betrayal.</td><td><strong>not checkable here</strong> &middot; central claim</td><td>Checked against: <a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>4</td><td>The new EPA findings mark the last installment of tests ... UCMR 5, the regulation that required U.S. water utilities to test drinking water for 29 individual PFAS compounds.</td><td><strong>true</strong></td></tr>
+<tr class="verdict-mostly-true"><td>10</td><td>A recent report from Environment America found that PFAS was detected in 83% of rivers, lakes, streams and other surface waters between 2022 and 2024.</td><td><strong>mostly true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-unsupported"><summary>#1 &middot; <strong>unsupported</strong> &mdash; About 197 million people in the U.S. drink drinking water contaminated with the toxic &quot;forever chemicals&quot; known as PFAS, according to test data released by the Environmental Protection Agency and recent state test results.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA Fifth Unregulated Contaminant Monitoring Rule</a></li><li><a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>No warehouse table carries PFAS. EPA's UCMR 5 pages (fetched) publish results and an estimate that 7.8% of systems would exceed the PFOA/PFOS limits but no national 197 million population figure; it is EWG's own estimate combining EPA and state data. EWG's pages returned HTTP 403. 'Contaminated' here means detected at or above EPA reporting levels (2-20 ppt), not above a limit.</dd>
+<dt>Warehouse searched for</dt><dd>PFAS drinking water contamination</dd>
+<dt>Web searches run</dt><dd>EWG 197 million Americans PFAS tap water UCMR 5 final data 13,459 sites; EPA UCMR 5 final data summary PFAS detected public water systems million people served 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#2 &middot; <strong>unsupported</strong> &mdash; That's 23 million more Americans exposed to PFAS in drinking water than the EPA found in previous tests.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data page</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>The earlier tally is EWG's, not EPA's; search snippets give earlier EWG totals of more than 158 million (March 2025) and more than 172 million, which do not clearly yield 23 million. EWG release pages returned 403.</dd>
+<dt>Warehouse searched for</dt><dd>PFAS drinking water population exposed</dd>
+<dt>Web searches run</dt><dd>EWG 197 million Americans PFAS tap water UCMR 5 final data 13,459 sites</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#3 &middot; <strong>unsupported</strong> &mdash; The UCMR 5 data reveal 3,595 sites with detectable levels of PFAS, bringing the total number of known PFAS-contaminated sites to 13,459.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online, EPA final UCMR 5 data</a></li><li><a href="https://www.epa.gov/dwucmr/occurrence-data-unregulated-contaminant-monitoring-rule">EPA UCMR 5 occurrence data</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Neither figure appears on EPA pages fetched; EPA reports just under 2 million results at over 10,000 systems. EWG map page returned 403.</dd>
+<dt>No page loaded because</dt><dd>Off-site pages read (EPA UCMR 5 and occurrence pages, Water Online Sept 2 EPA release) do not contain the counts; EWG map returned HTTP 403 and no other outlet found.</dd>
+<dt>Warehouse searched for</dt><dd>PFAS detections public water systems sites</dd>
+<dt>Web searches run</dt><dd>EWG 197 million Americans PFAS tap water UCMR 5 final data 13,459 sites</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The new EPA findings mark the last installment of tests ... UCMR 5, the regulation that required U.S. water utilities to test drinking water for 29 individual PFAS compounds.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Final dataset released August 2026; 29 PFAS plus lithium<ul class="claim-sources"><li><a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA UCMR 5</a></li><li><a href="https://www.wateronline.com/doc/epa-releases-final-ucmr-drinking-water-data-for-pfas-and-lithium-0001">Water Online Sept 2, 2026</a></li></ul></dd>
+<dt>Why</dt><dd>EPA released the final UCMR 5 dataset in August 2026 (Aug 27) covering 29 PFAS plus lithium, sampled 2023-2025. The article calls it new in November; it is nearly three months old.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#5 &middot; <strong>partially false</strong> &mdash; The agency is in the final stages of rolling back limits on four PFAS chemicals.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>EPA page: proposed rule announced May 18, 2026; comment period closed July 20, 2026<ul class="claim-sources"><li><a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>EPA's May 18, 2026 action is a proposed rule; comment closed July 20, 2026 and no final rescission rule appears on EPA pages. 'Final stages' overstates procedural status.</dd>
+<dt>Why</dt><dd>EPA pages describe a proposed rescission of PFHxS, PFNA, HFPO-DA and the Hazard Index mixture (incl. PFBS).</dd>
+<dt>Windows tested</dt><dd>May 18, 2026 proposal: proposed; as of Nov 22, 2026 EPA page: still described as proposed</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; The agency plans to retain the PFOA and PFOS standards at 4 parts per trillion. But it also wants to extend the compliance deadline for meeting those standards to 2031.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>4.0 ppt unchanged; optional 2-year extension to April 2031<ul class="claim-sources"><li><a href="https://www.epa.gov/sdwa/proposed-pfoa-and-pfos-compliance-extension-rule">EPA Proposed PFOA and PFOS Compliance Extension Rule</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Proposal gives systems an option to request two additional years (to April 2031), not a blanket extension of the deadline from April 2029.</dd>
+<dt>Why</dt><dd>EPA extension-rule page confirms 4.0 ppt unchanged and the 2031 option.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; In 2024, the Biden EPA finalized first-time limits on six PFAS in drinking water.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Final PFAS NPDWR April 10, 2024, six PFAS<ul class="claim-sources"><li><a href="https://www.epa.gov/sdwa/and-polyfluoroalkyl-substances-pfas">EPA PFAS NPDWR</a></li></ul></dd>
+<dt>Why</dt><dd>EPA announced the final NPDWR for six PFAS on April 10, 2024.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; In a reversal last year, Trump's EPA announced plans to leave four PFAS unregulated - GenX, PFBS, PFNA and PFHxS.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>May 2025 EPA announcement of intent to rescind<ul class="claim-sources"><li><a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></li></ul></dd>
+<dt>Why</dt><dd>EPA says that in May 2025 it announced intent to rescind the PFHxS, PFNA, HFPO-DA and Hazard Index (with PFBS) provisions. PFBS is regulated only within the mixture.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#9 &middot; <strong>not checkable here</strong> &mdash; The EPA's plan to reverse the four MCLs also likely contradicts an anti-backsliding provision in the Safe Drinking Water Act.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></li></ul></dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: A contested legal prediction no data can test; EPA's stated rationale (that the 2024 regulations followed an unlawful procedure) is omitted by the article.</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>A contested legal prediction no data can test; EPA's stated rationale (that the 2024 regulations followed an unlawful procedure) is omitted by the article.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; A recent report from Environment America found that PFAS was detected in 83% of rivers, lakes, streams and other surface waters between 2022 and 2024.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>83% of 1,602 monitoring locations (1,329 sites) per WaterWorld coverage<ul class="claim-sources"><li><a href="https://www.waterworld.com/drinking-water-treatment/pfas/news/55413397/pfas-detected-at-83-of-monitored-us-waterways-report-finds">WaterWorld coverage</a></li></ul></dd>
+<dt>Inaccuracy</dt><dd>The 83% is the share of monitoring locations (1,329 of 1,602 sites in 40 states), not of waterways. Read from search summaries; the report page returned 403.</dd>
+<dt>Why</dt><dd>Figure matches reports of the study.</dd>
+<dt>Web searches run</dt><dd>Environment America PFAS found in America's lakes and streams 83% detected 2022 2024</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#11 &middot; <strong>unsupported</strong> &mdash; The Centers for Disease Control and Prevention has detected PFAS in the blood of 99% of Americans, including newborn babies.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Cited ScienceDirect paper returned 403; the ATSDR health-effects page fetched does not state 99%.</dd>
+<dt>No page loaded because</dt><dd>ScienceDirect and EWG pages returned HTTP 403; ATSDR page read lacks the figure.</dd>
+<dt>Warehouse searched for</dt><dd>PFAS blood levels CDC NHANES</dd>
+<dt>Web searches run</dt><dd>ATSDR health effects page find 99</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#12 &middot; <strong>mostly true</strong> &mdash; Very low doses of PFAS have been linked to suppression of the immune system. Studies show exposure to PFAS can also increase the risk of cancer, harm fetal development and reduce vaccine effectiveness.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>ATSDR: lower vaccine antibody response; kidney and testicular cancer (PFOA); small birth weight decreases<ul class="claim-sources"><li><a href="https://www.atsdr.cdc.gov/pfas/about/health-effects.html">ATSDR PFAS health effects</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>ATSDR reports lower antibody response to some vaccines, kidney and testicular cancer (PFOA) and small decreases in birth weight in humans; immune-system damage is cited from animal studies at higher doses. 'Very low doses' and general 'cancer' go beyond that page.</dd>
+<dt>Why</dt><dd>Direction supported by ATSDR; strength overstated.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#13 &middot; <strong>unsupported</strong> &mdash; EWG estimates nearly 30,000 industrial polluters could be discharging PFAS into the environment.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.epa.gov/dwucmr/fifth-unregulated-contaminant-monitoring-rule">EPA UCMR 5 page (no match)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>EWG's 2021 release and map returned 403; no independent source read. It is a modeled suspected-discharger count presented as EWG's estimate.</dd>
+<dt>No page loaded because</dt><dd>EWG release and map returned HTTP 403; no other copy found.</dd>
+<dt>Warehouse searched for</dt><dd>industrial PFAS dischargers facilities</dd>
+<dt>Web searches run</dt><dd>EWG suspected industrial dischargers PFAS 30,000</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#14 &middot; <strong>mostly true</strong> &mdash; The number aligns with findings from a 2020 paper by Environmental Working Group scientists that estimated PFAS was in the water of 200 million Americans.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>2020 EWG study: more than 200 million Americans could have PFAS in drinking water (Medical News Today)<ul class="claim-sources"><li><a href="https://www.medicalnewstoday.com/articles/healthy/toxic-chemicals-may-contaminate-drinking-water-of-200-million-us-people">Medical News Today copy</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>EWG's 2020 release is titled 'more than 200 million Americans could have toxic PFAS in their drinking water': a modeled possibility, not a measurement. The agreement is EWG checking its own estimate.</dd>
+<dt>Why</dt><dd>Title seen in search results; EWG page returned 403.</dd>
+<dt>Web searches run</dt><dd>study more 200 million americans could have toxic pfas their drinking water</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#15 &middot; <strong>not checkable here</strong> &mdash; This isn't just a regulatory change, it's a public health betrayal.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Scott Faber (EWG) — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.epa.gov/sdwa/proposed-pfas-rescission-rule">EPA Proposed PFAS Rescission Rule</a></li></ul></dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: A value judgment about policy; no evidence can test it.</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>A value judgment about policy; no evidence can test it.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>November 19, 2026</strong> &mdash; Publication date</li><li><strong>10 popular water filters (2023)</strong> &mdash; Description of an EWG test, outside what could be re-tested</li></ul>
+</section>
+<section>
+<h2>Warehouse check</h2>
+<p>search_catalog found no PFAS data. environment.drinking_water tables hold SDWIS violations and nitrate only, so claims were checked against primary sources.</p>
+</section>
+<section>
+<h2>Misleading even where facts check out</h2>
+<ul><li>Detection is not exceedance: UCMR 5 reports results at or above 2-20 ppt reporting levels, and EPA says results do not indicate compliance. EPA's own headline, that 7.8% of systems would exceed the PFOA/PFOS limits, is omitted.</li><li>EWG is source, author and validator: new data 'confirm' its own 2020 estimate.</li><li>The subhead says Trump 'moves to scrap protections', but the body says PFOA and PFOS limits stay at 4 ppt and the rescission is proposed, not final. EPA's stated rationale is omitted.</li><li>'New EPA findings' were released Aug 27, 2026.</li><li>83% is the share of monitoring sites, not of waterways.</li></ul>
+</section>
+<section>
+<h2>Limits</h2>
+<p>EWG, ScienceDirect and Environment America pages returned HTTP 403, so the 197M, 23M, 3,595, 13,459, 99% and 30,000 figures are graded unsupported rather than false.</p>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

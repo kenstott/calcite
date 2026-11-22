@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The FOX 4 article's claims about CDC flu activity, state flu levels and hospitalizations are accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The FOX 4 article's claims about CDC flu activity, state flu levels and hospitalizations are accurate.</h1>
+<p class="subtitle">CDC FluView Week 44 (ending 2026-11-07, released 2026-11-13); warehouse health.cdc_resp_net_rates (FluSurv-NET) and health.cdc_ari_activity_state</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.fox4news.com/news/flu-activity-climbs-nationwide-6-states-reporting-high-levels-cdc-says">https://www.fox4news.com/news/flu-activity-climbs-nationwide-6-states-reporting-high-levels-cdc-says</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:18px">FluSurv-NET weekly hospitalization rate, week ending about Nov 7 (per 100,0…</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="271" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="271" viewBox="0 0 412 271" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="271" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Weekly rate near Nov 7, by season</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="64" y1="56" x2="64" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="64" y="219" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.0</text>
+      <line class="grid" x1="114" y1="56" x2="114" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="114" y="219" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.5</text>
+      <line class="grid" x1="164" y1="56" x2="164" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="164" y="219" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1.0</text>
+      <line class="grid" x1="214" y1="56" x2="214" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="214" y="219" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1.5</text>
+      <line class="grid" x1="264" y1="56" x2="264" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="264" y="219" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2.0</text>
+      <line class="grid" x1="314" y1="56" x2="314" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="314" y="219" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2.5</text>
+      <line class="grid" x1="364" y1="56" x2="364" y2="203" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-6" class="tick" x="364" y="219" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3.0</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="64" y1="56" x2="64" y2="203" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="64" y1="203" x2="364" y2="203" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-value-axis-title" class="axis-title" x="214" y="247" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">per 100,000</text>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-2018-19" class="tick" x="56" y="70.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2018-19</text>
+      <text id="p1-xtick-2019-20" class="tick" x="56" y="91.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2019-20</text>
+      <text id="p1-xtick-2022-23" class="tick" x="56" y="112.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2022-23</text>
+      <text id="p1-xtick-2023-24" class="tick" x="56" y="133.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2023-24</text>
+      <text id="p1-xtick-2024-25" class="tick" x="56" y="154.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2024-25</text>
+      <text id="p1-xtick-2025-26" class="tick" x="56" y="175.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2025-26</text>
+      <text id="p1-xtick-2026-27" class="tick" x="56" y="196.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2026-27</text>
+    </g>
+    <g id="p1-series-rate-per-100k" class="series">
+      <g class="hover">
+        <title>2018-19 — Rate per 100k: 0.2</title>
+        <rect id="p1-mark-rate-per-100k-2018-19" class="bar" x="64" y="59.78" width="20" height="12.44" fill="#2563eb"/>
+        <rect class="hit" x="64" y="58" width="300" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-rate-per-100k-2018-19" class="value-label" x="88" y="70.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">0.2</text>
+      <g class="hover">
+        <title>2019-20 — Rate per 100k: 0.3</title>
+        <rect id="p1-mark-rate-per-100k-2019-20" class="bar" x="64" y="80.78" width="30" height="12.44" fill="#2563eb"/>
+        <rect class="hit" x="64" y="79" width="300" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-rate-per-100k-2019-20" class="value-label" x="98" y="91.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">0.3</text>
+      <g class="hover">
+        <title>2022-23 — Rate per 100k: 2.5</title>
+        <rect id="p1-mark-rate-per-100k-2022-23" class="bar" x="64" y="101.78" width="250" height="12.44" fill="#2563eb"/>
+        <rect class="hit" x="64" y="100" width="300" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-rate-per-100k-2022-23" class="value-label" x="318" y="112.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.5</text>
+      <g class="hover">
+        <title>2023-24 — Rate per 100k: 0.5</title>
+        <rect id="p1-mark-rate-per-100k-2023-24" class="bar" x="64" y="122.78" width="50" height="12.44" fill="#2563eb"/>
+        <rect class="hit" x="64" y="121" width="300" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-rate-per-100k-2023-24" class="value-label" x="118" y="133.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">0.5</text>
+      <g class="hover">
+        <title>2024-25 — Rate per 100k: 0.3</title>
+        <rect id="p1-mark-rate-per-100k-2024-25" class="bar" x="64" y="143.78" width="30" height="12.44" fill="#2563eb"/>
+        <rect class="hit" x="64" y="142" width="300" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-rate-per-100k-2024-25" class="value-label" x="98" y="154.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">0.3</text>
+      <g class="hover">
+        <title>2025-26 — Rate per 100k: 0.5</title>
+        <rect id="p1-mark-rate-per-100k-2025-26" class="bar" x="64" y="164.78" width="50" height="12.44" fill="#2563eb"/>
+        <rect class="hit" x="64" y="163" width="300" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-rate-per-100k-2025-26" class="value-label" x="118" y="175.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">0.5</text>
+      <g class="hover">
+        <title>2026-27 — Rate per 100k: 2.7</title>
+        <rect id="p1-mark-rate-per-100k-2026-27" class="bar" x="64" y="185.78" width="270" height="12.44" fill="#2563eb"/>
+        <rect class="hit" x="64" y="184" width="300" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-rate-per-100k-2026-27" class="value-label" x="338" y="196.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.7</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="348" fill="#6b7280">Weeks ending 11/10/18, 11/9/19, 11/5/22, 11/4/23, 11/9/24, 11/8/25,</text>
+  <text class="caption" x="24" y="361" fill="#6b7280">11/7/26. 2020-21 and 2021-22 were pandemic-distorted (near zero).</text>
+  <text class="footnote" x="20" y="393" fill="#6b7280">Warehouse values are revised and exceed CDC's preliminary observed 1.8 for Week 44.</text>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:52661/a/68778c8b0c6a9b86463ceeb040198bc7.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The FOX 4 piece is accurate on nearly every figure: 11.3% test positivity, 3.2% ILI visits, Louisiana as the lone Very High state, the burden estimates and five pediatric deaths all match CDC FluView Week 44. Durbin's mid-October hospitalization claim holds up (warehouse FluSurv-NET shows 1.6 per 100,000 on 2026-10-17 vs at most 0.6 at the same point in 2018-19 to 2025-26; the pre-2018 comparison rests on CDC via Durbin). Rating: <strong>0 Pinocchios</strong>. Minor blemishes that do not change the rating: the piece counts 6 high or very high states where CDC counts 7 (Washington omitted), and it omits CDC's low severity rating.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 93/100 — honest</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>7 claims graded, 0 not gradable, 2 fell short. In this article only.</p></div>
+<p><strong>5</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>7</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>The CDC's weekly influenza update for the week ending on Nov. 7, says positive tests for flu specimens were at about 11% and rising.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>six states reaching new high levels ... South Carolina and Texas were the next highest, with California, Tennessee and Oregon following, also in the high category</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>seasonal flu activity is on the rise across the country</td><td><strong>mostly true</strong></td><td>Checked against: <code>health.cdc_resp_net_rates</code>; <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>2</td><td>More than 3% of doctors' office visits were due to flu-like symptoms.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>3</td><td>Louisiana tops the list as the only state in the very high category.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>5</td><td>There are an estimated 2.6 million illnesses, 36,000 hospitalizations and 2,100 deaths related to flu infections so far this season, according to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>6</td><td>Five of the deaths among children have been reported to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>11</td><td>seasonal flu activity is on the rise across the country</td><td><strong>mostly true</strong></td><td>Checked against: <code>health.cdc_resp_net_rates</code>; <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>6</td><td>Five of the deaths among children have been reported to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>5</td><td>There are an estimated 2.6 million illnesses, 36,000 hospitalizations and 2,100 deaths related to flu infections so far this season, according to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>six states reaching new high levels ... South Carolina and Texas were the next highest, with California, Tennessee and Oregon following, also in the high category</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>3</td><td>Louisiana tops the list as the only state in the very high category.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>2</td><td>More than 3% of doctors' office visits were due to flu-like symptoms.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>1</td><td>The CDC's weekly influenza update for the week ending on Nov. 7, says positive tests for flu specimens were at about 11% and rising.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>6</td><td>Five of the deaths among children have been reported to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>3</td><td>Louisiana tops the list as the only state in the very high category.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>2</td><td>More than 3% of doctors' office visits were due to flu-like symptoms.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>seasonal flu activity is on the rise across the country</td><td><strong>mostly true</strong></td><td>Checked against: <code>health.cdc_resp_net_rates</code>; <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>six states reaching new high levels ... South Carolina and Texas were the next highest, with California, Tennessee and Oregon following, also in the high category</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>1</td><td>The CDC's weekly influenza update for the week ending on Nov. 7, says positive tests for flu specimens were at about 11% and rising.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>5</td><td>There are an estimated 2.6 million illnesses, 36,000 hospitalizations and 2,100 deaths related to flu infections so far this season, according to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>six states reaching new high levels ... South Carolina and Texas were the next highest, with California, Tennessee and Oregon following, also in the high category</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>seasonal flu activity is on the rise across the country</td><td><strong>mostly true</strong></td><td>Checked against: <code>health.cdc_resp_net_rates</code>; <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>3</td><td>Louisiana tops the list as the only state in the very high category.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>5</td><td>There are an estimated 2.6 million illnesses, 36,000 hospitalizations and 2,100 deaths related to flu infections so far this season, according to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>6</td><td>Five of the deaths among children have been reported to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>2</td><td>More than 3% of doctors' office visits were due to flu-like symptoms.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>1</td><td>The CDC's weekly influenza update for the week ending on Nov. 7, says positive tests for flu specimens were at about 11% and rising.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>1</td><td>The CDC's weekly influenza update for the week ending on Nov. 7, says positive tests for flu specimens were at about 11% and rising.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>six states reaching new high levels ... South Carolina and Texas were the next highest, with California, Tennessee and Oregon following, also in the high category</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>2</td><td>More than 3% of doctors' office visits were due to flu-like symptoms.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>3</td><td>Louisiana tops the list as the only state in the very high category.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a>; <a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></td></tr><tr class="verdict-true"><td>5</td><td>There are an estimated 2.6 million illnesses, 36,000 hospitalizations and 2,100 deaths related to flu infections so far this season, according to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-true"><td>6</td><td>Five of the deaths among children have been reported to the CDC.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>seasonal flu activity is on the rise across the country</td><td><strong>mostly true</strong></td><td>Checked against: <code>health.cdc_resp_net_rates</code>; <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Dr. Anna Durbin — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 88/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>2 claims graded, 1 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>1</strong> not checkable here &middot; <strong>3</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-mostly-true"><td>7</td><td>Dr. Anna Durbin of Johns Hopkins University says the rate of flu hospitalizations in mid-October was at its highest level in the past 15 years.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <code>health.cdc_resp_net_rates</code>; <a href="https://www.chiefhealthcareexecutive.com/view/what-to-watch-this-respiratory-season-from-h1n1-to-mrna-vaccines">Chief Healthcare Executive</a></td></tr>
+<tr class="verdict-true"><td>8</td><td>the flu season is starting a bit earlier</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr>
+<tr class="verdict-not-checkable-here"><td>9</td><td>I think it's really important for everyone to get a flu vaccine as soon as possible</td><td><strong>not checkable here</strong></td><td>Checked against: <a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>10</td><td>The CDC recommends an annual flu vaccine for everyone 6 months of age and older.</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The CDC's weekly influenza update for the week ending on Nov. 7, says positive tests for flu specimens were at about 11% and rising.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CDC FluView Week 44: 5,911 of 52,287 specimens positive = 11.3%, increased vs Week 43. Warehouse search_catalog found no lab-positivity table.<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>influenza percent positive clinical laboratories CDC weekly</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; More than 3% of doctors' office visits were due to flu-like symptoms.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>ILINet Week 44: 3.2% of visits for ILI (fever plus cough or sore throat), above baseline 2.9%; ILI is a symptom definition, not lab-confirmed flu, which the sentence correctly says<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Louisiana tops the list as the only state in the very high category.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CDC Week 44 ILI activity table: 1 jurisdiction Very High; Latin Times coverage names Louisiana<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li><li><a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; six states reaching new high levels ... South Carolina and Texas were the next highest, with California, Tennessee and Oregon following, also in the high category</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CDC Week 44: Very High 1, High 6 (up from 0 and 2); coverage lists CA, LA, OR, SC, TN, TX, WA<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li><li><a href="https://www.latintimes.com/seven-states-high-flu-activity-early-season-601368">Latin Times</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>CDC counts 1 Very High + 6 High = 7 jurisdictions; the piece lists Louisiana plus five High states (six total) and omits Washington. The within-High ordering is not a CDC ranking.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; There are an estimated 2.6 million illnesses, 36,000 hospitalizations and 2,100 deaths related to flu infections so far this season, according to the CDC.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CDC: at least 2,600,000 illnesses, 36,000 hospitalizations, 2,100 deaths (preliminary estimates)<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Five of the deaths among children have been reported to the CDC.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CDC: five pediatric deaths this season; counted separately from the 2,100 estimate<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; Dr. Anna Durbin of Johns Hopkins University says the rate of flu hospitalizations in mid-October was at its highest level in the past 15 years.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Dr. Anna Durbin — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>FluSurv-NET weekly rate week ending 2026-10-17 = 1.6/100k; 2022-23 (2022-10-15) 0.6; other seasons 0.1-0.3 <code>health.cdc_resp_net_rates</code></dd>
+<dt>Independent evidence</dt><dd>Chief Healthcare Executive quotes Durbin: highest early season hospital rate for mid-October since 2010-2011<ul class="claim-sources"><li><a href="https://www.chiefhealthcareexecutive.com/view/what-to-watch-this-respiratory-season-from-h1n1-to-mrna-vaccines">Chief Healthcare Executive</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Durbin said highest early-season mid-October rate since 2010-11 (week ending Oct 17). Warehouse covers 2018-19 on only; pre-2018 rests on Durbin citing CDC.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT season,&quot;date&quot;,estimate FROM health.cdc_resp_net_rates WHERE surveillance_network='FluSurv-NET' AND state='Overall' AND age_category='Overall' AND race='All' AND sex='All' AND data_type='Weekly Rate'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; the flu season is starting a bit earlier</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Dr. Anna Durbin — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>CDC: activity is higher than typically observed at this time of year; warehouse FluSurv-NET weekly rate at Oct 17 is 1.6 vs 0.6 or less in prior seasons<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#9 &middot; <strong>not checkable here</strong> &mdash; I think it's really important for everyone to get a flu vaccine as soon as possible</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Dr. Anna Durbin — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: A personal recommendation (belief), not a testable fact. CDC itself recommends vaccination (FluView Week 44) but 'as soon as possible' urgency is judgment.</dd>
+<dt>Why</dt><dd>A personal recommendation (belief), not a testable fact. CDC itself recommends vaccination (FluView Week 44) but 'as soon as possible' urgency is judgment.</dd>
+<dt>Web searches run</dt><dd>Anna Durbin Johns Hopkins flu hospitalizations mid-October highest in 15 years</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; The CDC recommends an annual flu vaccine for everyone 6 months of age and older.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>CDC Week 44: vaccines recommended for persons 6 months and older<ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#11 &middot; <strong>mostly true</strong> &mdash; seasonal flu activity is on the rise across the country</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>FluSurv-NET weekly rate 2026-11-07 = 2.7, 2026-11-14 = 2.3; ARI map week 2026-11-14: 8 Moderate, none High <code>health.cdc_resp_net_rates</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cdc.gov/fluview/surveillance/2026-week-44.html">CDC FluView Week 44</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>CDC: indicators rising in many parts, not uniformly (Region 9 positivity fell; Region 2 ILI fell, likely incomplete data). Warehouse FluSurv-NET weekly rate 2.7 (Nov 7) then 2.3 (Nov 14).</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;,estimate FROM health.cdc_resp_net_rates WHERE surveillance_network='FluSurv-NET' AND state='Overall' AND data_type='Weekly Rate' AND season='2026-27'</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Misleading-by-omission flags</h2>
+<ul><li>CDC's preliminary severity assessment is low for all ages; the piece omits it.</li><li>The state map uses ILINet (any fever-plus-cough illness), not lab-confirmed flu.</li><li>Durbin's statement concerns the early-season mid-October week. The warehouse shows the weekly rate peaking at 2.7 (Nov 7) and 2.3 for Nov 14; at the Nov 5-7 week, 2022-23 (2.5) was nearly as high.</li><li>'Five of the deaths among children' is loose: pediatric deaths are reported separately from the 2,100 estimate.</li></ul>
+</section>
+<section>
+<h2>Limits</h2>
+<p>State names by activity level come from secondary coverage (Latin Times citing CDC and AP); the CDC page text gave counts only, as the map is an image. Pre-2018 comparison could not be tested in the warehouse (FluSurv-NET loaded from 2018-19).</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Per-state level names from CDC map directly</strong>: Map is an image; CDC page text gave counts only; names taken from secondary coverage.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>6 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 3 rows — 2626 ms</summary><pre><code>SELECT * FROM health.cdc_resp_net_rates WHERE surveillance_network='FluSurv-NET' AND state='Overall' AND age_category='Overall' AND race='All' AND sex='All' AND data_type='Weekly Rate' FETCH FIRST 3 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 2885 ms</summary><pre><code>SELECT * FROM health.cdc_ari_activity_state FETCH FIRST 3 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 46 rows — 4429 ms</summary><pre><code>SELECT season, &quot;date&quot;, estimate FROM health.cdc_resp_net_rates WHERE surveillance_network='FluSurv-NET' AND state='Overall' AND age_category='Overall' AND race='All' AND sex='All' AND data_type='Weekly Rate' AND rate_type='Observed' AND ((&quot;date&quot; BETWEEN '2018-10-12' AND '2018-11-24') OR (&quot;date&quot; BETWEEN '2019-10-12' AND '2019-11-24') OR (&quot;date&quot; BETWEEN '2022-10-12' AND '2022-11-24') OR (&quot;date&quot; BETWEEN '2023-10-12' AND '2023-11-24') OR (&quot;date&quot; BETWEEN '2024-10-12' AND '2024-11-24') OR (&quot;date&quot; BETWEEN '2025-10-12' AND '2025-11-24') OR (&quot;date&quot; BETWEEN '2026-10-01' AND '2026-11-24')) ORDER BY &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 198 rows — 1767 ms</summary><pre><code>SELECT geography, label, week_end FROM health.cdc_ari_activity_state WHERE label IN ('High','Very High') ORDER BY label, geography</code></pre></details>
+<details class="sqltoggle"><summary>query — 26 rows — 1716 ms</summary><pre><code>SELECT week_end, label, COUNT(*) n FROM health.cdc_ari_activity_state WHERE week_end &gt;= '2026-10-01' GROUP BY week_end, label ORDER BY week_end, label</code></pre></details>
+<details class="sqltoggle"><summary>query — 9 rows — 594 ms</summary><pre><code>SELECT season, MAX(CAST(estimate AS DOUBLE)) peak_week, MIN(&quot;date&quot;) d0 FROM health.cdc_resp_net_rates WHERE surveillance_network='FluSurv-NET' AND state='Overall' AND age_category='Overall' AND race='All' AND sex='All' AND data_type='Weekly Rate' AND rate_type='Observed' AND estimate NOT LIKE '%*%' GROUP BY season ORDER BY season</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

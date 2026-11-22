@@ -2055,5 +2055,149 @@
       "everyman"
     ],
     "note": "article 403 for all arms; askamerica no engine rating (2 graded claims, own view 1), expert 1, everyman 1; net gap ~-$1.7B after surplus hospitals; filed #1415 Schedule H"
+  },
+  {
+    "topic_slug": "urbanmilwaukee-wi-for-profit-utilities-rates-29-percent-since-2020",
+    "headline": "Urban Milwaukee: Wisconsin's for-profit electric utilities hiked rates 29% since 2020 vs 14-15% for public utilities",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q1/askamerica/2026-11-22",
+    "pinocchios": 1,
+    "source_url": "https://urbanmilwaukee.com/2026/11/11/wisconsins-for-profit-electric-utilities-hike-rates-more-than-public-utilities/",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "askamerica 1 pin; expert 0 pin; warehouse EIA-861 ends 2023; filed #1433"
+  },
+  {
+    "topic_slug": "axios-indianapolis-pedestrian-deaths-vision-zero-231-vs-170",
+    "headline": "Axios Indianapolis: pedestrian deaths test Vision Zero promises (231 metro deaths 2020-24 vs 170 in 2015-19)",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q2/askamerica/2026-11-22",
+    "pinocchios": 2,
+    "source_url": "https://www.axios.com/local/indianapolis/2026/11/12/indy-pedestrian-deaths-test-vision-zero-promises",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "Axios 403, no copy anywhere; askamerica did not deliver (engine copy gate, filed #1434); agent.md recovered; provisional 2 pin"
+  },
+  {
+    "topic_slug": "fox9-twin-cities-2nd-warmest-sept-oct-2026",
+    "headline": "FOX 9: Twin Cities record 2nd-warmest September-October; five of past six years in top 10",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q3/askamerica/2026-11-22",
+    "pinocchios": 0,
+    "source_url": "https://www.fox9.com/weather/twin-cities-records-2nd-warmest-september-october-2026",
+    "ranks": [
+      [
+        "askamerica",
+        "expert"
+      ],
+      "everyman"
+    ],
+    "note": "tie askamerica/expert, 0 pin; ghcnd_daily 2026 stops 2026-09-22, filed #1435"
+  },
+  {
+    "topic_slug": "chalkbeat-nyc-enrollment-drops-23000-2026-27",
+    "headline": "Chalkbeat: NYC public school enrollment drops by 23,000 students",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q4/askamerica/2026-11-22",
+    "pinocchios": 0,
+    "source_url": "https://www.chalkbeat.org/newyork/2026/11/16/nyc-2026-27-public-school-student-enrollment-drop-pressures-budget-closures/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 pin, 15 claims; NYC CCD umbrella LEA empty but 32 geographic districts carry data (navigation miss, no issue)"
+  },
+  {
+    "topic_slug": "csmonitor-farmers-bounty-struggling-record-aid",
+    "headline": "CS Monitor: America's farmers are harvesting a bounty. Why are they struggling?",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q5/askamerica/2026-11-22",
+    "pinocchios": 0,
+    "source_url": "https://www.csmonitor.com/Business/2026/1110/farmers-harvest-subsidies-inflation-crops",
+    "ranks": [
+      [
+        "askamerica",
+        "expert"
+      ],
+      "everyman"
+    ],
+    "note": "tie askamerica/expert, 0 pin; report.html said 0.5, fixed on resume and re-verified"
+  },
+  {
+    "topic_slug": "investmentnews-sec-enforcement-public-companies-record-low-fy2026",
+    "headline": "InvestmentNews: SEC enforcement against public companies hits record low under Atkins (16 actions, down 71%)",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q6/askamerica/2026-11-22",
+    "pinocchios": 0,
+    "source_url": "https://www.investmentnews.com/regulation-legal-compliance/sec-enforcement-against-public-companies-hits-record-low-under-atkins/268982",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 pin, 12/12 from primary report; no SEC enforcement table, filed #1437"
+  },
+  {
+    "topic_slug": "foxnews-aaf-tariff-lobbying-337-percent-q3-2026",
+    "headline": "Fox News: tariff-related DC lobbying spending up 337% under Trump (Advancing American Freedom report)",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q7/askamerica/2026-11-22",
+    "pinocchios": 1,
+    "source_url": "https://www.foxnews.com/politics/industry-drove-dc-lobbying-337-percent-trump-whats-driving-push",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 1 pin; LDA filings reproduce 197% dollars (vs 337%) and 251% filings (vs 239%)"
+  },
+  {
+    "topic_slug": "ewg-pfas-tap-water-197-million-americans-ucmr5",
+    "headline": "EWG: toxic forever chemicals found in tap water of 197M Americans",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q8/askamerica/2026-11-22",
+    "pinocchios": 1,
+    "source_url": "https://www.wateronline.com/doc/toxic-forever-chemicals-found-in-tap-water-of-m-americans-0001",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 1 pin; no PFAS/UCMR5 table, filed #1438"
+  },
+  {
+    "topic_slug": "hudsoncountyview-jersey-city-crime-25-percent-decline",
+    "headline": "Hudson County View: Jersey City crime data shows nearly 25% average decline, officials say",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q9/askamerica/2026-11-22",
+    "pinocchios": 1,
+    "source_url": "https://hudsoncountyview.com/jersey-city-crime-data-shows-nearly-25-average-decline-officials-say/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 1 pin; thefts misattribution (dashboard inconsistency); missed crime.cde_reta (catalog ranking miss)"
+  },
+  {
+    "topic_slug": "fox4-flu-hospitalization-rate-highest-15-years-six-states-high",
+    "headline": "FOX 4: flu activity climbs nationwide, 6 states at high levels; hospitalization rate highest in 15 years",
+    "checked_date": "2026-11-22",
+    "run_subpath": "q10/askamerica/2026-11-22",
+    "pinocchios": 0,
+    "source_url": "https://www.fox4news.com/news/flu-activity-climbs-nationwide-6-states-reporting-high-levels-cdc-says",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica 0 pin after recipe rerun (fact-check recipe step 10: cdc_resp_net_rates); first pass ranked below expert"
   }
 ]

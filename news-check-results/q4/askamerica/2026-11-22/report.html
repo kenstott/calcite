@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Chalkbeat article's claims about NYC public school enrollment, hold-harmless budgets and school closures are accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Chalkbeat article's claims about NYC public school enrollment, hold-harmless budgets and school closures are accurate.</h1>
+<p class="subtitle">Checked 2026-11-22 against NY1, Chalkbeat follow-ups, the SCA projection PDF, NCES CCD (edu.ccd_districts) and the article's linked sources</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.chalkbeat.org/newyork/2026/11/16/nyc-2026-27-public-school-student-enrollment-drop-pressures-budget-closures/">https://www.chalkbeat.org/newyork/2026/11/16/nyc-2026-27-public-school-student-enrollment-drop-pressures-budget-closures/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">NYC enrollment: article vs independent sources</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">Preliminary Oct 31, 2026 counts (NY1) and SCA March 2026 projection</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="246" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="282" fill="#6b7280">K-12 decline</text>
+  <text class="stat-value" x="36" y="312" fill="#1f2328">-23,000 (-2.9%)</text>
+  <text class="stat-delta" x="36" y="332" fill="#dc2626">confirmed by NY1</text>
+  </g>
+  <rect class="panel-edge" x="448" y="82" width="412" height="436" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="82" width="412" height="436" viewBox="0 0 412 436" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="436" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Article figure vs independent source</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="153" y1="56" x2="153" y2="368" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-0" class="tick" x="153" y="384" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0</text>
+      <line class="grid" x1="189" y1="56" x2="189" y2="368" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-1" class="tick" x="189" y="384" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">200,000</text>
+      <line class="grid" x1="225" y1="56" x2="225" y2="368" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-2" class="tick" x="225" y="384" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">400,000</text>
+      <line class="grid" x1="261" y1="56" x2="261" y2="368" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-3" class="tick" x="261" y="384" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">600,000</text>
+      <line class="grid" x1="297" y1="56" x2="297" y2="368" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-4" class="tick" x="297" y="384" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">800,000</text>
+      <line class="grid" x1="333" y1="56" x2="333" y2="368" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-5" class="tick" x="333" y="384" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1M</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="153" y1="56" x2="153" y2="368" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="153" y1="368" x2="333" y2="368" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-value-axis-title" class="axis-title" x="243" y="412" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Students</text>
+    <g id="p2-category-axis-labels">
+      <text id="p2-xtick-k-12-article" class="tick" x="145" y="91.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">K-12 (article)</text>
+      <text id="p2-xtick-k-12-ny1" class="tick" x="145" y="153.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">K-12 (NY1)</text>
+      <text id="p2-xtick-k-12-preschool-article" class="tick" x="145" y="216" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">K-12+preschool (article)</text>
+      <text id="p2-xtick-k-12-preschool-ny1" class="tick" x="145" y="278.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">K-12+preschool (NY1)</text>
+      <text id="p2-xtick-sca-2034-35-pk-12-proj" class="tick" x="145" y="340.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">SCA 2034-35 PK-12 proj.</text>
+    </g>
+    <g id="p2-series-students" class="series">
+      <g class="hover">
+        <title>K-12 (article) — Students: 766,900</title>
+        <rect id="p2-mark-students-k-12-article" class="bar" x="153" y="67.23" width="138.04" height="38.94" fill="#2563eb"/>
+        <rect class="hit" x="153" y="67.23" width="180" height="38.94" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-students-k-12-article" class="value-label" x="295.04" y="91.20" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">766,900</text>
+      <g class="hover">
+        <title>K-12 (NY1) — Students: 766,900</title>
+        <rect id="p2-mark-students-k-12-ny1" class="bar" x="153" y="129.63" width="138.04" height="38.94" fill="#2563eb"/>
+        <rect class="hit" x="153" y="129.63" width="180" height="38.94" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-students-k-12-ny1" class="value-label" x="295.04" y="153.60" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">766,900</text>
+      <g class="hover">
+        <title>K-12+preschool (article) — Students: 863,100</title>
+        <rect id="p2-mark-students-k-12-preschool-article" class="bar" x="153" y="192.03" width="155.36" height="38.94" fill="#2563eb"/>
+        <rect class="hit" x="153" y="192.03" width="180" height="38.94" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-students-k-12-preschool-article" class="value-label" x="312.36" y="216" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">863,100</text>
+      <g class="hover">
+        <title>K-12+preschool (NY1) — Students: 863,100</title>
+        <rect id="p2-mark-students-k-12-preschool-ny1" class="bar" x="153" y="254.43" width="155.36" height="38.94" fill="#2563eb"/>
+        <rect class="hit" x="153" y="254.43" width="180" height="38.94" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-students-k-12-preschool-ny1" class="value-label" x="312.36" y="278.40" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">863,100</text>
+      <g class="hover">
+        <title>SCA 2034-35 PK-12 proj. — Students: 721,251</title>
+        <rect id="p2-mark-students-sca-2034-35-pk-12-proj" class="bar" x="153" y="316.83" width="129.83" height="38.94" fill="#2563eb"/>
+        <rect class="hit" x="153" y="316.83" width="180" height="38.94" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-students-sca-2034-35-pk-12-proj" class="value-label" x="286.83" y="340.80" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">721,251</text>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:51968/a/126fc7953c7dd41cfc7224aaa9dfa601.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The article's central numbers check out: NY1 independently reports 766,900 K-12 students (down 23,000, 2.9%) and 863,100 with preschool (down 2.6%), both preliminary. The nearly $2 billion hold-harmless figure matches Chalkbeat's $1.9 billion. The SCA 2034-35 projection (-128,401 from 2025-26) matches 'another 130,000'. The decade loss is 20.5%, not 'nearly 20%'. The Samuels quote could not be independently confirmed. Rating: 0 Pinocchios (Geppetto), with minor imprecision.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 98/100 — honest</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>13 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>12</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>13</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>New York City's public schools lost about 23,000 students, or nearly 3%, from the year before, according to preliminary numbers the Education Department released Monday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat school-level</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Over the past decade, the city has lost about 200,000 students, or nearly 20%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></td></tr><tr class="verdict-true"><td>2</td><td>That leaves the nation's largest school system with about 766,900 students, from kindergarten through senior year, as of Oct. 31.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>4</td><td>When the city's free preschool programs for 2-, 3-, and 4-year-olds are included in the enrollment tally, the total is 863,100, according to the Education Department's preliminary data. That was down about 2.6% from the previous year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>5</td><td>Since 2020, New York City has spent nearly $2 billion to prop up budgets at schools with declining enrollment.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a></td></tr><tr class="verdict-true"><td>6</td><td>By the 2034-35 school year, the city is predicting that the student population will fall by another 130,000, according to demographic projections from the School Construction Authority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://dnnhh5cc1.blob.core.windows.net/portals/0/Capital_Plan/Demographic_projection_Reports/Volume%202-2026.pdf?sv=2017-04-17&amp;sr=b&amp;si=DNNFileManagerPolicy&amp;sig=pl1f%2BywRLsn%2BsVXvRXNIEbkxmnewwAydpZBsa%2F8kIm4%3D">SCA Demographic Projections Vol. 2 (Mar 2026)</a>; <a href="https://dnnhh5cc1.blob.core.windows.net/">dnnhh5cc1.blob.core.windows.net root (HTTP 400)</a></td></tr><tr class="verdict-true"><td>8</td><td>Historically, when schools have fewer students than projected on their roster, the Education Department claws back money in the middle of the school year. But since the pandemic, the city has largely kept school budgets steady despite enrollment declines.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a>; <a href="https://www.chalkbeat.org/newyork/2026/06/07/nyc-school-budgets-hold-harmless-extended-despite-enrollment-drops-2026/">Chalkbeat June 7</a></td></tr><tr class="verdict-true"><td>9</td><td>Enrollment in city-funded preschool programs was up slightly.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>10</td><td>The preschool increase came thanks to the rollout of a new program for 2,000 2-year-olds this year as well as an uptick in 4-year-olds signed up for prekindergarten programs.</td><td><strong>true</strong> &middot; causal claim</td><td>#9 — supported<br>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/09/10/mamdani-2-k-program-launches-with-cost-savings-payment-delays/">Chalkbeat 2-K launch</a></td></tr><tr class="verdict-true"><td>11</td><td>Mamdani's free 2-K program expects to add 10,000 more seats next year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/10/19/2-k-expansion-bronx-staten-island-22-districts/">Chalkbeat 2-K expansion</a></td></tr><tr class="verdict-true"><td>12</td><td>Several contributing factors lead to the drop: falling birth rates, families leaving the city, and a slowdown of immigration into the five boroughs under President Donald Trump.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a>; <a href="https://www.chalkbeat.org/newyork/2025/11/26/immigration-enrollment-boom-halts-under-trump-adams-policies/">Chalkbeat Nov 2025 immigration</a></td></tr><tr class="verdict-true"><td>13</td><td>The city is floating proposals to close two small schools in Harlem and one in Brooklyn, as well as merge two sets of schools in the Bronx and Brooklyn, expected to be voted on by the Panel for Educational Policy over the next two months.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a></td></tr><tr class="verdict-true"><td>15</td><td>The declines in New York City mirror national trends. Many large school systems, including Los Angeles, Chicago, Philadelphia and Houston, are also grappling with sharp drops.</td><td><strong>true</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://www.chalkbeat.org/chicago/2026/09/24/chicago-public-schools-loses-another-11500-students/">Chalkbeat Chicago</a>; <a href="https://www.chalkbeat.org/philadelphia/2026/10/20/school-district-enrollment-falls-by-2500-students/">Chalkbeat Philadelphia</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>15</td><td>The declines in New York City mirror national trends. Many large school systems, including Los Angeles, Chicago, Philadelphia and Houston, are also grappling with sharp drops.</td><td><strong>true</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://www.chalkbeat.org/chicago/2026/09/24/chicago-public-schools-loses-another-11500-students/">Chalkbeat Chicago</a>; <a href="https://www.chalkbeat.org/philadelphia/2026/10/20/school-district-enrollment-falls-by-2500-students/">Chalkbeat Philadelphia</a></td></tr><tr class="verdict-true"><td>13</td><td>The city is floating proposals to close two small schools in Harlem and one in Brooklyn, as well as merge two sets of schools in the Bronx and Brooklyn, expected to be voted on by the Panel for Educational Policy over the next two months.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a></td></tr><tr class="verdict-true"><td>12</td><td>Several contributing factors lead to the drop: falling birth rates, families leaving the city, and a slowdown of immigration into the five boroughs under President Donald Trump.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a>; <a href="https://www.chalkbeat.org/newyork/2025/11/26/immigration-enrollment-boom-halts-under-trump-adams-policies/">Chalkbeat Nov 2025 immigration</a></td></tr><tr class="verdict-true"><td>11</td><td>Mamdani's free 2-K program expects to add 10,000 more seats next year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/10/19/2-k-expansion-bronx-staten-island-22-districts/">Chalkbeat 2-K expansion</a></td></tr><tr class="verdict-true"><td>10</td><td>The preschool increase came thanks to the rollout of a new program for 2,000 2-year-olds this year as well as an uptick in 4-year-olds signed up for prekindergarten programs.</td><td><strong>true</strong> &middot; causal claim</td><td>#9 — supported<br>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/09/10/mamdani-2-k-program-launches-with-cost-savings-payment-delays/">Chalkbeat 2-K launch</a></td></tr><tr class="verdict-true"><td>9</td><td>Enrollment in city-funded preschool programs was up slightly.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>8</td><td>Historically, when schools have fewer students than projected on their roster, the Education Department claws back money in the middle of the school year. But since the pandemic, the city has largely kept school budgets steady despite enrollment declines.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a>; <a href="https://www.chalkbeat.org/newyork/2026/06/07/nyc-school-budgets-hold-harmless-extended-despite-enrollment-drops-2026/">Chalkbeat June 7</a></td></tr><tr class="verdict-true"><td>6</td><td>By the 2034-35 school year, the city is predicting that the student population will fall by another 130,000, according to demographic projections from the School Construction Authority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://dnnhh5cc1.blob.core.windows.net/portals/0/Capital_Plan/Demographic_projection_Reports/Volume%202-2026.pdf?sv=2017-04-17&amp;sr=b&amp;si=DNNFileManagerPolicy&amp;sig=pl1f%2BywRLsn%2BsVXvRXNIEbkxmnewwAydpZBsa%2F8kIm4%3D">SCA Demographic Projections Vol. 2 (Mar 2026)</a>; <a href="https://dnnhh5cc1.blob.core.windows.net/">dnnhh5cc1.blob.core.windows.net root (HTTP 400)</a></td></tr><tr class="verdict-true"><td>5</td><td>Since 2020, New York City has spent nearly $2 billion to prop up budgets at schools with declining enrollment.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a></td></tr><tr class="verdict-true"><td>4</td><td>When the city's free preschool programs for 2-, 3-, and 4-year-olds are included in the enrollment tally, the total is 863,100, according to the Education Department's preliminary data. That was down about 2.6% from the previous year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Over the past decade, the city has lost about 200,000 students, or nearly 20%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></td></tr><tr class="verdict-true"><td>2</td><td>That leaves the nation's largest school system with about 766,900 students, from kindergarten through senior year, as of Oct. 31.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>1</td><td>New York City's public schools lost about 23,000 students, or nearly 3%, from the year before, according to preliminary numbers the Education Department released Monday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat school-level</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>6</td><td>By the 2034-35 school year, the city is predicting that the student population will fall by another 130,000, according to demographic projections from the School Construction Authority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://dnnhh5cc1.blob.core.windows.net/portals/0/Capital_Plan/Demographic_projection_Reports/Volume%202-2026.pdf?sv=2017-04-17&amp;sr=b&amp;si=DNNFileManagerPolicy&amp;sig=pl1f%2BywRLsn%2BsVXvRXNIEbkxmnewwAydpZBsa%2F8kIm4%3D">SCA Demographic Projections Vol. 2 (Mar 2026)</a>; <a href="https://dnnhh5cc1.blob.core.windows.net/">dnnhh5cc1.blob.core.windows.net root (HTTP 400)</a></td></tr><tr class="verdict-true"><td>9</td><td>Enrollment in city-funded preschool programs was up slightly.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>8</td><td>Historically, when schools have fewer students than projected on their roster, the Education Department claws back money in the middle of the school year. But since the pandemic, the city has largely kept school budgets steady despite enrollment declines.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a>; <a href="https://www.chalkbeat.org/newyork/2026/06/07/nyc-school-budgets-hold-harmless-extended-despite-enrollment-drops-2026/">Chalkbeat June 7</a></td></tr><tr class="verdict-true"><td>11</td><td>Mamdani's free 2-K program expects to add 10,000 more seats next year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/10/19/2-k-expansion-bronx-staten-island-22-districts/">Chalkbeat 2-K expansion</a></td></tr><tr class="verdict-true"><td>1</td><td>New York City's public schools lost about 23,000 students, or nearly 3%, from the year before, according to preliminary numbers the Education Department released Monday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat school-level</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Over the past decade, the city has lost about 200,000 students, or nearly 20%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></td></tr><tr class="verdict-true"><td>12</td><td>Several contributing factors lead to the drop: falling birth rates, families leaving the city, and a slowdown of immigration into the five boroughs under President Donald Trump.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a>; <a href="https://www.chalkbeat.org/newyork/2025/11/26/immigration-enrollment-boom-halts-under-trump-adams-policies/">Chalkbeat Nov 2025 immigration</a></td></tr><tr class="verdict-true"><td>5</td><td>Since 2020, New York City has spent nearly $2 billion to prop up budgets at schools with declining enrollment.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a></td></tr><tr class="verdict-true"><td>2</td><td>That leaves the nation's largest school system with about 766,900 students, from kindergarten through senior year, as of Oct. 31.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>13</td><td>The city is floating proposals to close two small schools in Harlem and one in Brooklyn, as well as merge two sets of schools in the Bronx and Brooklyn, expected to be voted on by the Panel for Educational Policy over the next two months.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a></td></tr><tr class="verdict-true"><td>15</td><td>The declines in New York City mirror national trends. Many large school systems, including Los Angeles, Chicago, Philadelphia and Houston, are also grappling with sharp drops.</td><td><strong>true</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://www.chalkbeat.org/chicago/2026/09/24/chicago-public-schools-loses-another-11500-students/">Chalkbeat Chicago</a>; <a href="https://www.chalkbeat.org/philadelphia/2026/10/20/school-district-enrollment-falls-by-2500-students/">Chalkbeat Philadelphia</a></td></tr><tr class="verdict-true"><td>10</td><td>The preschool increase came thanks to the rollout of a new program for 2,000 2-year-olds this year as well as an uptick in 4-year-olds signed up for prekindergarten programs.</td><td><strong>true</strong> &middot; causal claim</td><td>#9 — supported<br>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/09/10/mamdani-2-k-program-launches-with-cost-savings-payment-delays/">Chalkbeat 2-K launch</a></td></tr><tr class="verdict-true"><td>4</td><td>When the city's free preschool programs for 2-, 3-, and 4-year-olds are included in the enrollment tally, the total is 863,100, according to the Education Department's preliminary data. That was down about 2.6% from the previous year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>3</td><td>Over the past decade, the city has lost about 200,000 students, or nearly 20%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></td></tr><tr class="verdict-true"><td>2</td><td>That leaves the nation's largest school system with about 766,900 students, from kindergarten through senior year, as of Oct. 31.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>4</td><td>When the city's free preschool programs for 2-, 3-, and 4-year-olds are included in the enrollment tally, the total is 863,100, according to the Education Department's preliminary data. That was down about 2.6% from the previous year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>5</td><td>Since 2020, New York City has spent nearly $2 billion to prop up budgets at schools with declining enrollment.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a></td></tr><tr class="verdict-true"><td>6</td><td>By the 2034-35 school year, the city is predicting that the student population will fall by another 130,000, according to demographic projections from the School Construction Authority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://dnnhh5cc1.blob.core.windows.net/portals/0/Capital_Plan/Demographic_projection_Reports/Volume%202-2026.pdf?sv=2017-04-17&amp;sr=b&amp;si=DNNFileManagerPolicy&amp;sig=pl1f%2BywRLsn%2BsVXvRXNIEbkxmnewwAydpZBsa%2F8kIm4%3D">SCA Demographic Projections Vol. 2 (Mar 2026)</a>; <a href="https://dnnhh5cc1.blob.core.windows.net/">dnnhh5cc1.blob.core.windows.net root (HTTP 400)</a></td></tr><tr class="verdict-true"><td>8</td><td>Historically, when schools have fewer students than projected on their roster, the Education Department claws back money in the middle of the school year. But since the pandemic, the city has largely kept school budgets steady despite enrollment declines.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a>; <a href="https://www.chalkbeat.org/newyork/2026/06/07/nyc-school-budgets-hold-harmless-extended-despite-enrollment-drops-2026/">Chalkbeat June 7</a></td></tr><tr class="verdict-true"><td>9</td><td>Enrollment in city-funded preschool programs was up slightly.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>11</td><td>Mamdani's free 2-K program expects to add 10,000 more seats next year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/10/19/2-k-expansion-bronx-staten-island-22-districts/">Chalkbeat 2-K expansion</a></td></tr><tr class="verdict-true"><td>13</td><td>The city is floating proposals to close two small schools in Harlem and one in Brooklyn, as well as merge two sets of schools in the Bronx and Brooklyn, expected to be voted on by the Panel for Educational Policy over the next two months.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a></td></tr><tr class="verdict-true"><td>15</td><td>The declines in New York City mirror national trends. Many large school systems, including Los Angeles, Chicago, Philadelphia and Houston, are also grappling with sharp drops.</td><td><strong>true</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://www.chalkbeat.org/chicago/2026/09/24/chicago-public-schools-loses-another-11500-students/">Chalkbeat Chicago</a>; <a href="https://www.chalkbeat.org/philadelphia/2026/10/20/school-district-enrollment-falls-by-2500-students/">Chalkbeat Philadelphia</a></td></tr><tr class="verdict-true"><td>10</td><td>The preschool increase came thanks to the rollout of a new program for 2,000 2-year-olds this year as well as an uptick in 4-year-olds signed up for prekindergarten programs.</td><td><strong>true</strong> &middot; causal claim</td><td>#9 — supported<br>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/09/10/mamdani-2-k-program-launches-with-cost-savings-payment-delays/">Chalkbeat 2-K launch</a></td></tr><tr class="verdict-true"><td>12</td><td>Several contributing factors lead to the drop: falling birth rates, families leaving the city, and a slowdown of immigration into the five boroughs under President Donald Trump.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a>; <a href="https://www.chalkbeat.org/newyork/2025/11/26/immigration-enrollment-boom-halts-under-trump-adams-policies/">Chalkbeat Nov 2025 immigration</a></td></tr><tr class="verdict-true"><td>1</td><td>New York City's public schools lost about 23,000 students, or nearly 3%, from the year before, according to preliminary numbers the Education Department released Monday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat school-level</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>12</td><td>Several contributing factors lead to the drop: falling birth rates, families leaving the city, and a slowdown of immigration into the five boroughs under President Donald Trump.</td><td><strong>true</strong> &middot; causal claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a>; <a href="https://www.chalkbeat.org/newyork/2025/11/26/immigration-enrollment-boom-halts-under-trump-adams-policies/">Chalkbeat Nov 2025 immigration</a></td></tr><tr class="verdict-true"><td>13</td><td>The city is floating proposals to close two small schools in Harlem and one in Brooklyn, as well as merge two sets of schools in the Bronx and Brooklyn, expected to be voted on by the Panel for Educational Policy over the next two months.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a></td></tr><tr class="verdict-mostly-true"><td>3</td><td>Over the past decade, the city has lost about 200,000 students, or nearly 20%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></td></tr><tr class="verdict-true"><td>8</td><td>Historically, when schools have fewer students than projected on their roster, the Education Department claws back money in the middle of the school year. But since the pandemic, the city has largely kept school budgets steady despite enrollment declines.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a>; <a href="https://www.chalkbeat.org/newyork/2026/06/07/nyc-school-budgets-hold-harmless-extended-despite-enrollment-drops-2026/">Chalkbeat June 7</a></td></tr><tr class="verdict-true"><td>2</td><td>That leaves the nation's largest school system with about 766,900 students, from kindergarten through senior year, as of Oct. 31.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>4</td><td>When the city's free preschool programs for 2-, 3-, and 4-year-olds are included in the enrollment tally, the total is 863,100, according to the Education Department's preliminary data. That was down about 2.6% from the previous year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>9</td><td>Enrollment in city-funded preschool programs was up slightly.</td><td><strong>true</strong></td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></td></tr><tr class="verdict-true"><td>1</td><td>New York City's public schools lost about 23,000 students, or nearly 3%, from the year before, according to preliminary numbers the Education Department released Monday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a>; <a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat school-level</a></td></tr><tr class="verdict-true"><td>5</td><td>Since 2020, New York City has spent nearly $2 billion to prop up budgets at schools with declining enrollment.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a></td></tr><tr class="verdict-true"><td>6</td><td>By the 2034-35 school year, the city is predicting that the student population will fall by another 130,000, according to demographic projections from the School Construction Authority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://dnnhh5cc1.blob.core.windows.net/portals/0/Capital_Plan/Demographic_projection_Reports/Volume%202-2026.pdf?sv=2017-04-17&amp;sr=b&amp;si=DNNFileManagerPolicy&amp;sig=pl1f%2BywRLsn%2BsVXvRXNIEbkxmnewwAydpZBsa%2F8kIm4%3D">SCA Demographic Projections Vol. 2 (Mar 2026)</a>; <a href="https://dnnhh5cc1.blob.core.windows.net/">dnnhh5cc1.blob.core.windows.net root (HTTP 400)</a></td></tr><tr class="verdict-true"><td>10</td><td>The preschool increase came thanks to the rollout of a new program for 2,000 2-year-olds this year as well as an uptick in 4-year-olds signed up for prekindergarten programs.</td><td><strong>true</strong> &middot; causal claim</td><td>#9 — supported<br>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/09/10/mamdani-2-k-program-launches-with-cost-savings-payment-delays/">Chalkbeat 2-K launch</a></td></tr><tr class="verdict-true"><td>11</td><td>Mamdani's free 2-K program expects to add 10,000 more seats next year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/10/19/2-k-expansion-bronx-staten-island-22-districts/">Chalkbeat 2-K expansion</a></td></tr><tr class="verdict-true"><td>15</td><td>The declines in New York City mirror national trends. Many large school systems, including Los Angeles, Chicago, Philadelphia and Houston, are also grappling with sharp drops.</td><td><strong>true</strong></td><td>Checked against: <code>edu.ccd_districts</code>; <a href="https://www.chalkbeat.org/chicago/2026/09/24/chicago-public-schools-loses-another-11500-students/">Chalkbeat Chicago</a>; <a href="https://www.chalkbeat.org/philadelphia/2026/10/20/school-district-enrollment-falls-by-2500-students/">Chalkbeat Philadelphia</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Kamar Samuels — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>14</td><td>&quot;We've started to have conversations in communities,&quot; Samuels told the Chancellor's Parent Advisory Committee last week.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> mostly true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-mostly-true"><td>7</td><td>Thirty states have seen public school enrollment declines since 2014.</td><td><strong>mostly true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; New York City's public schools lost about 23,000 students, or nearly 3%, from the year before, according to preliminary numbers the Education Department released Monday.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NY1 (Nov 16): 766,900 K-12 as of Oct 31, down 23,000 or 2.9%. Preliminary figure.<ul class="claim-sources"><li><a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></li><li><a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat school-level</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>school district enrollment New York City public schools</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; That leaves the nation's largest school system with about 766,900 students, from kindergarten through senior year, as of Oct. 31.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NY1 reports 766,900 as of Oct. 31 (preliminary).<ul class="claim-sources"><li><a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#3 &middot; <strong>mostly true</strong> &mdash; Over the past decade, the city has lost about 200,000 students, or nearly 20%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>-197,232 (-20.5%)<ul class="claim-sources"><li><a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></li><li><a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says 'nearly 20%'; the evidence (NY1: 964,132 in 2016-17 to 766,900) is -197,232, or -20.5%, which is just over 20%.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; When the city's free preschool programs for 2-, 3-, and 4-year-olds are included in the enrollment tally, the total is 863,100, according to the Education Department's preliminary data. That was down about 2.6% from the previous year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NY1: 863,100 vs 885,860 last year; change = -2.57%.<ul class="claim-sources"><li><a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Since 2020, New York City has spent nearly $2 billion to prop up budgets at schools with declining enrollment.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Chalkbeat June 22, 2026: nearly $1.9 billion since 2020 (about $290 million next year).<ul class="claim-sources"><li><a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; By the 2034-35 school year, the city is predicting that the student population will fall by another 130,000, according to demographic projections from the School Construction Authority.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>-128,401 from 2025-26 per SCA Table A1<ul class="claim-sources"><li><a href="https://dnnhh5cc1.blob.core.windows.net/portals/0/Capital_Plan/Demographic_projection_Reports/Volume%202-2026.pdf?sv=2017-04-17&amp;sr=b&amp;si=DNNFileManagerPolicy&amp;sig=pl1f%2BywRLsn%2BsVXvRXNIEbkxmnewwAydpZBsa%2F8kIm4%3D">SCA Demographic Projections Vol. 2 (Mar 2026)</a></li><li><a href="https://dnnhh5cc1.blob.core.windows.net/">dnnhh5cc1.blob.core.windows.net root (HTTP 400)</a></li></ul></dd>
+<dt>Why</dt><dd>Projection (estimate): SCA Table A1 shows 849,652 in 2025-26 falling to 721,251 in 2034-35, a decline of 128,401, i.e. about 130,000. Caveat for readers: SCA counts PK-12 excluding District 75, measured from 2025-26.</dd>
+<dt>No page loaded because</dt><dd>SCA PDF read in full via the article's signed link; the storage host root returns HTTP 400 and lists no index page.</dd>
+<dt>Warehouse searched for</dt><dd>school district enrollment New York City public schools</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; Thirty states have seen public school enrollment declines since 2014.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>NCES CCD district sums 2014 vs 2024: 31 of 51 jurisdictions (states + DC) declined <code>edu.ccd_districts</code></dd>
+<dt>Independent evidence</dt><dd>NYT fetch 403<ul class="claim-sources"><li><a href="https://www.nytimes.com/2026/05/08/upshot/public-schools-enrollment-crisis.html">NYT Upshot (403)</a></li><li><a href="https://www.npr.org/2026/11/06/nx-s1-5971283/public-school-enrollment-ice-deportation-birthrate">NPR Nov 6</a></li></ul></dd>
+<dt>Inaccuracy</dt><dd>The claim says 30 states; the warehouse count is 31 of 51 jurisdictions (includes DC, ends 2024); NYT page returned HTTP 403 so the cited source was not read directly.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>WITH s AS (SELECT state_abbr, &quot;year&quot;, SUM(CASE WHEN enrollment&gt;0 THEN enrollment END) e FROM edu.ccd_districts WHERE &quot;year&quot; IN (2014,2024) AND fips BETWEEN 1 AND 56 GROUP BY state_abbr, &quot;year&quot;) SELECT COUNT(*) states, SUM(CASE WHEN b.e&lt;a.e THEN 1 ELSE 0 END) declined FROM s a JOIN s b ON a.state_abbr=b.state_abbr AND a.&quot;year&quot;=2014 AND b.&quot;year&quot;=2024</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; Historically, when schools have fewer students than projected on their roster, the Education Department claws back money in the middle of the school year. But since the pandemic, the city has largely kept school budgets steady despite enrollment declines.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Chalkbeat June 22 and June 7, 2026 pieces describe the same midyear clawback practice and the hold-harmless exception since 2020.<ul class="claim-sources"><li><a href="https://www.chalkbeat.org/newyork/2026/06/22/hold-harmless-costs-grow-enrollment-losses-continue/">Chalkbeat hold harmless</a></li><li><a href="https://www.chalkbeat.org/newyork/2026/06/07/nyc-school-budgets-hold-harmless-extended-despite-enrollment-drops-2026/">Chalkbeat June 7</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; Enrollment in city-funded preschool programs was up slightly.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Derived from NY1 totals: (863,100-766,900) = 96,200 vs (885,860-789,900) = 95,960, about +240 (+0.25%).<ul class="claim-sources"><li><a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; The preschool increase came thanks to the rollout of a new program for 2,000 2-year-olds this year as well as an uptick in 4-year-olds signed up for prekindergarten programs.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>2-K launched with roughly 2,000 toddlers<ul class="claim-sources"><li><a href="https://www.chalkbeat.org/newyork/2026/09/10/mamdani-2-k-program-launches-with-cost-savings-payment-delays/">Chalkbeat 2-K launch</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#9</dd>
+<dt>What that evidence found</dt><dd>Chalkbeat Sept 10 confirms roughly 2,000 toddlers started 2-K. The 4-year-old uptick was not independently verified; 2,000 new seats exceeds the net +240, so other preschool categories fell.</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; Mamdani's free 2-K program expects to add 10,000 more seats next year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Chalkbeat Oct 19: program growing to 12,000 kids next year from 2,000 this year = +10,000.<ul class="claim-sources"><li><a href="https://www.chalkbeat.org/newyork/2026/10/19/2-k-expansion-bronx-staten-island-22-districts/">Chalkbeat 2-K expansion</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; Several contributing factors lead to the drop: falling birth rates, families leaving the city, and a slowdown of immigration into the five boroughs under President Donald Trump.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Comptroller report and district patterns; stated as contributing factors, no decomposition.<ul class="claim-sources"><li><a href="https://ny1.com/nyc/all-boroughs/education/2026/11/16/nyc-public-school-enrollment-continues-to-fall">NY1</a></li><li><a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a></li><li><a href="https://www.chalkbeat.org/newyork/2025/11/26/immigration-enrollment-boom-halts-under-trump-adams-policies/">Chalkbeat Nov 2025 immigration</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>What that evidence found</dt><dd>City Comptroller report (via NY1) cites lower births, decreased migration in and families moving out; Chalkbeat Nov 19 shows steepest losses in immigrant-heavy districts and schools.</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#13 &middot; <strong>true</strong> &mdash; The city is floating proposals to close two small schools in Harlem and one in Brooklyn, as well as merge two sets of schools in the Bronx and Brooklyn, expected to be voted on by the Panel for Educational Policy over the next two months.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Chalkbeat Nov 2: two Harlem closures (112 and 40 students), vote Dec. 16; Chalkbeat Nov 19: five closure/merger proposals on PEP agendas Jan 20 and Jan 27, 2027, consistent with 3 closures + 2 mergers.<ul class="claim-sources"><li><a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></li><li><a href="https://www.chalkbeat.org/newyork/2026/11/19/nyc-student-enrollment-losses-by-school/">Chalkbeat Nov 19</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#14 &middot; <strong>unsupported</strong> &mdash; &quot;We've started to have conversations in communities,&quot; Samuels told the Chancellor's Parent Advisory Committee last week.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Kamar Samuels — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.chalkbeat.org/newyork/2026/11/02/nyc-harlem-school-closures-center-school-relocation-mamdani/">Chalkbeat Nov 2</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>No other page located containing the quote; Chalkbeat's Nov 2 piece quotes Samuels on small schools but not this line.</dd>
+<dt>No page loaded because</dt><dd>Fetched Chalkbeat Nov 2 and NY1; neither contains the quote; the meeting has no public transcript found.</dd>
+<dt>Warehouse searched for</dt><dd>school district enrollment New York City public schools</dd>
+<dt>Web searches run</dt><dd>NYC public school enrollment 766,900 preliminary October 31 2026 Education Department</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#15 &middot; <strong>true</strong> &mdash; The declines in New York City mirror national trends. Many large school systems, including Los Angeles, Chicago, Philadelphia and Houston, are also grappling with sharp drops.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>31 of 51 jurisdictions lower in 2024 than 2014 (NCES CCD) <code>edu.ccd_districts</code></dd>
+<dt>Independent evidence</dt><dd>Chicago -11,500 (Chalkbeat Sept 24); Philadelphia about -2,500 (Chalkbeat Oct 20); Houston about -9,000 to -10,000 (Houston Public Media); LAUSD lost 300,000+ over two decades (NPR).<ul class="claim-sources"><li><a href="https://www.chalkbeat.org/chicago/2026/09/24/chicago-public-schools-loses-another-11500-students/">Chalkbeat Chicago</a></li><li><a href="https://www.chalkbeat.org/philadelphia/2026/10/20/school-district-enrollment-falls-by-2500-students/">Chalkbeat Philadelphia</a></li><li><a href="https://www.houstonpublicmedia.org/articles/education/2026/10/07/563768/houston-isd-loses-roughly-9000-students-more-than-twice-its-projection/">Houston Public Media</a></li><li><a href="https://www.npr.org/2026/11/06/nx-s1-5971283/public-school-enrollment-ice-deportation-birthrate">NPR</a></li></ul></dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Framing check</h2>
+<p>Not materially misleading. The piece labels figures preliminary and says budget consequences are 'murky'. Missing context: the drop is the largest since the pandemic, and the SCA projection counts PK-12 excluding District 75 from last year's base, not this year's K-12 count. The warehouse (NCES CCD) has no usable NYC row (null/zero enrollment), so NYC counts were checked against NY1 and the SCA PDF.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 12 rows — 4104 ms</summary><pre><code>SELECT &quot;year&quot;, leaid, enrollment FROM edu.ccd_districts WHERE leaid='3620580' ORDER BY &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 8536 ms</summary><pre><code>WITH s AS (SELECT state_abbr, &quot;year&quot;, SUM(CASE WHEN enrollment&gt;0 THEN enrollment END) e FROM edu.ccd_districts WHERE &quot;year&quot; IN (2014,2024) AND fips BETWEEN 1 AND 56 GROUP BY state_abbr, &quot;year&quot;) SELECT COUNT(*) states, SUM(CASE WHEN b.e&lt;a.e THEN 1 ELSE 0 END) declined FROM s a JOIN s b ON a.state_abbr=b.state_abbr AND a.&quot;year&quot;=2014 AND b.&quot;year&quot;=2024</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
