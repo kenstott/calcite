@@ -2483,7 +2483,7 @@ partitionedTables:
     # successful run and never revisit it. Reopening the 2 most recently published years covers
     # that late-arriving load; the hash check skips the write when nothing changed.
     lookbackPeriods: 2
-    # Freshness gate: waterqualitydata.us is a live query with no meaningful
+    # Freshness gate: waterqualitydata.epa.gov is a live query with no meaningful
     # Last-Modified, so this hashes the response body post-fetch to skip the
     # materialize/commit when unchanged (fails open on a missing prior token).
     freshness:
@@ -2569,7 +2569,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.waterqualitydata.us/data/Result/search?statecode=US:{state}&startDateLo=01-01-{effective_year}&startDateHi=12-31-{effective_year}&mimeType=csv&zip=no"
+      url: "https://waterqualitydata.epa.gov/data/Result/search?statecode=US:{state}&startDateLo=01-01-{effective_year}&startDateHi=12-31-{effective_year}&mimeType=csv&zip=no"
       method: GET
       response:
         format: csv
