@@ -2659,7 +2659,7 @@ public class HttpSource implements DataSource {
             headers.length, cachePath);
       } else if (hasHeader) {
         // Read header row from file
-        String headerLine = reader.readLine();
+        String headerLine = CsvRecordReader.readRecord(reader, quoted);
         if (headerLine == null) {
           this.headers = new String[0];
           this.filterColumnIndex = -1;
@@ -2680,7 +2680,7 @@ public class HttpSource implements DataSource {
         LOGGER.debug("Parsed {} columns from header (from cache: {})", headers.length, cachePath);
       } else {
         // Headerless file without explicit names — peek first line for column count
-        String firstLine = reader.readLine();
+        String firstLine = CsvRecordReader.readRecord(reader, quoted);
         if (firstLine == null) {
           this.headers = new String[0];
           this.filterColumnIndex = -1;
@@ -2770,7 +2770,7 @@ public class HttpSource implements DataSource {
 
       try {
         String line;
-        while ((line = reader.readLine()) != null) {
+        while ((line = CsvRecordReader.readRecord(reader, quoted)) != null) {
           lineNumber++;
           line = line.trim();
           if (line.isEmpty()) {

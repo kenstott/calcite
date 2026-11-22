@@ -108,6 +108,28 @@ public class HttpSourceInnerClassCoverageTest {
     assertFalse(iter.hasNext());
   }
 
+  @Test void testQuotedFieldWithEmbeddedNewlineStaysOneRecord() throws Exception {
+    String csv = "org,site,comment\nO1,S1,\"line one\nline two,\nline three\"\nO2,S2,plain\n";
+    InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
+    HttpSource source = createMinimalHttpSource();
+
+    Iterator<Map<String, Object>> iter =
+        createLazyCSVIterator(source, is, "/test", ',', null, null, true, null);
+
+    assertTrue(iter.hasNext());
+    Map<String, Object> row1 = iter.next();
+    assertEquals("O1", row1.get("org"));
+    assertEquals("S1", row1.get("site"));
+    assertEquals("line one\nline two,\nline three", row1.get("comment"));
+
+    assertTrue(iter.hasNext());
+    Map<String, Object> row2 = iter.next();
+    assertEquals("O2", row2.get("org"));
+    assertEquals("S2", row2.get("site"));
+
+    assertFalse(iter.hasNext());
+  }
+
   @Test void testEmptyCSV() throws Exception {
     String csv = "";
     InputStream is = new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
