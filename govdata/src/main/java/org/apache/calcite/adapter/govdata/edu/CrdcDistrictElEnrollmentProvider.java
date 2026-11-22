@@ -297,8 +297,9 @@ public class CrdcDistrictElEnrollmentProvider implements DataProvider {
 
   /** Downloads and decompresses the school-level {@code Enrollment.csv} entry of the zip. */
   static byte[] readEnrollmentCsv(String zipUrl) throws IOException {
+    ArchiveReader archive = new ArchiveReader(zipUrl);
     // Tail: end-of-central-directory record, which locates the central directory.
-    byte[] tail = rangeBytes(zipUrl, "bytes=-65536");
+    byte[] tail = archive.range("bytes=-65536");
     int eocd = -1;
     for (int i = tail.length - 22; i >= 0; i--) {
       if (le32(tail, i) == EOCD_SIG) {
@@ -315,7 +316,7 @@ public class CrdcDistrictElEnrollmentProvider implements DataProvider {
     if (cdSize == 0xFFFFFFFFL || cdOffset == 0xFFFFFFFFL) {
       throw new IOException("district_el_enrollment: zip64 archive not supported: " + zipUrl);
     }
-    byte[] cd = rangeBytes(zipUrl, "bytes=" + cdOffset + "-" + (cdOffset + cdSize - 1));
+    byte[] cd = archive.range("bytes=" + cdOffset + "-" + (cdOffset + cdSize - 1));
 
     int pos = 0;
     while (pos + 46 <= cd.length && le32(cd, pos) == CEN_SIG) {
@@ -333,13 +334,13 @@ public class CrdcDistrictElEnrollmentProvider implements DataProvider {
       }
       // The local header repeats the name and extra lengths (which may differ from the central
       // directory's), so read it to find where the data starts.
-      byte[] local = rangeBytes(zipUrl, "bytes=" + localOffset + "-" + (localOffset + 29));
+      byte[] local = archive.range("bytes=" + localOffset + "-" + (localOffset + 29));
       if (le32(local, 0) != LOC_SIG) {
         throw new IOException("district_el_enrollment: bad local header for " + name + " in "
             + zipUrl);
       }
       long dataStart = localOffset + 30 + le16(local, 26) + le16(local, 28);
-      byte[] data = rangeBytes(zipUrl, "bytes=" + dataStart + "-" + (dataStart + compSize - 1));
+      byte[] data = archive.range("bytes=" + dataStart + "-" + (dataStart + compSize - 1));
       if (method == 0) {
         return data;
       }
@@ -390,25 +391,64 @@ public class CrdcDistrictElEnrollmentProvider implements DataProvider {
     return ByteBuffer.wrap(b, off, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
   }
 
-  private static byte[] rangeBytes(String url, String range) throws IOException {
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(180000);
-    conn.setRequestProperty("User-Agent", "GovData/1.0");
-    conn.setRequestProperty("Range", range);
-    NetworkOutageWait.connect(conn);
-    int status = conn.getResponseCode();
-    if (status != HttpURLConnection.HTTP_PARTIAL) {
-      throw new IOException("HTTP " + status + " (expected 206 for " + range + ") from " + url);
+  /**
+   * Range reads of one archive version. civilrightsdata.ed.gov serves one URL from load-balanced
+   * backends that hold different builds of the file (different ETag, length and central directory),
+   * so every request after the first carries the first response's load-balancer cookie and its
+   * ETag as {@code If-Match}; a request answered by another build fails instead of being read as
+   * part of the same zip.
+   */
+  private static final class ArchiveReader {
+    private final String url;
+    private String cookie;
+    private String etag;
+
+    ArchiveReader(String url) {
+      this.url = url;
     }
-    try (InputStream is = CompleteBody.of(conn);
-         ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-      byte[] buf = new byte[65536];
-      int len;
-      while ((len = is.read(buf)) > 0) {
-        baos.write(buf, 0, len);
+
+    byte[] range(String range) throws IOException {
+      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+      conn.setConnectTimeout(30000);
+      conn.setReadTimeout(180000);
+      conn.setRequestProperty("User-Agent", "GovData/1.0");
+      conn.setRequestProperty("Range", range);
+      if (etag != null) {
+        conn.setRequestProperty("If-Match", etag);
+        conn.setRequestProperty("Cookie", cookie);
       }
-      return baos.toByteArray();
+      NetworkOutageWait.connect(conn);
+      int status = conn.getResponseCode();
+      if (status != HttpURLConnection.HTTP_PARTIAL) {
+        throw new IOException("HTTP " + status + " (expected 206 for " + range + ") from " + url);
+      }
+      if (etag == null) {
+        String tag = conn.getHeaderField("ETag");
+        if (tag == null) {
+          throw new IOException("district_el_enrollment: no ETag on " + url);
+        }
+        StringBuilder cookies = new StringBuilder();
+        List<String> setCookies = conn.getHeaderFields().get("Set-Cookie");
+        if (setCookies != null) {
+          for (String sc : setCookies) {
+            if (cookies.length() > 0) {
+              cookies.append("; ");
+            }
+            cookies.append(sc.substring(0, sc.indexOf(';') < 0 ? sc.length() : sc.indexOf(';')));
+          }
+        }
+        etag = tag;
+        cookie = cookies.toString();
+      }
+      try (InputStream is = CompleteBody.of(conn);
+           ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+        byte[] buf = new byte[65536];
+        int len;
+        while ((len = is.read(buf)) > 0) {
+          baos.write(buf, 0, len);
+        }
+        return baos.toByteArray();
+      }
     }
   }
 }
