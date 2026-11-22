@@ -520,6 +520,56 @@ SELECT 'environment', 'drinking_water_sample_results', 'T8_pk_duplication',
 FROM (SELECT COALESCE(SUM(c - 1), 0) AS n FROM (SELECT COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/drinking_water_sample_results', allow_moved_paths := true) GROUP BY pwsid, water_facility_id, sampling_point_id, sample_date, six_year_id HAVING COUNT(*) > 1));
 
 -- ------------------------------------------------------------
+-- TABLE: ucmr_results (partition cols: type)
+-- sampling_point_type (EP) and monitoring_requirement (AM) are constant across the UCMR 5 file by design.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T2_row_count',
+  CASE WHEN n >= 1500000 THEN 'pass' ELSE 'fail' END, n, 1500000, 'Expected >=1.5M UCMR 5 results (EPA file has 1.99M at the Oct 2026 release)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'sampling_point_type', 'monitoring_requirement')));
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL pwsid / sampling_point_id / sample_id / contaminant / collection_date rows (facility_id is excluded: the one facility EPA ids as the literal NA reads as null)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true) WHERE pwsid IS NULL OR sampling_point_id IS NULL OR sample_id IS NULL OR contaminant IS NULL OR collection_date IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with negative result_value, a detection without a value, a non-detect with a value, or year outside 2023-2030'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true) WHERE result_value < 0 OR (detected AND result_value IS NULL) OR (NOT detected AND result_value IS NOT NULL) OR year < 2023 OR year > 2030);
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T7_pfas_magnitude',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Detected PFOA results (EPA UCMR 5 data summary reports several thousand PFOA detections)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true) WHERE contaminant = 'PFOA' AND detected);
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T7_contaminant_count',
+  CASE WHEN n = 30 THEN 'pass' ELSE 'fail' END, n, 30, 'UCMR 5 lists 29 PFAS plus lithium'
+FROM (SELECT COUNT(DISTINCT contaminant) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'ucmr_results', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (pwsid, facility_id, sampling_point_id, sample_id, contaminant, collection_date) rows beyond the first'
+FROM (SELECT COALESCE(SUM(c - 1), 0) AS n FROM (SELECT COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ucmr_results', allow_moved_paths := true) GROUP BY pwsid, facility_id, sampling_point_id, sample_id, contaminant, collection_date HAVING COUNT(*) > 1));
+
+-- ------------------------------------------------------------
 -- TABLE: superfund_sites (partition cols: type)
 -- ------------------------------------------------------------
 INSERT INTO dq_results
