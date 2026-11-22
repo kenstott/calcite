@@ -68,8 +68,10 @@ _COLUMN_LABELS = ["COLUMN_NAME", "TYPE_NAME", "NULLABLE", "REMARKS"]
 
 
 class _DatabaseMetaData:
-    def __init__(self, tables, broken_schemas=(), broken_tables=(), failing_views=None):
+    def __init__(self, tables, broken_schemas=(), broken_tables=(), failing_views=None,
+                 empty_tables=()):
         self._tables = tables  # {schema: [table, ...]}
+        self._empty_tables = set(empty_tables)
         self._broken_schemas = set(broken_schemas)
         self._broken_tables = set(broken_tables)
         # {schema: view}: listed until its first resolution fails, then no longer listed --
@@ -100,6 +102,8 @@ class _DatabaseMetaData:
     def getColumns(self, _catalog, schema, table, _pattern):
         if (schema, table) in self._broken_tables:
             raise RuntimeError("Iceberg metadata unreadable")
+        if (schema, table) in self._empty_tables:
+            return _ResultSet(_COLUMN_LABELS, [])
         return _ResultSet(
             _COLUMN_LABELS, [{"COLUMN_NAME": "id", "TYPE_NAME": "INTEGER", "NULLABLE": "0"}]
         )
@@ -237,3 +241,11 @@ def test_an_unwritable_state_directory_is_one_warning_and_the_catalog_is_served(
     assert [r.levelno for r in records] == [logging.WARNING]
     assert f"{state} is not writable" in records[0].getMessage()
     assert records[0].exc_info is None
+
+
+def test_walk_with_a_table_that_reports_no_columns_is_not_cached(tmp_path):
+    model_path = _model(tmp_path)
+    ctx, column_types = catalog_populate.build_and_cache_context(
+        _Connection(_DatabaseMetaData(_TABLES, empty_tables=[("econ", "cpi")])), model_path)
+    assert column_types[ctx.tables["econ.cpi"].table_id] == []
+    assert not os.path.exists(catalog_populate.catalog_cache_path(model_path))

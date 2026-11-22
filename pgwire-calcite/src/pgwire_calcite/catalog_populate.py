@@ -226,6 +226,10 @@ def build_context_reporting_gaps(conn) -> tuple:
                         ),
                     )
                 )
+            if not cols:
+                log.warning("getColumns returned no columns for %s.%s -- the walk is incomplete",
+                            schema, name)
+                gaps.append(f"table {schema}.{name}")
             column_types[tm.table_id] = cols
         except Exception as e:
             log.warning("getColumns failed for %s.%s (%s: %s) — leaving it column-less",
