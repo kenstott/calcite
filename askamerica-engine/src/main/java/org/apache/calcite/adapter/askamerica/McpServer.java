@@ -3062,6 +3062,15 @@ public class McpServer {
             + "syndication partner's or wire service's page. The claims MUST be extracted from "
             + "that text. The publish is refused when the article did not load and no copy "
             + "that loaded is named here."));
+        pubProps.set("article_unavailable", prop("boolean",
+            "For a validation whose `source_url` would not load and for which the engine's copy "
+            + "search found no copy that loads: set true to publish without the article's text. "
+            + "Accepted only after web_fetch of `source_url` failed and the engine searched for "
+            + "copies and none loaded. Then every claim that rests on the article's body only "
+            + "MUST carry `kind`: \"article_text\" and the verdict 'not checkable here'; the "
+            + "other claims MUST be ones visible in the headline or in search results, graded on "
+            + "evidence; and `title` MUST say the article text was not read (\"article text not "
+            + "read\"). Refused when a copy loaded or no copy search ran."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -4879,14 +4888,16 @@ public class McpServer {
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceArticleTextRead(claims,
                             args.path("source_url").asText(null),
-                            args.path("article_copy_url").asText(null)));
+                            args.path("article_copy_url").asText(null),
+                            args.path("article_unavailable").asBoolean(false), rTitle));
                         addIfPresent(gateProblems, enforceFiguresAccountedFor(claims,
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceMeasureSearched(claims));
                         addIfPresent(gateProblems, enforceWindowsTested(claims));
                         addIfPresent(gateProblems, enforceUnsupportedFigureAttempted(claims,
                             args.path("source_url").asText(null)));
-                        addIfPresent(gateProblems, enforceNotCheckableOnlyForOpinions(claims));
+                        addIfPresent(gateProblems, enforceNotCheckableOnlyForOpinions(claims,
+                            args.path("article_unavailable").asBoolean(false)));
                         addIfPresent(gateProblems, enforceFactCheckProcedureServed());
                         addIfPresent(gateProblems, enforceArticleFiguresClaimed(claims,
                             args.path("source_url").asText(null), args.path("unclaimed")));
@@ -8356,10 +8367,13 @@ public class McpServer {
      * Reuters copy on another site graded six to ten.
      */
     private static String enforceArticleTextRead(JsonNode claims, String articleUrl,
-            String copyUrl) {
+            String copyUrl, boolean unavailable, String title) {
         if (articleUrl == null || articleUrl.trim().isEmpty()
                 || pageLoaded(normalizeUrlForMatch(articleUrl))) {
             return null;
+        }
+        if (unavailable && (copyUrl == null || copyUrl.trim().isEmpty())) {
+            return enforceArticleUnavailable(claims, articleUrl, title);
         }
         if (copyUrl == null || copyUrl.trim().isEmpty()) {
             return "validation refused: the article " + articleUrl + " did not load, so its "
@@ -8406,6 +8420,56 @@ public class McpServer {
             + ", so it is not a copy of the story the claims came from. A copy carries the "
             + "central claim's figures and most of the others. Find one that does, web_fetch it, "
             + "extract the claims from its text and name it.";
+    }
+
+    /** Claim kind for a claim that rests on the body of an article that could not be read. */
+    static final String KIND_ARTICLE_TEXT = "article_text";
+
+    /**
+     * The exit for an article that does not load and has no copy anywhere: the engine must have
+     * tried the article and searched for copies without one loading, the report must say the text
+     * was not read, claims resting on the body alone are graded 'not checkable here', and at least
+     * one claim must be graded on evidence so the report is not empty.
+     */
+    private static String enforceArticleUnavailable(JsonNode claims, String articleUrl,
+            String title) {
+        String norm = normalizeUrlForMatch(articleUrl);
+        if (!COPY_SEARCHED.contains(norm)) {
+            return "validation refused: `article_unavailable` needs the engine's copy search, "
+                + "which runs when web_fetch of " + articleUrl + " fails. web_fetch it, read the "
+                + "copy search result, then publish.";
+        }
+        java.util.List<String> loaded = COPY_LOADED.get(norm);
+        if (loaded != null && !loaded.isEmpty()) {
+            return "validation refused: `article_unavailable` is set but the copy search loaded "
+                + loaded + ". Extract the claims from one that is the same story and name it in "
+                + "`article_copy_url`.";
+        }
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        boolean graded = false;
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            boolean articleOnly = KIND_ARTICLE_TEXT.equals(
+                c.path("kind").asText("").trim().toLowerCase(java.util.Locale.ROOT));
+            if (articleOnly && !ClaimScoring.VERDICT_NOT_CHECKABLE.equals(verdict)) {
+                problems.add("the `article_text` claim \"" + c.path("assertion").asText("").trim()
+                    + "\" MUST be graded 'not checkable here'");
+            }
+            if (!articleOnly && !ClaimScoring.VERDICT_NOT_CHECKABLE.equals(verdict)) {
+                graded = true;
+            }
+        }
+        if (!graded) {
+            problems.add("no claim is graded on evidence; with the article text unread, publish "
+                + "the claims visible in its headline or in search results, checked against "
+                + "primary sources");
+        }
+        if (title == null || !title.toLowerCase(java.util.Locale.ROOT)
+                .contains("article text not read")) {
+            problems.add("`title` MUST say the article text was not read, e.g. \"... "
+                + "(article text not read)\"");
+        }
+        return problems.isEmpty() ? null : "validation refused: " + String.join("; ", problems);
     }
 
     /** Fraction of the article's headline words its copy must carry when the claims hold no figure. */
@@ -8687,6 +8751,9 @@ public class McpServer {
     /** Article URLs whose copies were already searched for this session. */
     static final java.util.Set<String> COPY_SEARCHED =
         java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** Per article URL, the copy-search results that loaded. */
+    static final java.util.Map<String, java.util.List<String>> COPY_LOADED =
+        new java.util.concurrent.ConcurrentHashMap<>();
     /** How many search results are fetched when looking for a copy of an article. */
     private static final int COPY_CANDIDATES = 6;
 
@@ -8786,6 +8853,7 @@ public class McpServer {
             webFetch(a);
             (pageLoaded(normalizeUrlForMatch(u)) ? loaded : failed).add(u);
         }
+        COPY_LOADED.put(normalizeUrlForMatch(articleUrl), new java.util.ArrayList<>(loaded));
         StringBuilder sb = new StringBuilder("\n\n--- the article did not load: copies of the "
             + "story ---\nThe engine searched news for \"" + String.join("\", \"", queries)
             + "\" and fetched " + tried + " result(s).");
@@ -8865,12 +8933,15 @@ public class McpServer {
      * and left the central figure ungraded; a later run graded a bicyclist figure 'not checkable
      * here' because no accessible source carried it.
      */
-    private static String enforceNotCheckableOnlyForOpinions(JsonNode claims) {
+    private static String enforceNotCheckableOnlyForOpinions(JsonNode claims,
+            boolean articleUnavailable) {
         java.util.List<String> ungraded = new java.util.ArrayList<>();
         for (JsonNode c : claims) {
             String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
             if (ClaimScoring.VERDICT_NOT_CHECKABLE.equals(verdict)
-                    && !ClaimScoring.isOpinion(c) && !ClaimScoring.isAttack(c)) {
+                    && !ClaimScoring.isOpinion(c) && !ClaimScoring.isAttack(c)
+                    && !(articleUnavailable && KIND_ARTICLE_TEXT.equals(
+                        c.path("kind").asText("").trim().toLowerCase(java.util.Locale.ROOT)))) {
                 ungraded.add("\"" + c.path("assertion").asText("").trim() + "\"");
             }
         }

@@ -49,6 +49,8 @@ class ExternalCheckGateTest {
     @AfterEach void clearCallLog() throws Exception {
         callLog().clear();
         McpServer.FETCHED_TEXT.clear();
+        McpServer.COPY_SEARCHED.clear();
+        McpServer.COPY_LOADED.clear();
         McpServer.DOCUMENT_LINKS.clear();
     }
 
@@ -726,9 +728,9 @@ class ExternalCheckGateTest {
 
     private static String centralGate(String claimsJson) throws Exception {
         Method m = McpServer.class.getDeclaredMethod("enforceNotCheckableOnlyForOpinions",
-            JsonNode.class);
+            JsonNode.class, boolean.class);
         m.setAccessible(true);
-        return (String) m.invoke(null, MAPPER.readTree(claimsJson));
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), false);
     }
 
     /** The q14 shape: the central figure left uncheckable, citing fetched pages, no searches. */
@@ -815,11 +817,75 @@ class ExternalCheckGateTest {
             + "{\"assertion\":\"b\",\"verdict\":\"not checkable here\"}]"));
     }
 
+    private static String unavailableGate(String claimsJson, String title) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceArticleTextRead",
+            JsonNode.class, String.class, String.class, boolean.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE, null, true, title);
+    }
+
+    private static final String UNAVAILABLE_CLAIMS =
+        "[{\"assertion\":\"Indy pedestrian deaths rose\",\"verdict\":\"true\"},"
+        + "{\"assertion\":\"The mayor promised Vision Zero in 2016\","
+        + "\"kind\":\"article_text\",\"verdict\":\"not checkable here\","
+        + "\"reason\":\"body unread\"}]";
+    private static final String UNAVAILABLE_TITLE =
+        "The Axios article's claims about Vision Zero (article text not read)";
+
+    @Test void unavailableArticleNeedsTheCopySearchToHaveRun() throws Exception {
+        String r = unavailableGate(UNAVAILABLE_CLAIMS, UNAVAILABLE_TITLE);
+        assertNotNull(r);
+        assertTrue(r.contains("copy search"), r);
+    }
+
+    @Test void unavailableArticleIsRefusedWhenACopyLoaded() throws Exception {
+        String n = McpServer.normalizeUrlForMatch(ARTICLE);
+        McpServer.COPY_SEARCHED.add(n);
+        McpServer.COPY_LOADED.put(n, java.util.Collections.singletonList("https://x.example/a"));
+        assertNotNull(unavailableGate(UNAVAILABLE_CLAIMS, UNAVAILABLE_TITLE));
+    }
+
+    @Test void unavailableArticlePublishesWithArticleOnlyClaimsNotCheckable() throws Exception {
+        McpServer.COPY_SEARCHED.add(McpServer.normalizeUrlForMatch(ARTICLE));
+        assertNull(unavailableGate(UNAVAILABLE_CLAIMS, UNAVAILABLE_TITLE));
+    }
+
+    @Test void unavailableArticleTitleMustSayTextWasNotRead() throws Exception {
+        McpServer.COPY_SEARCHED.add(McpServer.normalizeUrlForMatch(ARTICLE));
+        String r = unavailableGate(UNAVAILABLE_CLAIMS, "The Axios article's claims about Vision Zero");
+        assertNotNull(r);
+        assertTrue(r.contains("article text was not read"), r);
+    }
+
+    @Test void unavailableArticleNeedsAClaimGradedOnEvidence() throws Exception {
+        McpServer.COPY_SEARCHED.add(McpServer.normalizeUrlForMatch(ARTICLE));
+        String onlyUnread = "[{\"assertion\":\"a\",\"kind\":\"article_text\","
+            + "\"verdict\":\"not checkable here\",\"reason\":\"r\"}]";
+        assertNotNull(unavailableGate(onlyUnread, UNAVAILABLE_TITLE));
+    }
+
+    @Test void articleTextClaimMustBeNotCheckableWhenUnavailable() throws Exception {
+        McpServer.COPY_SEARCHED.add(McpServer.normalizeUrlForMatch(ARTICLE));
+        String graded = "[{\"assertion\":\"a\",\"verdict\":\"true\"},"
+            + "{\"assertion\":\"b\",\"kind\":\"article_text\",\"verdict\":\"true\"}]";
+        assertNotNull(unavailableGate(graded, UNAVAILABLE_TITLE));
+    }
+
+    @Test void articleTextKindIsNotCheckableOnlyWhenArticleUnavailable() throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceNotCheckableOnlyForOpinions",
+            JsonNode.class, boolean.class);
+        m.setAccessible(true);
+        JsonNode c = MAPPER.readTree("[{\"assertion\":\"b\",\"kind\":\"article_text\","
+            + "\"verdict\":\"not checkable here\"}]");
+        assertNull(m.invoke(null, c, true));
+        assertNotNull(m.invoke(null, c, false));
+    }
+
     private static String articleTextGate(String claimsJson, String copyUrl) throws Exception {
         Method m = McpServer.class.getDeclaredMethod("enforceArticleTextRead",
-            JsonNode.class, String.class, String.class);
+            JsonNode.class, String.class, String.class, boolean.class, String.class);
         m.setAccessible(true);
-        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE, copyUrl);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE, copyUrl, false, null);
     }
 
     private static String page(String body) {
@@ -885,7 +951,7 @@ class ExternalCheckGateTest {
         String article = "https://www.msn.com/en-us/news/politics/dan-patrick-tells-texas-gop"
             + "-convention-twelve-million-moved/ar-AA1abc";
         Method m = McpServer.class.getDeclaredMethod("enforceArticleTextRead",
-            JsonNode.class, String.class, String.class);
+            JsonNode.class, String.class, String.class, boolean.class, String.class);
         m.setAccessible(true);
         String copy = "https://www.fox7austin.com/news/patrick-convention";
         String headlineOnly = "[{\"assertion\":\"Dan Patrick tells Texas GOP convention twelve "
@@ -895,15 +961,15 @@ class ExternalCheckGateTest {
         McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
             java.util.Collections.singletonList(page("Dan Patrick tells Texas GOP convention "
                 + "twelve million moved to Texas.")));
-        String refused = (String) m.invoke(null, MAPPER.readTree(headlineOnly), article, copy);
+        String refused = (String) m.invoke(null, MAPPER.readTree(headlineOnly), article, copy, false, null);
         assertNotNull(refused);
         assertTrue(refused.contains("restates its headline"), refused);
 
-        assertNull(m.invoke(null, MAPPER.readTree(body), article, copy));
+        assertNull(m.invoke(null, MAPPER.readTree(body), article, copy, false, null));
 
         McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
             java.util.Collections.singletonList(page("Texas rents rose last year.")));
-        String other = (String) m.invoke(null, MAPPER.readTree(body), article, copy);
+        String other = (String) m.invoke(null, MAPPER.readTree(body), article, copy, false, null);
         assertNotNull(other);
         assertTrue(other.contains("different story"), other);
     }
