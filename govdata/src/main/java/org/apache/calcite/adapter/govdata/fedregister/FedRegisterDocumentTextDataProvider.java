@@ -89,8 +89,8 @@ public class FedRegisterDocumentTextDataProvider implements StorageAwareDataProv
 
     File tempDir;
     try {
-      tempDir = ZipDownloadUtils.downloadZipToTempDirCached(
-          url, null, "fr-bulk-text", cachePath, storageProvider());
+      tempDir = FedRegisterBulkXmlDataProvider.downloadMonthZip(
+          url, "fr-bulk-text", cachePath, storageProvider(), year, month);
     } catch (IOException e) {
       if (e.getMessage() != null && e.getMessage().contains("HTTP 404")) {
         LOGGER.info("FR bulk ZIP not yet available (404): {}", url);

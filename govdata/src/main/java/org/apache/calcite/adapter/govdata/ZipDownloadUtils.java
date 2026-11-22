@@ -302,6 +302,26 @@ public final class ZipDownloadUtils {
   }
 
   /**
+   * Download a ZIP and make the cache directory at {@code cachePath} hold exactly its contents,
+   * ignoring whatever was cached before. For sources whose archive keeps growing after it is
+   * first published. The old cache is replaced only after the download succeeds.
+   */
+  public static File downloadZipToTempDirRefreshed(String url, Map<String, String> headers,
+      String prefix, String cachePath, StorageProvider provider) throws IOException {
+    final StorageProvider sp = provider != null ? provider
+        : StorageProviderFactory.createForGovDataCache();
+    File tempDir = downloadZipToTempDir(url, headers, prefix);
+    String cacheDir = cachePath.endsWith("/") ? cachePath : cachePath + "/";
+    for (StorageProvider.FileEntry entry : sp.listFiles(cacheDir, true)) {
+      if (!entry.isDirectory()) {
+        sp.delete(entry.getPath());
+      }
+    }
+    writeDirectoryToStorage(tempDir, cachePath, sp);
+    return tempDir;
+  }
+
+  /**
    * Download a text/CSV from {@code url}, caching via StorageProvider.
    * Returns cached content as a String if available, downloads otherwise.
    */
