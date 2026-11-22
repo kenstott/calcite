@@ -956,10 +956,29 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Congress's bill records show Hawley sponsored S. 2760 in the 118th Congress, a credit card rate cap with no cosponsors. In the 119th Congress he is a cosponsor, added the day it was introduced (Feb. 4, 2025), of S. 381, the 10 Percent Credit Card Interest Rate Cap Act sponsored by Sen. Bernie Sanders (I-Vt.), whose other cosponsors are Democrats Merkley and Gillibrand. Whether \"my bipartisan bill\" fits a bill he cosponsors rather than sponsors is a question of wording the records do not settle.",
+   "evidence": [
+    {
+     "label": "law.bills (Hawley-sponsored credit card and interest-rate bills)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT congress, bill_type, bill_number, title, sponsor_full_name, sponsor_party, cosponsor_count, latest_action_text FROM law.bills WHERE sponsor_full_name LIKE '%Hawley%' AND (LOWER(title) LIKE '%interest%' OR LOWER(title) LIKE '%credit card%')"
+    },
+    {
+     "label": "law.bills (119th Congress credit card and interest-rate bills)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT congress, bill_type, bill_number, title, sponsor_full_name, cosponsor_count, introduced_date, latest_action_text FROM law.bills WHERE congress=119 AND (LOWER(title) LIKE '%credit card%' OR LOWER(title) LIKE '%interest rate%') ORDER BY bill_type, bill_number"
+    },
+    {
+     "label": "law.bill_cosponsors (S. 381, 119th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_cosponsors-table",
+     "askamerica": true,
+     "sql": "SELECT bill_number, full_name, sponsorship_date, is_original_cosponsor, withdrawn_date FROM law.bill_cosponsors WHERE congress=119 AND bill_type='s' AND bill_number=381"
+    }
+   ],
+   "check_run": "q207/askamerica/2026-11-22"
   },
   {
    "id": 26,
