@@ -638,8 +638,8 @@ partitionedTables:
       - name: crash_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(make_date(TRY_CAST(src."YEAR" AS INTEGER), TRY_CAST(src."MONTH" AS INTEGER), TRY_CAST(src."DAY" AS INTEGER)) AS DATE)'
-        comment: Crash date (from YEAR/MONTH/DAY)
+        expression: 'TRY(make_date(TRY_CAST(src."YEAR" AS INTEGER), TRY_CAST(src."MONTH" AS INTEGER), TRY_CAST(src."DAY" AS INTEGER)))'
+        comment: Crash date (from YEAR/MONTH/DAY); null when the day or month is an unknown-value code (e.g. DAY=99) or not a real calendar date
       - name: day_of_week
         type: string
         nullable: true
