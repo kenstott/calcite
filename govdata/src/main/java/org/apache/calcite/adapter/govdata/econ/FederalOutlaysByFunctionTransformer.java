@@ -71,7 +71,8 @@ public class FederalOutlaysByFunctionTransformer extends EiaBulkXlsxTransformer 
       workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes));
       return parseTable(workbook);
     } catch (Exception e) {
-      throw new RuntimeException("Failed to parse OMB Historical Table 3.2 XLSX from " + url, e);
+      throw new RuntimeException("Failed to parse OMB Historical Table " + tableNumber()
+          + " XLSX from " + url, e);
     } finally {
       if (workbook != null) {
         try {
@@ -81,6 +82,16 @@ public class FederalOutlaysByFunctionTransformer extends EiaBulkXlsxTransformer 
         }
       }
     }
+  }
+
+  /** OMB table number, for error messages. Table 5.1 (budget authority) has the identical layout. */
+  protected String tableNumber() {
+    return "3.2";
+  }
+
+  /** Name of the JSON field that carries the per-year dollar amount. */
+  protected String valueColumn() {
+    return "outlays_millions";
   }
 
   private String parseTable(XSSFWorkbook workbook) {
@@ -175,9 +186,9 @@ public class FederalOutlaysByFunctionTransformer extends EiaBulkXlsxTransformer 
       out.put("function_code", code);
       out.put("function_name", name);
       if (value == null) {
-        out.putNull("outlays_millions");
+        out.putNull(valueColumn());
       } else {
-        out.put("outlays_millions", value.doubleValue());
+        out.put(valueColumn(), value.doubleValue());
       }
       result.add(out);
     }

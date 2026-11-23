@@ -7166,6 +7166,103 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # --- FEDERAL BUDGET AUTHORITY BY BUDGET FUNCTION ---
+  - name: federal_budget_authority_by_function
+    pattern: "type=federal_budget_authority_by_function/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    freshness:
+      type: last_modified
+    comment: >
+      OMB Historical Table 5.1 ("Budget Authority by Function and Subfunction") — new budget
+      authority (the amount Congress lets agencies commit; what a President's budget request and
+      an appropriations topline are stated in) broken out by OMB's 20 canonical budget-function
+      codes (050 National Defense, 570 Medicare, 650 Social Security, 900 Net Interest, etc.),
+      FY1976-2031. Years flagged is_estimate are the current President's Budget request year and
+      outyear projections, not enacted amounts, so this is where a requested-increase question
+      ("42% more for defense") is answered: compare the request-year budget_authority_millions
+      against the prior year's. It is budget authority, NOT spending: the sibling
+      federal_outlays_by_function (Table 3.2) holds cash outlays for the same functions, and the
+      two differ by years of lag and by mandatory programs, so never mix them in one ratio. One
+      row per (year, function); each function's total is OMB's own "Total, <Function>" rollup
+      row where one exists, or the function's sole subfunction row when OMB omits a redundant
+      Total line. Totals include mandatory and discretionary authority and reconciliation-bill
+      amounts OMB scores in the request year, so National Defense can exceed the discretionary
+      "national defense topline" quoted in press. Subfunction detail is not ingested; the 1976
+      transition quarter ("TQ") column is not a fiscal year and is skipped. Values in
+      current-dollar millions, not inflation-adjusted; a null is OMB's own placeholder, not
+      zero. Source: OMB Historical Tables page (whitehouse.gov/omb/historical-tables/); the
+      download URL embeds the current budget cycle and changes annually — re-derive it from
+      that landing page's own hist05z1 link if this URL ever 404s, same caveat as
+      federal_outlays_by_function.
+
+    dimensions:
+      type:
+        - federal_budget_authority_by_function
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year
+      - name: is_estimate
+        type: boolean
+        nullable: false
+        comment: >
+          True for years beyond the budget cycle's own actuals (OMB's "estimate" columns — the
+          President's Budget request year and outyear projections, not enacted authority)
+      - name: function_code
+        type: string
+        nullable: false
+        comment: 3-digit OMB budget-function code (e.g. "050", "570", "650", "900")
+      - name: function_name
+        type: string
+        nullable: false
+        comment: OMB's own function name (e.g. "National Defense", "Medicare", "Social Security")
+      - name: budget_authority_millions
+        type: double
+        nullable: true
+        comment: >
+          Budget authority in current-dollar millions for this function/year; null where OMB's
+          own cell is a placeholder ("N/A", "..........") rather than a figure, not coerced to
+          zero
+
+    source:
+      type: http
+      url: "https://www.whitehouse.gov/wp-content/uploads/2026/04/hist05z1_fy2027.xlsx"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # FederalBudgetAuthorityByFunctionTransformer re-downloads the XLSX and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FederalBudgetAuthorityByFunctionTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=federal_budget_authority_by_function/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: federal_budget_authority_by_function
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   # --- FEDERAL OUTLAYS BY AGENCY ---
   - name: federal_outlays_by_agency
     pattern: "type=federal_outlays_by_agency/*.parquet"
@@ -12828,6 +12925,11 @@ constraints:
     primaryKey: [year, month, holder]
 
   federal_outlays_by_function:
+    primaryKey:
+      - year
+      - function_code
+
+  federal_budget_authority_by_function:
     primaryKey:
       - year
       - function_code
