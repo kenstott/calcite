@@ -4945,6 +4945,118 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # PEP POPULATION ESTIMATES - state and county population from the bulk vintage file
+  # ---------------------------------------------------------------------------
+  - name: pep_population_estimates
+    pattern: "type=pep_estimates/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    comment: >
+      Population Estimates Program (PEP) resident population for every state (and DC) and county,
+      one row per geography per data year, July 1 reference date, data years 2020 through the
+      latest published vintage (2020-2025 from the Vintage 2025 file). Use this table for the
+      newest per-capita denominators (state GDP per capita, income per capita for 2024 and 2025):
+      the Census API endpoint behind pep_population has not published vintages 2024 or 2025, so
+      pep_population ends at data year 2023, while this table reads the bulk file
+      co-est{vintage}-alldata.csv. Every data year comes from the single latest vintage (the
+      vintage column), so later vintages replace earlier ones for the overlapping years and the
+      series is internally consistent; the values for 2020-2023 therefore differ slightly from the
+      Vintage 2023 values in pep_population. geography is 'state' (county and county_fips NULL) or
+      'county'. Connecticut counties from data year 2020 are its nine planning regions
+      (county_fips 09110-09190), which do not join geo.counties; every other county does. The
+      April 1, 2020 census base is not loaded. Source:
+      www2.census.gov/programs-surveys/popest/datasets/.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - pep_estimates
+      # `year` is the publish year; the data year is effective_year = year - dataLag, and
+      # start/minYear bound `year`. minYear 2021 reaches data year 2020, the first year of the
+      # current vintage; the newest data year is the prior calendar year.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2021
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1
+        descending: true
+      # Latest published PEP vintage (data years 2020 through this value). Census publishes the
+      # next vintage each March; raise this value then. A data year beyond the vintage fails
+      # loudly.
+      pep_vintage:
+        type: list
+        values: ['2025']
+
+    columns:
+      - name: geography
+        type: string
+        nullable: false
+        comment: Geography level, 'state' (50 states and DC) or 'county'
+      - name: state
+        type: string
+        nullable: false
+        comment: State FIPS code (2 digits)
+      - name: county
+        type: string
+        nullable: true
+        comment: County FIPS code (3 digits, within state); NULL on state rows
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS code (state + county) for joining to geo.counties; NULL on state rows
+      - name: geo_name
+        type: string
+        nullable: false
+        comment: State name on state rows, county name as published by PEP on county rows
+      - name: population
+        type: long
+        nullable: false
+        comment: Resident population estimate at July 1 of the data year
+      - name: vintage
+        type: string
+        nullable: false
+        comment: PEP vintage of the source file (the latest vintage for every data year)
+
+    source:
+      type: http
+      url: "https://www2.census.gov/programs-surveys/popest/datasets/2020-{pep_vintage}/counties/totals/co-est{pep_vintage}-alldata.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.census.PepPopulationProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pep_estimates/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: pep_population_estimates
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+
+  # ---------------------------------------------------------------------------
   # PEP COMPONENTS OF CHANGE - births, deaths and net migration by county
   # ---------------------------------------------------------------------------
   - name: pep_components_of_change
@@ -9020,6 +9132,18 @@ constraints:
         targetColumns: [county_fips]
 
   pep_population:
+    primaryKey: [year, geography, state, county]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  pep_population_estimates:
     primaryKey: [year, geography, state, county]
     foreignKeys:
       - columns: [state]

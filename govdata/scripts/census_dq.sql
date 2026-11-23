@@ -835,6 +835,69 @@ FROM (SELECT
         COUNT(*) FILTER (WHERE population_estimate <= 0 OR births < 0 OR deaths < 0) AS bad
       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true));
 
+-- ----------------------------------------------------------------------------
+-- pep_population_estimates: PEP state + county population (bulk co-est{vintage}-alldata.csv),
+-- data years 2020..latest vintage. Not sampled: the whole table is read.
+-- ----------------------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'census', 'pep_population_estimates', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'pep_population_estimates', 'T2_row_count',
+  CASE WHEN n >= 19000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '19000',
+  'Expected >= 19000 rows (6 data years 2020-2025 x (51 states + about 3,140 counties))'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true));
+
+SELECT 'pep_population_estimates' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true) LIMIT 1;
+
+INSERT INTO dq_results SELECT 'census', 'pep_population_estimates', 'T4_all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'pep_population_estimates', 'T5_all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'vintage');
+
+INSERT INTO dq_results
+SELECT 'census', 'pep_population_estimates', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0',
+  'NULL state/geography rows plus duplicate (year, geography, state, county) keys'
+FROM (SELECT
+        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true) WHERE state IS NULL OR geography IS NULL)
+      + (SELECT COUNT(*) FROM (SELECT year, geography, state, COALESCE(county, '') FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true) GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1)) AS n);
+
+-- One vintage, years 2020 onward, 51 state rows (50 states + DC) per data year.
+INSERT INTO dq_results
+SELECT 'census', 'pep_population_estimates', 'T7_years_and_vintage',
+  CASE WHEN y >= 6 AND v = 1 AND min_states = 51 AND max_states = 51 THEN 'pass' ELSE 'fail' END,
+  CAST(y AS VARCHAR) || ' / ' || CAST(v AS VARCHAR) || ' / ' || CAST(min_states AS VARCHAR) || '-' || CAST(max_states AS VARCHAR),
+  '>=6 / 1 / 51-51', 'Distinct data years, vintages, and state rows per year'
+FROM (SELECT (SELECT COUNT(DISTINCT year) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true)) AS y,
+             (SELECT COUNT(DISTINCT vintage) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true)) AS v,
+             MIN(c) AS min_states, MAX(c) AS max_states
+      FROM (SELECT year, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true) WHERE geography = 'state' GROUP BY year));
+
+-- County rows sum to the state rows within 0.5 percent for every data year (the file's own
+-- state totals; Connecticut regions and the rest sum exactly, tolerance covers rounding).
+INSERT INTO dq_results
+SELECT 'census', 'pep_population_estimates', 'T7_counties_sum_to_states',
+  CASE WHEN worst <= 0.005 THEN 'pass' ELSE 'fail' END, CAST(worst AS VARCHAR), '<= 0.005',
+  'Largest relative gap between summed county population and summed state population in any data year'
+FROM (SELECT COALESCE(MAX(ABS(c - s) / s), 0) AS worst FROM (
+        SELECT year,
+               SUM(CASE WHEN geography = 'county' THEN population END) AS c,
+               SUM(CASE WHEN geography = 'state' THEN population END) AS s
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true) GROUP BY year));
+
+-- Known value: Alabama July 1, 2025 resident population, 5,193,088 (co-est2025-alldata.csv);
+-- every row has population > 0.
+INSERT INTO dq_results
+SELECT 'census', 'pep_population_estimates', 'T7_known_values',
+  CASE WHEN al2025 = 5193088 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(al2025 AS VARCHAR) || ' / ' || CAST(bad AS VARCHAR), '5193088 / 0',
+  'Alabama 2025 population and rows with population <= 0'
+FROM (SELECT
+        COALESCE(SUM(CASE WHEN CAST(year AS INTEGER) = 2025 AND geography = 'state' AND state = '01' THEN population END), 0) AS al2025,
+        COUNT(*) FILTER (WHERE population <= 0) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true));
+
 -- acs_housing_tenure_by_age: B25007 tenure identity — owner + renter = total (row-weighted
 -- ACS totals are exactly additive; sentinel-normalized nulls skip the check via IS NOT NULL)
 INSERT INTO dq_results
