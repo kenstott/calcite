@@ -137,6 +137,14 @@ SELECT 'transport', 'fatal_crashes', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL st_case rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/fatal_crashes', allow_moved_paths := true) WHERE st_case IS NULL);
 
+INSERT INTO dq_results
+SELECT 'transport', 'fatal_crashes', 'T7_minute_range',
+  CASE WHEN bad = 0 AND populated > 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'minute must be 0-59 or NULL (99 mapped to NULL); populated=' || populated
+FROM (SELECT COUNT(*) FILTER (WHERE minute < 0 OR minute > 59) AS bad,
+             COUNT(minute) AS populated
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/fatal_crashes', allow_moved_paths := true));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: airline_ontime (BTS on-time; partition cols: type, year, month)
 -- ─────────────────────────────────────────────────────────────

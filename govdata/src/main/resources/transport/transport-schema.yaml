@@ -598,7 +598,7 @@ partitionedTables:
     comment: >
       NHTSA Fatality Analysis Reporting System — one row per fatal traffic crash
       (accident.csv, grain ST_CASE) for the given data year, with fatality,
-      person, vehicle, and pedestrian counts, crash date/hour/day-of-week,
+      person, vehicle, and pedestrian counts, crash date/hour/minute/day-of-week,
       lat/lon, and decoded conditions (weather, light, manner of collision,
       roadway function). Delta by year: past years immutable, newest complete
       year (effective_year = year - 2) re-fetched. Joins to geo.counties via
@@ -650,6 +650,11 @@ partitionedTables:
         nullable: true
         expression: 'CASE WHEN TRY_CAST(src."HOUR" AS INTEGER) = 99 THEN NULL ELSE TRY_CAST(src."HOUR" AS INTEGER) END'
         comment: Hour of crash (0-23; 99=unknown mapped to null)
+      - name: minute
+        type: integer
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."MINUTE" AS INTEGER) = 99 THEN NULL ELSE TRY_CAST(src."MINUTE" AS INTEGER) END'
+        comment: Minute of crash (0-59; 99=unknown mapped to null). Combine with hour for sub-hour windows (sunset/sunrise, rush-hour edges).
       - name: latitude
         type: double
         nullable: true
