@@ -677,6 +677,8 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           builder.hasInsider(true);
         } else if (fileName.endsWith("_earnings.parquet")) {
           builder.hasEarnings(true);
+        } else if (fileName.endsWith("_cyber.parquet")) {
+          builder.hasCyberIncident(true);
         } else if (fileName.endsWith("_chunks.parquet")) {
           builder.hasChunks(true);
         } else if (fileName.endsWith("_13f.parquet")) {

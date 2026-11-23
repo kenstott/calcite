@@ -51,6 +51,7 @@ class SecStagedFilePatternOwnershipTest {
     types.put("institutional_holdings", "13f");
     types.put("beneficial_ownership", "13dg");
     types.put("earnings_transcripts", "earnings");
+    types.put("cyber_incident_disclosures", "cyber");
     return types;
   }
 

@@ -1635,6 +1635,96 @@ partitionedTables:
         batchPartitionColumns: [year]
 
   # ==========================================================================
+  # 8-K ITEM 1.05 CYBERSECURITY INCIDENT DISCLOSURES
+  # ==========================================================================
+
+  - name: cyber_incident_disclosures
+    pattern: "year=*/*cyber*.parquet"
+    partitions: *sec_partitions
+    hooks:
+      enabled: false
+
+    comment: >
+      Material cybersecurity incidents reported on Form 8-K Item 1.05 (required of SEC registrants
+      since 2023-12-18), one row per 8-K or 8-K/A whose EDGAR item list names Item 1.05. Carries
+      the filing date, registrant (cik, company_name), SIC code, the filing's full EDGAR item list,
+      whether the filing is an amendment, a ransomware_mentioned flag, and the Item 1.05 text.
+      Use for: counting disclosed incidents per quarter or SIC industry (join sic_code to a
+      division, or to a SIC range), tracking ransomware's share of disclosures, and reading what
+      a company said about an incident. LIMITS: only Item 1.05 filings are here. Voluntary
+      cyber disclosures filed under Item 8.01, and incidents never reported on an 8-K, are not.
+      ransomware_mentioned is true when the Item 1.05 text contains "ransom" (it also matches
+      filings that say no ransomware was involved), and is false when the text could not be
+      extracted. incident_text is cut at 20,000 characters, and is null when the primary
+      document has no "Item 1.05" section (the text sits in an exhibit). The same incident can
+      appear more than once: the original 8-K plus each 8-K/A amendment. COVERAGE: populated by
+      the sec_secondary worker slot (see earnings_transcripts); a year not yet ingested there
+      returns no rows, which is not the same as no incidents.
+
+    columns:
+      - *cik_column
+      - *accession_number
+      - *filing_date
+      - name: year
+        type: int
+        nullable: false
+        comment: Filing year for Iceberg partitioning
+      - *filing_type
+      - name: company_name
+        type: string
+        nullable: true
+        comment: Registrant name per EDGAR submissions
+      - name: sic_code
+        type: string
+        nullable: true
+        comment: Standard Industrial Classification code of the registrant per EDGAR submissions
+      - name: items
+        type: string
+        nullable: false
+        comment: Comma-separated EDGAR item numbers the filing reports (always includes 1.05)
+      - name: is_amendment
+        type: boolean
+        nullable: false
+        comment: True for an 8-K/A amending an earlier report, false for an original 8-K
+      - name: ransomware_mentioned
+        type: boolean
+        nullable: false
+        comment: True when the Item 1.05 text contains "ransom"; false when it does not or no text was extracted
+      - name: incident_text
+        type: string
+        nullable: true
+        comment: Text of the Item 1.05 section, cut at 20,000 characters; null when the section is not in the primary document
+
+    source:
+      <<: *document_source_defaults
+      extractionType: earnings_text
+      documentTypes:
+        - "*.htm"
+        - "*.html"
+      itemFilter: ["1.05"]
+
+    dimensions:
+      cik:
+        type: inherited
+      filing_type: *current_report_types
+      year: *year_range
+
+    materialize:
+      <<: *materialize_defaults
+      rowBatchSize: 5000
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: cyber_incident_disclosures
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        sortOrder: [cik, accession_number]
+        batchPartitionColumns: [year]
+
+  # ==========================================================================
   # STOCK PRICES
   # ==========================================================================
   # Daily OHLCV data from external price APIs
@@ -2032,6 +2122,16 @@ constraints:
 
   earnings_transcripts:
     primaryKey: [cik, accession_number, section_type, paragraph_number]
+    foreignKeys:
+      - columns: [cik, accession_number]
+        targetTable: filing_metadata
+        targetColumns: [cik, accession_number]
+
+  cyber_incident_disclosures:
+    primaryKey: [cik, accession_number]
+    indexes:
+      - [filing_date]
+      - [sic_code]
     foreignKeys:
       - columns: [cik, accession_number]
         targetTable: filing_metadata

@@ -121,4 +121,22 @@ class FormTypeItemsTest {
             .contains(FormType.OutputType.EARNINGS),
         "the single-argument form keeps its original meaning for callers that have no items");
   }
+
+  private static boolean expectsCyber(FormType form, String items) {
+    return form.getExpectedOutputs(false, items).contains(FormType.OutputType.CYBER_INCIDENT);
+  }
+
+  @Test void testItem105OwesACyberIncidentOutput() {
+    assertTrue(expectsCyber(FormType.FORM_8K, "1.05,9.01"));
+    assertTrue(expectsCyber(FormType.FORM_8K_A, "8.01, 1.05"),
+        "an amendment reporting Item 1.05 is also a disclosure");
+  }
+
+  @Test void testOtherItemsOrUnknownItemsOweNoCyberOutput() {
+    assertFalse(expectsCyber(FormType.FORM_8K, "8.01,9.01"),
+        "a voluntary Item 8.01 disclosure is not Item 1.05");
+    assertFalse(expectsCyber(FormType.FORM_8K, "11.05"), "1.05 must match as a whole item");
+    assertFalse(expectsCyber(FormType.FORM_8K, null), "unknown items do not make an output owed");
+    assertFalse(expectsCyber(FormType.FORM_10K, "1.05"), "only 8-K forms carry Item 1.05");
+  }
 }
