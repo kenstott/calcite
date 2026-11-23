@@ -436,14 +436,23 @@
    "kind": "factual",
    "test": "True if about 200 million Americans currently have health insurance through an employer, so that a single-payer plan ending employer coverage would move roughly that many people. False if official survey data put employer-based coverage well below 200 million (for example under 170 million). Cannot be determined if no current count of employer coverage is available.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "contradicted",
+   "finding": "The Census Bureau's report for 2024 (P60-288, Table 1) puts employment-based coverage at 181.3 million people, about 19 million below 200 million; that count includes dependents and anyone covered at any point in the year, so a point-in-time count would be lower. The 2025 figure is not yet published, which is what remains open.",
+   "check_run": "q202/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Census P60-288, Health Insurance Coverage in the United States: 2024 (Table 1)",
+     "url": "https://www2.census.gov/library/publications/2025/demo/p60-288.pdf"
+    },
+    {
+     "label": "Census P60-288 report page",
+     "url": "https://www.census.gov/library/publications/2025/demo/p60-288.html"
+    }
+   ]
   },
   {
    "id": 11,
@@ -564,14 +573,23 @@
    "kind": "factual",
    "test": "True if about $285 billion (roughly $280 to $300 billion) of Russian state assets are immobilized in Europe. False if official or authoritative figures put the amount frozen in Europe well outside that range. Cannot be determined if no current figure is available.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "The European Parliament's research service puts Russian central bank assets immobilized in EU jurisdictions at about €210 billion (about $246 billion); holdings in the UK, Switzerland and other non-EU European countries are counted separately and no official Europe-wide total was found, so whether the figure is about $285 billion depends on what 'Europe' covers.",
+   "check_run": "q203/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "European Parliamentary Research Service, immobilised Russian assets (Sept. 2025)",
+     "url": "https://eprs.europarl.europa.eu/contents/publications/EPRS/2025/09/EPRS_BRI(2025)775908.html"
+    },
+    {
+     "label": "Moscow Times on Euroclear holdings (Apr. 2, 2026)",
+     "url": "https://www.themoscowtimes.com/2026/04/02/russias-central-bank-seeks-230bln-from-euroclear-over-frozen-assets"
+    }
+   ]
   },
   {
    "id": 15,
@@ -596,14 +614,23 @@
    "kind": "factual",
    "test": "True if the Russia sanctions bill and the China sanctions bill Kennedy supports were introduced and pushed for more than a year before Senate leaders brought them to the floor. False if either bill reached the floor within a year of introduction, or has not reached the floor at all. Cannot be determined if the bills or their floor dates cannot be identified.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "The Russia part holds: S. 1241, the Sanctioning Russia Act, was introduced on April 1, 2025, and the Senate passed the Russia and Iran sanctions bill 86-11 on Aug. 7, 2026, about 16 months later. No separate China sanctions bill brought to the Senate floor could be identified, so the China part is undetermined.",
+   "check_run": "q203/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "S. 1241 as introduced (govinfo)",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s1241is/html/BILLS-119s1241is.htm"
+    },
+    {
+     "label": "PBS NewsHour/AP, Senate passage (Aug. 7, 2026)",
+     "url": "https://www.pbs.org/newshour/politics/senate-passes-sweeping-russia-sanctions-bill-negotiated-by-the-late-sen-lindsey-graham"
+    }
+   ]
   },
   {
    "id": 16,
@@ -628,14 +655,29 @@
    "kind": "factual",
    "test": "True if President Trump's current defense budget request is about 42% above the prior year's defense funding. False if the request's increase is clearly different from about 42% (for example under 35% or over 50%). Cannot be determined if the request or the baseline cannot be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "The FY2027 defense request of about $1.5 trillion was reported by Defense News as a 42% increase over the prior year, and the White House fact sheet gives 44% for the Department of War. AskAmerica's outlay table, which counts spending rather than requested budget authority, shows national defense outlays rising from $966.4 billion in FY2026 to an estimated $1,205.0 billion in FY2027 (24.7%).",
+   "check_run": "q203/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "econ.federal_outlays_by_function (national defense outlays, FY2024-2028)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#federal_outlays_by_function-table",
+     "askamerica": true,
+     "sql": "SELECT \"year\", outlays_millions, is_estimate FROM econ.federal_outlays_by_function WHERE function_name ILIKE '%National Defense%' AND \"year\" BETWEEN 2024 AND 2028 ORDER BY \"year\""
+    },
+    {
+     "label": "White House fact sheet, FY2027 military budget",
+     "url": "https://www.whitehouse.gov/wp-content/uploads/2026/04/rebuilding-our-military-fact-sheet.pdf"
+    },
+    {
+     "label": "Defense News on the FY2027 request (Apr. 21, 2026)",
+     "url": "https://www.defensenews.com/pentagon/2026/04/21/pentagon-seeks-funds-for-golden-dome-drones-ai-in-largest-ever-budget-request/"
+    }
+   ]
   },
   {
    "id": 17,
@@ -660,14 +702,19 @@
    "kind": "factual",
    "test": "True if there is a record of Kennedy pressing Majority Leader Thune and Senate Republicans for about 16 months to add defense money to a reconciliation bill, without success. False if the record shows the defense money he sought was passed, or his effort began much later. Cannot be determined if no record of his effort beyond his own words is found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsupported",
+   "finding": "No record of a 16-month effort by Kennedy to add defense money to a reconciliation bill was found beyond his own remarks; the documented dispute is the November 2026 push for a $350 billion defense reconciliation package, which Senate Republicans paused on Nov. 19. The search covered news reports and the Meet the Press transcript, not Kennedy's press releases or the Congressional Record.",
+   "check_run": "q203/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Washington Post via Anchorage Daily News (Nov. 19, 2026)",
+     "url": "https://www.adn.com/nation-world/2026/11/19/senate-republicans-resist-trumps-bid-to-bypass-democrats-on-defense-funding/"
+    }
+   ]
   },
   {
    "id": 18,
@@ -756,14 +803,23 @@
    "kind": "factual",
    "test": "True if official records (Commerce Department actions, export licenses, indictments or inspector-general findings) show advanced U.S. chips reached China in breach of or around export controls in a way the Commerce Department permitted or failed to stop. False if records show no such chips reached China or that Commerce blocked them. Cannot be determined if it turns on whether Commerce 'allowed' it, a judgment the records do not settle.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "A Justice Department case shows at least $160 million of export-controlled Nvidia H100 and H200 chips were smuggled or attempted to China on falsified paperwork, and the Commerce Department's January 2026 rule moved H200-class licenses for China to case-by-case review. No inspector-general finding or Commerce record was found showing that Commerce permitted or failed to stop the smuggling, so whether it 'allowed' circumvention is not settled by the records.",
+   "check_run": "q204/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Justice Department, Operation Gatekeeper (Dec. 8, 2025)",
+     "url": "https://www.justice.gov/opa/pr/us-authorities-shut-down-major-china-linked-ai-tech-smuggling-network"
+    },
+    {
+     "label": "Federal Register, BIS final rule 2026-00789 (Jan. 15, 2026)",
+     "url": "https://www.govinfo.gov/content/pkg/FR-2026-01-15/html/2026-00789.htm"
+    }
+   ]
   },
   {
    "id": 21,
@@ -952,14 +1008,25 @@
    "kind": "factual",
    "test": "True if Kennedy's Senate campaign committee reported cash on hand of about $30 million in its latest FEC filing. False if the reported cash on hand is well away from $30 million (for example under $25 million or over $35 million). Cannot be determined if no recent FEC filing is available.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "contradicted",
+   "finding": "AskAmerica's FEC data show John Kennedy for US with $19.53 million cash on hand at the end of its latest report (through Sept. 30, 2026), and the FEC's candidate totals give the same figure; total receipts since January 2023 are $27.5 million. What remains open: reports after Sept. 30 are not yet filed, and money held outside the campaign committee was not checked.",
+   "check_run": "q205/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "fec.committee_summaries (John Kennedy for US, through Sept. 30, 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/fec/#committee_summaries-table",
+     "askamerica": true,
+     "sql": "SELECT * FROM fec.committee_summaries WHERE committee_id IN (SELECT committee_id FROM fec.candidate_committee_linkages WHERE candidate_id='S4LA00065') ORDER BY \"year\" DESC FETCH FIRST 6 ROWS ONLY"
+    },
+    {
+     "label": "FEC API, candidate totals S4LA00065",
+     "url": "https://api.open.fec.gov/v1/candidate/S4LA00065/totals/?sort=-cycle&per_page=5"
+    }
+   ]
   },
   {
    "id": 27,
