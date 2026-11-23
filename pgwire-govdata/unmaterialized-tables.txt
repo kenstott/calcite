@@ -14,6 +14,7 @@ econ.business_formation_statistics
 econ.federal_budget_authority_by_function
 econ.osha_inspections
 econ.osha_violations
+economy_PLACEHOLDER
 econ.treasury_foreign_holdings
 edu.edfacts_chronic_absenteeism
 energy.eia_plant_generation
