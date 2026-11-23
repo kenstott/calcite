@@ -480,12 +480,13 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
 INSERT INTO dq_results
 SELECT 'transport', 'urbanized_area_vmt', 'T7_total_consistent',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
-  'Rows whose class VMT does not sum to the published total (tolerance 1 thousand) or whose total is outside 0..300000'
+  'Rows whose class VMT does not sum to the published total (tolerance 1 thousand) or whose total is outside 0..300000; excludes the one known FHWA source error (2021 Pascagoula, MS: HM-71 sheet H lists classes summing to 1441.5 against a total of 856.4; ops #1456)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/urbanized_area_vmt', allow_moved_paths := true)
-  WHERE dvmt_thousands_total IS NULL OR dvmt_thousands_total < 0 OR dvmt_thousands_total > 300000
+  WHERE NOT (year = 2021 AND urbanized_area = 'Pascagoula' AND states = 'MS')
+    AND (dvmt_thousands_total IS NULL OR dvmt_thousands_total < 0 OR dvmt_thousands_total > 300000
      OR ABS(dvmt_thousands_total - (dvmt_thousands_interstate + dvmt_thousands_freeways_expressways
         + dvmt_thousands_other_principal_arterial + dvmt_thousands_minor_arterial
-        + dvmt_thousands_major_collector + dvmt_thousands_minor_collector + dvmt_thousands_local)) > 1);
+        + dvmt_thousands_major_collector + dvmt_thousands_minor_collector + dvmt_thousands_local)) > 1));
 
 INSERT INTO dq_results
 SELECT 'transport', 'urbanized_area_vmt', 'T8_pk_duplicates',
