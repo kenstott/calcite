@@ -1943,14 +1943,19 @@
    "kind": "factual",
    "test": "True if the State Department's latest Country Reports on Terrorism or equivalent official statement calls Iran the leading or worst state sponsor of terrorism. False if the official reports rank another country above Iran. Cannot be determined if no official ranking exists.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "The State Department's Country Reports on Terrorism do not rank countries, but the latest edition located (2023, released December 2024) calls Iran the world's leading state sponsor of terrorism, as reported by Iran International; the State Department's own pages refused automated access and could not be read directly. No official source ranking another country above Iran was found.",
+   "check_run": "q214/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Iran International, US names Iran top state sponsor of terrorism (Dec. 13, 2024)",
+     "url": "https://www.iranintl.com/en/202412132588"
+    }
+   ]
   },
   {
    "id": 50,
@@ -1975,14 +1980,23 @@
    "kind": "factual",
    "test": "True if President Trump has publicly said he would go to war with Iran again, or would make the same decision again. False if the record shows he said otherwise. Cannot be determined if no such statement by the president can be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "In a Fox News interview on Sept. 10, 2026, the president said of the Iran war, 'If I had it to do again, I'd do exactly as I did,' as reported by Outlook India and Business Today; a transcript or video of the interview was not read directly.",
+   "check_run": "q214/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Business Today, Trump says he doesn't regret the Iran war (Sept. 11, 2026)",
+     "url": "https://www.businesstoday.in/world/story/would-do-exactly-as-i-did-donald-trump-says-he-doesnt-regret-the-iran-war-554745-2026-09-11"
+    },
+    {
+     "label": "Outlook India, Trump says no regret over starting war with Iran",
+     "url": "https://www.outlookindia.com/international/trying-anything-to-get-me-out-trump-says-no-regret-over-starting-war-with-iran"
+    }
+   ]
   },
   {
    "id": 51,
