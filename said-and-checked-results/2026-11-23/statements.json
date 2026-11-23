@@ -1,0 +1,2221 @@
+{
+ "date": "2026-11-23",
+ "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 22 or 23, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 23 in the early morning ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (six were: three CBS 60 Minutes segments, NBC Meet the Press, ABC This Week and CNN State of the Union, all Nov. 22). One NPR story, \"After midterm losses, Republicans debate what's next for the party,\" could not be read and is not included. Transcripts from Nov. 16 to 20 were searched only to confirm quotes. PBS NewsHour carries Associated Press reporting. Nine of the fifteen readable stories and transcripts quoted no officeholder in scope. Greetings and procedural remarks, quotes under five words, commentators' accounts of what officials said, and statements by officials outside the offices in scope (including the Director of National Intelligence, senators-elect and former officeholders other than presidents and vice presidents) were left out. Statements are worded as the outlet reported them.",
+ "lede": [
+  "The Sunday shows on Nov. 22 were dominated by the aftermath of the midterm elections, in which Democrats won control of both chambers of Congress, and by a week of technology outages. Sen. John Kennedy of Louisiana and Sen. Chris Van Hollen of Maryland, who is challenging Chuck Schumer for Senate Democratic leader, gave long interviews on NBC's Meet the Press; Rep. Jamie Raskin of Maryland appeared on CNN's State of the Union to discuss House Democrats' plans for investigations.",
+  "This page lists every statement by an officeholder in scope that was quoted in the day's stories and transcripts, labelled by kind. Factual statements and the factual premises of predictions are checked one at a time against AskAmerica's warehouse and primary sources; statements still waiting for a check are marked not yet checked."
+ ],
+ "stories": [
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/22/nx-s1-6036735/medicare-open-enrollment-2027",
+   "headline": "Medicare looks a bit different in 2027, so don't miss open enrollment",
+   "published": "2026-11-22T08:11-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/22/nx-s1-6045787/politics-chat-lawmakers-step-up-with-only-weeks-to-democrats-control-of-congress",
+   "headline": "Politics chat: Lawmakers step up with only weeks to Democrats' control of Congress",
+   "published": "2026-11-22T08:12-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/22/nx-s1-6040018/christian-nationalist-conference-hosts-nick-fuentes-vows-to-keep-pushing-maga-agenda",
+   "headline": "Christian nationalist conference hosts Nick Fuentes, vows to keep pushing MAGA agenda",
+   "published": "2026-11-22T08:12-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/health/scientists-are-fighting-for-their-halted-funds-trust-of-black-communities-may-be-harder-to-win-back",
+   "headline": "Scientists are fighting for their halted funds. Trust of Black communities may be harder to win back",
+   "published": "2026-11-22T13:02-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992",
+   "headline": "Democrats clinch a historic House majority of at least 258 seats, the largest since 1992",
+   "published": "2026-11-22T13:24-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/world/u-s-intelligence-chief-says-trumps-description-of-putin-as-a-friend-is-entirely-appropriate",
+   "headline": "U.S. intelligence chief says Trump's description of Putin as a 'friend' is 'entirely appropriate'",
+   "published": "2026-11-22T13:37-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/23/g-s1-155021/up-first-newsletter-midterms-house-ai-stocks-poland-nato-cop31",
+   "headline": "Democrats win House by largest margin in 50 years. And, COP31 ends with no deal",
+   "published": "2026-11-23T07:42-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/one-of-the-very-worst-jan-6-leader-stewart-rhodes-says-he-is-absolutely-done-with-trump",
+   "headline": "'One of the very worst.' Jan. 6 leader Stewart Rhodes says he is 'absolutely done' with Trump",
+   "published": "2026-11-23T07:59-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/how-a-billionaire-tax-proposal-failed-in-california-despite-big-election-wins-for-progressives",
+   "headline": "How a billionaire tax proposal failed in California despite big election wins for progressives",
+   "published": "2026-11-23T08:27-05:00"
+  },
+  {
+   "outlet": "CBS 60 Minutes",
+   "url": "https://www.cbsnews.com/news/drug-cartels-tweak-molecules-to-make-new-synthetic-opioids-60-minutes-transcript/",
+   "headline": "60 Minutes Transcript: Drug cartels tweak molecules to make new synthetic opioids",
+   "published": "2026-11-22"
+  },
+  {
+   "outlet": "CBS 60 Minutes",
+   "url": "https://www.cbsnews.com/news/inside-the-tcc-an-online-community-that-idolizes-mass-shooters-60-minute-transcript/",
+   "headline": "60 Minutes Transcript: Inside the TCC, an online community that idolizes mass shooters",
+   "published": "2026-11-22"
+  },
+  {
+   "outlet": "CBS 60 Minutes",
+   "url": "https://www.cbsnews.com/news/visiting-a-rodeo-inside-largest-maximum-security-prison-in-us-60-minutes-transcript/",
+   "headline": "60 Minutes Transcript: Visiting a rodeo inside the largest maximum security prison in the U.S.",
+   "published": "2026-11-22"
+  },
+  {
+   "outlet": "NBC Meet the Press",
+   "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+   "headline": "Meet the Press – November 22, 2026",
+   "published": "2026-11-22"
+  },
+  {
+   "outlet": "ABC This Week",
+   "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+   "headline": "'This Week' Transcript 11-22-26: Director of National Intelligence Jay Clayton & former Chicago Mayor Rahm Emanuel",
+   "published": "2026-11-22"
+  },
+  {
+   "outlet": "CNN State of the Union",
+   "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+   "headline": "State of the Union – November 22, 2026",
+   "published": "2026-11-22"
+  }
+ ],
+ "statements": [
+  {
+   "id": 1,
+   "speaker": "Jason Crow",
+   "office": "U.S. Representative from Colorado",
+   "party": "D",
+   "context": "Speaking at the Capitol earlier in November about the pressure on House Democrats after winning the House majority.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "CO",
+   "about_states": [],
+   "quote": "Like, hell yeah, we should feel pressure",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 2,
+   "speaker": "Jason Crow",
+   "office": "U.S. Representative from Colorado",
+   "party": "D",
+   "context": "Speaking at the Capitol earlier in November, describing conditions in the country that he said create urgency for House Democrats.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Civil Rights and Social Issues",
+   "speaker_state": "CO",
+   "about_states": [],
+   "quote": "There are people dying in this country and people losing their healthcare, losing their livelihoods, losing their farms, being terrorized from ICE",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 3,
+   "speaker": "Alexandria Ocasio-Cortez",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "Speaking at the Capitol about the size of the incoming class of House Democrats after the November 2026 midterm elections.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "This is one of the largest classes we have seen",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Democratic freshman class elected to the House in November 2026 is among the largest incoming classes for either party in recent decades (for example, larger than most classes since 1974). False if official or reported counts show it is of ordinary size compared with past classes. Cannot be determined if no count of the 2026 incoming class is available yet.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 4,
+   "speaker": "Tom Suozzi",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "Describing how House Democrats should approach their agenda after winning the House majority, including investigations of Trump's financial dealings.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "Everything should be tied back to the people — and how it's affecting the people",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 5,
+   "speaker": "Troy Carter",
+   "office": "U.S. Representative from Louisiana",
+   "party": "D",
+   "context": "Commenting on differences of view among House Democrats as he is expected to lead the Congressional Black Caucus.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "We're not a monolith — people come to the caucus with different ideas — it's OK",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 6,
+   "speaker": "Jim Jordan",
+   "office": "U.S. Representative from Ohio",
+   "party": "R",
+   "context": "After House Republicans chose him as their leader in the minority following the November 2026 midterm elections.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "OH",
+   "about_states": [],
+   "quote": "Over the next two years, House Republicans will fight for American families",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 7,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator from New York",
+   "party": "D",
+   "context": "Speaking on the Senate floor about President Trump's summit last week in China with Russian President Putin and Chinese President Xi.",
+   "topic": "Trump, Putin and Xi summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "America would have been far better off if Trump just stayed home",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/u-s-intelligence-chief-says-trumps-description-of-putin-as-a-friend-is-entirely-appropriate"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "It’s a betrayal of the United States.",
+     "outlet": "ABC This Week",
+     "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 8,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Asked at a White House news conference on Friday whether Russian President Putin is a friend of America, after Trump called Putin his friend.",
+   "topic": "Trump, Putin and Xi summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I consider him to be somebody that I have a very good relationship (with)",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/world/u-s-intelligence-chief-says-trumps-description-of-putin-as-a-friend-is-entirely-appropriate"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "I get along with Russia. I get along with China. I get along with a lot of people.",
+     "outlet": "NBC Meet the Press",
+     "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 9,
+   "speaker": "Ro Khanna",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Speaking on election night after California voters rejected Proposition 40, a one-time tax on billionaires' wealth that he supported.",
+   "topic": "California billionaire tax",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "CA",
+   "about_states": [
+    "CA"
+   ],
+   "quote": "The game is up, people have had it and this election is just the beginning",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/how-a-billionaire-tax-proposal-failed-in-california-despite-big-election-wins-for-progressives"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 10,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "Describing Senator Bernie Sanders's Medicare for All bill on NBC's Meet the Press, November 22, 2026.",
+   "topic": "Medicare for All and health care",
+   "broad_topic": "Health",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "It would mean that 200 million Americans would have to give up their health insurance through their employer and turn to the federal government for all of their health insurance.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if about 200 million Americans currently have health insurance through an employer, so that a single-payer plan ending employer coverage would move roughly that many people. False if official survey data put employer-based coverage well below 200 million (for example under 170 million). Cannot be determined if no current count of employer coverage is available.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 11,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, discussing whether a Medicare for All plan that keeps private insurance, as Senator-elect Abdul El-Sayed described, could be paid for.",
+   "topic": "Medicare for All and health care",
+   "broad_topic": "Health",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "the numbers don’t work, doing it the way Abdul wants to do it",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 12,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, speaking of people who believe moving health insurance to the federal government will lower costs.",
+   "topic": "Medicare for All and health care",
+   "broad_topic": "Health",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "if you think that turning it all over to the federal government is going to solve our problems and make it less expensive, then you’re too dumb to live",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 13,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, describing the Russian and Chinese presidents after a three-way summit with President Trump.",
+   "topic": "Trump, Putin and Xi summit",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "Putin and Xi are predators.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 14,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, describing a proposal to use frozen Russian assets in Europe to buy weapons for Ukraine.",
+   "topic": "Defense spending and Russia sanctions",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "We’ve got, I think, $285 billion of — of Russian assets frozen in Europe",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if about $285 billion (roughly $280 to $300 billion) of Russian state assets are immobilized in Europe. False if official or authoritative figures put the amount frozen in Europe well outside that range. Cannot be determined if no current figure is available.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 15,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, describing how long it took Senate leaders to bring the Russia and China sanctions bills to the floor.",
+   "topic": "Defense spending and Russia sanctions",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "It took us, I don’t know, over a year of pushing to get our leadership to bring that bill to the floor, the Russian sanctions bill and the China sanctions bill.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Russia sanctions bill and the China sanctions bill Kennedy supports were introduced and pushed for more than a year before Senate leaders brought them to the floor. False if either bill reached the floor within a year of introduction, or has not reached the floor at all. Cannot be determined if the bills or their floor dates cannot be identified.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 16,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, on President Trump's request for additional defense spending.",
+   "topic": "Defense spending and Russia sanctions",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "The president has his right to ask for 42% more spending on defense.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if President Trump's current defense budget request is about 42% above the prior year's defense funding. False if the request's increase is clearly different from about 42% (for example under 35% or over 50%). Cannot be determined if the request or the baseline cannot be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 17,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, describing his effort to get Senate Republican leaders to pass more defense money through a reconciliation bill.",
+   "topic": "Defense spending and Russia sanctions",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "I have tried and failed, for 16 months, to convince Senator Thune, who has total control of the Senate and my Senate colleagues, to do that.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if there is a record of Kennedy pressing Majority Leader Thune and Senate Republicans for about 16 months to add defense money to a reconciliation bill, without success. False if the record shows the defense money he sought was passed, or his effort began much later. Cannot be determined if no record of his effort beyond his own words is found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 18,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, on whether Democrats will support President Trump's requested increase in defense spending.",
+   "topic": "Defense spending and Russia sanctions",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "The Democrats will never do that.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 19,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, on the cause of the week's technology outages and breaches.",
+   "topic": "Tech outages and cybersecurity",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "I do think the genesis of all of these hacks, and there will be more, is AI.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 20,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, on how Nvidia chips reached China, referring to the Commerce Department and U.S. export controls.",
+   "topic": "Chip exports and Nvidia",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "that the Department of Commerce has allowed the Communist Party of China to circumvent our export controls on advanced chips",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if official records (Commerce Department actions, export licenses, indictments or inspector-general findings) show advanced U.S. chips reached China in breach of or around export controls in a way the Commerce Department permitted or failed to stop. False if records show no such chips reached China or that Commerce blocked them. Cannot be determined if it turns on whether Commerce 'allowed' it, a judgment the records do not settle.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 21,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, describing the Commerce Department's handling of export controls on advanced chips.",
+   "topic": "Chip exports and Nvidia",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "They’re so incompetent, you wouldn’t put them in charge of a food truck.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 22,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, speaking of Nvidia founder Jensen Huang, who is expected to testify before the Senate Banking Committee.",
+   "topic": "Chip exports and Nvidia",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "It was the most expensive sex since Helen of Troy.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 23,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, about the results of the November 2026 midterm elections for his party.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "My party was rejected by the American people.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 24,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, on how Vice President JD Vance explains the midterm losses and Vance's earlier position on the Iran war.",
+   "topic": "Iran war and funding",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "JD says it’s all, you know, the fault of the Iranian war. That’s very convenient, since he was against it.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 25,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, asked whether he will run for president in 2028.",
+   "topic": "2028 presidential plans",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "LA",
+   "about_states": [
+    "LA"
+   ],
+   "quote": "My plan, right now, is to run for re-election.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 26,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "On Meet the Press, on his campaign finances ahead of a 2028 Senate re-election race in Louisiana.",
+   "topic": "2028 presidential plans",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "LA",
+   "about_states": [
+    "LA"
+   ],
+   "quote": "I’ve saved up about $30 million.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Kennedy's Senate campaign committee reported cash on hand of about $30 million in its latest FEC filing. False if the reported cash on hand is well away from $30 million (for example under $25 million or over $35 million). Cannot be determined if no recent FEC filing is available.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 27,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, as he challenges Chuck Schumer for Senate Democratic leader, on how he has dealt with President Trump.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "I have been fighting from day one against a lawless Trump administration.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 28,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, on Kilmar Abrego Garcia, whom the administration deported to El Salvador in 2025, and where he is now.",
+   "topic": "Immigration enforcement",
+   "broad_topic": "Immigration",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "He’s back on U.S. soil",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Kilmar Abrego Garcia is currently in the United States after his 2025 deportation to El Salvador. False if records show he is outside the United States. Cannot be determined if no current record of his location is found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 65,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, on the Trump administration's continuing legal actions against Kilmar Abrego Garcia after his return to the United States.",
+   "topic": "Immigration enforcement",
+   "broad_topic": "Immigration",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "they’re still trying to persecute him.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 29,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, giving his count of Senate Democrats backing his bid to become Senate Democratic leader.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "we’re north of 15 and momentum is in our direction",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a public count shows more than 15 Senate Democrats backing Van Hollen for Senate Democratic leader. False if public counts show 15 or fewer. Cannot be determined if no public count of his supporters exists.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 30,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, on what voters were calling for in the November 2026 midterm elections.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "People are sick and tired of an economic system rigged in favor of the very wealthy, against working people and fueled by political corruption.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 31,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, saying Senate Democratic leader Chuck Schumer opposed Abdul El-Sayed in Michigan's and Peggy Flanagan in Minnesota's 2026 Democratic Senate primaries.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [
+    "MI",
+    "MN"
+   ],
+   "quote": "Our current leader, Senator Schumer, sided with crypto and AIPAC to try to defeat him as well as to try to defeat our new senator, Senator Peggy Flanagan in Minnesota.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Senator Schumer or groups he directed backed opponents of Abdul El-Sayed in Michigan's and Peggy Flanagan in Minnesota's 2026 Democratic Senate primaries, alongside crypto-industry and AIPAC-linked spending against them. False if records show Schumer stayed neutral in both primaries or that crypto and AIPAC groups did not oppose them. Cannot be determined if Schumer's role cannot be established from records.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 32,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, denying that he has claimed to represent generational change in the Democratic Party.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "I’ve never said that I represent generational change.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if no recorded statement shows Van Hollen saying he represents generational change. False if a recorded statement shows him saying it. Cannot be determined beyond the statements that could be searched.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 33,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, comparing Republican and Democratic spending in the November 2026 midterm elections.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "Washington Republicans, they raised and spent twice as much as Democratic Washington Republicans",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Republican party committees and allied groups raised and spent about twice as much as their Democratic counterparts in the 2026 federal elections. False if FEC totals show Democrats matched or outspent Republicans. Cannot be determined if the totals are not yet available or depend on which committees are counted.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 34,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, on the Democratic agenda for the first hundred days of the new Congress.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "we have to reverse the terrible things that were done by the Trump administration",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 35,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, describing a political spending rule in connection with Elon Musk's election spending and federal contracts.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "the Elon Musk loophole that allows him to spend hundreds of millions of dollars while he’s getting billions of dollars in contracts",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Elon Musk spent hundreds of millions of dollars on U.S. elections while his companies held billions of dollars in federal contracts, and a rule (a 'loophole') allows a contractor's owner to spend that way. False if Musk's election spending or his companies' federal contracts are far smaller, or if federal law bars such spending. Cannot be determined if it turns on what counts as a 'loophole'.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 36,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, giving his personal view of the Senate filibuster.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "So my personal position is that the filibuster’s an anti-democratic provision",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 37,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, on legislation to let people aged 55 to 65 buy into Medicare.",
+   "topic": "Medicare for All and health care",
+   "broad_topic": "Health",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "Andy Kim, Senator Kim has a bill to do that.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Senator Andy Kim has introduced a bill letting people aged 55 to 65 buy into Medicare. False if no such bill by Kim exists. Cannot be determined if the bill's contents cannot be read.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 38,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, on whether Congress should fund military operations against Iran.",
+   "topic": "Iran war and funding",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "we should not continue to fund an illegal war that’s driving up prices",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "premised_prediction",
+   "test": "Premise only: True if price data show the U.S. war with Iran has raised prices for Americans (for example oil, gasoline or overall consumer prices rising with the war). False if prices have not risen, or fell, during the war. Cannot be determined if prices rose but the war's part in it cannot be separated from other causes.",
+   "premise": "The U.S. war with Iran is driving up prices for Americans.",
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 39,
+   "speaker": "Chris Van Hollen",
+   "office": "U.S. Senator from Maryland",
+   "party": "D",
+   "context": "On Meet the Press, asked whether he would drop a 2028 presidential run if he loses the Senate Democratic leader race.",
+   "topic": "2028 presidential plans",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "I am not running for president in 2028.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 40,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a news conference on Friday, shown on Meet the Press, on the prospects for working with the new Democratic Congress on health care.",
+   "topic": "Medicare for All and health care",
+   "broad_topic": "Health",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "There’s a real possibility that we get a lot of great things done, especially on health care.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "If they want to get things done, I want to get things done too.",
+     "outlet": "NBC Meet the Press",
+     "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 41,
+   "speaker": "Hakeem Jeffries",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "In a clip shown on Meet the Press before he is expected to become House speaker in January 2027.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "The status quo is unacceptable.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 42,
+   "speaker": "Barack Obama",
+   "office": "Former President of the United States",
+   "party": "D",
+   "context": "Speaking to incoming House Democrats, in a clip shown on Meet the Press.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Hang onto your values, your commitments, your convictions.",
+   "reported_by": {
+    "outlet": "NBC Meet the Press",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 43,
+   "speaker": "Marco Rubio",
+   "office": "Secretary of State",
+   "party": "R",
+   "context": "Speaking about the week's technology outages and whether they are linked to a coordinated attack, as shown on ABC's This Week.",
+   "topic": "Tech outages and cybersecurity",
+   "broad_topic": "Defense and National Security",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "We have absolutely no reason to believe, we have no evidence, no indications of any kind that these instances -- that these incidents are related to each other.",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if U.S. government officials or agencies have publicly found no evidence linking the week's technology outages to one another. False if an official finding links them. Cannot be determined if no official assessment beyond the secretary's own words is available.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [
+    44
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "We are not under systemic attack.",
+     "outlet": "NBC Meet the Press",
+     "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 44,
+   "speaker": "Josh Hawley",
+   "office": "U.S. Senator from Missouri",
+   "party": "R",
+   "context": "In a clip shown on ABC's This Week, on whether the week's technology outages were coincidence.",
+   "topic": "Tech outages and cybersecurity",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "If this is all a coincidence, it’s like the greatest coincidence in the history of the world.",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [
+    43
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 45,
+   "speaker": "JD Vance",
+   "office": "Vice President of the United States",
+   "party": "R",
+   "context": "Asked whether Americans should prepare for emergencies after the week's technology outages, in a clip shown on ABC's This Week.",
+   "topic": "Tech outages and cybersecurity",
+   "broad_topic": "Disasters, Insurance and Risk",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Should we be preparing to build a bunker and to stock up on food and water? And my answer to that is, no.",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 46,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking to Americans about the week's technology outages and stock market losses, in a clip shown on ABC's This Week.",
+   "topic": "Tech outages and cybersecurity",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Tell them to relax. Everything’s good.",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 47,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Describing a call with the governor-elect of Texas, in a clip shown on ABC's This Week.",
+   "topic": "Texas governor-elect call",
+   "broad_topic": "Immigration",
+   "speaker_state": null,
+   "about_states": [
+    "TX"
+   ],
+   "quote": "I received a phone call two days ago from the new governor of -- governor-elect of Texas. She was really nice. It was a very productive call. And she wants to have a strong border.",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a record shows Texas's governor-elect called President Trump about two days before his remarks. False if records show no such call or a different date. Cannot be determined if only the president's own account exists.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 48,
+   "speaker": "Tom Cotton",
+   "office": "U.S. Senator from Arkansas",
+   "party": "R",
+   "context": "Quoted by ABC's host from an interview with The Wall Street Journal, on Commerce Secretary Howard Lutnick and warnings about AI chips smuggled into China.",
+   "topic": "Chip exports and Nvidia",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "If Howard Lutnick wanted my support, perhaps he should have responded to my many letters warning about the Chinese communist front companies and, more importantly, taking the threats of communist China more seriously.",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "Read aloud by the host from a Wall Street Journal interview; the Journal original was not located."
+   },
+   "kind": "premised_prediction",
+   "test": "Premise only: True if records show Senator Cotton sent Commerce Secretary Lutnick several letters warning about Chinese communist front companies. False if Cotton sent no such letters to Lutnick. Cannot be determined if letters exist but their recipients or subjects cannot be confirmed.",
+   "premise": "Senator Cotton sent Commerce Secretary Howard Lutnick many letters warning about Chinese communist front companies.",
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 49,
+   "speaker": "JD Vance",
+   "office": "Vice President of the United States",
+   "party": "R",
+   "context": "Answering a question at a White House news conference on Friday about whether the war with Iran was worth the loss of the Senate.",
+   "topic": "Iran war and funding",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "It's the biggest state sponsor of terrorism.",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the State Department's latest Country Reports on Terrorism or equivalent official statement calls Iran the leading or worst state sponsor of terrorism. False if the official reports rank another country above Iran. Cannot be determined if no official ranking exists.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 50,
+   "speaker": "JD Vance",
+   "office": "Vice President of the United States",
+   "party": "R",
+   "context": "Answering a question at a White House news conference on Friday about the Iran war and the loss of the Senate.",
+   "topic": "Iran war and funding",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "the president has said he would do it again",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if President Trump has publicly said he would go to war with Iran again, or would make the same decision again. False if the record shows he said otherwise. Cannot be determined if no such statement by the president can be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 51,
+   "speaker": "JD Vance",
+   "office": "Vice President of the United States",
+   "party": "R",
+   "context": "Answering a question at a White House news conference on Friday about his role while President Trump is in office.",
+   "topic": "Iran war and funding",
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "my goal is and my job is to support the president of the United States",
+   "reported_by": {
+    "outlet": "ABC This Week",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 52,
+   "speaker": "Tom Cotton",
+   "office": "U.S. Senator from Arkansas",
+   "party": "R",
+   "context": "Quoted by CNN's host from an interview with The Wall Street Journal, on the Commerce Department's response to Nvidia chip diversion to China.",
+   "topic": "Chip exports and Nvidia",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "It's just a bit late, regrettably, and I think we need to catalog the damage that's been done.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "Read aloud by the host from a Wall Street Journal interview; the Journal original was not located."
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 53,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, discussing President Trump's executive order on federal contractors' responses to congressional requests.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "Trump is scrambling to cover up all of the corruption, the kickbacks, the bribery, the insider influence.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 54,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, on the legal effect of President Trump's executive order on federal contractors' responses to Congress.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "that so-called executive order has all the force of an interoffice memo",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the executive order cannot bind private contractors or Congress, under the Constitution or statute. False if the order has legal force over contractors' responses to Congress. Cannot be determined if it turns on a legal question no court has decided.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 55,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, responding to a letter from a U.S. attorney, on prosecutions the Trump administration has brought.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "We know that they illegitimately tried to prosecute James Comey, Letitia James, Adam Schiff, Maggie Goodlander, on and on, on a whole bunch of cases.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Justice Department under Trump brought or sought criminal charges against James Comey, Letitia James, Adam Schiff and Maggie Goodlander. False if any of them was never the subject of a federal prosecution or charging effort. Cannot be determined if 'illegitimately' is the point at issue, which is a judgment the records do not settle.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 56,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, on what the Federal Records Act requires of federal officials.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "That's called the Federal Records Act, which says that they have got to preserve and document all official communications.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Federal Records Act requires federal agencies to preserve and document official communications. False if the Act imposes no such duty. Cannot be determined if it turns on how the Act applies to particular communications.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 57,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, describing information given to House Democrats about the FBI's general counsel.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Crime and Policing",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "it turns out we had some people who shared with us the fact that the general counsel, the FBI, was engaged in Signal chats -- these are auto-deleting Signal chats -- with a Trump associate relating to a health care fraud potential prosecution.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a public record (filing, letter, report) shows the FBI general counsel used auto-deleting Signal chats with a Trump associate about a possible health care fraud prosecution. False if a record shows no such chats took place. Cannot be determined if the claim rests only on unnamed sources House Democrats describe.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 58,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, describing the Trump administration's pardons and political fundraising funds.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Crime and Policing",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "we know that they have been pardoning lots of people who are engaged in white-collar fraud and getting money to various political and governmental slush funds that Trump has set up.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if President Trump has pardoned many people convicted of white-collar fraud and records link such clemency to money going to political or government funds tied to Trump. False if few white-collar pardons were granted or no such money link is on record. Cannot be determined if the pardons are confirmed but the money link is not.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 59,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, on a law firm's disclosure of work it did for the Trump administration.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "one of the law firms has just revealed that nearly $12 million worth of their associates and partners' time was used by the Trump administration in order to do their work and their projects.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a law firm has disclosed that nearly $12 million worth of its lawyers' time went to work for the Trump administration. False if the disclosed figure is clearly different. Cannot be determined if no such disclosure is found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 60,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, on commitments of free legal work the Trump administration obtained from law firms.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "they got commitments for up to a billion dollars from all of the law firms that were targeted by this scam by the president.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the law firms that reached agreements with the Trump administration committed up to about $1 billion in free legal work in total. False if the total committed is clearly different (for example under $800 million or over $1.2 billion). Cannot be determined if no total is available.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 61,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative from Maryland",
+   "party": "D",
+   "context": "On CNN's State of the Union, on what House Democrats will do about law firms' work for the Trump administration.",
+   "topic": "Congressional investigations and oversight",
+   "broad_topic": "Courts and Nominations",
+   "speaker_state": "MD",
+   "about_states": [],
+   "quote": "So we're going to expose this entire scheme.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 62,
+   "speaker": "Hakeem Jeffries",
+   "office": "U.S. Representative from New York",
+   "party": "D",
+   "context": "In an interview with The New York Times, shown on CNN's State of the Union, on whether he would negotiate with White House chief of staff Stephen Miller.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "I have made clear that Stephen Miller's a stone-cold racist.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "Shown as a clip from a New York Times interview; the Times original was not located."
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 63,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Speaking about House Democratic leader Hakeem Jeffries and White House chief of staff Stephen Miller, in a clip shown on CNN's State of the Union.",
+   "topic": "Midterm results and Democratic majority",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I look forward to working with Hakeem.",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01",
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 64,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a Sunday morning post read aloud on CNN's State of the Union, on Chuck Schumer's possible election as Senate majority leader.",
+   "topic": "Senate Democratic leadership race",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "He failed badly as leader once before, one of the worst in history",
+   "reported_by": {
+    "outlet": "CNN State of the Union",
+    "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-22/segment/01"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "Read aloud by the host from a post by the President; the original post was not located."
+   },
+   "kind": "personal_attack",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  }
+ ]
+}
