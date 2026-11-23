@@ -1346,7 +1346,13 @@ partitionedTables:
     comment: >
       Health insurance coverage counts (with/without coverage, public, private) from the ACS
       5-Year survey, at state and county levels. Raw counts, not rates, and not broken out
-      by age (age groups are summed into the totals).
+      by age (age groups are summed into the totals). with_health_insurance and
+      no_health_insurance come from B27001 (2014+). public_coverage and
+      private_coverage are the all-ages totals with any public / any private coverage
+      from subject tables S2704 / S2703, joined on in the response transformer; a
+      person with both is counted in both, so they do not sum to the insured total.
+      They are NULL for 2014-2016 because those vintages have no matching total
+      variable.
 
     dimensions:
       type:
@@ -1384,27 +1390,26 @@ partitionedTables:
       - name: public_coverage
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."B27003_004E" AS BIGINT)'
-        comment: Population with public health insurance
+        expression: 'TRY_CAST(src."S2704_C02_001E" AS BIGINT)'
+        comment: People with any public health coverage (Medicare, Medicaid/means-tested, VA), all ages, from ACS subject table S2704; NULL for 2014-2016
       - name: public_coverage_moe
         type: bigint
         nullable: true
-        expression: 'CASE WHEN TRY_CAST(src."B27003_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B27003_004M" AS BIGINT) END'
-        comment: 90% CI margin of error for public_coverage (Census variable B27003_004M; negative sentinels normalized to null)
+        expression: 'CASE WHEN TRY_CAST(src."S2704_C02_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2704_C02_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for public_coverage (Census variable S2704_C02_001M; negative sentinels normalized to null)
       - name: private_coverage
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."B27002_004E" AS BIGINT)'
-        comment: Population with private health insurance
-
+        expression: 'TRY_CAST(src."S2703_C02_001E" AS BIGINT)'
+        comment: People with any private health coverage (employer-based, direct-purchase, TRICARE/military), all ages, from ACS subject table S2703; NULL for 2014-2016
       - name: private_coverage_moe
         type: bigint
         nullable: true
-        expression: 'CASE WHEN TRY_CAST(src."B27002_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B27002_004M" AS BIGINT) END'
-        comment: 90% CI margin of error for private_coverage (Census variable B27002_004M; negative sentinels normalized to null)
+        expression: 'CASE WHEN TRY_CAST(src."S2703_C02_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2703_C02_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for private_coverage (Census variable S2703_C02_001M; negative sentinels normalized to null)
     source:
       type: http
-      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B27001_001E,B27001_001M,B27001_004E,B27001_005E,B27001_007E,B27001_008E,B27001_010E,B27001_011E,B27001_013E,B27001_014E,B27001_016E,B27001_017E,B27001_019E,B27001_020E,B27001_022E,B27001_023E,B27001_025E,B27001_026E,B27001_028E,B27001_029E,B27001_032E,B27001_033E,B27001_035E,B27001_036E,B27001_038E,B27001_039E,B27001_041E,B27001_042E,B27001_044E,B27001_045E,B27001_047E,B27001_048E,B27001_050E,B27001_051E,B27001_053E,B27001_054E,B27001_056E,B27001_057E,B27002_004E,B27002_004M,B27003_004E,B27003_004M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B27001_001E,B27001_001M,B27001_004E,B27001_005E,B27001_007E,B27001_008E,B27001_010E,B27001_011E,B27001_013E,B27001_014E,B27001_016E,B27001_017E,B27001_019E,B27001_020E,B27001_022E,B27001_023E,B27001_025E,B27001_026E,B27001_028E,B27001_029E,B27001_032E,B27001_033E,B27001_035E,B27001_036E,B27001_038E,B27001_039E,B27001_041E,B27001_042E,B27001_044E,B27001_045E,B27001_047E,B27001_048E,B27001_050E,B27001_051E,B27001_053E,B27001_054E,B27001_056E,B27001_057E&for={geography}:*&key={env:CENSUS_API_KEY}"
       method: GET
       response:
         format: json
@@ -1415,7 +1420,7 @@ partitionedTables:
         enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.AcsHealthInsuranceTransformer"
 
     materialize:
       format: iceberg
