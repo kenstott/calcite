@@ -1708,9 +1708,9 @@
    "kind": "factual",
    "test": "True if U.S. government officials or agencies have publicly found no evidence linking the week's technology outages to one another. False if an official finding links them. Cannot be determined if no official assessment beyond the secretary's own words is available.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "Director of National Intelligence Jay Clayton said on the same program that the incidents were 'not a coordinated or state sponsored attack,' and Nextgov reports that he told Congress the NSA network outage traced to patching of software vulnerabilities. No official finding linking the outages to one another was found; separate intrusions at the FBI and USDA are described as distinct from them.",
+   "check_run": "q211/askamerica/2026-11-23",
    "counter_statements": [
     44
    ],
@@ -1723,7 +1723,16 @@
      "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
     }
    ],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "ABC This Week transcript (Nov. 22, 2026)",
+     "url": "https://abcnews.com/Politics/week-transcript-11-22-26-director-national-intelligence/story?id=138345755"
+    },
+    {
+     "label": "Nextgov, security officials tell Congress tech outages are not malicious (Nov. 2026)",
+     "url": "https://www.nextgov.com/cybersecurity/2026/11/security-officials-tell-congress-tech-outages-are-not-malicious/417312/"
+    }
+   ]
   },
   {
    "id": 44,
