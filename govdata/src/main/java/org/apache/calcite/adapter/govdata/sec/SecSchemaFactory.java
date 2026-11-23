@@ -237,7 +237,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         // downloadSecDataUsingDocumentEtl always runs at the end regardless of what it was asked
         // to do) when this worker's only job is prices. fetchStockPrices keeps its existing
         // meaning; this is a separate opt-in so no existing worker's behavior changes silently.
-        if (getBooleanValue(operand, "pricesOnly", false)) {
+        if (getBooleanValue(operand, "enforcementOnly", false)) {
+          LOGGER.info("enforcementOnly=true: skipping SEC filing and price downloads");
+        } else if (getBooleanValue(operand, "pricesOnly", false)) {
           downloadSecPricesOnly(operand);
         } else {
           // Download SEC data using DocumentETLProcessor
@@ -264,6 +266,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           tableName);
       return false;
     });
+    // enforcement_actions is the exception: it comes from SEC's public listing pages through the
+    // standard HTTP ETL, not from filings. A table-specific hook wins over "*". It runs only in
+    // its own worker slot (enforcementOnly), never inside the per-year filing slots.
+    final boolean enforcementOnly = getBooleanValue(operand, "enforcementOnly", false);
+    builder.isEnabled("enforcement_actions", context -> enforcementOnly);
   }
 
   // Flag to ensure download only runs once

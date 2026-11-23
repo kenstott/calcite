@@ -1384,7 +1384,7 @@ generate_single_schema_model() {
       operand_body="\"dataSource\": \"cftc\",
       ${_YEAR_RANGE}"
       ;;
-    sec|sec_primary|sec_prices|sec_secondary|sec_13f)
+    sec|sec_primary|sec_prices|sec_secondary|sec_13f|sec_enforcement)
       # sec_primary, sec_prices, sec_secondary and sec_13f are workload splits of the single
       # "sec" schema and all write their tracker under the same "sec" dataSource path, so their
       # compaction model is identical to sec — this lets the harness compact the sec/ tracker for
@@ -1773,6 +1773,7 @@ get_timeout_config() {
     patents)      echo 480 ;;  # full bulk dumps (g_patent.tsv, owner.csv ~700MB each) + summaries
     sec|sec_primary|sec_secondary|sec_13f) echo 720 ;;  # ~293k accessions/year × download+convert+materialize; full pass ≫ 4h
     sec_prices)   echo 240 ;;  # Stooq bulk: 508MB zip + ~22M-row materialize
+    sec_enforcement) echo 60 ;;  # ~310 listing pages at 5 req/s, ~50k rows
     cftc)         echo 240 ;;  # large derivatives history
     cyber_vuln)   echo 240 ;;  # full NVD ~350k CVEs at 0.167 req/s (no API key) — long quiet crawls
     cyber_threat) echo 240 ;;  # OTX subscribed-pulse cursor pagination, rate-limited
@@ -1888,7 +1889,7 @@ build_inline_model() {
 # sec_* pool slots are workload splits of the single sec schema and share its YAML.
 schema_yaml_resource() {
   case "$1" in
-    sec_primary|sec_secondary|sec_13f|sec_prices) echo "sec/sec-schema.yaml" ;;
+    sec_primary|sec_secondary|sec_13f|sec_prices|sec_enforcement) echo "sec/sec-schema.yaml" ;;
     econ_reference) echo "econ/econ-reference-schema.yaml" ;;
     cyber_vuln)     echo "cyber/cyber-vuln-schema.yaml" ;;
     cyber_threat)   echo "cyber/cyber-threat-schema.yaml" ;;

@@ -1725,6 +1725,102 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ==========================================================================
+  # ENFORCEMENT ACTIONS (SEC Division of Enforcement listings)
+  # ==========================================================================
+  - name: enforcement_actions
+    pattern: "listing=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: listing
+          type: VARCHAR
+    comment: >
+      Every SEC enforcement action published on the SEC's two enforcement listing pages, one row
+      per listing row: litigation releases (civil actions in federal court, from LR-14644 on
+      1995-09-20) and administrative proceedings (Commission orders, with a file number). Use to
+      count actions by fiscal year or type, find the releases naming a respondent, and link to the
+      SEC's release and complaint documents. fiscal_year is the federal fiscal year (October
+      through September) of filed_date. respondents is the listing's own text, which can name
+      several parties ("A, B, and C"), so it is not one row per respondent and carries no CIK.
+      Not covered: allegations, sanctions and amounts (these are in each release's text, which is
+      not fetched), and the SEC's published annual-results totals (standalone vs follow-on
+      split, money ordered). Counts here are listing rows, so they will not equal the SEC's
+      annual totals. Source: sec.gov/enforcement-litigation/litigation-releases and
+      /administrative-proceedings (HTML listings, keyless, republished in full on every run).
+
+    dimensions:
+      listing:
+        - litigation-releases
+        - administrative-proceedings
+
+    columns:
+      - name: action_type
+        type: string
+        nullable: false
+        comment: "civil = litigation release (federal court action); administrative = administrative proceeding (Commission order)"
+      - name: release_number
+        type: string
+        nullable: false
+        comment: "SEC release number: LR-<n> for litigation releases, or the Exchange Act / Securities Act / Advisers Act release number (e.g. 34-106331) for administrative proceedings"
+      - name: file_number
+        type: string
+        nullable: true
+        comment: "Administrative proceeding file number (e.g. 3-22713); null for litigation releases"
+      - name: filed_date
+        type: date
+        nullable: false
+        comment: Date the SEC published the release (UTC date)
+      - name: fiscal_year
+        type: int
+        nullable: false
+        comment: Federal fiscal year (October-September) of filed_date; Oct 2025 is fiscal_year 2026
+      - name: respondents
+        type: string
+        nullable: false
+        comment: Respondent or defendant names exactly as listed by the SEC; may name several parties in one string
+      - name: release_url
+        type: string
+        nullable: true
+        comment: Absolute URL of the release page (or the .txt/.pdf release for older entries)
+      - name: complaint_url
+        type: string
+        nullable: true
+        comment: Absolute URL of the SEC complaint document when the listing links one; null otherwise
+
+    source:
+      type: http
+      url: "https://www.sec.gov/enforcement-litigation/{listing}?page=0"
+      method: GET
+      parallel: 1
+      headers:
+        User-Agent: *edgar_user_agent
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.sec.SecEnforcementTransformer"
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "listing=*/"
+      partition:
+        columns: [listing]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: enforcement_actions
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [listing]
+        incrementalKeys: [listing]
+        overwritePartitions: true
+
+
+  # ==========================================================================
   # VECTORIZED CHUNKS (Optional)
 # ============================================================================
 # CONSTRAINTS
