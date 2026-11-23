@@ -7748,6 +7748,123 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # --- MONTHLY RETAIL SALES VINTAGES, ALFRED (advance print and every later revision) ---
+  - name: retail_sales_revision_vintages
+    timeColumn: date  # observation time (reference month, first day); this table has no column named 'year'
+    pattern: "type=retail_sales_revision_vintages/series=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: series
+          type: VARCHAR
+    # Each series' whole real-time history is one request and changes with every monthly Census
+    # release, so the hash check skips the write on days nothing new was published.
+    freshness:
+      type: hash
+    comment: >
+      Monthly Advance Retail Sales vintages from ALFRED (the St. Louis Fed's archive of FRED
+      real-time periods), the Census Bureau's Advance Monthly Retail Trade report, for seven
+      seasonally adjusted series in millions of dollars: RSAFS retail trade and food services,
+      RSXFS retail trade (ex food services), RSFSXMV retail and food services ex motor vehicle and
+      parts dealers, and the four components that define the "control group" (total retail and
+      food services excluding autos, gasoline, building materials and food services): RSMVPD motor
+      vehicle and parts dealers, RSGASS gasoline stations, RSBMGESD building materials / garden
+      equipment / supplies dealers, RSFSDP food services and drinking places. Control group =
+      RSAFS - RSMVPD - RSGASS - RSBMGESD - RSFSDP, computed from values taken at the same
+      realtime_start. econ.fred_indicators holds only the current, most-revised value of retail
+      sales; this table keeps what each release published, so the size of the advance-to-second
+      -to-benchmark revision can be measured. One row per (series, date, realtime_start): value is
+      what ALFRED shows for reference month `date` from the release dated realtime_start until the
+      day before realtime_end (realtime_end 9999-12-31 means still current). Only releases that
+      changed the value get a row, so the ADVANCE (first) print of a month is the row with the
+      smallest realtime_start for that date, the next realtime_start is the first revision (the
+      following month's report), and the current value is the row with realtime_end 9999-12-31;
+      the annual benchmark revision shows as new rows for prior months. Vintage depth differs: RSAFS,
+      RSXFS and RSFSXMV have vintages from 2001-06-13; the four components only from 2013-05-13,
+      so a control-group revision can be computed for months from 2013-05 onward, not for 2010-2013.
+      Months older than a series' first vintage appear once, stamped with that first realtime_start,
+      and are not true advance prints. The change for a month is its value minus the PRIOR month's
+      value as of the same realtime_start, not as of the current vintage.
+    dimensions:
+      type:
+        - retail_sales_revision_vintages
+      series:
+        - RSAFS
+        - RSXFS
+        - RSFSXMV
+        - RSMVPD
+        - RSGASS
+        - RSBMGESD
+        - RSFSDP
+
+    columns:
+      - name: series
+        type: string
+        nullable: false
+        comment: >
+          FRED series id (partition column). RSAFS retail trade and food services, RSXFS retail
+          trade, RSFSXMV retail and food services ex motor vehicle and parts, RSMVPD motor vehicle
+          and parts dealers, RSGASS gasoline stations, RSBMGESD building materials and garden
+          equipment dealers, RSFSDP food services and drinking places. Always filter on series.
+      - name: realtime_start
+        type: date
+        nullable: false
+        comment: First day this value was the published value for `date` (the Census Advance Monthly Retail Trade release date, or the day ALFRED first recorded it)
+      - name: realtime_end
+        type: date
+        nullable: false
+        comment: Last day this value was the published value; 9999-12-31 means it is still the current value
+      - *date_column
+      - name: value
+        type: double
+        nullable: true
+        comment: Seasonally adjusted retail sales in millions of dollars for the reference month `date` as published from realtime_start to realtime_end
+
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/series/observations"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        series_id: "{series}"
+        # output_type=1 = observations by real-time period: one row per (date, value interval);
+        # the whole vintage history of a series (<= 6k rows here) fits one page.
+        output_type: "1"
+        realtime_start: "1776-07-04"
+        realtime_end: "9999-12-31"
+        limit: "100000"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 502, 503, 504]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=retail_sales_revision_vintages/series=*/"
+      partition:
+        columns: [type, series]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: retail_sales_revision_vintages
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   # --- WORLD INDICATORS ---
   - name: world_indicators
     timeColumn: date  # observation time; this table has no column named 'year'

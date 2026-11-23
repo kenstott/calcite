@@ -2835,6 +2835,95 @@ FROM (SELECT COUNT(*) AS dups FROM (
         SELECT series, date, realtime_start FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true)
         GROUP BY 1,2,3 HAVING COUNT(*) > 1));
 
+-- ============================================================================
+-- retail_sales_revision_vintages (FRED/ALFRED real-time monthly advance retail sales vintages)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true) LIMIT 1));
+
+-- 7 series; ALFRED reports 5.6k (RSAFS), 5.5k (RSXFS), 5.6k (RSFSXMV), 3.0k (RSMVPD), 2.8k (RSGASS), 3.0k (RSBMGESD), 2.6k (RSFSDP) rows.
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'row_count',
+  CASE WHEN n >= 25000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '25000',
+  CASE WHEN n >= 25000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');  -- single-table-type partition: type is expected constant
+
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series outside the 7 scoped FRED retail sales series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true)
+      WHERE series NOT IN ('RSAFS','RSXFS','RSFSXMV','RSMVPD','RSGASS','RSBMGESD','RSFSDP'));
+
+-- Retail sales are positive dollar amounts; a non-positive or NULL value is a parse defect
+-- (none of the seven series carries a '.' vintage).
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where value is NULL or not positive'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true)
+      WHERE value IS NULL OR value <= 0);
+
+-- Must carry the latest monthly release: latest RSAFS realtime_start within the last 60 days.
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'expected_values',
+  CASE WHEN mx >= CURRENT_DATE - INTERVAL 60 DAY THEN 'pass' ELSE 'fail' END,
+  CAST(mx AS VARCHAR), '>= today - 60 days',
+  'latest RSAFS realtime_start must be a recent monthly release'
+FROM (SELECT MAX(realtime_start) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true) WHERE series = 'RSAFS');
+
+-- Revisions exist: most 2010+ RSAFS months have more than one vintage (each month is re-estimated the following month).
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'expected_values',
+  CASE WHEN pct >= 0.9 THEN 'pass' ELSE 'fail' END,
+  CAST(pct AS VARCHAR), '>= 0.9',
+  'share of RSAFS months since 2010 with more than one vintage'
+FROM (SELECT AVG(CASE WHEN c > 1 THEN 1.0 ELSE 0.0 END) AS pct FROM (
+        SELECT date, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true)
+        WHERE series = 'RSAFS' AND date >= DATE '2010-01-01' GROUP BY date));
+
+-- The control-group components must overlap in time with the total so the group can be built:
+-- all five series carry the same latest reference month.
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'expected_values',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  'RSAFS and its four control-group components share one latest reference month'
+FROM (SELECT COUNT(DISTINCT mx) AS n FROM (
+        SELECT series, MAX(date) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true)
+        WHERE series IN ('RSAFS','RSMVPD','RSGASS','RSBMGESD','RSFSDP') GROUP BY series));
+
+-- PK shape: (series, date, realtime_start)
+INSERT INTO dq_results
+SELECT 'econ', 'retail_sales_revision_vintages', 'pk_duplicates',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(dups AS VARCHAR), '0',
+  'duplicate (series, date, realtime_start) keys'
+FROM (SELECT COUNT(*) AS dups FROM (
+        SELECT series, date, realtime_start FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/retail_sales_revision_vintages', allow_moved_paths := true)
+        GROUP BY 1,2,3 HAVING COUNT(*) > 1));
+
 -- social_security_trustees_projections
 INSERT INTO dq_results
 SELECT 'econ', 'social_security_trustees_projections', 'all_null_cols', 'fail',
