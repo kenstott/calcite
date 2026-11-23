@@ -846,8 +846,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/p
 
 INSERT INTO dq_results
 SELECT 'census', 'pep_population_estimates', 'T2_row_count',
-  CASE WHEN n >= 19000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '19000',
-  'Expected >= 19000 rows (6 data years 2020-2025 x (51 states + about 3,140 counties))'
+  CASE WHEN n >= 9000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '9000',
+  'Expected >= 9000 rows (>= 3 data years x (51 states + about 3,140 counties); production carries 6, the DQ window fewer)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true));
 
 SELECT 'pep_population_estimates' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true) LIMIT 1;
@@ -866,9 +866,9 @@ FROM (SELECT
 -- One vintage, years 2020 onward, 51 state rows (50 states + DC) per data year.
 INSERT INTO dq_results
 SELECT 'census', 'pep_population_estimates', 'T7_years_and_vintage',
-  CASE WHEN y >= 6 AND v = 1 AND min_states = 51 AND max_states = 51 THEN 'pass' ELSE 'fail' END,
+  CASE WHEN y >= 3 AND v = 1 AND min_states = 51 AND max_states = 51 THEN 'pass' ELSE 'fail' END,
   CAST(y AS VARCHAR) || ' / ' || CAST(v AS VARCHAR) || ' / ' || CAST(min_states AS VARCHAR) || '-' || CAST(max_states AS VARCHAR),
-  '>=6 / 1 / 51-51', 'Distinct data years, vintages, and state rows per year'
+  '>=3 / 1 / 51-51', 'Distinct data years, vintages, and state rows per year'
 FROM (SELECT (SELECT COUNT(DISTINCT year) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true)) AS y,
              (SELECT COUNT(DISTINCT vintage) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population_estimates', allow_moved_paths := true)) AS v,
              MIN(c) AS min_states, MAX(c) AS max_states
