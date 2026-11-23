@@ -2,8 +2,8 @@
  "date": "2026-11-23",
  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 22 or 23, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 23 in the early morning ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (six were: three CBS 60 Minutes segments, NBC Meet the Press, ABC This Week and CNN State of the Union, all Nov. 22). One NPR story, \"After midterm losses, Republicans debate what's next for the party,\" could not be read and is not included. Transcripts from Nov. 16 to 20 were searched only to confirm quotes. PBS NewsHour carries Associated Press reporting. Nine of the fifteen readable stories and transcripts quoted no officeholder in scope. Greetings and procedural remarks, quotes under five words, commentators' accounts of what officials said, and statements by officials outside the offices in scope (including the Director of National Intelligence, senators-elect and former officeholders other than presidents and vice presidents) were left out. Statements are worded as the outlet reported them.",
  "lede": [
-  "The Sunday shows on Nov. 22 were dominated by the aftermath of the midterm elections, in which Democrats won control of both chambers of Congress, and by a week of technology outages. Sen. John Kennedy of Louisiana and Sen. Chris Van Hollen of Maryland, who is challenging Chuck Schumer for Senate Democratic leader, gave long interviews on NBC's Meet the Press; Rep. Jamie Raskin of Maryland appeared on CNN's State of the Union to discuss House Democrats' plans for investigations.",
-  "This page lists every statement by an officeholder in scope that was quoted in the day's stories and transcripts, labelled by kind. Factual statements and the factual premises of predictions are checked one at a time against AskAmerica's warehouse and primary sources; statements still waiting for a check are marked not yet checked."
+  "The Sunday programs on Nov. 22 turned on the aftermath of the midterm elections, in which Democrats won control of both chambers of Congress, and on a week of technology outages. Sen. John Kennedy of Louisiana and Sen. Chris Van Hollen of Maryland, who is challenging Chuck Schumer for Senate Democratic leader, gave long interviews on NBC's Meet the Press. Rep. Jamie Raskin of Maryland spoke on CNN's State of the Union about House Democrats' plans for oversight of the administration, and clips of the president, the vice president and Secretary of State Marco Rubio were shown on ABC's This Week.",
+  "The page lists 65 statements by 17 officeholders. Twenty-eight were factual claims or factual premises of predictions, and every one was checked against AskAmerica's warehouse and primary sources: 11 were supported, 13 unsettled, 1 unsupported and 3 contradicted. Two of the contradicted claims turned on campaign-finance totals in AskAmerica's FEC data and one on a Census Bureau count of employer health coverage. The other 37 statements were opinions, predictions, promises or personal attacks and are listed without a check."
  ],
  "stories": [
   {
@@ -2117,14 +2117,19 @@
    "kind": "factual",
    "test": "True if the executive order cannot bind private contractors or Congress, under the Constitution or statute. False if the order has legal force over contractors' responses to Congress. Cannot be determined if it turns on a legal question no court has decided.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "As reported by CNN (the order's text could not be read directly), the order directs federal contractors to notify the White House of congressional requests and follow its instructions on withholding material, with contract termination as the penalty. An executive order cannot override Congress's oversight power, but no court has ruled on whether this one can bind contractors through their contracts.",
+   "check_run": "q215/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "CNN, executive order on federal contractors and congressional requests (Nov. 21, 2026)",
+     "url": "https://www.cnn.com/2026/11/21/politics/trump-executive-order-federal-contractors-congressional-requests"
+    }
+   ]
   },
   {
    "id": 55,
@@ -2149,14 +2154,23 @@
    "kind": "factual",
    "test": "True if the Justice Department under Trump brought or sought criminal charges against James Comey, Letitia James, Adam Schiff and Maggie Goodlander. False if any of them was never the subject of a federal prosecution or charging effort. Cannot be determined if 'illegitimately' is the point at issue, which is a judgment the records do not settle.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "James Comey and Letitia James were indicted in fall 2025 (both cases were later dismissed), and federal prosecutors presented a case against Rep. Maggie Goodlander to a grand jury, which declined to indict in February 2026. Adam Schiff was the subject of a criminal mortgage-fraud investigation that stalled, but no report of charges being sought against him was found, so whether the claim fits him depends on whether an investigation counts as an attempt to prosecute.",
+   "check_run": "q215/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "NBC News, Schiff investigation stalled (Oct. 23, 2025)",
+     "url": "https://www.nbcnews.com/politics/rcna239375"
+    },
+    {
+     "label": "New Hampshire Bar Association, grand jury declines to indict Goodlander",
+     "url": "https://www.nhbar.org/grand-jury-declines-to-indict-maggie-goodlander-in-federal-investigation/"
+    }
+   ]
   },
   {
    "id": 56,
@@ -2181,14 +2195,21 @@
    "kind": "factual",
    "test": "True if the Federal Records Act requires federal agencies to preserve and document official communications. False if the Act imposes no such duty. Cannot be determined if it turns on how the Act applies to particular communications.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "Under 44 U.S.C. 3101, each agency head must make and preserve records containing adequate and proper documentation of the agency's functions, decisions and essential transactions; 44 U.S.C. 3301 covers electronic records, and 44 U.S.C. 2911 requires official business done on non-official messaging accounts to be copied or forwarded to an official account. The statute's wording is 'records' and 'adequate and proper documentation' rather than 'all official communications'.",
+   "check_run": "q215/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "law.usc_sections (44 U.S.C. 2911, 3101, 3301)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#usc_sections-table",
+     "askamerica": true,
+     "sql": "SELECT citation, section_text FROM law.usc_sections WHERE title_number='44' AND section_number IN ('3101','2911','3301') "
+    }
+   ]
   },
   {
    "id": 57,
@@ -2213,14 +2234,19 @@
    "kind": "factual",
    "test": "True if a public record (filing, letter, report) shows the FBI general counsel used auto-deleting Signal chats with a Trump associate about a possible health care fraud prosecution. False if a record shows no such chats took place. Cannot be determined if the claim rests only on unnamed sources House Democrats describe.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "CNN reports that Raskin's letters to agencies describe a Signal conversation between the FBI general counsel and an associate of Donald Trump Jr., set to delete itself after a week, concerning a person wanted on health care fraud charges. The chat itself is not public; the account rests on what sources gave House Democrats, and the Justice Department said only that it follows all legal requirements.",
+   "check_run": "q215/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "CNN, Democrats warn administration on document destruction (Nov. 20, 2026)",
+     "url": "https://www.cnn.com/2026/11/20/politics/democrats-trump-administration-documents-destruction"
+    }
+   ]
   },
   {
    "id": 58,
@@ -2245,14 +2271,27 @@
    "kind": "factual",
    "test": "True if President Trump has pardoned many people convicted of white-collar fraud and records link such clemency to money going to political or government funds tied to Trump. False if few white-collar pardons were granted or no such money link is on record. Cannot be determined if the pardons are confirmed but the money link is not.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "An NBC News analysis of the president's first 88 individual pardons found more than half were for white-collar offenses. On the money link, donor records reported by the Washington Post (read through a summary) show the daughter of banker Julio Herrera Velutini pledged $2.5 million to the White House ballroom fund in September 2025 before his January 2026 pardon, but that reporting does not establish the donation influenced the pardon, and no broader record tying pardons to payments into Trump-linked funds was found.",
+   "check_run": "q216/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "NBC News, Trump's pardons forgive financial crimes",
+     "url": "https://www.nbcnews.com/politics/trump-administration/trumps-pardons-forgive-financial-crimes-came-hundreds-millions-punishm-rcna248277"
+    },
+    {
+     "label": "Justice Department, clemency grants by President Trump (2025-present)",
+     "url": "https://www.justice.gov/pardon/clemency-grants-president-donald-j-trump-2025-present"
+    },
+    {
+     "label": "Alternet, summary of Washington Post ballroom donor records",
+     "url": "https://alternet.org/trump-ballroom-donors"
+    }
+   ]
   },
   {
    "id": 59,
@@ -2277,14 +2316,23 @@
    "kind": "factual",
    "test": "True if a law firm has disclosed that nearly $12 million worth of its lawyers' time went to work for the Trump administration. False if the disclosed figure is clearly different. Cannot be determined if no such disclosure is found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "House Judiciary Democrats reported on Nov. 19, 2026 that Kirkland & Ellis disclosed providing at least $11.8 million in free legal services to federal agencies under its 2025 agreement with the administration; the firm's letter itself was not read directly.",
+   "check_run": "q216/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "House Judiciary Democrats press release (Nov. 19, 2026)",
+     "url": "https://democrats-judiciary.house.gov/media-center/press-releases/after-one-law-firm-reveals-being-coerced-into-providing-118-million-in-free-legal-work-to-trump-administration-ranking-members-raskin-and-blumenthal-and-sen-schiff-slam-nine-other-law-firms-for-stonewalling-congressional"
+    },
+    {
+     "label": "WJLA/National News Desk, Kirkland did $11.8 million in free legal work",
+     "url": "https://wjla.com/news/nation-world/kirkland-did-118-million-in-free-legal-work-under-trump-deal-disclosure-shows"
+    }
+   ]
   },
   {
    "id": 60,
@@ -2309,14 +2357,23 @@
    "kind": "factual",
    "test": "True if the law firms that reached agreements with the Trump administration committed up to about $1 billion in free legal work in total. False if the total committed is clearly different (for example under $800 million or over $1.2 billion). Cannot be determined if no total is available.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "Bloomberg Government reports that nine law firms pledged a combined $940 million in free legal services under their agreements with the administration. The figure is Bloomberg's tally of announced pledges, not a total stated in the agreements.",
+   "check_run": "q216/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Bloomberg Government, Trump's $940 million deals with law firms",
+     "url": "https://news.bloomberglaw.com/bloomberg-government-news/in-trumps-940-million-deals-with-firms-the-jury-is-still-out"
+    },
+    {
+     "label": "WJLA/National News Desk (citing Bloomberg)",
+     "url": "https://wjla.com/news/nation-world/kirkland-did-118-million-in-free-legal-work-under-trump-deal-disclosure-shows"
+    }
+   ]
   },
   {
    "id": 61,
