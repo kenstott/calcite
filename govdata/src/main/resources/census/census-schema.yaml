@@ -1434,6 +1434,134 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # ACS HEALTH INSURANCE BY TYPE - Coverage by type (S2703 private, S2704 public)
+  # ---------------------------------------------------------------------------
+  - name: acs_health_insurance_by_type
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      People with health insurance by coverage type, from the ACS 5-Year subject
+      tables S2703 (private coverage: employer-based, direct-purchase,
+      TRICARE/military) and S2704 (public coverage: Medicare,
+      Medicaid/means-tested, VA), at state and county levels. Counts are
+      "alone or in combination": a person with two coverage types is counted in
+      each, so the six types do not sum to the insured total (see
+      acs_health_insurance for insured/uninsured). Civilian noninstitutionalized
+      population. Margins of error at the 90% level. Fetched from the
+      acs5/subject endpoint. Starts 2017: the S2703/S2704 row layout changed
+      between the 2016 and 2017 vintages.
+
+    dimensions:
+      type:
+        - acs
+      year:
+        <<: *acs_year_range
+        minYear: 2017  # S2703/S2704 row layout is stable 2017+; 2015-2016 rows map to different concepts
+      geography: *all_geographies
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: total_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S2703_C01_001E" AS BIGINT)'
+        comment: Total civilian noninstitutionalized population
+      - name: employer_based_coverage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S2703_C02_002E" AS BIGINT)'
+        comment: People with Employer-based coverage, alone or in combination with other types (a person with two types counts in both, so types do not sum to total insured)
+      - name: employer_based_coverage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."S2703_C02_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2703_C02_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for employer_based_coverage (Census variable S2703_C02_002M; negative sentinels normalized to null)
+      - name: direct_purchase_coverage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S2703_C02_006E" AS BIGINT)'
+        comment: People with Direct-purchase coverage, alone or in combination with other types (a person with two types counts in both, so types do not sum to total insured)
+      - name: direct_purchase_coverage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."S2703_C02_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2703_C02_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for direct_purchase_coverage (Census variable S2703_C02_006M; negative sentinels normalized to null)
+      - name: tricare_coverage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S2703_C02_010E" AS BIGINT)'
+        comment: People with TRICARE/military coverage, alone or in combination with other types (a person with two types counts in both, so types do not sum to total insured)
+      - name: tricare_coverage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."S2703_C02_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2703_C02_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for tricare_coverage (Census variable S2703_C02_010M; negative sentinels normalized to null)
+      - name: medicare_coverage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S2704_C02_002E" AS BIGINT)'
+        comment: People with Medicare coverage, alone or in combination with other types (a person with two types counts in both, so types do not sum to total insured)
+      - name: medicare_coverage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."S2704_C02_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2704_C02_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for medicare_coverage (Census variable S2704_C02_002M; negative sentinels normalized to null)
+      - name: medicaid_coverage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S2704_C02_006E" AS BIGINT)'
+        comment: People with Medicaid/means-tested public coverage, alone or in combination with other types (a person with two types counts in both, so types do not sum to total insured)
+      - name: medicaid_coverage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."S2704_C02_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2704_C02_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for medicaid_coverage (Census variable S2704_C02_006M; negative sentinels normalized to null)
+      - name: va_coverage
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."S2704_C02_010E" AS BIGINT)'
+        comment: People with VA health care coverage, alone or in combination with other types (a person with two types counts in both, so types do not sum to total insured)
+      - name: va_coverage_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."S2704_C02_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."S2704_C02_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for va_coverage (Census variable S2704_C02_010M; negative sentinels normalized to null)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5/subject?get=NAME,S2703_C01_001E,S2703_C02_002E,S2703_C02_002M,S2703_C02_006E,S2703_C02_006M,S2703_C02_010E,S2703_C02_010M,S2704_C02_002E,S2704_C02_002M,S2704_C02_006E,S2704_C02_006M,S2704_C02_010E,S2704_C02_010M&for={geography}:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_health_insurance_by_type
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # ACS LANGUAGE - Language spoken at home
   # ---------------------------------------------------------------------------
   - name: acs_language
