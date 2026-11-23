@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Willamette Week article's claims about Portland person crime, Oregon FBI crime statistics and property-crime trends are somewhat biased and mostly accurate; 7 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+#s2-t4-s1:checked ~ table tbody.s0{display:none}
+#s2-t4-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"]{color:var(--link)}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"] .srtcue{opacity:1}
+#s2-t4-s1:checked ~ .srtreset{display:inline-block}
+#s2-t4-s2:checked ~ table tbody.s0{display:none}
+#s2-t4-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"]{color:var(--link)}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"] .srtcue{opacity:1}
+#s2-t4-s2:checked ~ .srtreset{display:inline-block}
+#s2-t4-s3:checked ~ table tbody.s0{display:none}
+#s2-t4-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"]{color:var(--link)}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"] .srtcue{opacity:1}
+#s2-t4-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Willamette Week article's claims about Portland person crime, Oregon FBI crime statistics and property-crime trends are somewhat biased and mostly accurate; 7 claims could not be confirmed.</h1>
+<p class="subtitle">FBI CDE (crime.cde_offenses, crime.cde_reta, Portland PD ORI OR0260200), KATU report of FBI Portland release; vintage 2026-11-23. Overall: 1 Pinocchio.</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.wweek.com/news/2026/11/19/violent-crime-rose-in-portland-over-past-two-years/">https://www.wweek.com/news/2026/11/19/violent-crime-rose-in-portland-over-past-two-years/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Oregon vs Portland: 2024 to 2025 change</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">FBI CDE; Oregon = state offense rate, Portland = Portland PD Return A counts</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="312" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="312" viewBox="0 0 412 312" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="312" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">% change 2024 to 2025</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="191" y1="56" x2="191" y2="258" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="191" y="274" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">-30.0%</text>
+      <line class="grid" x1="231.75" y1="56" x2="231.75" y2="258" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="231.75" y="274" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">-20.0%</text>
+      <line class="grid" x1="272.50" y1="56" x2="272.50" y2="258" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="272.50" y="274" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">-10.0%</text>
+      <line class="grid" x1="313.25" y1="56" x2="313.25" y2="258" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="313.25" y="274" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.0%</text>
+      <line class="grid" x1="354" y1="56" x2="354" y2="258" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="354" y="274" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">10.0%</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="313.25" y1="56" x2="313.25" y2="258" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="191" y1="258" x2="354" y2="258" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-or-violent-rate" class="tick" x="132" y="71.22" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">OR violent rate</text>
+      <text id="p1-xtick-or-homicide-rate" class="tick" x="132" y="93.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">OR homicide rate</text>
+      <text id="p1-xtick-or-property-rate" class="tick" x="132" y="116.11" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">OR property rate</text>
+      <text id="p1-xtick-or-burglary-rate" class="tick" x="132" y="138.56" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">OR burglary rate</text>
+      <text id="p1-xtick-portland-murder" class="tick" x="132" y="161" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Portland murder</text>
+      <text id="p1-xtick-portland-agg-assault" class="tick" x="132" y="183.44" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Portland agg. assault</text>
+      <text id="p1-xtick-portland-simple-assault" class="tick" x="132" y="205.89" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Portland simple assault</text>
+      <text id="p1-xtick-portland-burglary" class="tick" x="132" y="228.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Portland burglary</text>
+      <text id="p1-xtick-portland-veh-theft" class="tick" x="132" y="250.78" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Portland veh. theft</text>
+    </g>
+    <g id="p1-series-change" class="series">
+      <g class="hover">
+        <title>OR violent rate — % change: -7.3%</title>
+        <rect id="p1-mark-change-or-violent-rate" class="bar" x="283.50" y="60.04" width="29.75" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="58.72" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-or-violent-rate" class="value-label" x="279.50" y="71.22" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="end">-7.3%</text>
+      <g class="hover">
+        <title>OR homicide rate — % change: -24.3%</title>
+        <rect id="p1-mark-change-or-homicide-rate" class="bar" x="214.23" y="82.48" width="99.02" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="81.17" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-or-homicide-rate" class="value-label" x="210.23" y="93.67" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="end">-24.3%</text>
+      <g class="hover">
+        <title>OR property rate — % change: -11.4%</title>
+        <rect id="p1-mark-change-or-property-rate" class="bar" x="266.80" y="104.93" width="46.45" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="103.61" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-or-property-rate" class="value-label" x="262.80" y="116.11" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="end">-11.4%</text>
+      <g class="hover">
+        <title>OR burglary rate — % change: -20.0%</title>
+        <rect id="p1-mark-change-or-burglary-rate" class="bar" x="231.75" y="127.37" width="81.50" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="126.06" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-or-burglary-rate" class="value-label" x="227.75" y="138.56" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="end">-20.0%</text>
+      <g class="hover">
+        <title>Portland murder — % change: -25.0%</title>
+        <rect id="p1-mark-change-portland-murder" class="bar" x="211.38" y="149.82" width="101.88" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="148.50" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-portland-murder" class="value-label" x="207.38" y="161" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="end">-25.0%</text>
+      <g class="hover">
+        <title>Portland agg. assault — % change: 0.8%</title>
+        <rect id="p1-mark-change-portland-agg-assault" class="bar" x="313.25" y="172.26" width="3.26" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="170.94" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-portland-agg-assault" class="value-label" x="320.51" y="183.44" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">0.8%</text>
+      <g class="hover">
+        <title>Portland simple assault — % change: 8.6%</title>
+        <rect id="p1-mark-change-portland-simple-assault" class="bar" x="313.25" y="194.71" width="35.05" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="193.39" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-portland-simple-assault" class="value-label" x="352.30" y="205.89" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">8.6%</text>
+      <g class="hover">
+        <title>Portland burglary — % change: -18.2%</title>
+        <rect id="p1-mark-change-portland-burglary" class="bar" x="239.09" y="217.15" width="74.16" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="215.83" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-portland-burglary" class="value-label" x="235.09" y="228.33" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="end">-18.2%</text>
+      <g class="hover">
+        <title>Portland veh. theft — % change: -27.1%</title>
+        <rect id="p1-mark-change-portland-veh-theft" class="bar" x="202.82" y="239.60" width="110.43" height="13.36" fill="#2563eb"/>
+        <rect class="hit" x="191" y="238.28" width="163" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-change-portland-veh-theft" class="value-label" x="198.82" y="250.78" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="end">-27.1%</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:49447/a/d2a97d9bd6db8bb095f7cb9d9f4a14bc.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Answer</h2>
+<p><strong>1 Pinocchio.</strong> The statewide FBI figures are accurate, but the headline overreaches and one figure is mislabeled. It says 'Violent Crime Rises in Portland', yet the body reports 'person crime', a Portland Police Bureau category that includes simple assault and intimidation. Those two offenses drive the rise; aggravated assault is up 1% and homicide is down. FBI Return A data for Portland PD show violent crime (murder, rape, robbery, aggravated assault) fell about 3.8% in 2025 versus 2024. The piece also labels the FBI's Portland-only property figures (about 2,600 fewer offenses, about 1,500 fewer vehicle thefts) as 'statewide', which is wrong. The Portland police tracker figures that carry the central claim could not be independently verified.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias +14/100 — no consistent lean</strong></p><p>7 claims graded, 0 not gradable, 7 fell short. In this article only.</p></div>
+<p><strong>7</strong> unsupported &middot; <strong>7</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-unsupported"><td>1</td><td>Portland has seen person crime—a category that includes violent offenses like aggravated assault, rape and kidnapping—increase 11% since 2024.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>7</td><td>According to the Portland Police Bureau’s data tracker, person crime in Portland is up 6% year to date through October compared with 2025 and 11% compared with 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>However, some categories of person crime, including homicide, have been decreasing year to date since 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>The main driver of the increase is the category of simple assault and intimidation, which represents 57% of person offenses year to date and which has experienced the highest volume increase, with more than 412 offenses compared with last year.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Reports of intimidation are also up by 92 offenses and are increasing at a higher rate than total person crime—14% to 6%.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The second-most-common person crime, aggravated assault, which represents 28% of person offenses year to date, and while it is increasing slightly—1%—it’s only up by 14 offenses.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>As for property crime in Portland, it decreased nearly 4% year to date between 2024 and 2025, but has ticked up a percentage point this year through October.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-unsupported"><td>12</td><td>As for property crime in Portland, it decreased nearly 4% year to date between 2024 and 2025, but has ticked up a percentage point this year through October.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The second-most-common person crime, aggravated assault, which represents 28% of person offenses year to date, and while it is increasing slightly—1%—it’s only up by 14 offenses.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Reports of intimidation are also up by 92 offenses and are increasing at a higher rate than total person crime—14% to 6%.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>The main driver of the increase is the category of simple assault and intimidation, which represents 57% of person offenses year to date and which has experienced the highest volume increase, with more than 412 offenses compared with last year.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>However, some categories of person crime, including homicide, have been decreasing year to date since 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>7</td><td>According to the Portland Police Bureau’s data tracker, person crime in Portland is up 6% year to date through October compared with 2025 and 11% compared with 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>1</td><td>Portland has seen person crime—a category that includes violent offenses like aggravated assault, rape and kidnapping—increase 11% since 2024.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>7</td><td>According to the Portland Police Bureau’s data tracker, person crime in Portland is up 6% year to date through October compared with 2025 and 11% compared with 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>As for property crime in Portland, it decreased nearly 4% year to date between 2024 and 2025, but has ticked up a percentage point this year through October.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>1</td><td>Portland has seen person crime—a category that includes violent offenses like aggravated assault, rape and kidnapping—increase 11% since 2024.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Reports of intimidation are also up by 92 offenses and are increasing at a higher rate than total person crime—14% to 6%.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>The main driver of the increase is the category of simple assault and intimidation, which represents 57% of person offenses year to date and which has experienced the highest volume increase, with more than 412 offenses compared with last year.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>However, some categories of person crime, including homicide, have been decreasing year to date since 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The second-most-common person crime, aggravated assault, which represents 28% of person offenses year to date, and while it is increasing slightly—1%—it’s only up by 14 offenses.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-unsupported"><td>7</td><td>According to the Portland Police Bureau’s data tracker, person crime in Portland is up 6% year to date through October compared with 2025 and 11% compared with 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>However, some categories of person crime, including homicide, have been decreasing year to date since 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>The main driver of the increase is the category of simple assault and intimidation, which represents 57% of person offenses year to date and which has experienced the highest volume increase, with more than 412 offenses compared with last year.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Reports of intimidation are also up by 92 offenses and are increasing at a higher rate than total person crime—14% to 6%.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The second-most-common person crime, aggravated assault, which represents 28% of person offenses year to date, and while it is increasing slightly—1%—it’s only up by 14 offenses.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>As for property crime in Portland, it decreased nearly 4% year to date between 2024 and 2025, but has ticked up a percentage point this year through October.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>1</td><td>Portland has seen person crime—a category that includes violent offenses like aggravated assault, rape and kidnapping—increase 11% since 2024.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-unsupported"><td>1</td><td>Portland has seen person crime—a category that includes violent offenses like aggravated assault, rape and kidnapping—increase 11% since 2024.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>However, some categories of person crime, including homicide, have been decreasing year to date since 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>The main driver of the increase is the category of simple assault and intimidation, which represents 57% of person offenses year to date and which has experienced the highest volume increase, with more than 412 offenses compared with last year.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>The second-most-common person crime, aggravated assault, which represents 28% of person offenses year to date, and while it is increasing slightly—1%—it’s only up by 14 offenses.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>As for property crime in Portland, it decreased nearly 4% year to date between 2024 and 2025, but has ticked up a percentage point this year through October.</td><td><strong>unsupported</strong></td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>7</td><td>According to the Portland Police Bureau’s data tracker, person crime in Portland is up 6% year to date through October compared with 2025 and 11% compared with 2024.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr><tr class="verdict-unsupported"><td>10</td><td>Reports of intimidation are also up by 92 offenses and are increasing at a higher rate than total person crime—14% to 6%.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Portland Police Bureau spokesperson — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>13</td><td>A spokesperson said the bureau doesn’t have much insight why person crime is increasing here while decreasing elsewhere.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.portland.gov/police/news">PPB news</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>4</strong> true &middot; <strong>1</strong> mostly false &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s0" checked><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s1"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s2"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s3"><table><thead><tr><th><label class="srth" for="s2-t4-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t4-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t4-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>2</td><td>This week, the FBI’s Oregon field office in Portland reported that violent crime across the state fell 7.9% between 2024 and 2025 while murder and nonnegligent manslaughter dropped 24.4%.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>Property crime—which includes vandalism, auto theft, shoplifting and fraud—also declined, falling 12.1%, notably with burglaries down 20.4%.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-false"><td>4</td><td>Statewide, law enforcement agencies reported significant improvements in property crime with approximately 2,600 fewer property offenses including around 1,500 fewer motor vehicle thefts.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-true"><td>5</td><td>Through August, reported violent crime in Oregon was down approximately 16% compared to the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Statewide, the month of August saw one of the largest year-over-year decreases, with violent crime down nearly 50 percent compared to August 2025.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>6</td><td>Statewide, the month of August saw one of the largest year-over-year decreases, with violent crime down nearly 50 percent compared to August 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Through August, reported violent crime in Oregon was down approximately 16% compared to the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-false"><td>4</td><td>Statewide, law enforcement agencies reported significant improvements in property crime with approximately 2,600 fewer property offenses including around 1,500 fewer motor vehicle thefts.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-true"><td>3</td><td>Property crime—which includes vandalism, auto theft, shoplifting and fraud—also declined, falling 12.1%, notably with burglaries down 20.4%.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>This week, the FBI’s Oregon field office in Portland reported that violent crime across the state fell 7.9% between 2024 and 2025 while murder and nonnegligent manslaughter dropped 24.4%.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>3</td><td>Property crime—which includes vandalism, auto theft, shoplifting and fraud—also declined, falling 12.1%, notably with burglaries down 20.4%.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-false"><td>4</td><td>Statewide, law enforcement agencies reported significant improvements in property crime with approximately 2,600 fewer property offenses including around 1,500 fewer motor vehicle thefts.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-true"><td>6</td><td>Statewide, the month of August saw one of the largest year-over-year decreases, with violent crime down nearly 50 percent compared to August 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>This week, the FBI’s Oregon field office in Portland reported that violent crime across the state fell 7.9% between 2024 and 2025 while murder and nonnegligent manslaughter dropped 24.4%.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Through August, reported violent crime in Oregon was down approximately 16% compared to the same period in 2025.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>4</td><td>Statewide, law enforcement agencies reported significant improvements in property crime with approximately 2,600 fewer property offenses including around 1,500 fewer motor vehicle thefts.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-true"><td>2</td><td>This week, the FBI’s Oregon field office in Portland reported that violent crime across the state fell 7.9% between 2024 and 2025 while murder and nonnegligent manslaughter dropped 24.4%.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>Property crime—which includes vandalism, auto theft, shoplifting and fraud—also declined, falling 12.1%, notably with burglaries down 20.4%.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>Through August, reported violent crime in Oregon was down approximately 16% compared to the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Statewide, the month of August saw one of the largest year-over-year decreases, with violent crime down nearly 50 percent compared to August 2025.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t4-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-unsupported"><summary>#1 &middot; <strong>unsupported</strong> &mdash; Portland has seen person crime—a category that includes violent offenses like aggravated assault, rape and kidnapping—increase 11% since 2024.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Portland PD 2024-&gt;2025: simple assault 5,821-&gt;6,322 (+8.6%); agg assault 3,045-&gt;3,068 (+0.8%); murder 68-&gt;51; rape 333-&gt;305; robbery 1,112-&gt;962 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>Rests on the PPB data tracker (interactive NIBRS dashboard), which cannot be read by fetch; the warehouse has no 2026 city data. FBI Return A for Portland PD shows 2025 simple assault +8.6% and aggravated assault +0.8% vs 2024, directionally consistent but not a test of the 11% figure.</dd>
+<dt>No page loaded because</dt><dd>portland.gov reported-crime-data page was fetched and describes the tracker but carries no figures; the dashboard is interactive.</dd>
+<dt>Warehouse searched for</dt><dd>Portland person crime 2026 year to date, Portland Police Bureau</dd>
+<dt>Web searches run</dt><dd>Portland Police Bureau person crime 2026 year to date October simple assault intimidation increase data tracker</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, SUM(actual_murder), SUM(actual_assault_total), SUM(actual_assault_simple), SUM(actual_rape_total), SUM(actual_robbery_total) FROM crime.cde_reta WHERE ori LIKE 'OR02602%' AND year IN (2024,2025) GROUP BY year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; This week, the FBI’s Oregon field office in Portland reported that violent crime across the state fell 7.9% between 2024 and 2025 while murder and nonnegligent manslaughter dropped 24.4%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>OR violent rate 341.07-&gt;316.12 (-7.3%); homicide rate 3.91-&gt;2.96 (-24.3%). FBI figures 7.9% (an estimate) and 24.4% per KATU's report of the FBI release. <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd>7.9% and 24.4% (FBI Portland, via KATU)<ul class="claim-sources"><li><a href="https://katu.com/news/local/oregon-violent-crime-vehicle-thefts-statistics-fbi">KATU</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT offense_code, year, SUM(offense_rate) FROM crime.cde_offenses WHERE state_abbr='OR' AND year IN (2024,2025) GROUP BY offense_code, year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Property crime—which includes vandalism, auto theft, shoplifting and fraud—also declined, falling 12.1%, notably with burglaries down 20.4%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>OR property rate 2,452-&gt;2,172 (-11.4%); burglary 313.6-&gt;250.8 (-20.0%); FBI 12.1% and 20.4% within rate/count and coverage differences <code>crime.cde_offenses</code></dd>
+<dt>Independent evidence</dt><dd>12.1% and 20.4% (FBI via KATU)<ul class="claim-sources"><li><a href="https://katu.com/news/local/oregon-violent-crime-vehicle-thefts-statistics-fbi">KATU</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#4 &middot; <strong>mostly false</strong> &mdash; Statewide, law enforcement agencies reported significant improvements in property crime with approximately 2,600 fewer property offenses including around 1,500 fewer motor vehicle thefts.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>Portland PD vehicle theft 5,492-&gt;4,004 (-1,488); burglary -844; theft -519 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://katu.com/news/local/oregon-violent-crime-vehicle-thefts-statistics-fbi">KATU (FBI: In Portland ... about 2,600 fewer property crimes ... nearly 1,500 fewer motor vehicle thefts)</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The FBI said these were Portland figures, not statewide. Statewide, a 12.1% drop from about 90,500 property crimes means roughly 12,000 fewer, so 2,600 cannot be the state total.</dd>
+<dt>Evidence found and set aside because</dt><dd>The KATU passage that contains 2,600 reads 'In Portland, the FBI said the city reported about 2,600 fewer property crimes', which confirms the figure but contradicts the article's 'statewide' label; the grade rests on the label.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Through August, reported violent crime in Oregon was down approximately 16% compared to the same period in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>About 16% fewer Jan-Aug 2026 (FBI Portland, via KATU)<ul class="claim-sources"><li><a href="https://katu.com/news/local/oregon-violent-crime-vehicle-thefts-statistics-fbi">KATU</a></li></ul></dd>
+<dt>Web searches run</dt><dd>FBI Portland Oregon violent crime 2026 through August</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Statewide, the month of August saw one of the largest year-over-year decreases, with violent crime down nearly 50 percent compared to August 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Nearly 50% lower (FBI via KATU). A single month; with 16% YTD it may partly reflect late reporting.<ul class="claim-sources"><li><a href="https://katu.com/news/local/oregon-violent-crime-vehicle-thefts-statistics-fbi">KATU</a></li></ul></dd>
+<dt>Web searches run</dt><dd>FBI Portland Oregon August 2026 violent crime nearly 50%</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#7 &middot; <strong>unsupported</strong> &mdash; According to the Portland Police Bureau’s data tracker, person crime in Portland is up 6% year to date through October compared with 2025 and 11% compared with 2024.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>PPB tracker not readable; the catalog has no Portland city 2026 table (search returned only FBI state and Return A tables).</dd>
+<dt>Evidence found and set aside because</dt><dd>The only '6%' string in the fetched KATU page is not about Portland person crime.</dd>
+<dt>No page loaded because</dt><dd>Tried portland.gov reported-crime-data (no figures, interactive dashboard) and a web search; only WW itself reports the figures.</dd>
+<dt>Warehouse searched for</dt><dd>Portland person crime year to date October 2026 vs 2025 and 2024</dd>
+<dt>Web searches run</dt><dd>Portland Police Bureau data tracker person crime 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#8 &middot; <strong>unsupported</strong> &mdash; However, some categories of person crime, including homicide, have been decreasing year to date since 2024.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Portland murders 75, 68, 51 for 2023-2025 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Warehouse shows Portland PD murders 75, 68, 51 for 2023-2025 (a decline through 2025), but there is no 2026 year-to-date data to test the claim as stated.</dd>
+<dt>No page loaded because</dt><dd>PPB dashboard is interactive.</dd>
+<dt>Web searches run</dt><dd>Portland homicides 2026 year to date decrease</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#9 &middot; <strong>unsupported</strong> &mdash; The main driver of the increase is the category of simple assault and intimidation, which represents 57% of person offenses year to date and which has experienced the highest volume increase, with more than 412 offenses compared with last year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Portland simple assault 5,821-&gt;6,322 in 2025 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Tracker not readable. 2025 FBI data corroborate direction (simple assault +501 vs 2024).</dd>
+<dt>No page loaded because</dt><dd>PPB dashboard is interactive; no static page carries 2026 figures.</dd>
+<dt>Warehouse searched for</dt><dd>Portland simple assault intimidation offenses 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#10 &middot; <strong>unsupported</strong> &mdash; Reports of intimidation are also up by 92 offenses and are increasing at a higher rate than total person crime—14% to 6%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Tracker not readable; catalog search for intimidation returned no matching column.</dd>
+<dt>Evidence found and set aside because</dt><dd>The '6%' string in the fetched KATU page is not about Portland intimidation or person crime.</dd>
+<dt>No page loaded because</dt><dd>PPB dashboard is interactive.</dd>
+<dt>Warehouse searched for</dt><dd>Portland intimidation offenses 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#11 &middot; <strong>unsupported</strong> &mdash; The second-most-common person crime, aggravated assault, which represents 28% of person offenses year to date, and while it is increasing slightly—1%—it’s only up by 14 offenses.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>3,045 -&gt; 3,068 (+0.8%) <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>2026 year-to-date data not available; 2025 vs 2024 Portland PD aggravated assault was +0.8% (+23), consistent in direction and size but a different period.</dd>
+<dt>Evidence found and set aside because</dt><dd>The '1%' string in the fetched KATU page occurs inside '12.1%' and '1,500' and is unrelated to Portland aggravated assault.</dd>
+<dt>No page loaded because</dt><dd>PPB dashboard is interactive.</dd>
+<dt>Warehouse searched for</dt><dd>Portland aggravated assault 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#12 &middot; <strong>unsupported</strong> &mdash; As for property crime in Portland, it decreased nearly 4% year to date between 2024 and 2025, but has ticked up a percentage point this year through October.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>burglary+theft+MVT 2024: 34,657; 2025: 31,806 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/open-data/reported-crime-data">PPB reported crime data (fetched)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>PPB tracker unreadable. FBI Portland PD burglary+theft+vehicle theft fell about 8% in 2025 (34,657 to 31,806), larger than 4%, though categories and periods differ.</dd>
+<dt>Evidence found and set aside because</dt><dd>The '4%' string in KATU is not about Portland property crime.</dd>
+<dt>No page loaded because</dt><dd>PPB dashboard is interactive.</dd>
+<dt>Warehouse searched for</dt><dd>Portland property crime 2026 vs 2025</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#13 &middot; <strong>unsupported</strong> &mdash; A spokesperson said the bureau doesn’t have much insight why person crime is increasing here while decreasing elsewhere.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Portland Police Bureau spokesperson — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.portland.gov/police/news">PPB news</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>A paraphrase available only in the WW piece; no other reporting or PPB statement found. The 'decreasing elsewhere' part is supported by the state data.</dd>
+<dt>No page loaded because</dt><dd>Searched; no other outlet or PPB page carries the statement.</dd>
+<dt>Warehouse searched for</dt><dd>Portland Police Bureau spokesperson statement on person crime increase</dd>
+<dt>Web searches run</dt><dd>Portland Police Bureau spokesperson person crime increase no insight why 2026</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What checked out</h2>
+<p>Oregon FBI estimates match the warehouse: state violent rate -7.3% (FBI 7.9%), homicide -24.3% (24.4%), property -11.4% (12.1%), burglary -20.0% (20.4%). Portland PD vehicle thefts fell 5,492 to 4,004, matching 'nearly 1,500'.</p>
+</section>
+<section>
+<h2>What did not</h2>
+<ul><li><strong>Misattribution:</strong> the 2,600 and 1,500 figures are Portland-only per the FBI release as reported by KATU. Statewide, property crime fell roughly 12,000 offenses.</li><li><strong>Framing:</strong> the headline's 'violent crime' is not what the data shows. Simple assault and intimidation make up 57% of the category and the growth; aggravated assault is +14 offenses; homicide is down.</li><li><strong>Mixed bases:</strong> state figures use UCR definitions over 2025 and Jan-Aug 2026; city figures use PPB's broader NIBRS person category year to date through October, so 'despite state trends' compares different measures.</li><li><strong>Unverifiable:</strong> all PPB tracker figures (6%, 11%, 412, 92, 57%, 28%, 14%) and the spokesperson paraphrase could not be tested.</li></ul>
+</section>
+<section>
+<h2>Method notes</h2>
+<p>Tables: crime.cde_offenses (state rates summed over 12 months) and crime.cde_reta (Portland PD, ORI OR0260200; aggravated assault = total assault minus simple). The FBI release was read through KATU's report, not the FBI page. Return A is subject to revision and differs from PPB definitions.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Portland Police Bureau tracker figures (6%, 11%, 412, 92, 57%, 28%, 14%)</strong>: The PPB tracker is an interactive dashboard not in the warehouse and not readable via fetch; those figures are graded unsupported, with FBI Return A for Portland PD (2025 vs 2024 only) as a partial cross-check. No 2026 city data exists in the warehouse.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>5 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 30 rows — 741 ms</summary><pre><code>SELECT offense_code, year, SUM(offense_rate) r, avg(population) pop, avg(population_coverage_pct) cov, count(*) n FROM crime.cde_offenses WHERE state_abbr='OR' AND year IN (2023,2024,2025) GROUP BY offense_code, year ORDER BY offense_code, year</code></pre></details>
+<details class="sqltoggle"><summary>query — 28 rows — 10 ms</summary><pre><code>SELECT column_name FROM information_schema.columns WHERE table_schema='crime' AND table_name='cde_reta' AND column_name LIKE 'actual_%' </code></pre></details>
+<details class="sqltoggle"><summary>query — 4465 ms</summary><pre><code>SELECT a.agency_name, r.year, SUM(r.actual_murder) murder, SUM(r.actual_assault_total) agg, SUM(r.actual_assault_simple) simple, SUM(r.actual_burglary_total) burg, SUM(r.actual_motor_vehicle_theft_total) mvt, SUM(r.actual_theft_total) theft, SUM(r.actual_rape_total) rape, SUM(r.actual_robbery_total) rob FROM crime.cde_reta r JOIN crime.cde_agencies a ON a.ori=r.ori WHERE a.state_abbr='OR' AND a.agency_name ILIKE 'Portland Police%' AND r.year IN (2023,2024,2025) GROUP BY a.agency_name, r.year ORDER BY 1,2</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 981 ms</summary><pre><code>SELECT ori, agency_name FROM crime.cde_agencies WHERE state_abbr='OR' AND agency_name ILIKE '%Portland%'</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 2293 ms</summary><pre><code>SELECT r.year, SUM(r.actual_murder) murder, SUM(r.actual_assault_total) assault, SUM(r.actual_assault_simple) simple, SUM(r.actual_burglary_total) burg, SUM(r.actual_motor_vehicle_theft_total) mvt, SUM(r.actual_theft_total) theft, SUM(r.actual_rape_total) rape, SUM(r.actual_robbery_total) rob FROM crime.cde_reta r WHERE r.ori LIKE 'OR02602%' AND r.year IN (2023,2024,2025) GROUP BY r.year ORDER BY 1</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

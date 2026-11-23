@@ -1,0 +1,29 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fact-check: US sunset-window fatal crashes</title></head><body style="font-family:sans-serif;max-width:900px;margin:auto">
+<h1>Fact-check: Travel and Tour World, "US Fatal Crashes Near Sunset Rise 28.3% in Autumn Compared with Winter" (Nov 22, 2026)</h1>
+<img src="agent-dashboard.png" style="width:100%" alt="dashboard">
+<h2>Findings: the numbers hold up (0 Pinocchios on facts), but they are counts, not risk</h2>
+<p>I rebuilt the analysis from NHTSA's final 2024 FARS file (36,297 fatal crashes). Within two hours either side of computed sunset I get 8,348 crashes and 8,934 deaths (article: 8,334 and 8,921). Autumn runs 26.0 per day against winter 20.1, a 29.4% gap (article 28.3%). November is 27.7 per day against January 18.9 (article 27.3 and 19.0). After-sunset crashes are 58.5% above pre-sunset ones (article 57.8%). January after-sunset share is 72.4% (article 72.2%). Every checked figure is within about 1-2%, explained by my own sunset and timezone approximations and my meteorological (not astronomical) seasons.</p>
+<ul>
+<li>Overall verdict: 0 Pinocchios (Geppetto) on accuracy of the facts. The piece explicitly says it does not establish causes.</li>
+<li>Material framing flag: the headline says crashes "rise" in autumn, but this is a cross-season comparison of raw counts. There is no exposure (vehicle-miles, people on the road) adjustment, so it does not show autumn sunset driving is riskier per mile. Autumn sunset also falls near the evening commute and after the November clock change, which would raise counts on its own.</li>
+<li>Not checkable here: the Lerner &amp; Rowe report itself (a web search did not locate it), so the article's figures are matched by independent recomputation, not against their document. The "pedestrian deaths concentrated after sunset" claim was not tested numerically.</li>
+<li>What would change this: a different season or sunset definition moves figures by a point or two; the direction does not change.</li></ul>
+<h2>Step 1: Claim extraction and check</h2>
+<table border="1" cellpadding="4"><tr><th>Claim</th><th>Article</th><th>Recomputed (FARS 2024)</th><th>Verdict</th></tr>
+<tr><td>Window crashes / deaths, nation</td><td>8,334 / 8,921</td><td>8,348 / 8,934</td><td>Confirmed</td></tr>
+<tr><td>Autumn vs winter per day</td><td>25.8 vs 20.1 (+28.3%)</td><td>26.0 vs 20.1 (+29.4%)</td><td>Confirmed</td></tr>
+<tr><td>Summer / spring per day</td><td>23.0 / 22.1</td><td>23.1 / 22.1</td><td>Confirmed</td></tr>
+<tr><td>Deaths winter/spring/summer</td><td>1,979 / 2,189 / 2,256</td><td>1,976 / 2,186 / 2,259</td><td>Confirmed</td></tr>
+<tr><td>Autumn crashes / deaths</td><td>2,349 / 2,497</td><td>2,366 / 2,513 (Sep-Nov)</td><td>Confirmed (season definition differs)</td></tr>
+<tr><td>Nov vs Jan per day</td><td>27.3 vs 19.0 (+43.4%)</td><td>27.7 vs 18.9</td><td>Confirmed; 27.3/19.0 gives 43.7% (rounding)</td></tr>
+<tr><td>Nov after / before sunset</td><td>543 / 276 (+96.7%)</td><td>554 / 276</td><td>Confirmed</td></tr>
+<tr><td>Jan after-sunset share</td><td>72.2%</td><td>72.4%</td><td>Confirmed</td></tr>
+<tr><td>Post vs pre sunset nationally</td><td>+57.8%</td><td>+58.5%</td><td>Confirmed</td></tr>
+<tr><td>Sunsets: Phoenix Jan 1 / Jul 1</td><td>5:31 pm / 7:42 pm</td><td>5:30 pm / 7:41 pm</td><td>Confirmed</td></tr>
+<tr><td>Sunsets: Las Vegas Jan / Jul</td><td>4:37 pm / 8:02 pm</td><td>4:35 pm / 8:01 pm</td><td>Confirmed</td></tr>
+<tr><td>Pedestrian deaths concentrated after sunset</td><td>qualitative</td><td>not tested</td><td>Not checked here</td></tr></table>
+<p><strong>Method:</strong> 50 states + DC (territories excluded), crashes with valid time and coordinates (35,894 of 36,297); sunset from the NOAA solar formula at the crash location; clock time converted using state time zones (split states by longitude); window = sunset +/-120 min. <strong>Confidence:</strong> high on the match, medium on exact decimals.</p>
+<h2>Step 2: Framing</h2><p><strong>Answer:</strong> accurate but exposure-free. <strong>Confidence:</strong> high. Judging risk would need traffic volume by hour; a seasonal comparison says nothing causal.</p>
+<h2>Sources</h2><ul><li>NHTSA FARS 2024 National CSV: <code>https://static.nhtsa.gov/nhtsa/downloads/FARS/2024/National/FARS2024NationalCSV.zip</code></li>
+<li>Article: <code>https://travelandtourworld.com/news/article/oxeev4irmuri</code></li>
+<li>NHTSA 2024 total of 36,297 fatal crashes (crashstats.nhtsa.dot.gov via web search)</li></ul></body></html>

@@ -2199,5 +2199,145 @@
       "everyman"
     ],
     "note": "askamerica 0 pin after recipe rerun (fact-check recipe step 10: cdc_resp_net_rates); first pass ranked below expert"
+  },
+  {
+    "topic_slug": "wweek-portland-person-crime-up-11pct-since-2024",
+    "headline": "Willamette Week: Portland person crime up 6% YTD vs 2025 and 11% vs 2024 while Oregon violent crime falls",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q2/askamerica/2026-11-23",
+    "pinocchios": 1,
+    "source_url": "https://www.wweek.com/news/2026/11/19/violent-crime-rose-in-portland-over-past-two-years/",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "askamerica caught statewide/Portland mislabel; missed cde_reta 2026 (recipe item 12)."
+  },
+  {
+    "topic_slug": "americanexperiment-mn-median-income-49th-since-2014",
+    "headline": "Center of the American Experiment: Minnesota median household income growth since 2014 ranks 49th of 50 states",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q1/askamerica/2026-11-23",
+    "pinocchios": 0,
+    "source_url": "https://www.americanexperiment.org/since-2014-minnesotas-median-household-income-growth-ranks-49th-out-of-50-states/",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "rerun after recipe item 11 (BEA population): GDP claims confirmed, 0 Pinocchios; expert still #1 (pre-1997 rank, calibration). Filed #1451 PEP vintage 2024/25."
+  },
+  {
+    "topic_slug": "blaze-trump-oil-price-dropped-day-after-election",
+    "headline": "Blaze News: Trump says oil price 'dropped like a rock the day after the election'",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q3/askamerica/2026-11-23",
+    "pinocchios": 0,
+    "source_url": "https://www.theblaze.com/news/thats-a-myth-why-are-gas-prices-plummeting-now-that-the-election-is-over",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "EIA weekly gas confirms pre-election decline; Trump oil claim mostly true but decline began before vote."
+  },
+  {
+    "topic_slug": "thewrap-musk-record-445m-midterm-spending",
+    "headline": "TheWrap: Musk spent at least $445 million backing Republicans in 2026 midterms (OpenSecrets)",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q4/askamerica/2026-11-23",
+    "pinocchios": 1,
+    "source_url": "https://thewrap.com/media-platforms/politics/elon-musk-regrets-spending-republicans-2026-midterms",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "FEC individual_contributions ~358M through Sept 30; caught truncated Musk quote; 51-seat goal unsupported."
+  },
+  {
+    "topic_slug": "foodnavigator-usdec-dairy-exports-10bn-record-2026",
+    "headline": "FoodNavigator: US dairy exports set to top $10bn in 2026, best third quarter in history (USDEC)",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q5/askamerica/2026-11-23",
+    "pinocchios": 1,
+    "source_url": "https://www.foodnavigator.com/Article/2026/11/16/us-dairy-exports-set-to-top-10bn-in-2026-as-global-demand-drives-growth/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "SEVERITY first pass: askamerica ranked below everyman (no web_search; graded USDEC 'first bn month' true vs USDA GATS 992.3M). Recipe fact-check item 13; rerun -> #1. Filed #1453 trade_exports 2026 (dataLag)."
+  },
+  {
+    "topic_slug": "npr-midterms-largest-house-win-in-50-years",
+    "headline": "NPR: the 2026 midterms were the largest win for either party in 50 years",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q7/askamerica/2026-11-23",
+    "pinocchios": 0,
+    "source_url": "https://www.opb.org/article/2026/11/19/democrats-house-win-was-the-largest-in-50-years/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "officials.house_election_results 1976 ~14 pts ties 2026's 14; headline borderline (1974 larger)."
+  },
+  {
+    "topic_slug": "travelandtourworld-us-sunset-fatal-crashes-autumn-28pct",
+    "headline": "Travel And Tour World: US fatal crashes near sunset rise 28.3% in autumn vs winter (Lerner & Rowe study)",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q9/askamerica/2026-11-23",
+    "pinocchios": 0,
+    "source_url": "https://travelandtourworld.com/news/article/oxeev4irmuri",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "Both recomputed 2024 FARS; askamerica hour-only (fatal_crashes lacks MINUTE, filed #1455) vs expert minute-level. Rating 0."
+  },
+  {
+    "topic_slug": "inquirer-camden-poverty-rate-lowest-since-2010",
+    "headline": "Philadelphia Inquirer: Camden poverty rate falls to 24.9%, lowest since at least 2010",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q8/askamerica/2026-11-23",
+    "pinocchios": null,
+    "source_url": "https://www.inquirer.com/south-jersey/camden-poverty-rate-census-20261119.html",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "engine 'too few to rate'. First pass expert #1 (no prior city vintages); recipe item 14; rerun set 2024 ACS 33.9% and 5-yr vintages beside 24.9% claim -> #1. Filed #1454 place-level ACS."
+  },
+  {
+    "topic_slug": "texastribune-texas-college-stopouts-1-in-3-no-degree",
+    "headline": "Texas Tribune (via TPR): one in three Texas students leaves college without a degree, study says",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q6/askamerica/2026-11-23",
+    "pinocchios": 1,
+    "source_url": "https://www.tpr.org/education/2026-11-18/one-in-three-texas-students-leaves-college-without-a-degree-new-study-says",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "Rerun after item-13 extension: Abbott 60x30 graded true from gov release; expert still #1 (read full PDF; askamerica's rerun hit 25MB fetch cap)."
+  },
+  {
+    "topic_slug": "aljazeera-anthropic-ipo-largest-in-history-81bn",
+    "headline": "Al Jazeera: Anthropic raises $81.3bn in biggest IPO of all time, ahead of SpaceX's $75bn debut",
+    "checked_date": "2026-11-23",
+    "run_subpath": "q10/askamerica/2026-11-23",
+    "pinocchios": 0,
+    "source_url": "https://aljazeera.com/economy/2026/11/19/anthropic-raises-81-3bn-in-biggest-ipo-of-all-time",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "Core deal facts confirmed; flagged SpaceX 85.7bn final; sec.stock_prices stale since 2026-05-29 (filed #1457)."
   }
 ]
