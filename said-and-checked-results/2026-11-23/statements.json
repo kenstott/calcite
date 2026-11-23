@@ -185,14 +185,27 @@
    "kind": "factual",
    "test": "True if the Democratic freshman class elected to the House in November 2026 is among the largest incoming classes for either party in recent decades (for example, larger than most classes since 1974). False if official or reported counts show it is of ordinary size compared with past classes. Cannot be determined if no count of the 2026 incoming class is available yet.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "Quorum's tally of AP-called races counts 73 new House Democrats among 104 new House members, and FiftyPlusOne calls the total House freshman class the largest in at least three decades (the prior high was 96 in 2010). Both counts are provisional while some races remain uncalled.",
+   "check_run": "q201/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Quorum, new members of the 120th Congress",
+     "url": "https://www.quorum.us/data-driven-insights/meet-the-new-members-of-the-120th-congress/"
+    },
+    {
+     "label": "FiftyPlusOne, How wave babies took over Congress",
+     "url": "https://blog.fiftyplusone.news/p/how-wave-babies-took-over-congress"
+    },
+    {
+     "label": "PBS NewsHour/AP (Nov. 22, 2026)",
+     "url": "https://www.pbs.org/newshour/politics/democrats-clinch-a-historic-house-majority-of-at-least-258-seats-the-largest-since-1992"
+    }
+   ]
   },
   {
    "id": 4,
