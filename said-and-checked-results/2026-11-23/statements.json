@@ -1857,14 +1857,23 @@
    "kind": "factual",
    "test": "True if a record shows Texas's governor-elect called President Trump about two days before his remarks. False if records show no such call or a different date. Cannot be determined if only the president's own account exists.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "Texas's governor-elect, Gina Hinojosa, told the Texas Tribune on Nov. 18 that she had called the president the previous Saturday, apparently Nov. 14, to discuss border security, and said he 'understands my commitment to keeping a secure border.' The date of the president's remarks was not established, so 'two days ago' can be neither confirmed nor ruled out.",
+   "check_run": "q212/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Texas Tribune via CBS Austin, Hinojosa says she talked border with Trump (Nov. 18, 2026)",
+     "url": "https://cbsaustin.com/news/local/gov-elect-gina-hinojosa-says-she-talked-border-with-trump"
+    },
+    {
+     "label": "Texas Tribune via KSAT, Hinojosa wins Texas governor's race (Nov. 4, 2026)",
+     "url": "https://www.ksat.com/news/texas/2026/11/04/democrat-gina-hinojosa-topples-greg-abbott-to-become-first-latina-governor-of-texas/"
+    }
+   ]
   },
   {
    "id": 48,
