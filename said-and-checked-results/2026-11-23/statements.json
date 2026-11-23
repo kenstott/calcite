@@ -1083,14 +1083,19 @@
    "kind": "factual",
    "test": "True if Kilmar Abrego Garcia is currently in the United States after his 2025 deportation to El Salvador. False if records show he is outside the United States. Cannot be determined if no current record of his location is found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "Abrego Garcia was returned to the United States in 2025, and the latest record found, from Oct. 6, 2026, has him appearing in federal court in Maryland while the government still seeks his removal to a third country; no report of a later removal was found. His location on Nov. 22 itself is inferred from that record, not directly documented.",
+   "check_run": "q206/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Good Morning America, Abrego Garcia returns to federal court (Oct. 6, 2026)",
+     "url": "https://www.goodmorningamerica.com/news/story/kilmar-abrego-garcia-returns-federal-court-continue-fighting-137006272"
+    }
+   ]
   },
   {
    "id": 65,
@@ -1147,14 +1152,19 @@
    "kind": "factual",
    "test": "True if a public count shows more than 15 Senate Democrats backing Van Hollen for Senate Democratic leader. False if public counts show 15 or fewer. Cannot be determined if no public count of his supporters exists.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "An Associated Press count on Nov. 18 publicly named Sen. Bernie Sanders and three Democrats as backing Van Hollen and reported his own figure of about 15, including private supporters. No independent public count above 15 was found; the leader is chosen by secret ballot, so the figure rests on his own tally.",
+   "check_run": "q207/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "AP via Philadelphia Inquirer (Nov. 18, 2026)",
+     "url": "https://www.inquirer.com/politics/nation/chuck-schumer-chris-van-hollen-senate-majority-leader-20261118.html"
+    }
+   ]
   },
   {
    "id": 30,
@@ -1214,14 +1224,29 @@
    "kind": "factual",
    "test": "True if Senator Schumer or groups he directed backed opponents of Abdul El-Sayed in Michigan's and Peggy Flanagan in Minnesota's 2026 Democratic Senate primaries, alongside crypto-industry and AIPAC-linked spending against them. False if records show Schumer stayed neutral in both primaries or that crypto and AIPAC groups did not oppose them. Cannot be determined if Schumer's role cannot be established from records.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "Schumer endorsed Rep. Haley Stevens against El-Sayed in Michigan, and AskAmerica's FEC data show AIPAC's United Democracy Project spending about $20.8 million against El-Sayed. No record was found of a Schumer role against Flanagan in Minnesota, of crypto-industry PAC spending in either race, or of AIPAC spending against Flanagan.",
+   "check_run": "q207/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "fec.independent_expenditures_current (2026 Michigan and Minnesota Senate races)",
+     "url": "https://askamerica.ai/catalog/schemas/fec/#independent_expenditures_current-view",
+     "askamerica": true,
+     "sql": "SELECT candidate_name, support_oppose, spender_name, SUM(amount) AS total, COUNT(*) AS n FROM fec.independent_expenditures_current WHERE election_year=2026 AND candidate_office='S' AND candidate_state IN ('MI','MN') AND (candidate_name ILIKE '%SAYED%' OR candidate_name ILIKE '%FLANAGAN%' OR candidate_name ILIKE '%STEVENS%' OR candidate_name ILIKE '%CRAIG%') AND amount_implausible IS NOT TRUE AND superseded_by_amendment IS NOT TRUE GROUP BY candidate_name, support_oppose, spender_name HAVING SUM(amount)>500000 ORDER BY total DESC"
+    },
+    {
+     "label": "KOMO, Schumer and Warren endorsements in Michigan (July 20, 2026)",
+     "url": "https://komonews.com/news/nation-world/dem-rift-intensifies-following-dueling-michigan-senate-endorsements-by-schumer-warren-haley-stevens-melat-kiros"
+    },
+    {
+     "label": "MinnPost, outside groups in the Minnesota Senate primary (Aug. 2026)",
+     "url": "https://www.minnpost.com/elections/2026/08/outside-groups-fuel-bitter-senate-race-between-peggy-flanagan-and-angie-craig/"
+    }
+   ]
   },
   {
    "id": 32,
@@ -1246,14 +1271,19 @@
    "kind": "factual",
    "test": "True if no recorded statement shows Van Hollen saying he represents generational change. False if a recorded statement shows him saying it. Cannot be determined beyond the statements that could be searched.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "In the same remarks he said he speaks of a 'generational opportunity,' and searches of his recent interviews found only that wording, not a claim to represent generational change. A search cannot show that no such statement was ever made; it covered news reports and interview snippets, not every recorded appearance.",
+   "check_run": "q207/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "NBC Meet the Press transcript (Nov. 22, 2026)",
+     "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-22-2026-rcna610681"
+    }
+   ]
   },
   {
    "id": 33,
@@ -1278,14 +1308,27 @@
    "kind": "factual",
    "test": "True if Republican party committees and allied groups raised and spent about twice as much as their Democratic counterparts in the 2026 federal elections. False if FEC totals show Democrats matched or outspent Republicans. Cannot be determined if the totals are not yet available or depend on which committees are counted.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "contradicted",
+   "finding": "AskAmerica's FEC data (reports through Oct. 14, 2026) show the Republican national party committees raised about $843 million to the Democratic committees' $725 million and spent $747 million to $710 million; adding the largest allied super PACs on each side gives about $2.1 billion raised to $1.37 billion, roughly 1.5 times, not twice. What remains open: the final pre- and post-election reports are not yet loaded, and the ratio depends on which groups are counted.",
+   "check_run": "q208/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "fec.committee_summaries (2026 party committees and allied super PACs, through Oct. 14)",
+     "url": "https://askamerica.ai/catalog/schemas/fec/#committee_summaries-table",
+     "askamerica": true,
+     "sql": "SELECT committee_id, committee_name, committee_type, total_receipts, total_disbursements, independent_expenditures, coverage_end_date FROM fec.committee_summaries WHERE year=2026 AND (committee_name ILIKE '%DSCC%' OR committee_name ILIKE '%DCCC%' OR committee_name ILIKE '%NRSC%' OR committee_name ILIKE '%NRCC%' OR committee_name ILIKE '%DEMOCRATIC NATIONAL%' OR committee_name ILIKE '%DEMOCRATIC SENATORIAL%' OR committee_name ILIKE '%DEMOCRATIC CONGRESSIONAL%' OR committee_name ILIKE '%REPUBLICAN SENATORIAL%' OR committee_name ILIKE '%REPUBLICAN CONGRESSIONAL%' OR committee_name ILIKE '%SENATE LEADERSHIP FUND%' OR committee_name ILIKE '%SENATE MAJORITY PAC%' OR committee_name ILIKE '%CONGRESSIONAL LEADERSHIP FUND%' OR committee_name ILIKE '%HOUSE MAJORITY PAC%' OR committee_name ILIKE '%AMERICA PAC%') ORDER BY total_receipts DESC FETCH FIRST 30 ROWS ONLY"
+    },
+    {
+     "label": "fec.committee_summaries (2026 allied super PACs)",
+     "url": "https://askamerica.ai/catalog/schemas/fec/#committee_summaries-table",
+     "askamerica": true,
+     "sql": "SELECT committee_id, committee_name, total_receipts, total_disbursements, independent_expenditures, coverage_end_date FROM fec.committee_summaries WHERE year=2026 AND (committee_name ILIKE 'SENATE LEADERSHIP FUND%' OR committee_name ILIKE 'SLF PAC%' OR committee_name ILIKE 'CLF' OR committee_name ILIKE 'CONGRESSIONAL LEADERSHIP FUND%' OR committee_name ILIKE 'MAGA INC%' OR committee_name ILIKE 'SENATE MAJORITY PAC%' OR committee_name ILIKE 'HMP%' OR committee_name ILIKE 'HOUSE MAJORITY PAC%' OR committee_name ILIKE 'SMP%' OR committee_name ILIKE 'DEMOCRATIC GOVERNORS%' ) ORDER BY total_receipts DESC"
+    }
+   ]
   },
   {
    "id": 34,
@@ -1342,14 +1385,31 @@
    "kind": "factual",
    "test": "True if Elon Musk spent hundreds of millions of dollars on U.S. elections while his companies held billions of dollars in federal contracts, and a rule (a 'loophole') allows a contractor's owner to spend that way. False if Musk's election spending or his companies' federal contracts are far smaller, or if federal law bars such spending. Cannot be determined if it turns on what counts as a 'loophole'.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "AskAmerica's data show Musk gave about $359 million to political committees in the 2026 cycle, and SpaceX held about $3.6 billion to $3.8 billion a year in federal contract obligations in fiscal 2024 to 2026, so the dollar figures hold. Whether this is a 'loophole' is a legal reading: 52 U.S.C. 30119 bars contributions by a person who holds a federal contract, and its text does not address an owner giving personal funds.",
+   "check_run": "q208/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "fec.individual_contributions (Elon Musk, 2026 cycle)",
+     "url": "https://askamerica.ai/catalog/schemas/fec/#individual_contributions-table",
+     "askamerica": true,
+     "sql": "SELECT c.committee_id, c.committee_name, SUM(i.amount) amt FROM fec.individual_contributions i LEFT JOIN fec.committees c ON c.committee_id=i.committee_id AND c.year=2026 WHERE i.year=2026 AND i.contributor_name ILIKE 'MUSK, ELON%' AND i.committee_id IN ('C00571703','C00879510','C00504530','C00898130','C00892471','C00892919','C00907584') GROUP BY c.committee_id, c.committee_name ORDER BY amt DESC"
+    },
+    {
+     "label": "fiscal.usaspending_contracts (SpaceX and Tesla obligations, FY2024-2026)",
+     "url": "https://askamerica.ai/catalog/schemas/fiscal/#usaspending_contracts-table",
+     "askamerica": true,
+     "sql": "SELECT year, recipient_parent_name, SUM(federal_action_obligation) obl FROM fiscal.usaspending_contracts WHERE year IN (2024,2025,2026) AND (recipient_parent_name ILIKE '%SPACE EXPLORATION%' OR recipient_parent_name ILIKE '%TESLA%' OR recipient_parent_name ILIKE '%STARLINK%' OR recipient_parent_name ILIKE '%XAI%' OR recipient_parent_name ILIKE '%BORING CO%') GROUP BY year, recipient_parent_name ORDER BY year, obl DESC"
+    },
+    {
+     "label": "52 U.S.C. 30119, contributions by government contractors (govinfo)",
+     "url": "https://www.govinfo.gov/content/pkg/USCODE-2023-title52/html/USCODE-2023-title52-subtitleIII-chap301-subchapI-sec30119.htm"
+    }
+   ]
   },
   {
    "id": 36,
@@ -1406,14 +1466,41 @@
    "kind": "factual",
    "test": "True if Senator Andy Kim has introduced a bill letting people aged 55 to 65 buy into Medicare. False if no such bill by Kim exists. Cannot be determined if the bill's contents cannot be read.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "Which proposal 'that' refers to is unclear. Kim sponsors no bill for a Medicare buy-in at ages 55 to 65; he cosponsors Sen. Tammy Baldwin's S. 5700, a buy-in for ages 50 to 64. He is the lead sponsor of S. 5037, the MediKids Act, which makes all children eligible for Medicaid from birth to age 26. So the statement fits if it means coverage for children and does not fit if it means the buy-in.",
+   "check_run": "q209/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "law.bills (bills sponsored by Sen. Andy Kim, 118th-119th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT bill_type, bill_number, title, introduced_date FROM law.bills WHERE congress IN (118,119) AND sponsor_full_name ILIKE '%Kim, Andy%' AND bill_type IN ('s','sres') ORDER BY congress, bill_number"
+    },
+    {
+     "label": "law.bills (Kim-sponsored child and Medicaid bills)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT congress, bill_type, bill_number, title, sponsor_full_name, introduced_date, latest_action_text FROM law.bills WHERE congress IN (118,119) AND bill_type IN ('s','hr') AND sponsor_full_name ILIKE '%Kim, Andy%' AND (title ILIKE '%child%' OR title ILIKE '%medicaid%' OR title ILIKE '%CHIP%' OR title ILIKE '%kids%' OR title ILIKE '%youth%')"
+    },
+    {
+     "label": "law.bill_cosponsors (Medicare bills Kim cosponsors, 119th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_cosponsors-table",
+     "askamerica": true,
+     "sql": "SELECT b.bill_type, b.bill_number, b.title, b.sponsor_full_name FROM law.bill_cosponsors c JOIN law.bills b ON b.congress=c.congress AND b.bill_type=c.bill_type AND b.bill_number=c.bill_number WHERE c.congress=119 AND c.full_name ILIKE '%Kim, Andy%' AND (b.title ILIKE '%medicare%' OR b.title ILIKE '%public option%' OR b.title ILIKE '%buy%')"
+    },
+    {
+     "label": "S. 5700, Medicare at 50 Act (govinfo)",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5700is/html/BILLS-119s5700is.htm"
+    },
+    {
+     "label": "S. 5037, MediKids Act (govinfo)",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5037is/html/BILLS-119s5037is.htm"
+    }
+   ]
   },
   {
    "id": 38,
@@ -1438,14 +1525,31 @@
    "kind": "premised_prediction",
    "test": "Premise only: True if price data show the U.S. war with Iran has raised prices for Americans (for example oil, gasoline or overall consumer prices rising with the war). False if prices have not risen, or fell, during the war. Cannot be determined if prices rose but the war's part in it cannot be separated from other causes.",
    "premise": "The U.S. war with Iran is driving up prices for Americans.",
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "AskAmerica's EIA data show U.S. regular gasoline rising from $2.94 a gallon on Feb. 23, 2026, days before the war began on Feb. 28, to $3.96 on March 23 and a peak near $4.48; it was still $4.27 on Oct. 26. The consumer price index rose 0.9% in March and 3.1% from February to October, and the Associated Press attributes the March and April jumps to the war and Iran's closing of the Strait of Hormuz.",
+   "check_run": "q210/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "energy.eia_retail_gasoline_prices (U.S. regular, weekly, Feb.-Oct. 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+     "askamerica": true,
+     "sql": "SELECT report_date, price_dollars_per_gallon FROM energy.eia_retail_gasoline_prices WHERE series_id='EMM_EPMR_PTE_NUS_DPG' AND report_date >= '2026-02-01' AND (report_date LIKE '%-01' OR report_date LIKE '%-08' OR report_date LIKE '%-15' OR report_date LIKE '%-22' OR report_date LIKE '%-2_') ORDER BY report_date"
+    },
+    {
+     "label": "econ.fred_indicators (CPI and WTI crude, 2026)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+     "askamerica": true,
+     "sql": "SELECT series, \"date\", \"value\" FROM econ.fred_indicators WHERE series IN ('CPIAUCSL','DCOILWTICO') AND \"date\" >= '2026-01-01' AND (\"date\" LIKE '%-01' OR series='CPIAUCSL') ORDER BY series, \"date\""
+    },
+    {
+     "label": "PBS NewsHour/AP, Iran war and inflation",
+     "url": "https://www.pbs.org/newshour/economy/iran-war-hits-home-as-gasoline-prices-fuel-significant-u-s-inflation-jump"
+    }
+   ]
   },
   {
    "id": 39,
