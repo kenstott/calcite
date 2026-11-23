@@ -1898,14 +1898,27 @@
    "kind": "premised_prediction",
    "test": "Premise only: True if records show Senator Cotton sent Commerce Secretary Lutnick several letters warning about Chinese communist front companies. False if Cotton sent no such letters to Lutnick. Cannot be determined if letters exist but their recipients or subjects cannot be confirmed.",
    "premise": "Senator Cotton sent Commerce Secretary Howard Lutnick many letters warning about Chinese communist front companies.",
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "Letters posted on Senator Cotton's Senate site show he wrote Commerce Secretary Lutnick at least three times (Oct. 13 and Oct. 30, 2025, and March 20, 2026) about advanced chips reaching China through shell companies, China-linked entities and smuggling networks. The letters use 'shell companies' rather than 'front companies'.",
+   "check_run": "q213/askamerica/2026-11-23",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Cotton letter to Lutnick on Megaspeed (Oct. 13, 2025)",
+     "url": "https://www.cotton.senate.gov/imo/media/doc/101325lutnickletter.pdf"
+    },
+    {
+     "label": "Cotton letter to Lutnick (Oct. 30, 2025)",
+     "url": "https://www.cotton.senate.gov/imo/media/doc/103025lutnickletter.pdf"
+    },
+    {
+     "label": "Cotton and Huizenga letter to Lutnick (Mar. 20, 2026)",
+     "url": "https://www.cotton.senate.gov/imo/media/doc/32026chipsletter.pdf"
+    }
+   ]
   },
   {
    "id": 49,
