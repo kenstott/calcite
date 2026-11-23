@@ -136,7 +136,7 @@ if [ $# -eq 0 ]; then
   echo "    historical — backfill workers: all SEC years (2010→current), all schemas (historical/initial)"
   echo "    all        — union of historical + daily"
   echo ""
-  echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
+  echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec_enforcement, sec, econ, census, geo, crime, weather,"
   echo "                 ref, fec, fedregister, law, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking, fisheries"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
@@ -381,7 +381,7 @@ for arg in "$@"; do
         econ_reference:daily          # 12m
         research:daily                # 10m
         officials:daily cyber_vuln:daily edu:daily
-        fedregister:daily "sec_prices:daily" patents:daily
+        fedregister:daily "sec_prices:daily" "sec_enforcement:daily" patents:daily
         fisheries:daily
         # ref:daily stays last (29m): queue position is a soft bias so its entity-resolution
         # bridge sees the same-day data of the schemas it reads (fec/patents/sec/health/

@@ -23,6 +23,7 @@
 #   sec_primary   <year|current>   — SEC 10-K/10-Q filings for one year
 #   sec_secondary <year|current>   — SEC 8-K, proxy, insider, 13F, 13D/G
 #   sec_prices    <daily|historical> — Stock prices via Stooq (year-range fixed)
+#   sec_enforcement <daily|historical> — SEC enforcement actions (full listing each run)
 #   econ          <historical|daily>
 #   census        <historical|daily|once|year|range> — once = qwi_employment (no year dim)
 #   geo           <historical|daily>
@@ -62,7 +63,7 @@ MODE="${2:-}"
 
 if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
   echo "Usage: $0 <schema> <mode>" >&2
-  echo "  Schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
+  echo "  Schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, sec_enforcement, econ, census, geo, crime," >&2
   echo "           weather, ref, fec, fedregister, law, officials, econ_reference, research," >&2
   echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
   echo "           housing, transport, environment, disasters, fiscal, banking, fisheries" >&2
@@ -388,6 +389,18 @@ case "$SCHEMA" in
       PRICE_OPS="$PRICE_OPS,\"ciks\":\"${GOVDATA_CIKS}\""
     fi
     run_etl_inline "$(build_inline_model sec "$PRICE_OPS")" "$WORKER_ID"
+    ;;
+
+  # ── SEC enforcement actions (litigation releases + administrative proceedings) ──
+  # The listings are republished in full on every run (overwritePartitions), so mode is ignored.
+  # enforcementOnly routes the sec factory past the filing/price downloads and enables just the
+  # enforcement_actions table.
+
+  sec_enforcement)
+    export GOVDATA_START_YEAR=2010
+    export GOVDATA_END_YEAR=2026
+    run_etl_inline "$(build_inline_model sec \
+      '"enforcementOnly":true,"fetchStockPrices":false,"filingTypes":[]')" "$WORKER_ID"
     ;;
 
   # ── SEC (filings) — universal historical|daily|year|range entry point ─────
@@ -787,7 +800,7 @@ PY
 
   *)
     echo "Unknown schema: $SCHEMA" >&2
-    echo "Valid schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
+    echo "Valid schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, sec_enforcement, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, law, officials, econ_reference, research," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
     echo "               housing, transport, environment, disasters, fiscal, banking, fisheries" >&2
