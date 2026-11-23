@@ -2311,7 +2311,7 @@ public class EtlPipeline {
           // out of date, writes them, and records the new token -- burying the revision and making
           // sure no later run looks again. This is what makes a lookback able to see a restatement
           // on a table that caches.
-          if (previousToken != null) {
+          if (previousToken != null && !isCacheReparsed(pipelineName)) {
             ((HttpSource) dataSource).invalidateRawCache(variables);
           }
           // Defer recording until the write succeeds (see the successful return below).
@@ -2357,7 +2357,7 @@ public class EtlPipeline {
     boolean hashFreshnessActive = freshnessConfigForHash != null
         && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
         && dataSource instanceof HttpSource;
-    if (hashFreshnessActive) {
+    if (hashFreshnessActive && !isCacheReparsed(pipelineName)) {
       ((HttpSource) dataSource).invalidateRawCache(variables);
     }
 
@@ -2670,7 +2670,8 @@ public class EtlPipeline {
     // condition createDataSource applies to HttpSource: a run that concluded it holds no reliable
     // committed state must re-fetch rather than replay an entry whose existence is its only
     // validity check.
-    boolean bypass = isTableForceDownloaded(config.getName()) || !freshnessSkipAllowed;
+    boolean bypass = isTableForceDownloaded(config.getName())
+        || (!freshnessSkipAllowed && !isCacheReparsed(config.getName()));
     return StorageRawCache.forBatch(config, variables, sourceStorageProvider, rawCachePath, bypass,
         workDirectory());
   }
@@ -3099,7 +3100,8 @@ public class EtlPipeline {
     // cache file at hasValidRawCache() — which only checks file existence, not whether this run
     // has any memory of writing it — and silently replayed whatever was in it instead of forcing
     // the live fetch that "reprocess" was supposed to guarantee.
-    boolean bypassRawCache = isTableForceDownloaded(config.getName()) || forceReprocessAll;
+    boolean bypassRawCache = isTableForceDownloaded(config.getName())
+        || (forceReprocessAll && !isCacheReparsed(config.getName()));
     return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
         workDirectory().getPath(), config.getColumns(), bypassRawCache);
   }
@@ -3299,7 +3301,23 @@ public class EtlPipeline {
    * response.
    */
   private static boolean isTableForceDownloaded(String pipelineName) {
-    String raw = VariableResolver.resolveEnvVars("${GOVDATA_FORCE_DOWNLOAD_TABLES:}");
+    return listedIn("${GOVDATA_FORCE_DOWNLOAD_TABLES:}", pipelineName);
+  }
+
+  /**
+   * True if {@code pipelineName} is listed in {@code GOVDATA_REPARSE_CACHE_TABLES} and not also in
+   * {@code GOVDATA_FORCE_DOWNLOAD_TABLES}, which wins. For such a table a force-reprocess reads the
+   * raw cache instead of bypassing it and neither freshness gate drops the entry, so every unit is
+   * reparsed from the cached bytes with no request to the source. Unlisted tables and the
+   * automatically derived forceReprocessAll of unlisted tables are unaffected.
+   */
+  static boolean isCacheReparsed(String pipelineName) {
+    return listedIn("${GOVDATA_REPARSE_CACHE_TABLES:}", pipelineName)
+        && !isTableForceDownloaded(pipelineName);
+  }
+
+  private static boolean listedIn(String variable, String pipelineName) {
+    String raw = VariableResolver.resolveEnvVars(variable);
     if (raw == null || raw.isEmpty()) {
       return false;
     }
