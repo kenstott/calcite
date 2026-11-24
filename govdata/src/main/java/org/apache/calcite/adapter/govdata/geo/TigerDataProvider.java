@@ -157,7 +157,12 @@ public class TigerDataProvider implements StorageAwareDataProvider {
       LOGGER.info("Memory before fetch: {}MB used / {}MB max", usedMb, maxMb);
 
       int yearInt = Integer.parseInt(year);
-      TigerShapefileParser.AttributeMapper mapper = getMapperForTable(tableName, yearInt);
+      final TigerShapefileParser.AttributeMapper tableMapper = getMapperForTable(tableName, yearInt);
+      // The TIGER 2010 vintage names every attribute with a "10" suffix (GEOID10, STATEFP10, ...).
+      final boolean suffixed2010 = yearInt == 2010;
+      TigerShapefileParser.AttributeMapper mapper = suffixed2010
+          ? feature -> tableMapper.mapAttributes(feature.withoutSuffix("10"))
+          : tableMapper;
       List<Object[]> records = new ArrayList<Object[]>();
 
       for (String url : urls) {

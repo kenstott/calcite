@@ -591,6 +591,22 @@ public class TigerShapefileParser {
     public Object getAttribute(String name) {
       return attributes.get(name);
     }
+
+    /**
+     * Returns a view of this feature whose attribute names have the given vintage suffix removed
+     * (e.g. {@code GEOID10} is readable as {@code GEOID}). Names without the suffix are unchanged.
+     */
+    public ShapefileFeature withoutSuffix(String suffix) {
+      Map<String, Object> stripped = new HashMap<String, Object>();
+      for (Map.Entry<String, Object> e : attributes.entrySet()) {
+        String key = e.getKey();
+        if (key.length() > suffix.length() && key.endsWith(suffix)) {
+          key = key.substring(0, key.length() - suffix.length());
+        }
+        stripped.put(key, e.getValue());
+      }
+      return new ShapefileFeature(stripped);
+    }
   }
 
   /**
