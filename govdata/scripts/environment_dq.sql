@@ -831,5 +831,118 @@ SELECT 'environment', 'attains_cause_summary', 'T8_pk_duplicates',
 FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/attains_cause_summary', allow_moved_paths := true)
   GROUP BY organization_id, reporting_cycle, water_type, use_name, parameter_group, attainment_category HAVING COUNT(*) > 1));
 
+-- ===== npdes_permits =====
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T1_exists',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T2_row_count',
+  CASE WHEN n >= 1000000 THEN 'pass' ELSE 'fail' END, n, 1000000, 'Expected >=1000000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows (permit_number, state_abbr)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) WHERE permit_number IS NULL OR state_abbr IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Bad state code, unknown status, or expiration before 1960 (source sentinel 0001-01-01 on 13 permits allowed)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) WHERE LENGTH(state_abbr) <> 2 OR permit_status_code NOT IN ('EFF','ADC','EXP','TRM','PND','RET','NON','DEN') OR (expiration_date < DATE '1960-01-01' AND expiration_date <> DATE '0001-01-01'));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (permit_number, version_number) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) GROUP BY permit_number, version_number HAVING COUNT(*) > 1));
+-- Acceptance: Michigan active CAFO general-permit coverages near 270 (EPA data shows ~231 EFF+ADC)
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T9_michigan_cafo',
+  CASE WHEN n BETWEEN 150 AND 400 THEN 'pass' ELSE 'fail' END, n, 270, 'Active Michigan MIG010000 coverages (EFF+ADC) expected 150-400'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) WHERE master_permit_number = 'MIG010000' AND permit_status_code IN ('EFF','ADC'));
+
+-- ===== npdes_facilities =====
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_facilities', 'T1_exists',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_facilities', 'T2_row_count',
+  CASE WHEN n >= 1000000 THEN 'pass' ELSE 'fail' END, n, 1000000, 'Expected >=1000000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_facilities', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+-- impaired_waters is a constant in the source (only the value '303(D) Listed' or null): excluded from T5.
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_facilities', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'impaired_waters')));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_facilities', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows (permit_number)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true) WHERE permit_number IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_facilities', 'T7_value_ranges',
+  CASE WHEN n <= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Latitude/longitude out of range (source has ~220 bad geocodes in 1.26M rows; fail above 1000)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true) WHERE (latitude IS NOT NULL AND (latitude NOT BETWEEN -15 AND 75 OR longitude NOT BETWEEN -180 AND 180)));
+
+-- ===== npdes_permit_components =====
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permit_components', 'T1_exists',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permit_components', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permit_components', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permit_components', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permit_components', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows (permit_number, component_type_code)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true) WHERE permit_number IS NULL OR component_type_code IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permit_components', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Unknown component code'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true) WHERE component_type_code NOT IN ('SWC','CSO','SWI','SWS','POT','PRE','CAF','BIO','SWM'));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permit_components', 'T9_cafo_count',
+  CASE WHEN n BETWEEN 3000 AND 15000 THEN 'pass' ELSE 'fail' END, n, 6700, 'CAF component rows expected ~6,700'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true) WHERE component_type_code = 'CAF');
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results ORDER BY schema, tbl, test;

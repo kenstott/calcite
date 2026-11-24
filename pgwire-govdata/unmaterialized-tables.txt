@@ -23,6 +23,10 @@ energy.eia_petroleum_spot_prices
 energy.eia_plant_generation
 environment.attains_cause_summary
 environment.attains_state_use_summary
+environment.npdes_cafo_permits
+environment.npdes_facilities
+environment.npdes_permit_components
+environment.npdes_permits
 environment.ucmr_results
 fedregister.presidential_documents
 fiscal.appropriations_timeliness_by_fy
