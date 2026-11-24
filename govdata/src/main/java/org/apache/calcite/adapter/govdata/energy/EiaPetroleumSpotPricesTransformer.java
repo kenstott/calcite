@@ -14,6 +14,9 @@ import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 /**
  * Transforms EIA API v2 {@code petroleum/pri/spt} (Petroleum Spot Prices) daily rows into tall
  * JSON rows, one per (series, report_date). The price unit differs by series ($/GAL for
