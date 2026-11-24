@@ -620,7 +620,9 @@ partitionedTables:
     dimensions:
       type:
         - boundary
-      year: *tiger_year_range
+      year:
+        <<: *tiger_year_range
+        minYear: 2011  # TIGER2010 county boundaries exist; minYear is the publish year (data year + dataLag)
 
     # TIGER tables use TigerDataProvider for binary shapefile handling
     source:
