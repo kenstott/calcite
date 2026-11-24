@@ -2602,6 +2602,64 @@ FROM (SELECT COUNT(*) AS n, MAX(primary_care_physicians_per_100k) AS max_rate
   WHERE primary_care_physicians_per_100k IS NOT NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: ahrf_physician_specialty (HRSA AHRF county x specialty x year; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_specialty', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_specialty', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 county x specialty x year rows (3,235 counties x ~50 specialties x 2 years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_specialty', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_specialty', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_specialty', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips / specialty / data_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true)
+  WHERE county_fips IS NULL OR specialty IS NULL OR data_year IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_specialty', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (county_fips, specialty, data_year) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, specialty, data_year, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true)
+  GROUP BY county_fips, specialty, data_year HAVING COUNT(*) > 1
+));
+
+-- T7 regression guard (the gap this table closes, govdata-ops#1472): general OB-GYN must be
+-- present for more than one data year and the newest-year national MD count must be plausible.
+INSERT INTO dq_results
+SELECT 'health', 'ahrf_physician_specialty', 'T7_obgyn_plausible',
+  CASE WHEN yrs >= 2 AND total BETWEEN 20000 AND 60000 THEN 'pass' ELSE 'fail' END, total, 20000,
+  'obgyn_gen: distinct data years (>=2) and newest-year national MD count within 20000-60000'
+FROM (SELECT COUNT(DISTINCT data_year) AS yrs,
+    SUM(CASE WHEN data_year = (SELECT MAX(data_year) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true)) THEN md_physicians END) AS total
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ahrf_physician_specialty', allow_moved_paths := true) WHERE specialty = 'obgyn_gen');
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 -- ============================================================================
