@@ -12,6 +12,7 @@ disasters.fema_firm_panels
 disasters.fema_nfhl_lomrs
 econ.business_formation_statistics
 econ.federal_budget_authority_by_function
+econ.national_industry_employment
 econ.osha_inspections
 econ.osha_violations
 econ.retail_sales_revision_vintages
