@@ -1515,6 +1515,91 @@ FROM (
 ) d;
 
 -- ============================================================
+-- eia_petroleum_spot_prices
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_petroleum_spot_prices', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true);
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_petroleum_spot_prices', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 40000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 40000, 'expected >= 40000 daily spot price rows (46,681 since 2010 alone)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_petroleum_spot_prices', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_petroleum_spot_prices', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T6: pk_nulls (report_date, price_year, series_id NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_petroleum_spot_prices', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'report_date IS NULL OR price_year IS NULL OR series_id IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true)
+WHERE report_date IS NULL OR price_year IS NULL OR series_id IS NULL;
+
+-- T7: expected_values — price between -50 and 500 where not null (WTI printed -36.98 on 2020-04-20)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_petroleum_spot_prices', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'price outside -50..500'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true)
+  WHERE price IS NOT NULL AND (price < -50 OR price > 500)
+) t;
+
+-- T8: PK duplication guard (series_id, report_date)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_petroleum_spot_prices', 'T8_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (series_id, report_date) groups'
+FROM (
+  SELECT series_id, report_date
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true)
+  GROUP BY series_id, report_date HAVING COUNT(*) > 1
+) d;
+
+-- ============================================================
 -- eia_heating_fuel_prices
 -- ============================================================
 

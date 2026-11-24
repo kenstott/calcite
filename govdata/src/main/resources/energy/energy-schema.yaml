@@ -266,6 +266,14 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
+  # EIA daily petroleum spot prices (petroleum/pri/spt): WTI/Brent from 1986, products from
+  # 1990-2006. dataLag: 0 -- the latest trading day is published within days.
+  eia_petroleum_spot_years: &eia_petroleum_spot_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1986}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
   # EIA weekly heating oil and propane prices (Heating Oil and Propane Update): weekly series
   # from 1990-10. dataLag: 0 -- the current week is published each Wednesday/Thursday.
   eia_heating_fuel_years: &eia_heating_fuel_years
@@ -2921,6 +2929,112 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: eia_retail_gasoline_prices
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: eia_petroleum_spot_prices
+    # Daily spot prints are final once published; lookback covers the January rollover.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=eia_petroleum_spot/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA daily petroleum spot prices (EIA API v2 petroleum/pri/spt), one row per series and
+      trading day. Eleven series: crude WTI Cushing (RWTC) and Brent (RBRTE) in $/barrel;
+      in $/gallon U.S. Gulf Coast kerosene-type jet fuel (EER_EPJK_PF4_RGC_DPG), Gulf Coast
+      and New York Harbor conventional regular gasoline, NY Harbor No. 2 heating oil, NY Harbor
+      and Gulf Coast ultra-low-sulfur diesel, Los Angeles CARB diesel and RBOB gasoline, and
+      Mont Belvieu propane. This is the wholesale spot market, not retail and not an airline's
+      delivered price: the jet fuel series is the Gulf Coast spot (about $2-4/gal), so it will
+      not match delivered-price indexes such as Argus. Units differ by series, so ALWAYS filter
+      on series_id (or product_code plus eia_area_code) and read the units column; never average
+      across series. WTI can be negative (-36.98 on 2020-04-20). Retail pump prices are in
+      eia_retail_gasoline_prices, retail heating oil in eia_heating_fuel_prices, Henry Hub
+      natural gas in eia_natural_gas_price.
+
+    dimensions:
+      type:
+        - eia_petroleum_spot
+      year: *eia_petroleum_spot_years
+
+    columns:
+      - name: report_date
+        type: string
+        nullable: false
+        comment: Trading date in ISO format (YYYY-MM-DD)
+      - name: price_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the report date
+      - name: series_id
+        type: string
+        nullable: false
+        comment: >
+          EIA API v2 series identifier (e.g. EER_EPJK_PF4_RGC_DPG Gulf Coast jet fuel, RWTC WTI,
+          RBRTE Brent). Long-format table: one row per (series_id, report_date); filter on it.
+      - name: series_description
+        type: string
+        nullable: true
+        comment: Full series description including area and unit
+      - name: product_code
+        type: string
+        nullable: true
+        comment: EIA product code (EPJK jet fuel, EPCWTI WTI crude, EPCBRENT Brent, EPMRU conventional gasoline, EPD2F heating oil, EPD2DXL0 ULSD, EPLLPA propane)
+      - name: product
+        type: string
+        nullable: true
+        comment: Product description (e.g. 'Kerosene-Type Jet Fuel')
+      - name: eia_area_code
+        type: string
+        nullable: true
+        comment: EIA area code (RGC Gulf Coast, Y35NY New York Harbor, Y05LA Los Angeles, Y44MB Mont Belvieu, YCUOK Cushing, ZEU Europe)
+      - name: process_name
+        type: string
+        nullable: true
+        comment: Process description (Spot Price FOB)
+      - name: price
+        type: double
+        nullable: true
+        comment: Spot price in the unit given by the units column ($/GAL for products, $/BBL for crude); may be negative for crude
+      - name: units
+        type: string
+        nullable: true
+        comment: Unit label as published ($/GAL or $/BBL)
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/petroleum/pri/spt/data?frequency=daily&start={year}-01-01&end={year}-12-31&data[]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaPetroleumSpotPricesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_petroleum_spot/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_petroleum_spot_prices
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
