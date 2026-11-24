@@ -5639,6 +5639,103 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: social_security_retirement_applications
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=social_security_retirement_applications/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Monthly Social Security retirement insurance applications filed, national, October 2011 (fiscal
+      year 2012) to the latest month SSA has published: total applications across all channels and the
+      subset filed on the internet, from SSA's open-data file "Retirement Insurance Applications Filed
+      via the Internet, FY 2012 onward". Use it for claims-surge or claims-drop checks, for example
+      summing October 2024 to April 2025 against the same months a year earlier. year and month are
+      the calendar month of filing; fiscal_year is SSA's October-September year labelled by the year it
+      ends (October 2024 is fiscal year 2025). These are retirement applications only: survivor
+      and Medicare applications, disability applications and awards are not in this table. ssa.gov
+      refuses non-browser clients, so the file is read through a headed browser session. Source:
+      https://www.ssa.gov/data/retirement-insurance-online-apps-2012-onward.html.
+
+    dimensions:
+      type:
+        - social_security_retirement_applications
+
+    columns:
+      - name: year
+        type: integer
+        nullable: true
+        comment: >
+          Calendar year of the filing month (October to December of fiscal year 2025 are 2024); PK with month.
+      - name: month
+        type: integer
+        nullable: true
+        comment: >
+          Calendar month of filing, 1 to 12; PK with year.
+      - name: fiscal_year
+        type: integer
+        nullable: true
+        comment: >
+          SSA fiscal year (October to September), labelled by the calendar year in which it ends.
+      - name: total_applications
+        type: bigint
+        nullable: true
+        comment: >
+          Total Social Security retirement insurance applications filed in the month, all channels.
+      - name: internet_applications
+        type: bigint
+        nullable: true
+        comment: >
+          Retirement insurance applications filed through SSA's internet channel in the month.
+      - name: pct_internet
+        type: double
+        nullable: true
+        comment: >
+          Percentage of total_applications filed on the internet, as published by SSA (0 to 100).
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads the page through a
+      # headed browser session (ssa.gov answers HTTP 403 to every non-browser client). The parameters
+      # are read by the transformer from this block. Headed Chrome needs a display (DISPLAY or
+      # WAYLAND_DISPLAY); when the browser cannot start the table fails, naming the cause.
+      url: "https://www.ssa.gov/data/fy12-onward-rib-filed-via-internet.csv"
+      method: GET
+      parameters:
+        ssaBrowserScript: "${SSA_BROWSER_SCRIPT:}"
+        ssaNodeCommand: "${SSA_NODE_COMMAND:node}"
+        ssaChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        ssaRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        ssaEntryPageUrl: "https://www.ssa.gov/oact/cola/Benefits.html"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.SocialSecurityRetirementApplicationsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=social_security_retirement_applications/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   - name: export_control_restricted_parties
     dataset_type: snapshot
     freshness:
