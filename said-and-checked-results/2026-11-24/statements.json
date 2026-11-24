@@ -1662,14 +1662,29 @@
    "kind": "factual",
    "test": "True if Huang has confirmed or an official source has found that he had a relationship with a woman U.S. officials identify as a Chinese spy, and Nvidia is documented lobbying for wider sales of AI chips to China. False if official sources show neither the relationship nor the lobbying. Cannot be determined if the relationship or the woman's status rests only on unconfirmed reports.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "The spy claim rests on news reports citing unnamed U.S. officials; no on-record official finding was found, and AP reports that Singaporean authorities found insufficient evidence she committed a crime. AskAmerica's lobbying disclosures show Nvidia filing reports from 2024 to 2026 on semiconductor trade policy and export controls, and AP reports Huang lobbied to loosen limits on chip sales to China, but the filings do not state a position on wider sales.",
+   "check_run": "q209/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "law.lobbying_activities (Nvidia China and export-control issues, 2024-2026)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#lobbying_activities-table",
+     "askamerica": true,
+     "sql": "SELECT c.name, f.\"year\", f.filing_period, a.general_issue_code, SUBSTR(a.description,1,300) AS d FROM law.lobbying_filings f JOIN law.lobbying_activities a ON a.filing_uuid=f.filing_uuid JOIN law.lobbying_clients c ON c.client_id=f.client_id WHERE c.name ILIKE 'NVIDIA%' AND (a.description ILIKE '%china%' OR a.description ILIKE '%export%') AND f.\"year\">=2024 FETCH FIRST 15 ROWS ONLY"
+    },
+    {
+     "label": "AP via PBS NewsHour, Huang's reinstatement sparks fury in Congress",
+     "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+    },
+    {
+     "label": "AP via PBS NewsHour, Huang resigns after affair raises security concerns",
+     "url": "https://www.pbs.org/newshour/economy/nvidia-ceo-jensen-huang-resigns-after-his-affair-raises-national-security-concerns"
+    }
+   ]
   },
   {
    "id": 44,
