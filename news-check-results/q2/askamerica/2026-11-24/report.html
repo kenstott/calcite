@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fortune article's claims about data-center electricity use in Oregon, Virginia and Iowa are balanced and mostly accurate; 4 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Fortune article's claims about data-center electricity use in Oregon, Virginia and Iowa are balanced and mostly accurate; 4 claims could not be confirmed.</h1>
+<p class="subtitle">Warehouse: energy.eia_electricity_prices (EIA retail sales, through 2025). Sources read: Nature Sustainability, OPB, ECOnorthwest slides, Dominion 10-K, EIP, Cleanview, Warren/Hawley, Oregon DOE.</p>
+<p class="under-review"><span>Article under review</span><a href="https://fortune.com/2026/11/20/data-centers-electricity-use-oregon-virginia-states/">https://fortune.com/2026/11/20/data-centers-electricity-use-oregon-virginia-states/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Article shares vs EIA denominators</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="14" style="font-size:14px" font-weight="600" text-anchor="middle">Implied data-center TWh vs EIA 2024 retail sales</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="67" y1="252" x2="390" y2="252" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="59" y="256" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="67" y1="224" x2="390" y2="224" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="59" y="228" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="67" y1="196" x2="390" y2="196" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="59" y="200" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40</text>
+      <line class="grid" x1="67" y1="168" x2="390" y2="168" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="59" y="172" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60</text>
+      <line class="grid" x1="67" y1="140" x2="390" y2="140" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="59" y="144" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">80</text>
+      <line class="grid" x1="67" y1="112" x2="390" y2="112" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="59" y="116" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">100</text>
+      <line class="grid" x1="67" y1="84" x2="390" y2="84" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="59" y="88" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">120</text>
+      <line class="grid" x1="67" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-7" class="tick" x="59" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">140</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="67" y1="56" x2="67" y2="252" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="67" y1="252" x2="390" y2="252" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="154" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 154)">TWh</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-oregon-18-6" class="tick" x="120.83" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Oregon (18.6%)</text>
+      <text id="p1-xtick-virginia-15-5" class="tick" x="228.50" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Virginia (15.5%)</text>
+      <text id="p1-xtick-iowa-13-1" class="tick" x="336.17" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Iowa (13.1%)</text>
+    </g>
+    <g id="p1-series-eia-2024-retail-sales-twh" class="series">
+      <g class="hover">
+        <title>Oregon (18.6%) — EIA 2024 retail sales, TWh: 59.68</title>
+        <rect id="p1-mark-eia-2024-retail-sales-twh-oregon-18-6" class="bar" x="86.38" y="168.45" width="33.45" height="83.55" fill="#2563eb"/>
+        <rect class="hit" x="86.38" y="56" width="33.45" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Virginia (15.5%) — EIA 2024 retail sales, TWh: 138.04</title>
+        <rect id="p1-mark-eia-2024-retail-sales-twh-virginia-15-5" class="bar" x="194.05" y="58.74" width="33.45" height="193.26" fill="#2563eb"/>
+        <rect class="hit" x="194.05" y="56" width="33.45" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Iowa (13.1%) — EIA 2024 retail sales, TWh: 54.93</title>
+        <rect id="p1-mark-eia-2024-retail-sales-twh-iowa-13-1" class="bar" x="301.71" y="175.10" width="33.45" height="76.90" fill="#2563eb"/>
+        <rect class="hit" x="301.71" y="56" width="33.45" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-implied-data-center-twh" class="series">
+      <g class="hover">
+        <title>Oregon (18.6%) — Implied data-center TWh: 11.1</title>
+        <rect id="p1-mark-implied-data-center-twh-oregon-18-6" class="bar" x="120.83" y="236.46" width="33.45" height="15.54" fill="#ea580c"/>
+        <rect class="hit" x="120.83" y="56" width="33.45" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Virginia (15.5%) — Implied data-center TWh: 21.4</title>
+        <rect id="p1-mark-implied-data-center-twh-virginia-15-5" class="bar" x="228.50" y="222.04" width="33.45" height="29.96" fill="#ea580c"/>
+        <rect class="hit" x="228.50" y="56" width="33.45" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Iowa (13.1%) — Implied data-center TWh: 7.2</title>
+        <rect id="p1-mark-implied-data-center-twh-iowa-13-1" class="bar" x="336.17" y="241.92" width="33.45" height="10.08" fill="#ea580c"/>
+        <rect class="hit" x="336.17" y="56" width="33.45" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-eia-2024-retail-sales-twh" x="48" y="296" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-eia-2024-retail-sales-twh" class="legend-label" x="64" y="305" fill="#1f2328" font-size="11" style="font-size:11px">EIA 2024 retail sales, TWh</text>
+      <rect id="p1-legend-swatch-implied-data-center-twh" x="217" y="296" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-implied-data-center-twh" class="legend-label" x="233" y="305" fill="#1f2328" font-size="11" style="font-size:11px">Implied data-center TWh</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62155/a/7a19ca605b83a480d3f25142761e598d.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: <strong>1 Pinocchio</strong>. The headline numbers trace to real sources: about 23% of Oregon sales (14.0 TWh over EIA 61.5 TWh = 22.7%), Dominion's 28%, the 82 TWh estimate, EIP's 143 GW and 74 plants, Cleanview's 2 GW and the Warren-Hawley quote. The Oregon 96% sales-growth figure could not be read in any source I opened, though EIA arithmetic makes it plausible. The state shares (18.6/15.5/13.1%) are unverified at the numerator but consistent with EIA denominators.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 91/100 — honest</strong> &middot; <strong>Bias 0/100 — no consistent lean</strong></p><p>12 claims graded, 0 not gradable, 6 fell short. In this article only. <strong>Citejacking:</strong> #6 leans on cited evidence that does not carry it.</p></div>
+<p><strong>6</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>4</strong> unsupported &middot; <strong>12</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>3</td><td>Oregon's state data-center share of electricity use grew from about 3 percent in 2015 to about 23 percent in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a>; <a href="https://www.oregon.gov/energy/get-involved/Documents/2026-07-31-ECONW-Understanding-Data-Center-Industry.pdf">ECOnorthwest slides</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>Oregon's studied data centers used the equivalent of 18.6 percent of the electricity sold in the state. In Virginia and Iowa, data centers consumed 15.5 and 13.1 percent, respectively.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>The group estimated that data centers were associated with approximately 96 percent of the state's electricity sales growth between 2020 and 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>Only about two dozen of the 74 proposed plants tagged by EIP are currently permitted for construction under the Clean Air Act.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>The facilities catalogued emit more annually than countries like Jordan, Kenya, and Guatemala; grid rates range from Washington's 10 g CO2/kWh to Virginia's 325.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.nytimes.com/interactive/2026/11/16/climate/ai-data-center-pollution-carbon-emissions.html">NYT</a>; <a href="https://www.epa.gov/egrid">EPA eGRID</a>; <a href="https://grist.org/">Grist home</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Because the Harvard study was limited to hyperscale facilities the authors could verify, its electricity-use estimates are likely undercounts (Virginia: about 15 percent versus Dominion's 28 percent).</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The authors estimated these facilities gobble up roughly 82 terawatt-hours of electricity annually... The 82-TWh estimate corresponds to about 2 percent of U.S. electricity.</td><td><strong>mostly true</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-true"><td>5</td><td>Dominion Energy has estimated that data centers purchased 28 percent of the electricity its Virginia subsidiary sold last year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a>; <a href="https://fortune.com/company/dominion-resources/">Fortune Dominion profile</a></td></tr><tr class="verdict-true"><td>7</td><td>In March, Senators Elizabeth Warren and Josh Hawley wrote to the EIA: 'Without this data, policymakers, utility companies, and local communities are operating in the dark.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.warren.senate.gov/newsroom/press-releases/warren-hawley-lead-bipartisan-push-for-mandatory-energy-use-reporting-requirements-for-data-centers">Warren press release</a>; <a href="https://grist.org/energy/what-congress-bill-to-speed-up-energy-projects-would-mean-for-you-permitting-reform-baaja/">Grist BAAJA explainer</a></td></tr><tr class="verdict-true"><td>8</td><td>There are 143 GW of gas plants currently proposed to power data centers, according to the Environmental Integrity Project.</td><td><strong>true</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a>; <a href="https://environmentalintegrity.org/">EIP site</a></td></tr><tr class="verdict-true"><td>10</td><td>As of June, about 2 GW of gas generators powered four data centers around the country, including Elon Musk's xAI sites in Memphis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://cleanview.co/reports/behind-the-meter-data-centers">Cleanview</a>; <a href="https://heated.world/p/the-first-study-of-ai-data-centers">Heated</a></td></tr><tr class="verdict-true"><td>11</td><td>Oregon Department of Energy noted the state 'currently lacks a policy mechanism to address emissions from data center load growth.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.oregon.gov/energy/Data-and-Reports/Documents/2026-BER-Policy-Briefs.pdf">Oregon DOE</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-unsupported"><td>12</td><td>The facilities catalogued emit more annually than countries like Jordan, Kenya, and Guatemala; grid rates range from Washington's 10 g CO2/kWh to Virginia's 325.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.nytimes.com/interactive/2026/11/16/climate/ai-data-center-pollution-carbon-emissions.html">NYT</a>; <a href="https://www.epa.gov/egrid">EPA eGRID</a>; <a href="https://grist.org/">Grist home</a></td></tr><tr class="verdict-true"><td>11</td><td>Oregon Department of Energy noted the state 'currently lacks a policy mechanism to address emissions from data center load growth.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.oregon.gov/energy/Data-and-Reports/Documents/2026-BER-Policy-Briefs.pdf">Oregon DOE</a></td></tr><tr class="verdict-true"><td>10</td><td>As of June, about 2 GW of gas generators powered four data centers around the country, including Elon Musk's xAI sites in Memphis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://cleanview.co/reports/behind-the-meter-data-centers">Cleanview</a>; <a href="https://heated.world/p/the-first-study-of-ai-data-centers">Heated</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>Only about two dozen of the 74 proposed plants tagged by EIP are currently permitted for construction under the Clean Air Act.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a></td></tr><tr class="verdict-true"><td>8</td><td>There are 143 GW of gas plants currently proposed to power data centers, according to the Environmental Integrity Project.</td><td><strong>true</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a>; <a href="https://environmentalintegrity.org/">EIP site</a></td></tr><tr class="verdict-true"><td>7</td><td>In March, Senators Elizabeth Warren and Josh Hawley wrote to the EIA: 'Without this data, policymakers, utility companies, and local communities are operating in the dark.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.warren.senate.gov/newsroom/press-releases/warren-hawley-lead-bipartisan-push-for-mandatory-energy-use-reporting-requirements-for-data-centers">Warren press release</a>; <a href="https://grist.org/energy/what-congress-bill-to-speed-up-energy-projects-would-mean-for-you-permitting-reform-baaja/">Grist BAAJA explainer</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Because the Harvard study was limited to hyperscale facilities the authors could verify, its electricity-use estimates are likely undercounts (Virginia: about 15 percent versus Dominion's 28 percent).</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a></td></tr><tr class="verdict-true"><td>5</td><td>Dominion Energy has estimated that data centers purchased 28 percent of the electricity its Virginia subsidiary sold last year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a>; <a href="https://fortune.com/company/dominion-resources/">Fortune Dominion profile</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>The group estimated that data centers were associated with approximately 96 percent of the state's electricity sales growth between 2020 and 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a></td></tr><tr class="verdict-true"><td>3</td><td>Oregon's state data-center share of electricity use grew from about 3 percent in 2015 to about 23 percent in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a>; <a href="https://www.oregon.gov/energy/get-involved/Documents/2026-07-31-ECONW-Understanding-Data-Center-Industry.pdf">ECOnorthwest slides</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>Oregon's studied data centers used the equivalent of 18.6 percent of the electricity sold in the state. In Virginia and Iowa, data centers consumed 15.5 and 13.1 percent, respectively.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The authors estimated these facilities gobble up roughly 82 terawatt-hours of electricity annually... The 82-TWh estimate corresponds to about 2 percent of U.S. electricity.</td><td><strong>mostly true</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>4</td><td>The group estimated that data centers were associated with approximately 96 percent of the state's electricity sales growth between 2020 and 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>The facilities catalogued emit more annually than countries like Jordan, Kenya, and Guatemala; grid rates range from Washington's 10 g CO2/kWh to Virginia's 325.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.nytimes.com/interactive/2026/11/16/climate/ai-data-center-pollution-carbon-emissions.html">NYT</a>; <a href="https://www.epa.gov/egrid">EPA eGRID</a>; <a href="https://grist.org/">Grist home</a></td></tr><tr class="verdict-true"><td>8</td><td>There are 143 GW of gas plants currently proposed to power data centers, according to the Environmental Integrity Project.</td><td><strong>true</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a>; <a href="https://environmentalintegrity.org/">EIP site</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>Only about two dozen of the 74 proposed plants tagged by EIP are currently permitted for construction under the Clean Air Act.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a></td></tr><tr class="verdict-true"><td>5</td><td>Dominion Energy has estimated that data centers purchased 28 percent of the electricity its Virginia subsidiary sold last year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a>; <a href="https://fortune.com/company/dominion-resources/">Fortune Dominion profile</a></td></tr><tr class="verdict-true"><td>10</td><td>As of June, about 2 GW of gas generators powered four data centers around the country, including Elon Musk's xAI sites in Memphis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://cleanview.co/reports/behind-the-meter-data-centers">Cleanview</a>; <a href="https://heated.world/p/the-first-study-of-ai-data-centers">Heated</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Because the Harvard study was limited to hyperscale facilities the authors could verify, its electricity-use estimates are likely undercounts (Virginia: about 15 percent versus Dominion's 28 percent).</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a></td></tr><tr class="verdict-true"><td>3</td><td>Oregon's state data-center share of electricity use grew from about 3 percent in 2015 to about 23 percent in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a>; <a href="https://www.oregon.gov/energy/get-involved/Documents/2026-07-31-ECONW-Understanding-Data-Center-Industry.pdf">ECOnorthwest slides</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>Oregon's studied data centers used the equivalent of 18.6 percent of the electricity sold in the state. In Virginia and Iowa, data centers consumed 15.5 and 13.1 percent, respectively.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The authors estimated these facilities gobble up roughly 82 terawatt-hours of electricity annually... The 82-TWh estimate corresponds to about 2 percent of U.S. electricity.</td><td><strong>mostly true</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-true"><td>7</td><td>In March, Senators Elizabeth Warren and Josh Hawley wrote to the EIA: 'Without this data, policymakers, utility companies, and local communities are operating in the dark.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.warren.senate.gov/newsroom/press-releases/warren-hawley-lead-bipartisan-push-for-mandatory-energy-use-reporting-requirements-for-data-centers">Warren press release</a>; <a href="https://grist.org/energy/what-congress-bill-to-speed-up-energy-projects-would-mean-for-you-permitting-reform-baaja/">Grist BAAJA explainer</a></td></tr><tr class="verdict-true"><td>11</td><td>Oregon Department of Energy noted the state 'currently lacks a policy mechanism to address emissions from data center load growth.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.oregon.gov/energy/Data-and-Reports/Documents/2026-BER-Policy-Briefs.pdf">Oregon DOE</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>1</td><td>The authors estimated these facilities gobble up roughly 82 terawatt-hours of electricity annually... The 82-TWh estimate corresponds to about 2 percent of U.S. electricity.</td><td><strong>mostly true</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Because the Harvard study was limited to hyperscale facilities the authors could verify, its electricity-use estimates are likely undercounts (Virginia: about 15 percent versus Dominion's 28 percent).</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a></td></tr><tr class="verdict-true"><td>5</td><td>Dominion Energy has estimated that data centers purchased 28 percent of the electricity its Virginia subsidiary sold last year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a>; <a href="https://fortune.com/company/dominion-resources/">Fortune Dominion profile</a></td></tr><tr class="verdict-true"><td>7</td><td>In March, Senators Elizabeth Warren and Josh Hawley wrote to the EIA: 'Without this data, policymakers, utility companies, and local communities are operating in the dark.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.warren.senate.gov/newsroom/press-releases/warren-hawley-lead-bipartisan-push-for-mandatory-energy-use-reporting-requirements-for-data-centers">Warren press release</a>; <a href="https://grist.org/energy/what-congress-bill-to-speed-up-energy-projects-would-mean-for-you-permitting-reform-baaja/">Grist BAAJA explainer</a></td></tr><tr class="verdict-true"><td>8</td><td>There are 143 GW of gas plants currently proposed to power data centers, according to the Environmental Integrity Project.</td><td><strong>true</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a>; <a href="https://environmentalintegrity.org/">EIP site</a></td></tr><tr class="verdict-true"><td>10</td><td>As of June, about 2 GW of gas generators powered four data centers around the country, including Elon Musk's xAI sites in Memphis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://cleanview.co/reports/behind-the-meter-data-centers">Cleanview</a>; <a href="https://heated.world/p/the-first-study-of-ai-data-centers">Heated</a></td></tr><tr class="verdict-true"><td>11</td><td>Oregon Department of Energy noted the state 'currently lacks a policy mechanism to address emissions from data center load growth.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.oregon.gov/energy/Data-and-Reports/Documents/2026-BER-Policy-Briefs.pdf">Oregon DOE</a></td></tr><tr class="verdict-true"><td>3</td><td>Oregon's state data-center share of electricity use grew from about 3 percent in 2015 to about 23 percent in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a>; <a href="https://www.oregon.gov/energy/get-involved/Documents/2026-07-31-ECONW-Understanding-Data-Center-Industry.pdf">ECOnorthwest slides</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>Oregon's studied data centers used the equivalent of 18.6 percent of the electricity sold in the state. In Virginia and Iowa, data centers consumed 15.5 and 13.1 percent, respectively.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>The group estimated that data centers were associated with approximately 96 percent of the state's electricity sales growth between 2020 and 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>Only about two dozen of the 74 proposed plants tagged by EIP are currently permitted for construction under the Clean Air Act.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>The facilities catalogued emit more annually than countries like Jordan, Kenya, and Guatemala; grid rates range from Washington's 10 g CO2/kWh to Virginia's 325.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.nytimes.com/interactive/2026/11/16/climate/ai-data-center-pollution-carbon-emissions.html">NYT</a>; <a href="https://www.epa.gov/egrid">EPA eGRID</a>; <a href="https://grist.org/">Grist home</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>6</td><td>Because the Harvard study was limited to hyperscale facilities the authors could verify, its electricity-use estimates are likely undercounts (Virginia: about 15 percent versus Dominion's 28 percent).</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a></td></tr><tr class="verdict-true"><td>10</td><td>As of June, about 2 GW of gas generators powered four data centers around the country, including Elon Musk's xAI sites in Memphis.</td><td><strong>true</strong></td><td>Checked against: <a href="https://cleanview.co/reports/behind-the-meter-data-centers">Cleanview</a>; <a href="https://heated.world/p/the-first-study-of-ai-data-centers">Heated</a></td></tr><tr class="verdict-true"><td>5</td><td>Dominion Energy has estimated that data centers purchased 28 percent of the electricity its Virginia subsidiary sold last year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a>; <a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a>; <a href="https://fortune.com/company/dominion-resources/">Fortune Dominion profile</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>Only about two dozen of the 74 proposed plants tagged by EIP are currently permitted for construction under the Clean Air Act.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a></td></tr><tr class="verdict-true"><td>8</td><td>There are 143 GW of gas plants currently proposed to power data centers, according to the Environmental Integrity Project.</td><td><strong>true</strong></td><td>Checked against: <a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a>; <a href="https://environmentalintegrity.org/">EIP site</a></td></tr><tr class="verdict-unsupported"><td>2</td><td>Oregon's studied data centers used the equivalent of 18.6 percent of the electricity sold in the state. In Virginia and Iowa, data centers consumed 15.5 and 13.1 percent, respectively.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The authors estimated these facilities gobble up roughly 82 terawatt-hours of electricity annually... The 82-TWh estimate corresponds to about 2 percent of U.S. electricity.</td><td><strong>mostly true</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></td></tr><tr class="verdict-unsupported"><td>4</td><td>The group estimated that data centers were associated with approximately 96 percent of the state's electricity sales growth between 2020 and 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a></td></tr><tr class="verdict-true"><td>3</td><td>Oregon's state data-center share of electricity use grew from about 3 percent in 2015 to about 23 percent in 2025.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>energy.eia_electricity_prices</code>; <a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a>; <a href="https://www.oregon.gov/energy/get-involved/Documents/2026-07-31-ECONW-Understanding-Data-Center-Industry.pdf">ECOnorthwest slides</a></td></tr><tr class="verdict-unsupported"><td>12</td><td>The facilities catalogued emit more annually than countries like Jordan, Kenya, and Guatemala; grid rates range from Washington's 10 g CO2/kWh to Virginia's 325.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.nytimes.com/interactive/2026/11/16/climate/ai-data-center-pollution-carbon-emissions.html">NYT</a>; <a href="https://www.epa.gov/egrid">EPA eGRID</a>; <a href="https://grist.org/">Grist home</a></td></tr><tr class="verdict-true"><td>11</td><td>Oregon Department of Energy noted the state 'currently lacks a policy mechanism to address emissions from data center load growth.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.oregon.gov/energy/Data-and-Reports/Documents/2026-BER-Policy-Briefs.pdf">Oregon DOE</a></td></tr><tr class="verdict-true"><td>7</td><td>In March, Senators Elizabeth Warren and Josh Hawley wrote to the EIA: 'Without this data, policymakers, utility companies, and local communities are operating in the dark.'</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.warren.senate.gov/newsroom/press-releases/warren-hawley-lead-bipartisan-push-for-mandatory-energy-use-reporting-requirements-for-data-centers">Warren press release</a>; <a href="https://grist.org/energy/what-congress-bill-to-speed-up-energy-projects-would-mean-for-you-permitting-reform-baaja/">Grist BAAJA explainer</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-mostly-true"><summary>#1 &middot; <strong>mostly true</strong> &mdash; The authors estimated these facilities gobble up roughly 82 terawatt-hours of electricity annually... The 82-TWh estimate corresponds to about 2 percent of U.S. electricity.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>82/3975.4 = 2.06% of 2024 retail sales <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd>Nature: 82 TWh, 1.8%, 25.7 Mt<ul class="claim-sources"><li><a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></li></ul></dd>
+<dt>What that evidence found</dt><dd>Nature Sustainability: ~82 TWh, ~1.8% of US consumption, ~25.7 Mt CO2</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The article says about 2 percent; the study says about 1.8% of US consumption (2.06% of EIA 2024 retail sales).</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr='US' AND sector_code='ALL' AND &quot;year&quot;=2024</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#2 &middot; <strong>unsupported</strong> &mdash; Oregon's studied data centers used the equivalent of 18.6 percent of the electricity sold in the state. In Virginia and Iowa, data centers consumed 15.5 and 13.1 percent, respectively.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>OR 59.68 TWh, VA 138.04 TWh, IA 54.93 TWh (2024) <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.nature.com/articles/s41893-026-01985-7">Nature Sustainability</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>State shares are in the study's supplementary data, not in the Nature text I could read. Recomputed denominators from EIA: OR 59.68, VA 138.04, IA 54.93 TWh (2024); implied numerators 11.1, 21.4 and 7.2 TWh, together ~40 TWh or half of the 82 TWh national total, which is plausible. Numerators not independently read.</dd>
+<dt>Web searches run</dt><dd>Nature Sustainability hyperscale data centers state shares Oregon 18.6</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_abbr, sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr IN ('OR','VA','IA') AND sector_code='ALL' AND &quot;year&quot;=2024</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Oregon's state data-center share of electricity use grew from about 3 percent in 2015 to about 23 percent in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>14.0/61.54 = 22.7% (2025) <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd>OPB ~23% in 2025<ul class="claim-sources"><li><a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a></li><li><a href="https://www.oregon.gov/energy/get-involved/Documents/2026-07-31-ECONW-Understanding-Data-Center-Industry.pdf">ECOnorthwest slides</a></li><li><a href="https://oregon.gov/">Oregon.gov</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>What that evidence found</dt><dd>OPB and ECOnorthwest: ~23% of 2025 retail sales; 14.0 TWh in 2025</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>23% recomputed: 14.0 TWh / 61.54 TWh EIA 2025 = 22.7%. The 2015 ~3% is in a slide chart only; the estimates are modeled and preliminary.</dd>
+<dt>Warehouse searched for</dt><dd>electricity retail sales by state</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr='OR' AND sector_code='ALL' AND &quot;year&quot; BETWEEN 2015 AND 2025</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#4 &middot; <strong>unsupported</strong> &mdash; The group estimated that data centers were associated with approximately 96 percent of the state's electricity sales growth between 2020 and 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>OR sales growth 2020-2025 = +10.53 TWh <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.opb.org/article/2026/09/17/oregon-data-centers-consume-quarter-state-power-report/">OPB</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Neither OPB nor the ECOnorthwest slides state 96%; the full report PDF exceeds the 25MB fetch cap. EIA arithmetic is consistent: OR sales rose 51.02 to 61.54 TWh (+10.53 TWh); 14.0 TWh in 2025 and 'nearly quadrupled since 2020' (KPTV summary) implies about +10 TWh, ~96-97%. Plausible, not read in a primary source.</dd>
+<dt>Web searches run</dt><dd>ECOnorthwest Oregon data centers 96 percent electricity sales growth 2020 2025</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr='OR' AND sector_code='ALL' AND &quot;year&quot; IN (2020,2025)</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Dominion Energy has estimated that data centers purchased 28 percent of the electricity its Virginia subsidiary sold last year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Dominion 10-K 28%<ul class="claim-sources"><li><a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a></li><li><a href="https://www.eia.gov/electricity/data/eia861/">EIA-861</a></li><li><a href="https://fortune.com/company/dominion-resources/">Fortune Dominion profile</a></li></ul></dd>
+<dt>What that evidence found</dt><dd>Dominion 10-K: data centers are 28% (2025) and 26% (2024) of Virginia Power electricity sales</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; Because the Harvard study was limited to hyperscale facilities the authors could verify, its electricity-use estimates are likely undercounts (Virginia: about 15 percent versus Dominion's 28 percent).</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>VA sales 138.0 TWh (2024), 147.6 TWh (2025) <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.sec.gov/Archives/edgar/data/715957/000119312526063120/d-20251231.htm">Dominion 10-K</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#5</dd>
+<dt>What that evidence found</dt><dd>Dominion's 28% is for 2025 and its own territory, all data center types; the study's 15.5% is for 2024 statewide sales</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The article attributes the 15.5% vs 28% gap to undercounting; part of it is mismatched years (2024 vs 2025), geography (Dominion territory vs statewide) and facility scope (all data centers vs verified hyperscale).</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr='VA' AND sector_code='ALL'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; In March, Senators Elizabeth Warren and Josh Hawley wrote to the EIA: 'Without this data, policymakers, utility companies, and local communities are operating in the dark.'</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>warren.senate.gov release<ul class="claim-sources"><li><a href="https://www.warren.senate.gov/newsroom/press-releases/warren-hawley-lead-bipartisan-push-for-mandatory-energy-use-reporting-requirements-for-data-centers">Warren press release</a></li><li><a href="https://grist.org/energy/what-congress-bill-to-speed-up-energy-projects-would-mean-for-you-permitting-reform-baaja/">Grist BAAJA explainer</a></li></ul></dd>
+<dt>What that evidence found</dt><dd>Press release March 26, 2026, exact quote</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; There are 143 GW of gas plants currently proposed to power data centers, according to the Environmental Integrity Project.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>EIP report p.3, p.10<ul class="claim-sources"><li><a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a></li><li><a href="https://environmentalintegrity.org/">EIP site</a></li></ul></dd>
+<dt>What that evidence found</dt><dd>EIP: at least 74 plants, 143 GW</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#9 &middot; <strong>unsupported</strong> &mdash; Only about two dozen of the 74 proposed plants tagged by EIP are currently permitted for construction under the Clean Air Act.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://environmentalintegrity.org/wp-content/uploads/2026/06/EIP_Report_ThePowerBehindAI_7.1.26.pdf">EIP report</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>The 74-plant count is confirmed but the permitted count was not found in the extractable EIP text.</dd>
+<dt>Warehouse searched for</dt><dd>Clean Air Act construction permits gas plants data centers</dd>
+<dt>Web searches run</dt><dd>EIP Power Behind AI permitted gas plants data centers</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; As of June, about 2 GW of gas generators powered four data centers around the country, including Elon Musk's xAI sites in Memphis.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Cleanview report<ul class="claim-sources"><li><a href="https://cleanview.co/reports/behind-the-meter-data-centers">Cleanview</a></li><li><a href="https://heated.world/p/the-first-study-of-ai-data-centers">Heated</a></li></ul></dd>
+<dt>What that evidence found</dt><dd>Cleanview: ~2 GW online across four projects mid-2026, mostly xAI Colossus</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; Oregon Department of Energy noted the state 'currently lacks a policy mechanism to address emissions from data center load growth.'</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Oregon DOE BER Policy Briefs<ul class="claim-sources"><li><a href="https://www.oregon.gov/energy/Data-and-Reports/Documents/2026-BER-Policy-Briefs.pdf">Oregon DOE</a></li></ul></dd>
+<dt>What that evidence found</dt><dd>BER Policy Briefs p.14 contains the sentence (with 'across the state')</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#12 &middot; <strong>unsupported</strong> &mdash; The facilities catalogued emit more annually than countries like Jordan, Kenya, and Guatemala; grid rates range from Washington's 10 g CO2/kWh to Virginia's 325.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.nytimes.com/interactive/2026/11/16/climate/ai-data-center-pollution-carbon-emissions.html">NYT</a></li><li><a href="https://www.epa.gov/egrid">EPA eGRID</a></li><li><a href="https://grist.org/">Grist home</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>NYT page returned HTTP 403; Heated and EPA eGRID pages did not contain the 325 or Jordan figures. Warehouse eGRID table is subregion-level (not state) and was not used. No primary text read.</dd>
+<dt>Warehouse searched for</dt><dd>power plant CO2 emissions rate per kWh by state eGRID</dd>
+<dt>Web searches run</dt><dd>Harvard hyperscale data centers emissions Jordan Kenya Guatemala</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Misleading-framing flags</h2>
+<ul><li>Headline pairs modeled, preliminary capacity-based estimates with metered EIA sales as if observed; 'consumed' overstates precision.</li><li>Oregon 23% (all 111 facilities, 2025) and 18.6% (verified hyperscale, 2024) are different universes.</li><li>Virginia 15.5% vs 28% mixes years, geography and scope, so the gap is not purely undercount.</li><li>Nature says 1.8% of US consumption; article rounds to 2%.</li></ul>
+</section>
+<section>
+<h2>Not verified</h2>
+<p>NYT emissions comparison (HTTP 403), 10 and 325 g/kWh, West Virginia 15 GW ranking, two dozen permitted plants, 403/142 facility counts.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Every cited claim verified</strong>: Not verified: NYT emissions comparison (HTTP 403), 10 and 325 g/kWh grid rates (warehouse eGRID is subregion-level, not queried), West Virginia second-to-Texas 15 GW, 'about two dozen permitted', 403/142 facility counts.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 16 rows — 2715 ms</summary><pre><code>SELECT state_abbr, &quot;year&quot;, sector_code, sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr IN ('OR','VA','IA','US') AND sector_code='ALL' AND &quot;year&quot; IN (2019,2020,2024,2025) ORDER BY state_abbr, &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 11 rows — 773 ms</summary><pre><code>SELECT &quot;year&quot;, sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr='OR' AND sector_code='ALL' AND &quot;year&quot; BETWEEN 2015 AND 2025 ORDER BY &quot;year&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

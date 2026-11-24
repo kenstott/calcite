@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The CNBC article's claims about the frozen housing market, mortgage rates and permits are balanced and mostly accurate; 2 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s1-t1-s1:checked ~ table tbody.s0{display:none}
+#s1-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"]{color:var(--link)}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"] .srtcue{opacity:1}
+#s1-t1-s1:checked ~ .srtreset{display:inline-block}
+#s1-t1-s2:checked ~ table tbody.s0{display:none}
+#s1-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"]{color:var(--link)}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"] .srtcue{opacity:1}
+#s1-t1-s2:checked ~ .srtreset{display:inline-block}
+#s1-t1-s3:checked ~ table tbody.s0{display:none}
+#s1-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"]{color:var(--link)}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"] .srtcue{opacity:1}
+#s1-t1-s3:checked ~ .srtreset{display:inline-block}
+#s1-t2-s1:checked ~ table tbody.s0{display:none}
+#s1-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s1-t2-s1:checked ~ table label[for="s1-t2-s1"]{color:var(--link)}
+#s1-t2-s1:checked ~ table label[for="s1-t2-s1"] .srtcue{opacity:1}
+#s1-t2-s1:checked ~ .srtreset{display:inline-block}
+#s1-t2-s2:checked ~ table tbody.s0{display:none}
+#s1-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s1-t2-s2:checked ~ table label[for="s1-t2-s2"]{color:var(--link)}
+#s1-t2-s2:checked ~ table label[for="s1-t2-s2"] .srtcue{opacity:1}
+#s1-t2-s2:checked ~ .srtreset{display:inline-block}
+#s1-t2-s3:checked ~ table tbody.s0{display:none}
+#s1-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s1-t2-s3:checked ~ table label[for="s1-t2-s3"]{color:var(--link)}
+#s1-t2-s3:checked ~ table label[for="s1-t2-s3"] .srtcue{opacity:1}
+#s1-t2-s3:checked ~ .srtreset{display:inline-block}
+#s1-t2-s4:checked ~ table tbody.s0{display:none}
+#s1-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s1-t2-s4:checked ~ table label[for="s1-t2-s4"]{color:var(--link)}
+#s1-t2-s4:checked ~ table label[for="s1-t2-s4"] .srtcue{opacity:1}
+#s1-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The CNBC article's claims about the frozen housing market, mortgage rates and permits are balanced and mostly accurate; 2 claims could not be confirmed.</h1>
+<p class="subtitle">Checked 2026-11-24 against econ.fred_indicators and primary releases. Overall: 1 Pinocchio.</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.cnbc.com/2026/11/23/housing-market-real-estate-economy.html">https://www.cnbc.com/2026/11/23/housing-market-real-estate-economy.html</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Freddie Mac 30-year rate and existing sales, 2026</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Freddie Mac PMMS 30-year fixed (%)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="53" y1="262" x2="390" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="45" y="266" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="53" y1="236.25" x2="390" y2="236.25" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="45" y="240.25" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1</text>
+      <line class="grid" x1="53" y1="210.50" x2="390" y2="210.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="45" y="214.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2</text>
+      <line class="grid" x1="53" y1="184.75" x2="390" y2="184.75" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="45" y="188.75" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3</text>
+      <line class="grid" x1="53" y1="159" x2="390" y2="159" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="45" y="163" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4</text>
+      <line class="grid" x1="53" y1="133.25" x2="390" y2="133.25" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="45" y="137.25" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+      <line class="grid" x1="53" y1="107.50" x2="390" y2="107.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="45" y="111.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6</text>
+      <line class="grid" x1="53" y1="81.75" x2="390" y2="81.75" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-7" class="tick" x="45" y="85.75" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">7</text>
+      <line class="grid" x1="53" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-8" class="tick" x="45" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="53" y1="56" x2="53" y2="262" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="53" y1="262" x2="390" y2="262" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="159" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 159)">percent</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-jul-23" class="tick" x="74.06" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jul 23</text>
+      <text id="p1-xtick-aug-20" class="tick" x="116.19" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Aug</text>
+      <text id="p1-xtick-aug-20-2" class="tick" x="116.19" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">20</text>
+      <text id="p1-xtick-sep-3" class="tick" x="158.31" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Sep 3</text>
+      <text id="p1-xtick-sep-17" class="tick" x="200.44" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Sep 17</text>
+      <text id="p1-xtick-oct-1" class="tick" x="242.56" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Oct 1</text>
+      <text id="p1-xtick-oct-8" class="tick" x="284.69" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Oct 8</text>
+      <text id="p1-xtick-oct-29" class="tick" x="326.81" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Oct 29</text>
+      <text id="p1-xtick-nov-19" class="tick" x="368.94" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Nov</text>
+      <text id="p1-xtick-nov-19-2" class="tick" x="368.94" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">19</text>
+    </g>
+    <g id="p1-series-pmms" class="series">
+      <path id="p1-line-pmms" class="line" d="M 74.06 92.57 L 116.19 90.76 L 158.31 89.22 L 200.44 83.04 L 242.56 74.54 L 284.69 71.45 L 326.81 75.57 L 368.94 74.54" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>Jul 23 — PMMS: 6.58</title>
+        <circle id="p1-mark-pmms-jul-23" class="point" cx="74.06" cy="92.57" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="74.06" cy="92.57" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Aug 20 — PMMS: 6.65</title>
+        <circle id="p1-mark-pmms-aug-20" class="point" cx="116.19" cy="90.76" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="116.19" cy="90.76" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Sep 3 — PMMS: 6.71</title>
+        <circle id="p1-mark-pmms-sep-3" class="point" cx="158.31" cy="89.22" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="158.31" cy="89.22" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Sep 17 — PMMS: 6.95</title>
+        <circle id="p1-mark-pmms-sep-17" class="point" cx="200.44" cy="83.04" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="200.44" cy="83.04" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Oct 1 — PMMS: 7.28</title>
+        <circle id="p1-mark-pmms-oct-1" class="point" cx="242.56" cy="74.54" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="242.56" cy="74.54" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Oct 8 — PMMS: 7.4</title>
+        <circle id="p1-mark-pmms-oct-8" class="point" cx="284.69" cy="71.45" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="284.69" cy="71.45" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Oct 29 — PMMS: 7.24</title>
+        <circle id="p1-mark-pmms-oct-29" class="point" cx="326.81" cy="75.57" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="326.81" cy="75.57" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Nov 19 — PMMS: 7.28</title>
+        <circle id="p1-mark-pmms-nov-19" class="point" cx="368.94" cy="74.54" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="368.94" cy="74.54" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <rect class="panel-edge" x="448" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Existing home sales SAAR (millions)</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="35" y1="276" x2="390" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="27" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="35" y1="232" x2="390" y2="232" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="27" y="236" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1</text>
+      <line class="grid" x1="35" y1="188" x2="390" y2="188" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="27" y="192" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2</text>
+      <line class="grid" x1="35" y1="144" x2="390" y2="144" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="27" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3</text>
+      <line class="grid" x1="35" y1="100" x2="390" y2="100" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="27" y="104" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4</text>
+      <line class="grid" x1="35" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="27" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="35" y1="56" x2="35" y2="276" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="35" y1="276" x2="390" y2="276" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-may" class="tick" x="64.58" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">May</text>
+      <text id="p2-xtick-jun" class="tick" x="123.75" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jun</text>
+      <text id="p2-xtick-jul" class="tick" x="182.92" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jul</text>
+      <text id="p2-xtick-aug" class="tick" x="242.08" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Aug</text>
+      <text id="p2-xtick-sep" class="tick" x="301.25" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Sep</text>
+      <text id="p2-xtick-oct" class="tick" x="360.42" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Oct</text>
+    </g>
+    <g id="p2-series-sales" class="series">
+      <g class="hover">
+        <title>May — Sales: 4.19</title>
+        <rect id="p2-mark-sales-may" class="bar" x="45.65" y="91.64" width="36.87" height="184.36" fill="#2563eb"/>
+        <rect class="hit" x="45.65" y="56" width="36.87" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jun — Sales: 4.13</title>
+        <rect id="p2-mark-sales-jun" class="bar" x="104.82" y="94.28" width="36.87" height="181.72" fill="#2563eb"/>
+        <rect class="hit" x="104.82" y="56" width="36.87" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jul — Sales: 4.06</title>
+        <rect id="p2-mark-sales-jul" class="bar" x="163.98" y="97.36" width="36.87" height="178.64" fill="#2563eb"/>
+        <rect class="hit" x="163.98" y="56" width="36.87" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Aug — Sales: 3.93</title>
+        <rect id="p2-mark-sales-aug" class="bar" x="223.15" y="103.08" width="36.87" height="172.92" fill="#2563eb"/>
+        <rect class="hit" x="223.15" y="56" width="36.87" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Sep — Sales: 3.97</title>
+        <rect id="p2-mark-sales-sep" class="bar" x="282.32" y="101.32" width="36.87" height="174.68" fill="#2563eb"/>
+        <rect class="hit" x="282.32" y="56" width="36.87" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Oct — Sales: 3.75</title>
+        <rect id="p2-mark-sales-oct" class="bar" x="341.48" y="111" width="36.87" height="165" fill="#2563eb"/>
+        <rect class="hit" x="341.48" y="56" width="36.87" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:58594/a/456a5b78522e0899a556c8e1e58c6fcc.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s0" checked><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s1"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s2"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s1-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s1-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 90/100 — honest</strong> &middot; <strong>Bias +10/100 — no consistent lean</strong></p><p>12 claims graded, 0 not gradable, 5 fell short. In this article only.</p></div>
+<p><strong>7</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>2</strong> unsupported &middot; <strong>12</strong> assertions checked</p>
+<input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s0" checked><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s1"><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s2"><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s3"><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s4"><table><thead><tr><th><label class="srth" for="s1-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s1-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Closed sales of existing homes in October fell to a 16-year low</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators EXHOSLUSM495S</code>; <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>the national mobility rate, which is how often people move from region to region, has been falling for two years. It now sits at 8.3%, down from 11.1% a decade ago</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.rismedia.com/2026/02/10/mobility-all-time-low-fears-entrenched-barriers/">RISMedia on JCHS mobility</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>Jobs in the mortgage industry have been falling since June and are down 38% since their last peak in the second quarter of 2021, according to the Mortgage Bankers Association.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://newslink.mba.org/mba-newslinks/2025/september/mba-newslink-wednesday-sept-3-2025/mba-chart-of-the-week-mortgage-industry-employment/">MBA chart of the week</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>Single-family building permits, an indicator of future construction, were down 13% in October year over year, according to the U.S. Census.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.fred_indicators PERMIT</code>; <a href="https://www.cnbc.com/2026/11/18/two-new-housing-reports-point-to-bleak-winter-ahead.html">CNBC Nov 18</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The average rate on the popular 30-year fixed mortgage hovered around 6.60% in July, according to Mortgage News Daily. By the start of October, it was at 7.61%, a full percentage point higher.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.fred_indicators MORTGAGE30US</code>; <a href="https://www.mortgagenewsdaily.com/newsletter/n/20261006">MND Oct 6</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>Americans have nearly $35 trillion of their wealth locked up in housing, a record high, according to Cotality.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/us-homeowner-equity-plateau-q2-2026">Cotality</a></td></tr><tr class="verdict-true"><td>2</td><td>Pending sales, an indicator of future closings, hit a record low on the 25-year-old index from the Realtors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR pending home sales</a></td></tr><tr class="verdict-true"><td>3</td><td>prices are up well over 50% from pre-pandemic levels</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators CSUSHPISA</code>; <a href="https://fred.stlouisfed.org/series/CSUSHPISA">FRED CSUSHPISA</a></td></tr><tr class="verdict-true"><td>6</td><td>builder sentiment in November dropped to the lowest level since 2012.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/17/homebuilder-sentiment-plunges-to-14-year-low-leading-more-builders-to-drop-prices.html">CNBC Nov 17</a></td></tr><tr class="verdict-true"><td>7</td><td>the housing turnover rate, which is how often homes get new owners, has now dropped to just 3.8% a year, well below the 5% rate in the decade following the financial crisis, according to Cotality.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/10-things-october-2026">Cotality 10 things Oct 2026</a></td></tr><tr class="verdict-true"><td>10</td><td>the median homeowner net wealth is about 43 times the median renter net wealth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://eyeonhousing.org/2026/11/homeownership-remains-a-key-to-household-wealth/">NAHB Eye on Housing</a></td></tr><tr class="verdict-true"><td>12</td><td>The number of active buyers nationally has been declining for six straight months and in October hit its lowest level since the aftermath of the financial crisis, according to Redfin.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.redfin.com/news/?p=82973">Redfin newsroom</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>12</td><td>The number of active buyers nationally has been declining for six straight months and in October hit its lowest level since the aftermath of the financial crisis, according to Redfin.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.redfin.com/news/?p=82973">Redfin newsroom</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>Jobs in the mortgage industry have been falling since June and are down 38% since their last peak in the second quarter of 2021, according to the Mortgage Bankers Association.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://newslink.mba.org/mba-newslinks/2025/september/mba-newslink-wednesday-sept-3-2025/mba-chart-of-the-week-mortgage-industry-employment/">MBA chart of the week</a></td></tr><tr class="verdict-true"><td>10</td><td>the median homeowner net wealth is about 43 times the median renter net wealth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://eyeonhousing.org/2026/11/homeownership-remains-a-key-to-household-wealth/">NAHB Eye on Housing</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>Americans have nearly $35 trillion of their wealth locked up in housing, a record high, according to Cotality.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/us-homeowner-equity-plateau-q2-2026">Cotality</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>the national mobility rate, which is how often people move from region to region, has been falling for two years. It now sits at 8.3%, down from 11.1% a decade ago</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.rismedia.com/2026/02/10/mobility-all-time-low-fears-entrenched-barriers/">RISMedia on JCHS mobility</a></td></tr><tr class="verdict-true"><td>7</td><td>the housing turnover rate, which is how often homes get new owners, has now dropped to just 3.8% a year, well below the 5% rate in the decade following the financial crisis, according to Cotality.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/10-things-october-2026">Cotality 10 things Oct 2026</a></td></tr><tr class="verdict-true"><td>6</td><td>builder sentiment in November dropped to the lowest level since 2012.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/17/homebuilder-sentiment-plunges-to-14-year-low-leading-more-builders-to-drop-prices.html">CNBC Nov 17</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>Single-family building permits, an indicator of future construction, were down 13% in October year over year, according to the U.S. Census.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.fred_indicators PERMIT</code>; <a href="https://www.cnbc.com/2026/11/18/two-new-housing-reports-point-to-bleak-winter-ahead.html">CNBC Nov 18</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The average rate on the popular 30-year fixed mortgage hovered around 6.60% in July, according to Mortgage News Daily. By the start of October, it was at 7.61%, a full percentage point higher.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.fred_indicators MORTGAGE30US</code>; <a href="https://www.mortgagenewsdaily.com/newsletter/n/20261006">MND Oct 6</a></td></tr><tr class="verdict-true"><td>3</td><td>prices are up well over 50% from pre-pandemic levels</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators CSUSHPISA</code>; <a href="https://fred.stlouisfed.org/series/CSUSHPISA">FRED CSUSHPISA</a></td></tr><tr class="verdict-true"><td>2</td><td>Pending sales, an indicator of future closings, hit a record low on the 25-year-old index from the Realtors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR pending home sales</a></td></tr><tr class="verdict-true"><td>1</td><td>Closed sales of existing homes in October fell to a 16-year low</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators EXHOSLUSM495S</code>; <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>9</td><td>Americans have nearly $35 trillion of their wealth locked up in housing, a record high, according to Cotality.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/us-homeowner-equity-plateau-q2-2026">Cotality</a></td></tr><tr class="verdict-true"><td>6</td><td>builder sentiment in November dropped to the lowest level since 2012.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/17/homebuilder-sentiment-plunges-to-14-year-low-leading-more-builders-to-drop-prices.html">CNBC Nov 17</a></td></tr><tr class="verdict-true"><td>1</td><td>Closed sales of existing homes in October fell to a 16-year low</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators EXHOSLUSM495S</code>; <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>Jobs in the mortgage industry have been falling since June and are down 38% since their last peak in the second quarter of 2021, according to the Mortgage Bankers Association.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://newslink.mba.org/mba-newslinks/2025/september/mba-newslink-wednesday-sept-3-2025/mba-chart-of-the-week-mortgage-industry-employment/">MBA chart of the week</a></td></tr><tr class="verdict-true"><td>2</td><td>Pending sales, an indicator of future closings, hit a record low on the 25-year-old index from the Realtors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR pending home sales</a></td></tr><tr class="verdict-true"><td>3</td><td>prices are up well over 50% from pre-pandemic levels</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators CSUSHPISA</code>; <a href="https://fred.stlouisfed.org/series/CSUSHPISA">FRED CSUSHPISA</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>Single-family building permits, an indicator of future construction, were down 13% in October year over year, according to the U.S. Census.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.fred_indicators PERMIT</code>; <a href="https://www.cnbc.com/2026/11/18/two-new-housing-reports-point-to-bleak-winter-ahead.html">CNBC Nov 18</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The average rate on the popular 30-year fixed mortgage hovered around 6.60% in July, according to Mortgage News Daily. By the start of October, it was at 7.61%, a full percentage point higher.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.fred_indicators MORTGAGE30US</code>; <a href="https://www.mortgagenewsdaily.com/newsletter/n/20261006">MND Oct 6</a></td></tr><tr class="verdict-true"><td>7</td><td>the housing turnover rate, which is how often homes get new owners, has now dropped to just 3.8% a year, well below the 5% rate in the decade following the financial crisis, according to Cotality.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/10-things-october-2026">Cotality 10 things Oct 2026</a></td></tr><tr class="verdict-true"><td>10</td><td>the median homeowner net wealth is about 43 times the median renter net wealth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://eyeonhousing.org/2026/11/homeownership-remains-a-key-to-household-wealth/">NAHB Eye on Housing</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>the national mobility rate, which is how often people move from region to region, has been falling for two years. It now sits at 8.3%, down from 11.1% a decade ago</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.rismedia.com/2026/02/10/mobility-all-time-low-fears-entrenched-barriers/">RISMedia on JCHS mobility</a></td></tr><tr class="verdict-true"><td>12</td><td>The number of active buyers nationally has been declining for six straight months and in October hit its lowest level since the aftermath of the financial crisis, according to Redfin.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.redfin.com/news/?p=82973">Redfin newsroom</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>The average rate on the popular 30-year fixed mortgage hovered around 6.60% in July, according to Mortgage News Daily. By the start of October, it was at 7.61%, a full percentage point higher.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.fred_indicators MORTGAGE30US</code>; <a href="https://www.mortgagenewsdaily.com/newsletter/n/20261006">MND Oct 6</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>Americans have nearly $35 trillion of their wealth locked up in housing, a record high, according to Cotality.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/us-homeowner-equity-plateau-q2-2026">Cotality</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>Single-family building permits, an indicator of future construction, were down 13% in October year over year, according to the U.S. Census.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.fred_indicators PERMIT</code>; <a href="https://www.cnbc.com/2026/11/18/two-new-housing-reports-point-to-bleak-winter-ahead.html">CNBC Nov 18</a></td></tr><tr class="verdict-true"><td>2</td><td>Pending sales, an indicator of future closings, hit a record low on the 25-year-old index from the Realtors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR pending home sales</a></td></tr><tr class="verdict-true"><td>3</td><td>prices are up well over 50% from pre-pandemic levels</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators CSUSHPISA</code>; <a href="https://fred.stlouisfed.org/series/CSUSHPISA">FRED CSUSHPISA</a></td></tr><tr class="verdict-true"><td>6</td><td>builder sentiment in November dropped to the lowest level since 2012.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/17/homebuilder-sentiment-plunges-to-14-year-low-leading-more-builders-to-drop-prices.html">CNBC Nov 17</a></td></tr><tr class="verdict-true"><td>7</td><td>the housing turnover rate, which is how often homes get new owners, has now dropped to just 3.8% a year, well below the 5% rate in the decade following the financial crisis, according to Cotality.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/10-things-october-2026">Cotality 10 things Oct 2026</a></td></tr><tr class="verdict-true"><td>10</td><td>the median homeowner net wealth is about 43 times the median renter net wealth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://eyeonhousing.org/2026/11/homeownership-remains-a-key-to-household-wealth/">NAHB Eye on Housing</a></td></tr><tr class="verdict-true"><td>12</td><td>The number of active buyers nationally has been declining for six straight months and in October hit its lowest level since the aftermath of the financial crisis, according to Redfin.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.redfin.com/news/?p=82973">Redfin newsroom</a></td></tr><tr class="verdict-true"><td>1</td><td>Closed sales of existing homes in October fell to a 16-year low</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators EXHOSLUSM495S</code>; <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>the national mobility rate, which is how often people move from region to region, has been falling for two years. It now sits at 8.3%, down from 11.1% a decade ago</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.rismedia.com/2026/02/10/mobility-all-time-low-fears-entrenched-barriers/">RISMedia on JCHS mobility</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>Jobs in the mortgage industry have been falling since June and are down 38% since their last peak in the second quarter of 2021, according to the Mortgage Bankers Association.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://newslink.mba.org/mba-newslinks/2025/september/mba-newslink-wednesday-sept-3-2025/mba-chart-of-the-week-mortgage-industry-employment/">MBA chart of the week</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>6</td><td>builder sentiment in November dropped to the lowest level since 2012.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cnbc.com/2026/11/17/homebuilder-sentiment-plunges-to-14-year-low-leading-more-builders-to-drop-prices.html">CNBC Nov 17</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>Americans have nearly $35 trillion of their wealth locked up in housing, a record high, according to Cotality.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/us-homeowner-equity-plateau-q2-2026">Cotality</a></td></tr><tr class="verdict-true"><td>7</td><td>the housing turnover rate, which is how often homes get new owners, has now dropped to just 3.8% a year, well below the 5% rate in the decade following the financial crisis, according to Cotality.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cotality.com/press-releases/10-things-october-2026">Cotality 10 things Oct 2026</a></td></tr><tr class="verdict-true"><td>3</td><td>prices are up well over 50% from pre-pandemic levels</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators CSUSHPISA</code>; <a href="https://fred.stlouisfed.org/series/CSUSHPISA">FRED CSUSHPISA</a></td></tr><tr class="verdict-true"><td>1</td><td>Closed sales of existing homes in October fell to a 16-year low</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators EXHOSLUSM495S</code>; <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The average rate on the popular 30-year fixed mortgage hovered around 6.60% in July, according to Mortgage News Daily. By the start of October, it was at 7.61%, a full percentage point higher.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.fred_indicators MORTGAGE30US</code>; <a href="https://www.mortgagenewsdaily.com/newsletter/n/20261006">MND Oct 6</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>Single-family building permits, an indicator of future construction, were down 13% in October year over year, according to the U.S. Census.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.fred_indicators PERMIT</code>; <a href="https://www.cnbc.com/2026/11/18/two-new-housing-reports-point-to-bleak-winter-ahead.html">CNBC Nov 18</a></td></tr><tr class="verdict-unsupported"><td>11</td><td>Jobs in the mortgage industry have been falling since June and are down 38% since their last peak in the second quarter of 2021, according to the Mortgage Bankers Association.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://newslink.mba.org/mba-newslinks/2025/september/mba-newslink-wednesday-sept-3-2025/mba-chart-of-the-week-mortgage-industry-employment/">MBA chart of the week</a></td></tr><tr class="verdict-true"><td>10</td><td>the median homeowner net wealth is about 43 times the median renter net wealth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://eyeonhousing.org/2026/11/homeownership-remains-a-key-to-household-wealth/">NAHB Eye on Housing</a></td></tr><tr class="verdict-true"><td>2</td><td>Pending sales, an indicator of future closings, hit a record low on the 25-year-old index from the Realtors.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR pending home sales</a></td></tr><tr class="verdict-true"><td>12</td><td>The number of active buyers nationally has been declining for six straight months and in October hit its lowest level since the aftermath of the financial crisis, according to Redfin.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.redfin.com/news/?p=82973">Redfin newsroom</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>the national mobility rate, which is how often people move from region to region, has been falling for two years. It now sits at 8.3%, down from 11.1% a decade ago</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.rismedia.com/2026/02/10/mobility-all-time-low-fears-entrenched-barriers/">RISMedia on JCHS mobility</a></td></tr></tbody></table><label class="srtreset" for="s1-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Closed sales of existing homes in October fell to a 16-year low</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>3.75M SAAR in Oct 2026 vs 3.97M Sept <code>econ.fred_indicators EXHOSLUSM495S</code></dd>
+<dt>Independent evidence</dt><dd>NAR: lowest since August 2010<ul class="claim-sources"><li><a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT series, &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series='EXHOSLUSM495S' AND &quot;date&quot;&gt;='2026-05-01'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Pending sales, an indicator of future closings, hit a record low on the 25-year-old index from the Realtors.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NAR: two consecutive months of record-low pending contracts<ul class="claim-sources"><li><a href="https://www.nar.realtor/newsroom/pending-home-sales-decreased-4-7-percent-october-2026">NAR pending home sales</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; prices are up well over 50% from pre-pandemic levels</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Case-Shiller 214.99 (Jan 2020) to 334.23 (Aug 2026) = +55% <code>econ.fred_indicators CSUSHPISA</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/series/CSUSHPISA">FRED CSUSHPISA</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT series, &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series='CSUSHPISA' AND &quot;date&quot; IN ('2020-01-01','2026-08-01')</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; The average rate on the popular 30-year fixed mortgage hovered around 6.60% in July, according to Mortgage News Daily. By the start of October, it was at 7.61%, a full percentage point higher.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>PMMS 6.58 (Jul 23) to 7.28 (Oct 1), peak 7.40 <code>econ.fred_indicators MORTGAGE30US</code></dd>
+<dt>Independent evidence</dt><dd>MND Oct 1 7.54%, Oct 6 7.56%<ul class="claim-sources"><li><a href="https://www.mortgagenewsdaily.com/newsletter/n/20261006">MND Oct 6</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>MND daily readings were 7.54% on Oct 1 and 7.56% on Oct 6, 7.61% appears only as a range figure; Freddie Mac rose about 0.7-0.8 points (6.58 to 7.28-7.40).</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series='MORTGAGE30US' AND &quot;date&quot;&gt;='2026-07-01'</code></pre></details>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#5 &middot; <strong>partially false</strong> &mdash; Single-family building permits, an indicator of future construction, were down 13% in October year over year, according to the U.S. Census.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>PERMIT 1,295 (Oct 2026) vs 1,418 (Oct 2025) <code>econ.fred_indicators PERMIT</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/18/two-new-housing-reports-point-to-bleak-winter-ahead.html">CNBC Nov 18</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The 12.9% y/y drop in CNBC's own linked report is for total building permits; single-family detail there is starts (-3.2%). Warehouse total permits are -8.7% y/y on the current vintage.</dd>
+<dt>Windows tested</dt><dd>Oct 2026 vs Oct 2025, total permits: -8.7% warehouse; -12.9% CNBC/Census; Oct vs Sep 2026: -7.4% warehouse; -8.7% CNBC</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series='PERMIT' AND &quot;date&quot; IN ('2025-10-01','2026-10-01')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; builder sentiment in November dropped to the lowest level since 2012.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NAHB HMI 25, lowest since April 2012<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/17/homebuilder-sentiment-plunges-to-14-year-low-leading-more-builders-to-drop-prices.html">CNBC Nov 17</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; the housing turnover rate, which is how often homes get new owners, has now dropped to just 3.8% a year, well below the 5% rate in the decade following the financial crisis, according to Cotality.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Cotality Oct 2026: 3.8% vs 5.0% average 2011-2019<ul class="claim-sources"><li><a href="https://www.cotality.com/press-releases/10-things-october-2026">Cotality 10 things Oct 2026</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#8 &middot; <strong>unsupported</strong> &mdash; the national mobility rate, which is how often people move from region to region, has been falling for two years. It now sits at 8.3%, down from 11.1% a decade ago</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.rismedia.com/2026/02/10/mobility-all-time-low-fears-entrenched-barriers/">RISMedia on JCHS mobility</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>8.3% not found in any page read; JCHS ACS-based household mobility is 11.2% for 2024 and counts all residential moves, not only region to region</dd>
+<dt>Evidence found and set aside because</dt><dd>The 11.1% in the NAR page is a regional pending-sales change, unrelated</dd>
+<dt>No page loaded because</dt><dd>No JCHS or Census CPS table with 8.3% loaded; RISMedia JCHS summary fetched but states no such figure</dd>
+<dt>Warehouse searched for</dt><dd>geographic mobility rate movers CPS</dd>
+<dt>Web searches run</dt><dd>Harvard JCHS mobility rate 8.3% lowest Census CPS 2026 moving</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#9 &middot; <strong>mostly true</strong> &mdash; Americans have nearly $35 trillion of their wealth locked up in housing, a record high, according to Cotality.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>$34 trillion<ul class="claim-sources"><li><a href="https://www.cotality.com/press-releases/us-homeowner-equity-plateau-q2-2026">Cotality</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Cotality Q1 2026 report gives total homeowner equity of about $34 trillion; record status not independently tested.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; the median homeowner net wealth is about 43 times the median renter net wealth.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>2025 SCF via NAHB: $458,900 vs $10,600 = about 43x<ul class="claim-sources"><li><a href="https://eyeonhousing.org/2026/11/homeownership-remains-a-key-to-household-wealth/">NAHB Eye on Housing</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#11 &middot; <strong>unsupported</strong> &mdash; Jobs in the mortgage industry have been falling since June and are down 38% since their last peak in the second quarter of 2021, according to the Mortgage Bankers Association.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://newslink.mba.org/mba-newslinks/2025/september/mba-newslink-wednesday-sept-3-2025/mba-chart-of-the-week-mortgage-industry-employment/">MBA chart of the week</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>MBA's own chart of the week (BLS data) shows -36% from Q2 2021 to Q2 2025; a 38% figure through 2026 was not found</dd>
+<dt>Evidence found and set aside because</dt><dd>The 38% match in the CNBC builder-sentiment page is unrelated (a rate figure), so the grade is unchanged</dd>
+<dt>No page loaded because</dt><dd>MBA's later update not located; only the Sept 2025 chart page was fetched</dd>
+<dt>Warehouse searched for</dt><dd>mortgage industry employment BLS mortgage lenders brokers</dd>
+<dt>Web searches run</dt><dd>Mortgage Bankers Association mortgage industry employment down 38% since 2021 peak</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; The number of active buyers nationally has been declining for six straight months and in October hit its lowest level since the aftermath of the financial crisis, according to Redfin.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Redfin Oct 2026: about 895,752 active buyers, sixth straight monthly decline, lowest in its data since 2013<ul class="claim-sources"><li><a href="https://www.redfin.com/news/?p=82973">Redfin newsroom</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Redfin active buyers October 2026 lowest since financial crisis six straight months decline</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>$200,000 / 2,000 / 4,400 / 23 years / 30% / 20 years / 7.51%</strong> &mdash; anecdotal personal details of interviewees; BLS job counts and a linked-page rate not checked as claims</li><li><strong>100 basis points</strong> &mdash; Quote characterization covered under the rate claim; linked Zillow video page had no text to check</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>4 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 41 rows — 3605 ms</summary><pre><code>SELECT series, &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series IN ('MORTGAGE30US','EXHOSLUSM495S','PERMIT') AND &quot;date&quot; &gt;= '2026-05-01' ORDER BY series, &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 8043 ms</summary><pre><code>SELECT &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series='EXHOSLUSM495S' AND &quot;value&quot; &lt;= 4000000 ORDER BY &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 2273 ms</summary><pre><code>SELECT &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series='CSUSHPINSA' AND &quot;date&quot; IN ('2020-01-01','2026-08-01','2026-07-01','2026-09-01') ORDER BY &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 17 rows — 1313 ms</summary><pre><code>SELECT series, &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series IN ('PERMIT','PERMIT1','CSUSHPISA','CSUSHPINSA','USSTHPI') AND &quot;date&quot; IN ('2019-12-01','2020-01-01','2020-02-01','2025-10-01','2026-07-01','2026-08-01','2026-09-01','2025-12-01','2025-09-01') ORDER BY series, &quot;date&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

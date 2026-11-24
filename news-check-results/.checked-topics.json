@@ -2339,5 +2339,145 @@
       "everyman"
     ],
     "note": "Core deal facts confirmed; flagged SpaceX 85.7bn final; sec.stock_prices stale since 2026-05-29 (filed #1457)."
+  },
+  {
+    "topic_slug": "foxbusiness-hopper-holiday-airfares-decade-high",
+    "headline": "Fox Business: Holiday airfares hit highest levels in a decade as jet fuel prices surge",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q1/askamerica/2026-11-24",
+    "pinocchios": null,
+    "source_url": "https://www.foxbusiness.com/economy/holiday-airfares-hit-highest-levels-decade-jet-fuel-prices-surge",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "engine too few to rate (agent.md 1 Pinocchio); shape ok (author_claims + Berg subject_claims); filed #1470 EIA petroleum spot/jet fuel; airfare CPI covered by #1469"
+  },
+  {
+    "topic_slug": "fortune-grist-data-centers-share-state-electricity",
+    "headline": "Fortune (Grist): Data centers' electricity use is soaring, especially in these states",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q2/askamerica/2026-11-24",
+    "pinocchios": 1,
+    "source_url": "https://fortune.com/2026/11/20/data-centers-electricity-use-oregon-virginia-states/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "first pass [expert, everyman, askamerica] SEVERITY DEFECT (96% graded true on plausibility; shares not recomputed); fact-check-a-news-article item 15 added; rerun 1 Pinocchio, engine matches"
+  },
+  {
+    "topic_slug": "the74-alabama-naep-4th-grade-reading-rank",
+    "headline": "The 74: A deep dive into Alabama's reading gains",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q3/askamerica/2026-11-24",
+    "pinocchios": 3,
+    "source_url": "https://www.the74million.org/article/a-deep-dive-into-alabamas-reading-gains/",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "45th/18th/13th sequence is Mississippi's per Fordham text, misattributed to Alabama; warehouse NAEP 40th/48th/33rd; shape fixed via resume (interviewee claim -> subject_claims)"
+  },
+  {
+    "topic_slug": "icn-montana-wildfire-homeowners-insurance",
+    "headline": "Inside Climate News: As wildfires stress Montana's insurance market, the state is getting harder to call home",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q4/askamerica/2026-11-24",
+    "pinocchios": null,
+    "source_url": "https://insideclimatenews.org/news/24112026/montana-wildfire-insurance-costs/",
+    "ranks": [
+      "everyman",
+      "expert",
+      "askamerica"
+    ],
+    "note": "SEVERITY DEFECT: engine web_fetch 403 + copy gate forced unrelated NBC page as copy; only 4 snippet claims; engine too few to rate (agent.md 2 provisional); resolution govdata-ops #1471"
+  },
+  {
+    "topic_slug": "kffhealthnews-ob-gyn-exodus-maternity-hospital-closures",
+    "headline": "KFF Health News: As states lose OB-GYNs, some look to limit medical malpractice risk",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q5/askamerica/2026-11-24",
+    "pinocchios": 0,
+    "source_url": "https://kffhealthnews.org/health-industry/birth-injury-lawsuits-restrictions-ob-gyn-exodus-malpractice-risk/",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "central claim (4 states' malpractice limits) true with statutes named; filed #1472 AHRF OB-GYN counts; shape ok"
+  },
+  {
+    "topic_slug": "pew-split-senate-delegations-120th-congress",
+    "headline": "Pew Research Center: Democratic wave sweeps in more split Senate delegations",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q6/askamerica/2026-11-24",
+    "pinocchios": 0,
+    "source_url": "https://www.pewresearch.org/short-reads/2026/11/23/democratic-wave-sweeps-in-more-split-senate-delegations/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "central count (10 split, 23 D, 17 R) true; warehouse officials.members 116th 9, 119th 3; filed #1473 Voteview DW-NOMINATE + member history; shape ok"
+  },
+  {
+    "topic_slug": "bridgemi-michigan-mega-farms-cafo-growth",
+    "headline": "Bridge Michigan: Mega-farms are booming in Michigan, drowning rivers in manure",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q7/askamerica/2026-11-24",
+    "pinocchios": 1,
+    "source_url": "https://bridgemi.com/michigan-environment-watch/mega-farms-are-booming-in-michigan-drowning-rivers-in-manure/",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "hogs-tripled not supported (census TOTAL 31,258 in 2002 to 41,033 in 2022; askamerica double-counted to ~82k despite rollup_contamination:high); filed #1474 NPDES/CAFO; shape ok"
+  },
+  {
+    "topic_slug": "wjla-water-systems-cyberattacks-states",
+    "headline": "WJLA (Scripps National News Desk): Among the latest cyber vulnerabilities, attacks on water systems",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q8/askamerica/2026-11-24",
+    "pinocchios": 0,
+    "source_url": "https://wjla.com/news/nation-world/among-the-latest-cyber-vulnerabilities-attacks-on-water-systems-capotil-hill",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "FBI/EPA PSA read in full; 12/9 state count unsupported (FBI says at least 7); engine 0 judged lenient (agent would say 1); shape ok; no gap (no public water-sector incident dataset)"
+  },
+  {
+    "topic_slug": "cnbc-stuck-frozen-housing-mobility-turnover",
+    "headline": "CNBC: Stuck: How a frozen housing market is hitting buyers, sellers and the economy",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q9/askamerica/2026-11-24",
+    "pinocchios": 1,
+    "source_url": "https://www.cnbc.com/2026/11/23/housing-market-real-estate-economy.html",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "single-family permits -13% graded partially false vs total PERMIT; PERMIT1 not in warehouse (filed #1476); filed #1475 CES national industry; shape ok"
+  },
+  {
+    "topic_slug": "kffhealthnews-early-social-security-claims-spike",
+    "headline": "KFF Health News: What's behind a recent spike in early Social Security claims?",
+    "checked_date": "2026-11-24",
+    "run_subpath": "q10/askamerica/2026-11-24",
+    "pinocchios": 0,
+    "source_url": "https://kffhealthnews.org/aging/social-security-early-claims-spike-doge-new-old-age/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "surge 276,572 (+13.25%) from SSA CSV, article's 267,000 a transposition; $3T misattributed to trustees; filed #1477 SSA monthly applications; shape ok"
   }
 ]
