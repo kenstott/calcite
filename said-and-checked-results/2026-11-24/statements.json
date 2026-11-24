@@ -1805,14 +1805,33 @@
    "kind": "factual",
    "test": "True if Bessent is on record in November 2026 saying he was frustrated by the Commerce Department's delay in restricting Nvidia chip exports to Megaspeed. False if his recorded remarks show he said no such thing or praised Commerce's pace. Cannot be determined if his remarks cannot be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "AP's account of Bessent's Nov. 13, 2026 CNBC remarks has him saying he was frustrated with the Commerce Department's delay in restricting Megaspeed, that other agencies had favored listing it for months and that Commerce \"has the pen\"; the CNBC transcript itself was not found. Commerce opened its Megaspeed investigation in 2024 per the Nov. 16 Commerce and Justice Department statement, and AskAmerica's screening-list data shows three Megaspeed companies now on the Entity List, with no listing date in the source.",
+   "check_run": "q210/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "econ.export_control_restricted_parties (Megaspeed Entity List entries)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#export_control_restricted_parties-table",
+     "askamerica": true,
+     "sql": "SELECT * FROM econ.export_control_restricted_parties WHERE name ILIKE '%megaspeed%'"
+    },
+    {
+     "label": "AP via Anchorage Daily News, Bessent on Commerce and Nvidia chips (Nov. 13, 2026)",
+     "url": "https://www.adn.com/business-economy/2026/11/13/treasurys-bessent-blames-lutnicks-commerce-department-for-not-restricting-nvidia-chips-to-china/"
+    },
+    {
+     "label": "Commerce and Justice Department joint statement on Megaspeed (Nov. 16, 2026)",
+     "url": "https://www.justice.gov/opa/media/1472536/dl"
+    },
+    {
+     "label": "AP via PBS NewsHour, Huang's reinstatement sparks fury in Congress",
+     "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+    }
+   ]
   },
   {
    "id": 48,
