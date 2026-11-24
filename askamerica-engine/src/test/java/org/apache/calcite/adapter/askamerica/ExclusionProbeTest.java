@@ -140,6 +140,40 @@ class ExclusionProbeTest {
     }
   }
 
+  @Test void predicateInsideSelectListExpressionIsNotAnExclusion() {
+    final String[] sqls = {
+        "SELECT congress, count(*) AS n, "
+            + "sum(case when law_type is not null then 1 else 0 end) AS laws "
+            + "FROM law.bills GROUP BY congress ORDER BY congress",
+        "SELECT congress, count(*) FILTER (WHERE law_type IS NOT NULL) AS laws "
+            + "FROM law.bills GROUP BY congress",
+        "SELECT congress, CASE WHEN chamber <> 'House' THEN 1 ELSE 0 END AS c "
+            + "FROM law.bills"};
+    for (String sql : sqls) {
+      ObjectNode env = QuestionDiagnostics.forQuery(null, sql, rows("a", "b"), 500,
+          s -> rows("a", "b"));
+      for (com.fasterxml.jackson.databind.JsonNode x : env.get("diagnostics").get("warnings")) {
+        assertFalse("explicit_exclusion".equals(x.get("type").asText()), sql);
+      }
+    }
+  }
+
+  @Test void predicateInWhereAlongsideSelectListCaseIsStillReported() {
+    final String sql = "SELECT congress, sum(case when law_type is not null then 1 else 0 end) "
+        + "AS laws FROM law.bills WHERE chamber IS NOT NULL GROUP BY congress";
+    ObjectNode env = QuestionDiagnostics.forQuery(null, sql, rows("a"), 500,
+        s -> rows("a", "b"));
+    boolean found = false;
+    for (com.fasterxml.jackson.databind.JsonNode x : env.get("diagnostics").get("warnings")) {
+      if ("explicit_exclusion".equals(x.get("type").asText())) {
+        found = true;
+        assertEquals(1, x.get("predicates").size());
+        assertEquals("chamber IS NOT NULL", x.get("predicates").get(0).asText());
+      }
+    }
+    assertTrue(found);
+  }
+
   @Test void aggregateWithUnchangedCountsProducesNoWarning() {
     ArrayNode agg = MAPPER.createArrayNode();
     agg.add(MAPPER.createObjectNode().put("river", "Ohio").put("locks", 20));

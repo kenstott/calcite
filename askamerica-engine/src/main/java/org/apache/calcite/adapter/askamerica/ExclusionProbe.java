@@ -14,6 +14,7 @@ import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlJoin;
 import org.apache.calcite.sql.SqlLiteral;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlSelect;
@@ -211,6 +212,49 @@ final class ExclusionProbe {
       cursor = e.end;
     }
     out.append(text, cursor, text.length());
+    return out.toString();
+  }
+
+  /**
+   * The source text of every clause that can remove rows: each {@code WHERE}, {@code HAVING}
+   * and join {@code ON} condition, joined by spaces. A predicate in a SELECT-list expression
+   * ({@code CASE}, an aggregate's {@code FILTER}) keeps every row and is not in the result.
+   *
+   * @throws Unavailable when the SQL does not parse
+   */
+  static String rowRemovingText(String sql) throws Unavailable {
+    String text = sql.replace('\t', ' ').replaceAll(";\\s*$", "");
+    SqlNode root;
+    try {
+      root = SqlParser.create(text,
+          SqlParser.config().withConformance(SqlConformanceEnum.LENIENT)).parseQuery();
+    } catch (SqlParseException e) {
+      throw new Unavailable("the SQL could not be parsed to find its row-removing clauses: "
+          + e.getMessage().replaceAll("\\s+", " "));
+    }
+    final List<SqlNode> clauses = new ArrayList<>();
+    root.accept(new SqlBasicVisitor<Void>() {
+      @Override public Void visit(SqlCall call) {
+        if (call instanceof SqlSelect) {
+          SqlSelect select = (SqlSelect) call;
+          if (select.getWhere() != null) {
+            clauses.add(select.getWhere());
+          }
+          if (select.getHaving() != null) {
+            clauses.add(select.getHaving());
+          }
+        } else if (call instanceof SqlJoin && ((SqlJoin) call).getCondition() != null) {
+          clauses.add(((SqlJoin) call).getCondition());
+        }
+        return super.visit(call);
+      }
+    });
+    int[] lineStarts = lineStarts(text);
+    StringBuilder out = new StringBuilder();
+    for (SqlNode clause : clauses) {
+      int[] span = span(clause, lineStarts, text);
+      out.append(text, span[0], span[1]).append(' ');
+    }
     return out.toString();
   }
 
