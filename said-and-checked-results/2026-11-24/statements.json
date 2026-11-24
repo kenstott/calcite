@@ -1210,14 +1210,23 @@
    "kind": "factual",
    "test": "True if Slotkin is on public record, before Nov. 19, 2026, saying she would not support Schumer as Senate Democratic leader. False if before Nov. 19 she had said she supported Schumer or had made no statement on him. Cannot be determined if her earlier statements cannot be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "On Nov. 10, 2026, nine days earlier, AP reported Slotkin saying at a Capitol news conference that she wanted a full plan from any candidate for leader and \"I'm a no until and unless I see that from anyone.\" That earlier position was conditional rather than an unconditional pledge.",
+   "check_run": "q205/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "AP via U.S. News, Sanders won't support Schumer (Nov. 10, 2026)",
+     "url": "https://www.usnews.com/news/politics/articles/2026-11-10/bernie-sanders-wont-support-schumer-for-senate-democratic-leader-saying-its-time-for-change"
+    },
+    {
+     "label": "AP via PBS NewsHour, Senate leadership vote (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+    }
+   ]
   },
   {
    "id": 32,
