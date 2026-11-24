@@ -1,0 +1,2078 @@
+{
+ "date": "2026-11-24",
+ "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 23 or 24, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 24 in the morning ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (one was: a White House statement of Nov. 23). One NPR story, \"Trump takes credit for Jensen Huang returns to Nvidia, says its good for the economy,\" could not be read and is not included. Transcripts from Nov. 17 to 22 were searched only to confirm quotes; none held any of the day's quotes. PBS NewsHour carries Associated Press reporting. Seven of the eighteen readable stories quoted no officeholder in scope. Greetings, quotes under five words, commentators' accounts of what officials said, reporters' paraphrases of opinions, and statements by people outside the offices in scope (including an acting Army secretary, the Democratic National Committee chair, a governor-elect, company executives and lawyers) were left out. Statements are worded as the outlet reported them.",
+ "lede": [
+  "Coverage on Nov. 23 and 24 centered on Nvidia's board reinstating chief executive Jensen Huang. President Trump said in a PBS News call and a CNBC interview that he had pressed for the return, and members of both parties in Congress called for hearings and investigations. Sen. Tim Scott announced that Huang will testify before the Senate Banking Committee on Dec. 3.",
+  "Other stories covered Rep. Jimmy Gomez's resignation after a House Ethics Committee report, the coming vote for Senate Democratic leader between Chuck Schumer and Chris Van Hollen, the health care plans of congressional Democrats and of the president, the Republican Party after its midterm losses, and the Army's planned detonation of degraded explosive material in Iowa, which Missouri Gov. Mike Kehoe addressed.",
+  "The page lists 59 statements by 24 officeholders. Nineteen are factual claims or factual premises of predictions; their checks are listed with each statement, and any not yet returned are marked not yet checked. The other 40 are opinions, predictions or promises, listed without a check."
+ ],
+ "stories": [
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/23/nx-s1-6044259/after-midterm-losses-republicans-debate-whats-next-for-the-party",
+   "headline": "After midterm losses, Republicans debate what's next for the party",
+   "published": "2026-11-23T04:45-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/democrats-plan-12-debates-for-their-2028-presidential-primary-with-whats-likely-to-be-a-crowded-field",
+   "headline": "Democrats plan 12 debates for their 2028 presidential primary, with what's likely to be a crowded field",
+   "published": "2026-11-23T10:54-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement",
+   "headline": "What Trump told PBS News about Jensen Huang before Nvidia reinstatement",
+   "published": "2026-11-23T11:22-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda",
+   "headline": "Medicare for All was once a long shot. Now universal healthcare is on the Democrats' agenda",
+   "published": "2026-11-23T12:05-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/watch-live-trump-delivers-address-on-newsoms-move-to-grant-clemency-for-californias-death-row",
+   "headline": "WATCH: Trump delivers address on Newsom's move to grant clemency for California's death row",
+   "published": "2026-11-23T14:12-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change",
+   "headline": "Senate leadership vote tests newly elected Democrats' promise of change",
+   "published": "2026-11-23T14:14-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/federal-appeals-court-gives-president-donald-trump-a-path-to-erasing-hush-money-conviction",
+   "headline": "Federal appeals court gives President Donald Trump a path to erasing hush money conviction",
+   "published": "2026-11-23T16:54-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings",
+   "headline": "Huang's reinstatement at Nvidia sparks fury in Congress as lawmakers move forward with hearings",
+   "published": "2026-11-23T17:06-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/ethics-probe-finds-democratic-rep-jimmy-gomez-made-unwelcome-sexual-advances-to-a-staffer",
+   "headline": "Ethics probe finds Democratic Rep. Jimmy Gomez made unwelcome sexual advances to a staffer",
+   "published": "2026-11-23T17:11-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations",
+   "headline": "California Democrat Rep. Gomez resigns following ethics report on sexual misconduct allegations",
+   "published": "2026-11-23T17:29-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/tamara-keith-and-amy-walter-on-trumps-role-in-huangs-reinstatement",
+   "headline": "Tamara Keith and Amy Walter on Trump's role in Huang's reinstatement",
+   "published": "2026-11-23T18:30-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/experts-weigh-national-security-implications-of-huangs-return-to-nvidia",
+   "headline": "Experts weigh national security implications of Huang's return to Nvidia",
+   "published": "2026-11-23T18:50-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia",
+   "headline": "Why Trump pushed for Jensen Huang's return to Nvidia",
+   "published": "2026-11-23T18:55-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/24/nx-s1-6051583/nvidia-huang-dei-trump-women",
+   "headline": "For workplace culture champions, Jensen Huang's return is 'unfathomable'",
+   "published": "2026-11-24T05:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/24/nx-s1-6051028/jamie-raskin-donald-trump-jr-1789-capital-democrats-investigation",
+   "headline": "Democrats probe whether Trump Jr.-aligned businesses benefit from government access",
+   "published": "2026-11-24T05:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/24/g-s1-155227/up-first-newsletter-nvidia-jensen-huang-trump-ukraine-russia-jimmy-gomez",
+   "headline": "Jensen Huang returns to Nvidia. And, Rep. Gomez resigns amid alleged sexual misconduct",
+   "published": "2026-11-24T07:12-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/nation/getting-court-approval-u-s-army-to-detonate-degraded-bomb-making-material-in-iowa-on-wednesday",
+   "headline": "Getting court approval, U.S. Army to detonate degraded bomb-making material in Iowa on Wednesday",
+   "published": "2026-11-24T08:34-05:00"
+  },
+  {
+   "outlet": "White House briefings and statements",
+   "url": "https://www.whitehouse.gov/briefings-statements/2026/11/first-lady-melania-trump-hails-americas-armed-forces/",
+   "headline": "First Lady Melania Trump Hails America\u2019s Armed Forces",
+   "published": "2026-11-23"
+  }
+ ],
+ "statements": [
+  {
+   "id": 1,
+   "speaker": "Spencer Cox",
+   "office": "Governor of Utah",
+   "party": "R",
+   "context": "Said in an onstage interview with Politico at a National Governors Association meeting the week of Nov. 16, about the Republican Party's leadership after Trump.",
+   "topic": "Republican Party's future",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "UT",
+   "about_states": [],
+   "quote": "It's time for the next thing. I mean, this is how this works. When presidents move on, we should be looking for the next leadership in our party and what that looks like.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/nx-s1-6044259/after-midterm-losses-republicans-debate-whats-next-for-the-party"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 2,
+   "speaker": "Mike Pence",
+   "office": "Former Vice President of the United States",
+   "party": "R",
+   "context": "Said in an interview with Fox News Digital about what the Republican Party needs to do after the 2026 midterm election losses.",
+   "topic": "Republican Party's future",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "if we don't return the Republican Party to the principles of a strong defense, limited government, fiscal responsibility and the right to life, it won't matter who we nominate in 2028 because this version of Republicanism was just rejected by the American people.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/nx-s1-6044259/after-midterm-losses-republicans-debate-whats-next-for-the-party"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "premised_prediction",
+   "test": "True if Democrats won a majority of seats in both the House and the Senate in the November 2026 elections, so Republicans lost control of Congress. False if Republicans kept a majority in either chamber. Cannot be determined if official or certified results for the chambers cannot be found.",
+   "premise": "Republicans lost the 2026 midterm elections, with Democrats winning control of Congress.",
+   "result": "supported",
+   "finding": "Democrats won majorities in both chambers in November 2026: NPR reports at least 258 House seats for Democrats, and The Hill reports Democrats won the Senate majority. These figures are as reported by news outlets and Wikipedia; no certified official tally was read, and AskAmerica's election tables end at the 2024 cycle.",
+   "check_run": "q201/askamerica/2026-11-24",
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": [
+    {
+     "label": "NPR on the midterm results (Nov. 23, 2026)",
+     "url": "https://www.npr.org/2026/11/23/nx-s1-6044259/after-midterm-losses-republicans-debate-whats-next-for-the-party"
+    },
+    {
+     "label": "The Hill, Democrats win the Senate",
+     "url": "https://thehill.com/homenews/senate/6185385-democrats-win-senate-midterms/amp/"
+    },
+    {
+     "label": "Wikipedia, 2026 Senate elections",
+     "url": "https://en.wikipedia.org/wiki/2026_United_States_Senate_elections"
+    },
+    {
+     "label": "Wikipedia, 2026 House elections",
+     "url": "https://en.wikipedia.org/wiki/2026_United_States_House_of_Representatives_elections"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "speaker": "Ted Cruz",
+   "office": "U.S. Senator from Texas",
+   "party": "R",
+   "context": "Said on his podcast, Verdict With Ted Cruz, describing the result of the 2026 midterm elections.",
+   "topic": "2026 midterm results",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "TX",
+   "about_states": [],
+   "quote": "2026 was not simply a blue wave. It was a blue tsunami.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/nx-s1-6044259/after-midterm-losses-republicans-debate-whats-next-for-the-party"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 4,
+   "speaker": "Ted Cruz",
+   "office": "U.S. Senator from Texas",
+   "party": "R",
+   "context": "Said on his podcast, Verdict With Ted Cruz, about Republican politicians and the cost of living after the 2026 midterms.",
+   "topic": "Prices, tariffs and the Iran war",
+   "broad_topic": "Economy and Jobs",
+   "speaker_state": "TX",
+   "about_states": [],
+   "quote": "Too many Republican politicians seem like they didn't understand or they didn't care. Food is too high. Gas is too high. Diesel is too high. Insurance is too high. Life is too high. Tariffs have made everything too expensive, and the Iran war has dragged on too long.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/nx-s1-6044259/after-midterm-losses-republicans-debate-whats-next-for-the-party"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 5,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a phone call with PBS News on Nov. 23 about Nvidia CEO Jensen Huang, hours before Nvidia's board reinstated him.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "He's back where he should be, and we see he did absolutely nothing wrong from that standpoint.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "He's back where he should be, and we see he did absolutely nothing wrong from that standpoint.",
+     "outlet": "PBS NewsHour",
+     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 6,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a phone call with PBS News on Nov. 23 about Nvidia CEO Jensen Huang before the board reinstated him.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "he hopefully will get back in and continue with that company and do a great job. He certainly learned a lesson.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 7,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Posted on Truth Social on Nov. 23 after Nvidia's board announced it had reinstated CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Congratulations to NVIDIA on having made, what I consider to be, an absolutely GREAT decision!",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [
+    49
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 8,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a Nov. 23 CNBC phone interview about what Nvidia's board asked of the U.S. government before reinstating CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "And we gave them assurances at least with everything we know, and we know a lot",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Nvidia's board or a federal official states that senior U.S. government officials gave the board input or assurances before it reinstated Huang. False if Nvidia or the government states that no such input or assurances were given. Cannot be determined if no statement on the board's contact with the government can be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "But they did ask for assurance on the national security threat. And we gave them assurance, at least with everything we know, and we know a lot. So, with everything we know, we gave them assurance.",
+     "outlet": "PBS NewsHour",
+     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 9,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a Nov. 23 CNBC phone interview about the investigation into Nvidia CEO Jensen Huang's conduct.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "And we have done a very thorough investigation. And the investigation showed that he did -- I mean, he had bad judgment having to do with somewhat unrelated incidents, but he did nothing wrong.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a federal agency or the White House is documented to have conducted an investigation of Huang that concluded he did nothing wrong. False if a record shows no federal investigation took place, or that one found wrongdoing. Cannot be determined if no record of an investigation or its conclusion can be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 10,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a Nov. 23 CNBC phone interview about Nvidia CEO Jensen Huang returning to the company.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I felt very strongly that he should come back.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 11,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a Nov. 23 CNBC phone interview about the risk of Nvidia CEO Jensen Huang working for a foreign competitor.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "I can tell you the bigger threat would be losing the brainpower of somebody like Jensen. That would be a threat. To me, that would be a far bigger threat than anything we're talking about.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 12,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a Nov. 23 CNBC phone interview about Nvidia's board reinstating CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "There's nothing wrong with a comeback, and they came back and they did the right thing. That was not an easy thing to do.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [
+    49
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 13,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "PBS NewsHour's reporter described what Trump said in a Nov. 23 CNBC phone interview about his contact with Nvidia's board and CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: The president also revealed his extraordinary personal involvement in this, saying that he had called the board several times directly and indirectly, and spoke with Huang yesterday on the phone.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Trump's own words in the CNBC interview, or another record, show he called Nvidia's board several times and spoke with Huang on Nov. 22. False if the interview or a record shows he did not contact the board or Huang. Cannot be determined if neither the interview text nor any record of the contacts can be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "Later in the morning, Trump told CNBC he'd spoken to Huang directly on Sunday, adding that the board asked for assurance about threats to national security.",
+     "outlet": "PBS NewsHour",
+     "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 14,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said on Nov. 23, according to the AP, about what Nvidia's board did in reinstating CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "what we wanted them to do",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 15,
+   "speaker": "Barack Obama",
+   "office": "Former President of the United States",
+   "party": "D",
+   "context": "Told newly elected congressional Democrats at the Capitol, according to a transcript cited by the AP, about the Affordable Care Act.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "But I was very explicit at the time. This is a starter home. It is not the answer",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if, around the passage of the Affordable Care Act in 2010, Obama publicly described the law as a first step, a starter home or not the final answer. False if his statements at the time presented it as complete and no such description from then can be found while his later 'starter home' remarks are dated years afterwards. Cannot be determined if his statements from 2010 cannot be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 16,
+   "speaker": "Barack Obama",
+   "office": "Former President of the United States",
+   "party": "D",
+   "context": "Told newly elected congressional Democrats at the Capitol, according to a transcript cited by the AP, about health care policy.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "You should push further and get more.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 17,
+   "speaker": "Hakeem Jeffries",
+   "office": "U.S. Representative from New York; House Democratic leader",
+   "party": "D",
+   "context": "Said at a post-election conference of Democrats in Denver about the party's early health care plans in the new Congress.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "We're going to begin very early on in the new Congress by working to reverse the Medicaid cuts and working to extend the Affordable Care Act tax credits",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 18,
+   "speaker": "Hakeem Jeffries",
+   "office": "U.S. Representative from New York; House Democratic leader",
+   "party": "D",
+   "context": "Said at a post-election conference of Democrats in Denver about expanding Medicare and children's health coverage.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "I think we've got to lower the age of eligibility as it relates to Medicare. I think we've got to make sure that we cover hearing, vision and dental, and we got to make sure that every child in America can be able to see a doctor with high-quality, affordable healthcare.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 19,
+   "speaker": "Pramila Jayapal",
+   "office": "U.S. Representative from Washington",
+   "party": "D",
+   "context": "Spoke to the AP about her talks with Democratic leader Hakeem Jeffries on moving health care legislation in the new Congress.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": "WA",
+   "about_states": [],
+   "quote": "It's been an ongoing conversation over the last several months, about how we acknowledge the urgency of the moment on healthcare and that it can't just be going back to restoring what was",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 20,
+   "speaker": "Pramila Jayapal",
+   "office": "U.S. Representative from Washington",
+   "party": "D",
+   "context": "Spoke to the AP about what Democratic leader Hakeem Jeffries had said on Medicare expansion.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": "WA",
+   "about_states": [],
+   "quote": "We had a sense that he was positively inclined",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 21,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said at a news conference on Nov. 20, his first since the midterm election, about legislation Democrats will send him in the new Congress.",
+   "topic": "Trump veto and Democratic agenda",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "They're going to send things my way, and I'm going to veto them",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 22,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said at a news conference on Nov. 20 about how he expects to respond to bills from Democratic congressional leaders.",
+   "topic": "Trump veto and Democratic agenda",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "But I think after a month or so they're going to send things and I'm going to say, 'I'm going to veto \u2014 unless you want to do this and this and this.'",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 23,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said at a news conference on Nov. 20 about working with Democratic congressional leaders on health care.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "There's a real possibility that we'll get a lot of great things done, especially on healthcare",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 24,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said at a news conference on Nov. 20 about a possible health care agreement with Democratic congressional leaders.",
+   "topic": "Health care agenda for new Congress",
+   "broad_topic": "Health",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Now, can it be what they want? No, but it can be a combination of what we all want. And we could end up with great healthcare in our country.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/medicare-for-all-was-once-a-long-shot-now-universal-healthcare-is-on-the-democrats-agenda"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 25,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Said in a March 2025 speech at the Justice Department, as quoted by the AP, about the criminal cases brought against him.",
+   "topic": "Prosecution of Trump's opponents",
+   "broad_topic": "Crime and Policing",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "lies and abuses that have occurred within these walls",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-trump-delivers-address-on-newsoms-move-to-grant-clemency-for-californias-death-row"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 26,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "The AP described what Trump pledged in a March 2025 speech at the Justice Department about his political opponents.",
+   "topic": "Prosecution of Trump's opponents",
+   "broad_topic": "Crime and Policing",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: He pledged at the time to expose the \"egregious crimes and severe misconduct\" of his foes.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/watch-live-trump-delivers-address-on-newsoms-move-to-grant-clemency-for-californias-death-row"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 27,
+   "speaker": "Mazie Hirono",
+   "office": "U.S. Senator from Hawaii",
+   "party": "D",
+   "context": "Spoke to the AP about the incoming Democratic senators as the Senate Democratic leadership vote approaches; she supports Chuck Schumer.",
+   "topic": "Senate Democratic leadership vote",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "HI",
+   "about_states": [],
+   "quote": "We should be very embracing of the new people who have been through fire to get here",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 28,
+   "speaker": "Ruben Gallego",
+   "office": "U.S. Senator from Arizona",
+   "party": "D",
+   "context": "Spoke to the AP about Chuck Schumer's record as Senate Democratic leader ahead of the Dec. 1 leadership vote.",
+   "topic": "Senate Democratic leadership vote",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "AZ",
+   "about_states": [],
+   "quote": "When the manager takes you to the World Series, you give him another contract",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [
+    32
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 29,
+   "speaker": "Jon Ossoff",
+   "office": "U.S. Senator from Georgia",
+   "party": "D",
+   "context": "Said this week, per the AP, about the Senate Democratic leadership race between Chuck Schumer and Chris Van Hollen.",
+   "topic": "Senate Democratic leadership vote",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "GA",
+   "about_states": [],
+   "quote": "I haven't committed to any candidate",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if there is no public record that Ossoff had endorsed Schumer or Van Hollen for Senate Democratic leader as of the week of Nov. 23, 2026. False if he is on record endorsing either before then. Cannot be determined if no record of his position can be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 30,
+   "speaker": "Jon Ossoff",
+   "office": "U.S. Senator from Georgia",
+   "party": "D",
+   "context": "Said this week, per the AP, about the Senate Democratic leadership race between Chuck Schumer and Chris Van Hollen.",
+   "topic": "Senate Democratic leadership vote",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "GA",
+   "about_states": [],
+   "quote": "and I'll hear everybody out",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 31,
+   "speaker": "Elissa Slotkin",
+   "office": "U.S. Senator from Michigan",
+   "party": "D",
+   "context": "Said on Nov. 19, per the AP, about her position in the Senate Democratic leadership race between Chuck Schumer and Chris Van Hollen.",
+   "topic": "Senate Democratic leadership vote",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MI",
+   "about_states": [],
+   "quote": "I've been clear that I wasn't supporting Schumer",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Slotkin is on public record, before Nov. 19, 2026, saying she would not support Schumer as Senate Democratic leader. False if before Nov. 19 she had said she supported Schumer or had made no statement on him. Cannot be determined if her earlier statements cannot be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 32,
+   "speaker": "Elissa Slotkin",
+   "office": "U.S. Senator from Michigan",
+   "party": "D",
+   "context": "Said on Nov. 19, per the AP, about how she will vote in the Senate Democratic leadership race.",
+   "topic": "Senate Democratic leadership vote",
+   "broad_topic": "Elections and Parties",
+   "speaker_state": "MI",
+   "about_states": [],
+   "quote": "I will be supporting Chris Van Hollen",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [
+    28
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 33,
+   "speaker": "Tim Scott",
+   "office": "U.S. Senator from South Carolina",
+   "party": "R",
+   "context": "The AP reported what the Senate Banking Committee chairman announced on Nov. 23 about Nvidia CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "SC",
+   "about_states": [],
+   "quote": "Reported as: Sen. Tim Scott, the outgoing Republican chairman of the Senate Banking Committee, announced that Huang will testify publicly before the panel on Dec. 3.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 34,
+   "speaker": "Elizabeth Warren",
+   "office": "U.S. Senator from Massachusetts",
+   "party": "D",
+   "context": "Wrote in a joint statement with Sen. Jim Banks in November about Nvidia's chip export approvals to China.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "MA",
+   "about_states": [],
+   "quote": "Since then, NVIDIA has reportedly received approvals to export hundreds of thousands of advanced AI chips to China, including to companies tied to China's military, all while attempting to influence the debate over chip controls in Washington, D.C.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if U.S. export approvals for Nvidia to sell advanced AI chips to China numbering in the hundreds of thousands, including to buyers tied to China's military, are documented by a primary source or credible reporting. False if official records show Nvidia received no such approvals or far fewer. Cannot be determined if the number or recipients of approvals cannot be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 35,
+   "speaker": "Jim Banks",
+   "office": "U.S. Senator from Indiana",
+   "party": "R",
+   "context": "Wrote in a joint statement with Sen. Elizabeth Warren in November about Nvidia's chip export approvals to China.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "IN",
+   "about_states": [],
+   "quote": "Since then, NVIDIA has reportedly received approvals to export hundreds of thousands of advanced AI chips to China, including to companies tied to China's military, all while attempting to influence the debate over chip controls in Washington, D.C.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if U.S. export approvals for Nvidia to sell advanced AI chips to China numbering in the hundreds of thousands, including to buyers tied to China's military, are documented by a primary source or credible reporting. False if official records show Nvidia received no such approvals or far fewer. Cannot be determined if the number or recipients of approvals cannot be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 36,
+   "speaker": "Elizabeth Warren",
+   "office": "U.S. Senator from Massachusetts",
+   "party": "D",
+   "context": "Wrote in a joint statement with Sen. Jim Banks in November about Nvidia CEO Jensen Huang's relationship with a suspected Chinese intelligence asset.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "MA",
+   "about_states": [],
+   "quote": "NVIDIA CEO Jensen Huang's confirmation of a relationship with a suspected spy for China's intelligence service makes these national security concerns even more urgent and raises important questions NVIDIA must answer",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 37,
+   "speaker": "Jim Banks",
+   "office": "U.S. Senator from Indiana",
+   "party": "R",
+   "context": "Wrote in a joint statement with Sen. Elizabeth Warren in November about Nvidia CEO Jensen Huang's relationship with a suspected Chinese intelligence asset.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "IN",
+   "about_states": [],
+   "quote": "NVIDIA CEO Jensen Huang's confirmation of a relationship with a suspected spy for China's intelligence service makes these national security concerns even more urgent and raises important questions NVIDIA must answer",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 38,
+   "speaker": "Robert Garcia",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Said on Nov. 23 about President Trump's involvement in Nvidia's decision to reinstate CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "raises serious national security and corruption questions",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 39,
+   "speaker": "Robert Garcia",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Said on Nov. 23 about congressional action on Nvidia's reinstatement of CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "We must investigate these actions",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 40,
+   "speaker": "Jim Himes",
+   "office": "U.S. Representative from Connecticut",
+   "party": "D",
+   "context": "Said in a statement on Nov. 23 about Nvidia's board reinstating CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "CT",
+   "about_states": [],
+   "quote": "Though the NVIDIA Board of Directors may be convinced that reinstating Mr. Huang 'poses no national security risk,' the Congress still has questions that require answers",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 41,
+   "speaker": "Don Bacon",
+   "office": "U.S. Representative from Nebraska",
+   "party": "R",
+   "context": "Wrote on social media on Nov. 23 about Nvidia chip sales to China.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "NE",
+   "about_states": [],
+   "quote": "Congress needs to get to the bottom of who approved high end computer chips sales to China",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 42,
+   "speaker": "Bill Huizenga",
+   "office": "U.S. Representative from Michigan",
+   "party": "R",
+   "context": "Posted on social media after Trump called for Nvidia CEO Jensen Huang's reinstatement, referring to Alice Huang, the Chinese businesswoman who had an affair with Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "MI",
+   "about_states": [],
+   "quote": "she was, and is, a spy",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a U.S. government body has officially identified Alice Huang as a spy or agent of a Chinese intelligence service. False if a U.S. government body has officially stated she is not a spy. Cannot be determined if the only accounts are reports that she is a suspected spy without an official finding.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 43,
+   "speaker": "Chris Coons",
+   "office": "U.S. Senator from Delaware",
+   "party": "D",
+   "context": "Posted on social media on Nov. 23 about Nvidia CEO Jensen Huang's reinstatement.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "DE",
+   "about_states": [],
+   "quote": "The guy who was having an affair with a Chinese spy while working relentlessly to help China get access to as many AI chips as possible? Really?",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Huang has confirmed or an official source has found that he had a relationship with a woman U.S. officials identify as a Chinese spy, and Nvidia is documented lobbying for wider sales of AI chips to China. False if official sources show neither the relationship nor the lobbying. Cannot be determined if the relationship or the woman's status rests only on unconfirmed reports.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 44,
+   "speaker": "Ruben Gallego",
+   "office": "U.S. Senator from Arizona",
+   "party": "D",
+   "context": "Said on Nov. 23 that Congress should investigate trading in Nvidia stock around the announcement that CEO Jensen Huang was reinstated.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "AZ",
+   "about_states": [],
+   "quote": "what stock positions took place before the announcement",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 45,
+   "speaker": "Ron Wyden",
+   "office": "U.S. Senator from Oregon",
+   "party": "D",
+   "context": "Said on Nov. 23 about Nvidia's reinstatement of CEO Jensen Huang and the Trump administration.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "OR",
+   "about_states": [],
+   "quote": "our national security is for sale",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 46,
+   "speaker": "Ron Wyden",
+   "office": "U.S. Senator from Oregon",
+   "party": "D",
+   "context": "Said on Nov. 23 about Democratic oversight of the Trump administration once they take the majority in January.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "OR",
+   "about_states": [],
+   "quote": "In January, Democrats will hold this corrupt administration accountable",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 47,
+   "speaker": "Scott Bessent",
+   "office": "Secretary of the Treasury",
+   "party": null,
+   "context": "The AP reported what the Treasury Secretary said earlier in November about delays in restricting Nvidia chip exports to Megaspeed.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: Treasury Secretary Scott Bessent earlier this month said he was frustrated by the Commerce Department's delay in placing restrictions on Nvidia chip exports to Megaspeed, the company whose CEO, Alice Huang, was involved with Jensen Huang.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Bessent is on record in November 2026 saying he was frustrated by the Commerce Department's delay in restricting Nvidia chip exports to Megaspeed. False if his recorded remarks show he said no such thing or praised Commerce's pace. Cannot be determined if his remarks cannot be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 48,
+   "speaker": "Tom Cotton",
+   "office": "U.S. Senator from Arkansas",
+   "party": "R",
+   "context": "Said in a statement on Nov. 23, as quoted by PBS NewsHour, about congressional action on Nvidia's reinstatement of CEO Jensen Huang.",
+   "topic": "Nvidia chip exports to China",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "Congress has much to investigate, and we will pass overwhelmingly bipartisan chip export control bills",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 49,
+   "speaker": "Hakeem Jeffries",
+   "office": "U.S. Representative from New York; House Democratic leader",
+   "party": "D",
+   "context": "Said in a statement on Nov. 23 about Nvidia's board reinstating CEO Jensen Huang.",
+   "topic": "Nvidia CEO Huang reinstatement",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "NY",
+   "about_states": [],
+   "quote": "The decision by the Nvidia board to reinstate Jensen Huang is indefensible, irresponsible, and incomprehensible.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [
+    7,
+    12
+   ],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 50,
+   "speaker": "Jimmy Gomez",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Said in a statement on Nov. 23 after the House Ethics Committee report, about his conduct outside his marriage.",
+   "topic": "Rep. Gomez ethics findings",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "personal mistakes I committed outside of my marriage",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/ethics-probe-finds-democratic-rep-jimmy-gomez-made-unwelcome-sexual-advances-to-a-staffer"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the House Ethics Committee report or Gomez's own statements describe conduct by Gomez outside his marriage. False if the report and record show no such conduct. Cannot be determined if neither the report nor his statement can be read.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 51,
+   "speaker": "Jimmy Gomez",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Wrote in a Nov. 23 statement that the House Ethics Committee report omitted parts of his testimony.",
+   "topic": "Rep. Gomez ethics findings",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "Among other significant deficiencies and omissions, the report does not include key portions of my testimony that are essential to a full and fair understanding of what occurred",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Ethics Committee report omits testimony Gomez gave that bears on the findings. False if the report includes his testimony in full or he gave no testimony. Cannot be determined if the report and the record of his testimony cannot both be read.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 52,
+   "speaker": "Jimmy Gomez",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Wrote in a Nov. 23 statement about how the House Ethics Committee report treated his interview.",
+   "topic": "Rep. Gomez ethics findings",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "In my interview, I answered the Committee's questions only to see my statements selectively quoted, disparaged, and disregarded throughout the final report, to which I was given no opportunity to respond.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Ethics Committee report quotes Gomez's interview selectively and he had no opportunity to respond to the final report before release. False if the report shows he was given the draft or final report and an opportunity to respond. Cannot be determined if the report's account of the process cannot be read.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 53,
+   "speaker": "Jimmy Gomez",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Wrote in a Nov. 23 statement about the House Ethics Committee's investigation process.",
+   "topic": "Rep. Gomez ethics findings",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "I also have serious concerns about the process.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 54,
+   "speaker": "Jimmy Gomez",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "Said in a Nov. 23 statement announcing his resignation about the House Ethics Committee report.",
+   "topic": "Rep. Gomez ethics findings",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "strong disagreements with the Committee's report and its conclusions",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/ethics-probe-finds-democratic-rep-jimmy-gomez-made-unwelcome-sexual-advances-to-a-staffer"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "has strong disagreements with the report and its conclusions",
+     "outlet": "NPR",
+     "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+    },
+    {
+     "quote": "Gomez says he has strong disagreements with the report and its conclusions.",
+     "outlet": "NPR",
+     "url": "https://www.npr.org/2026/11/24/g-s1-155227/up-first-newsletter-nvidia-jensen-huang-trump-ukraine-russia-jimmy-gomez"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 55,
+   "speaker": "Jimmy Gomez",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "The AP reported what Gomez had said earlier about the House Ethics Committee investigation and his conduct.",
+   "topic": "Rep. Gomez ethics findings",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "Reported as: Gomez had previously said he would cooperate with the investigation but also stressed that his actions were consensual in nature and did not violate the law or House Ethics rules.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/ethics-probe-finds-democratic-rep-jimmy-gomez-made-unwelcome-sexual-advances-to-a-staffer"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the Ethics Committee report finds Gomez's conduct consensual and finds no violation of the law or House rules. False if the report finds his advances were unwelcome or that he violated House rules. Cannot be determined if the report cannot be read.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "Gomez denied the interactions were nonconsensual.",
+     "outlet": "NPR",
+     "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 56,
+   "speaker": "Jimmy Gomez",
+   "office": "U.S. Representative from California",
+   "party": "D",
+   "context": "NPR reported what Gomez said on Nov. 23 about when his resignation from the House takes effect.",
+   "topic": "Rep. Gomez ethics findings",
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "CA",
+   "about_states": [],
+   "quote": "Reported as: Gomez says his resignation will be effective Dec. 1.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "result": null,
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [
+    {
+     "quote": "Gomez announced that he would be resigning from the House on Dec. 1",
+     "outlet": "PBS NewsHour",
+     "url": "https://www.pbs.org/newshour/politics/ethics-probe-finds-democratic-rep-jimmy-gomez-made-unwelcome-sexual-advances-to-a-staffer"
+    }
+   ],
+   "evidence": []
+  },
+  {
+   "id": 57,
+   "speaker": "Mike Kehoe",
+   "office": "Governor of Missouri",
+   "party": "R",
+   "context": "Said, per the AP, about responsibility for the Army's planned detonation of lead azide in Iowa.",
+   "topic": "Iowa lead azide detonation",
+   "broad_topic": "Disasters, Insurance and Risk",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "But I want to emphasize: this is a federal operation",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/nation/getting-court-approval-u-s-army-to-detonate-degraded-bomb-making-material-in-iowa-on-wednesday"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the planned detonation of lead azide in Iowa is carried out and controlled by a federal agency (the Army) rather than a state. False if a state agency directs or conducts it. Cannot be determined if the operator and authority cannot be identified.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 58,
+   "speaker": "Mike Kehoe",
+   "office": "Governor of Missouri",
+   "party": "R",
+   "context": "Said, per the AP, about the states' role in the timing of the Army's planned detonation of lead azide in Iowa.",
+   "topic": "Iowa lead azide detonation",
+   "broad_topic": "Disasters, Insurance and Risk",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "The states of Iowa, Missouri and Illinois do not have a say on when this is conducted.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/nation/getting-court-approval-u-s-army-to-detonate-degraded-bomb-making-material-in-iowa-on-wednesday"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if the timing of the detonation is set by the Army or a federal court with no approval required from Iowa, Missouri or Illinois. False if any of those states must approve or can set the timing under a permit, order or law. Cannot be determined if the governing authority or court order cannot be read.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  },
+  {
+   "id": 59,
+   "speaker": "Mike Kehoe",
+   "office": "Governor of Missouri",
+   "party": "R",
+   "context": "The AP reported what Missouri's governor said about state monitoring ahead of the Army's planned detonation of lead azide in Iowa.",
+   "topic": "Iowa lead azide detonation",
+   "broad_topic": "Disasters, Insurance and Risk",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "Reported as: Missouri Gov. Mike Kehoe said state agencies are working to establish additional monitoring of air and water quality, public health and agriculture resources.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/nation/getting-court-approval-u-s-army-to-detonate-degraded-bomb-making-material-in-iowa-on-wednesday"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if Missouri state agencies have announced or are documented setting up added air, water, health or agriculture monitoring for the detonation. False if Missouri officials state no added monitoring is planned. Cannot be determined if no Missouri statement on monitoring can be found.",
+   "premise": null,
+   "result": "not_checked",
+   "finding": null,
+   "check_run": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "evidence": []
+  }
+ ]
+}
