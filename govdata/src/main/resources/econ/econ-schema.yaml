@@ -425,6 +425,19 @@ dimension_values:
     - "HOUST"
     - "HOUST1F"
     - "PERMIT"
+    - "PERMIT1"  # Census NRC: single-family (1-unit) building permits, SAAR thousands
+    - "PERMIT5"  # Census NRC: 5+ unit permits, SAAR thousands
+    - "PERMIT24"  # Census NRC: 2-4 unit permits, SAAR thousands
+    - "PERMITNSA"  # Census NRC: total permits, not seasonally adjusted, thousands
+    - "PERMIT1NSA"  # Census NRC: 1-unit permits, not seasonally adjusted, thousands
+    - "PERMITNE"  # Census NRC: total permits, Northeast region, SAAR
+    - "PERMITMW"  # Census NRC: total permits, Midwest region, SAAR
+    - "PERMITS"  # Census NRC: total permits, South region, SAAR
+    - "PERMITW"  # Census NRC: total permits, West region, SAAR
+    - "HOUST5F"  # Census NRC: 5+ unit housing starts, SAAR
+    - "COMPUTSA"  # Census NRC: total housing completions, SAAR
+    - "COMPU1USA"  # Census NRC: 1-unit housing completions, SAAR
+    - "UNDCONTSA"  # Census NRC: housing units under construction, SAAR
     - "EXHOSLUSM495S"
     - "CSUSHPISA"
     - "MSPUS"
@@ -8102,6 +8115,11 @@ partitionedTables:
           total, monthly, thousands of units, seasonally adjusted annual rate; HOUST1F = single-family
           housing starts, monthly, thousands of units, seasonally adjusted annual rate; PERMIT =
           building permits for new housing units, monthly, thousands, seasonally adjusted annual rate;
+          PERMIT1 = single-family (1-unit) building permits, monthly, thousands, SAAR; PERMIT24 =
+          2-4 unit permits; PERMIT5 = 5+ unit permits; PERMITNSA / PERMIT1NSA = total / 1-unit permits
+          not seasonally adjusted; PERMITNE/PERMITMW/PERMITS/PERMITW = total permits by Census region;
+          HOUST5F = 5+ unit housing starts; COMPUTSA / COMPU1USA = total / 1-unit housing completions;
+          UNDCONTSA = housing units under construction (all Census New Residential Construction, via FRED);
           EXHOSLUSM495S = existing home sales, monthly, units, seasonally adjusted annual rate;
           CSUSHPISA = S&P CoreLogic Case-Shiller U.S. national home price index (house prices),
           monthly, index Jan 2000=100; MSPUS = median sales price of houses sold in the United States
@@ -8224,6 +8242,19 @@ partitionedTables:
         - "HOUST"        # Housing starts (total)
         - "HOUST1F"      # Housing starts (single-family)
         - "PERMIT"       # Building permits
+        - "PERMIT1"  # Census NRC: single-family (1-unit) building permits, SAAR thousands
+        - "PERMIT5"  # Census NRC: 5+ unit permits, SAAR thousands
+        - "PERMIT24"  # Census NRC: 2-4 unit permits, SAAR thousands
+        - "PERMITNSA"  # Census NRC: total permits, not seasonally adjusted, thousands
+        - "PERMIT1NSA"  # Census NRC: 1-unit permits, not seasonally adjusted, thousands
+        - "PERMITNE"  # Census NRC: total permits, Northeast region, SAAR
+        - "PERMITMW"  # Census NRC: total permits, Midwest region, SAAR
+        - "PERMITS"  # Census NRC: total permits, South region, SAAR
+        - "PERMITW"  # Census NRC: total permits, West region, SAAR
+        - "HOUST5F"  # Census NRC: 5+ unit housing starts, SAAR
+        - "COMPUTSA"  # Census NRC: total housing completions, SAAR
+        - "COMPU1USA"  # Census NRC: 1-unit housing completions, SAAR
+        - "UNDCONTSA"  # Census NRC: housing units under construction, SAAR
         - "EXHOSLUSM495S" # Existing home sales
         - "CSUSHPISA"    # S&P/Case-Shiller national home price index
         - "MSPUS"        # Median sales price of houses sold
