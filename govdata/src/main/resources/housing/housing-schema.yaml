@@ -1855,6 +1855,186 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # FHFA ZIP5 HOUSE PRICE INDEX — annual all-transactions file (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: zip_house_price_index
+    timeColumn: data_year  # observation year; this table has no column named 'year'
+    # Freshness gate: FHFA serves no Last-Modified/ETag for the static download path; a
+    # Content-Length probe skips the re-fetch when unchanged (new years add rows).
+    freshness:
+      type: size
+    pattern: "type=zip_house_price_index/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FHFA annual all-transactions House Price Index at five-digit ZIP Code grain
+      (developmental series), 1984 through the latest published year, about 18,000 ZIPs and
+      ~690,000 ZIP-year rows. Finer than county_house_price_index, so it answers neighbourhood
+      questions (e.g. how far the ZIPs hardest hit in the 2008 crash have recovered, peak-to-
+      trough by ZIP). annual_change_pct is the year-over-year percent change; hpi is cumulative
+      appreciation indexed to 100 in the ZIP's first recorded year; hpi_1990_base / hpi_2000_base
+      rebase to 100 in 1990 / 2000 and are null for ZIPs with no value in that base year. ZIP-
+      years with samples too small to publish are null (FHFA reports "."). Nominal, not
+      inflation-adjusted. Calibrated on Fannie Mae / Freddie Mac mortgage transactions only.
+      Snapshot table: the whole workbook is re-fetched and overwritten each run. Source:
+      fhfa.gov/hpi/download/annual/hpi_at_zip5.xlsx.
+
+    dimensions:
+      type:
+        - zip_house_price_index
+
+    columns:
+      - name: zip5
+        type: string
+        nullable: false
+        comment: 5-digit ZIP Code (ZCTA-style area, leading zeros kept); join key to other ZIP-grain tables
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Observation year; part of the primary key with zip5
+      - name: annual_change_pct
+        type: double
+        nullable: true
+        comment: Year-over-year percent change in the HPI (null in the first year and where unpublished)
+      - name: hpi
+        type: double
+        nullable: true
+        comment: HPI, base 100 in the area's first recorded year (cumulative nominal appreciation)
+      - name: hpi_1990_base
+        type: double
+        nullable: true
+        comment: HPI rebased to 100 in 1990; null for areas with no 1990 value
+      - name: hpi_2000_base
+        type: double
+        nullable: true
+        comment: HPI rebased to 100 in 2000; null for areas with no 2000 value
+
+    source:
+      type: http
+      url: "https://www.fhfa.gov/hpi/download/annual/hpi_at_zip5.xlsx"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.FhfaZip5HpiDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=zip_house_price_index/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: zip_house_price_index
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FHFA CENSUS-TRACT HOUSE PRICE INDEX — annual all-transactions file (snapshot)
+  # ---------------------------------------------------------------------------
+  - name: tract_house_price_index
+    timeColumn: data_year  # observation year; this table has no column named 'year'
+    # Freshness gate: FHFA serves no Last-Modified/ETag for the static download path; a
+    # Content-Length probe skips the re-fetch when unchanged (new years add rows).
+    freshness:
+      type: size
+    pattern: "type=tract_house_price_index/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FHFA annual all-transactions House Price Index at census-tract grain (developmental
+      series), 1989 through the latest published year, about 2.2 million tract-year rows.
+      Finest-grain price index in the corpus. annual_change_pct is the year-over-year percent
+      change; hpi is cumulative appreciation indexed to 100 in the tract's first recorded year;
+      hpi_1990_base / hpi_2000_base rebase to 100 in 1990 / 2000 and are null for tracts with no
+      value in that base year. Tract-years with samples too small to publish are null (FHFA
+      reports "."). Nominal, not inflation-adjusted. Calibrated on Fannie Mae / Freddie Mac
+      mortgage transactions only. Snapshot table: the whole file is re-fetched and overwritten
+      each run. Joins to county_house_price_index via county_fips. Source:
+      fhfa.gov/hpi/download/annual/hpi_at_tract.csv.
+
+    dimensions:
+      type:
+        - tract_house_price_index
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+        nullable: false
+      - name: tract_geoid
+        type: string
+        nullable: false
+        comment: 11-digit census tract GEOID (state 2 + county 3 + tract 6); FK to geo tract tables
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: USPS state abbreviation
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Observation year; part of the primary key with tract_geoid
+      - name: annual_change_pct
+        type: double
+        nullable: true
+        comment: Year-over-year percent change in the HPI (null in the first year and where unpublished)
+      - name: hpi
+        type: double
+        nullable: true
+        comment: HPI, base 100 in the area's first recorded year (cumulative nominal appreciation)
+      - name: hpi_1990_base
+        type: double
+        nullable: true
+        comment: HPI rebased to 100 in 1990; null for areas with no 1990 value
+      - name: hpi_2000_base
+        type: double
+        nullable: true
+        comment: HPI rebased to 100 in 2000; null for areas with no 2000 value
+
+    source:
+      type: http
+      url: "https://www.fhfa.gov/hpi/download/annual/hpi_at_tract.csv"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.FhfaTractHpiDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=tract_house_price_index/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: tract_house_price_index
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # CENSUS HOUSING VACANCY SURVEY — Table 12, households by age of householder (snapshot, xlsx)
   # ---------------------------------------------------------------------------
   - name: hvs_homeownership_by_age
