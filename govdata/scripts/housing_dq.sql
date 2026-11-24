@@ -118,7 +118,7 @@ FROM (SELECT COUNT(*) AS n FROM (
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: zip_house_price_index (FHFA annual HPI snapshot; partition col: type)
--- ~690K ZIP-year rows expected (about 18,000 ZIPs, 1984-latest).
+-- ~690K ZIP-year rows expected (about 19,000 ZIPs, 1975-latest).
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
 SELECT 'housing', 'zip_house_price_index', 'T1_existence',
@@ -171,7 +171,7 @@ FROM (SELECT COUNT(*) AS n FROM (
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: tract_house_price_index (FHFA annual HPI snapshot; partition col: type)
--- ~2.18M tract-year rows expected (1989-latest).
+-- ~2.18M tract-year rows expected (about 64,000 tracts, 1975-latest).
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
 SELECT 'housing', 'tract_house_price_index', 'T1_existence',
