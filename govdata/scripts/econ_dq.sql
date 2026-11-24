@@ -57,6 +57,7 @@ FROM (
   UNION ALL SELECT 'state_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'state_wages',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'national_wages',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages',       allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'national_industry_employment',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'metro_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'metro_wages',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'county_qcew',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',          allow_moved_paths := true) LIMIT 1) t)
@@ -126,6 +127,7 @@ FROM (
   UNION ALL SELECT 'state_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',        allow_moved_paths := true)), 19000  -- DQ window = current + 1 lookback year (by design). Within that window ~19.7K rows is the true floor; 20000 was set against a stale assumption. Separate concern under investigation: older years carry far fewer distinct series than the current year (truncated historical series fetch).
   UNION ALL SELECT 'state_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',           allow_moved_paths := true)), 200
   UNION ALL SELECT 'national_wages',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages',        allow_moved_paths := true)), 2000  -- ~4531 agglvl/industry/own rows per year confirmed live 2026-09-13 against the real 2023 file; 2000 gives headroom under the DQ sample window
+  UNION ALL SELECT 'national_industry_employment', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment', allow_moved_paths := true)), 5000  -- one year of CES: ~400 industries x 12 months x S/U; 5000 is well under the sample window
   UNION ALL SELECT 'metro_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',        allow_moved_paths := true)), 7000  -- BLS rejects nonexistent metro×industry series (HTTP 400); ~7456 valid rows is the real ceiling, not 10000
   UNION ALL SELECT 'metro_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',           allow_moved_paths := true)), 100
   UNION ALL SELECT 'county_qcew',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',           allow_moved_paths := true)), 10000
@@ -186,6 +188,7 @@ SELECT 'metro_food_cpi'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'state_industry'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',         allow_moved_paths := true) LIMIT 1;
 SELECT 'state_wages'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',            allow_moved_paths := true) LIMIT 1;
 SELECT 'national_wages'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages',         allow_moved_paths := true) LIMIT 1;
+SELECT 'national_industry_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment', allow_moved_paths := true) LIMIT 1;
 SELECT 'metro_industry'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',         allow_moved_paths := true) LIMIT 1;
 SELECT 'metro_wages'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',            allow_moved_paths := true) LIMIT 1;
 SELECT 'county_qcew'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',            allow_moved_paths := true) LIMIT 1;
@@ -303,6 +306,13 @@ INSERT INTO dq_results
 SELECT 'econ', 'national_wages', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- national_industry_employment
+INSERT INTO dq_results
+SELECT 'econ', 'national_industry_employment', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment', allow_moved_paths := true))
 WHERE null_percentage = 100.0;
 
 -- metro_industry
@@ -778,6 +788,16 @@ SELECT 'econ', 'national_wages', 'all_same_value', 'warn',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name', 'area_fips',
+                          'industry_classification', 'src_line_nbr', 'unit_mult');
+
+-- national_industry_employment
+INSERT INTO dq_results
+SELECT 'econ', 'national_industry_employment', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  -- footnotes is NULL except the single code 'P' (preliminary) on the latest months: an expected near-constant.
+  AND column_name NOT IN ('footnotes', 'type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
 
 -- metro_industry

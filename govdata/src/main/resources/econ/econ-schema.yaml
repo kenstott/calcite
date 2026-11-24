@@ -3733,6 +3733,145 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- NATIONAL INDUSTRY EMPLOYMENT (BLS CES) ---
+  - name: national_industry_employment
+    # BLS revises the prior 2 months on every monthly release and re-benchmarks the prior year in
+    # the February release (same cadence as employment_statistics). The lookback reopens the 3
+    # most recently published years; the hash check skips the write when unrevised.
+    lookbackPeriods: 3
+    freshness:
+      type: hash
+    pattern: "type=national_industry_employment/frequency=*/year=*/national_industry_employment.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Monthly national nonfarm payroll employment (all employees, thousands) for every NAICS
+      industry BLS publishes in the Current Employment Statistics (CES / establishment survey)
+      program, from the total nonfarm level down to detailed industries such as residential
+      building construction and real estate and rental and leasing, both seasonally adjusted (S)
+      and not seasonally adjusted (U). Loaded from 2010 (the pipeline year floor); the source
+      itself starts 1939 for top-level series and later (often 1990) for detailed industries.
+      SERIES ID LAYOUT (13 characters): CE + seasonal(1:
+      S or U) + industry code(8) + data type(2, always 01 here). The industry_code column
+      holds the 8-digit CES industry code (e.g. 20236100 residential building construction,
+      55530000 real estate and rental and leasing, 00000000 total nonfarm, 05000000 total
+      private); the first two digits are the supersector. Examples: CES2023610001 residential
+      building construction, CES5553000001 real estate and rental and leasing (both seasonally
+      adjusted). Decode industry_code with the BLS list at
+      https://download.bls.gov/pub/time.series/ce/ce.industry (not loaded as a table).
+      Latest months are preliminary: footnotes = 'P'. For state supersector detail see
+      state_industry, for metros metro_industry; for first-print versus revised national payroll
+      use ces_revision_vintages. One row per (series, year, period); a self-join must match on
+      series, year and period or it fans out. Hours and earnings series are not included.
+
+    # Dimension definitions for iteration
+    dimensions:
+      type:
+        - national_industry_employment
+      frequency: *monthly_frequency
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
+    # BLS CE-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS CES series identifier, 13 characters: CES (seasonally adjusted) or CEU (not
+          seasonally adjusted) + 8-digit industry code + data type 01 (all employees, thousands).
+          This table is long-format: one row per (series, period), so ALWAYS filter on series or
+          the decoded industry_code / seasonal columns. E.g. CES2023610001 is residential building
+          construction, seasonally adjusted.
+        source: series_id
+      - name: industry_code
+        type: string
+        nullable: true
+        comment: >
+          8-digit CES industry code, characters 4-11 of the series id (the first two digits are the
+          supersector). 00000000 = total nonfarm, 05000000 = total private, 20236100 = residential
+          building construction, 55530000 = real estate and rental and leasing.
+        source: industryCode
+        expression: "SUBSTR(TRIM(series), 4, 8)"
+      - name: seasonal
+        type: string
+        nullable: true
+        comment: "S = seasonally adjusted (series prefix CES), U = not seasonally adjusted (prefix CEU)"
+        source: seasonal
+        expression: "SUBSTR(TRIM(series), 3, 1)"
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: BLS period identifier (M01-M12 monthly, M13 annual average)
+        source: period
+      - name: period_name
+        type: string
+        source: periodName
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' WHEN 'M13' THEN 'Annual' ELSE period END"
+      - name: value
+        type: double
+        nullable: true
+        comment: Employment in thousands of jobs (all employees)
+        source: value
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: BLS footnote codes for the data point (P = preliminary)
+        source: footnote_codes
+
+    # Bulk flat-file source: the whole CE program as one TSV, no key and no daily limit (same
+    # mechanism as state_industry / metro_industry). Hours-and-earnings series are dropped by the
+    # row filter, which keeps only data type 01 (all employees).
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/ce/ce.data.0.AllCESSeries"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      rowFilter:
+        column: series_id
+        pattern: '^CE[SU]\d{8}01\s*$'
+
+    # Materialization configuration
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=national_industry_employment/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- METRO WAGES ---
   - name: metro_wages
     # BLS QCEW revises the most recent quarters as it finalizes each year's annual
