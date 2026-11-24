@@ -83,3 +83,42 @@ def test_incomplete_handshake_is_dropped_not_leaked(bare_server, caplog):
     assert [r.levelno for r in records] == [logging.INFO]
     assert "sent nothing before the socket timeout" in records[0].getMessage()
     assert records[0].exc_info is None
+
+
+@pytest.mark.parametrize(
+    "partial",
+    [
+        b"",  # connect and close
+        b"\x00\x00",  # two of the four length bytes
+        b"\x00\x00\x00\x08",  # length but no code
+        b"\x00\x00\x00\x08\x04\xd2\x16\x2f",  # SSLRequest then close
+        b"\x00\x00\x00\x10\x04\xd2\x16\x2e\x00\x00\x00\x01",  # CancelRequest, key truncated
+        b"\x00\x00\x00\x20\x00\x03\x00\x00user\x00",  # protocol 3.0, body truncated
+    ],
+)
+def test_short_startup_is_a_quiet_disconnect(bare_server, caplog, partial):
+    srv, host, port = bare_server
+    caplog.set_level(logging.DEBUG)
+
+    sock = socket.create_connection((host, port), timeout=5)
+    if partial:
+        sock.sendall(partial)
+    sock.shutdown(socket.SHUT_WR)
+    sock.settimeout(5)
+    try:
+        while sock.recv(4096):
+            pass
+    finally:
+        sock.close()
+
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and srv._active_connections != 0:
+        time.sleep(0.05)
+    assert srv._active_connections == 0
+
+    bad = [r for r in caplog.records if r.levelno >= logging.WARNING or r.exc_info]
+    assert bad == []
+
+    # The server keeps accepting after the aborted handshakes.
+    again = socket.create_connection((host, port), timeout=5)
+    again.close()

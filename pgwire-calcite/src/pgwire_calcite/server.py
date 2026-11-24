@@ -1406,9 +1406,23 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         peer_cert = self.request.getpeercert() if isinstance(self.request, ssl.SSLSocket) else None
         assert_principal_binding(auth, peer_cert, username)
 
+    def _read_startup_uint32(self) -> Optional[int]:
+        """Read one big-endian uint32 of a startup packet; None when the peer closed first."""
+        data = self.r.read_bytes(4)
+        if len(data) < 4:
+            return None
+        return struct.unpack("!I", data)[0]
+
+    def _startup_peer_closed(self) -> None:
+        log.debug("[PGWIRE] client %s closed before completing the startup packet", self.client_address)
+
     def handle_startup(self, conn: Connection) -> Optional[BVContext]:  # type: ignore[override]
-        msglen = self.r.read_uint32() - 4
-        code = self.r.read_uint32()
+        length = self._read_startup_uint32()
+        code = self._read_startup_uint32() if length is not None else None
+        if length is None or code is None:
+            self._startup_peer_closed()
+            return None
+        msglen = length - 4
         if code == 80877103:  # SSL request
             ssl_ctx: ssl.SSLContext | None = getattr(self.server, "ssl_ctx", None)
             if ssl_ctx:
@@ -1428,8 +1442,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             # BackendKeyData. Cancel that session's in-flight engine statement and
             # leave the session itself open — PG's contract is that a cancelled
             # backend keeps serving, it does not disconnect.
-            process_id = self.r.read_uint32()
-            secret_key = self.r.read_uint32()
+            process_id = self._read_startup_uint32()
+            secret_key = self._read_startup_uint32() if process_id is not None else None
+            if process_id is None or secret_key is None:
+                self._startup_peer_closed()
+                return None
             ctx = self.server.ctxts.get(process_id)  # type: ignore[attr-defined]
             if ctx is not None and ctx.secret_key == secret_key:
                 from pgwire_calcite.backend import CANCELED_BY_USER
@@ -1450,7 +1467,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 log.info("[PGWIRE] cancel request for pid=%s rejected (bad key)", process_id)
             return None
         elif code == 196608:  # Protocol 3.0
-            msg = [x.decode("utf-8") for x in self.r.read_bytes(msglen - 4).split(b"\x00")]
+            body = self.r.read_bytes(msglen - 4)
+            if len(body) < msglen - 4:
+                self._startup_peer_closed()
+                return None
+            msg = [x.decode("utf-8") for x in body.split(b"\x00")]
             params = dict(zip(msg[::2], msg[1::2]))
             log.info(
                 "[PGWIRE] connect params: %s", {k: v for k, v in params.items() if k != "password"}
