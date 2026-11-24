@@ -339,7 +339,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
       }
 
       String sql = "SELECT county_fips, state_fips, geometry"
-          + " FROM iceberg_scan('" + warehousePath + "/counties', allow_moved_paths=true)"
+          + " FROM iceberg_scan('" + warehousePath + "/geo/counties', allow_moved_paths=true)"
           + " WHERE year = " + tigerYear
           + " AND geometry IS NOT NULL";
 
