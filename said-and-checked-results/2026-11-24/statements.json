@@ -382,16 +382,16 @@
     "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement"
    },
    "source": {
-    "status": "not_found",
-    "url": null,
-    "note": ""
+    "status": "paraphrased",
+    "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+    "note": "CNBC's transcript reads \"we gave them assurance, at least with everything we know, and we know a lot\" (singular \"assurance\")."
    },
    "kind": "factual",
    "test": "True if Nvidia's board or a federal official states that senior U.S. government officials gave the board input or assurances before it reinstated Huang. False if Nvidia or the government states that no such input or assurances were given. Cannot be determined if no statement on the board's contact with the government can be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "Nvidia's Nov. 23 release says its board \"received input from senior levels of the United States government\" before reinstating Huang. In the CNBC interview Trump said the board \"did ask for assurance on the national security threat, and we gave them assurance.\"",
+   "check_run": "q202/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
@@ -402,7 +402,20 @@
      "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
     }
    ],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+     "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+    },
+    {
+     "label": "Nvidia release on Huang's reinstatement (Nov. 23, 2026)",
+     "url": "https://nvidianews.nvidia.com/news/nvidia-board-reinstates-jensen-huang-as-president-ceo-and-board-director"
+    },
+    {
+     "label": "CNBC on Trump and Huang (Nov. 23, 2026)",
+     "url": "https://www.cnbc.com/2026/11/23/trump-nvidia-jensen-huang.html"
+    }
+   ]
   },
   {
    "id": 9,
@@ -420,21 +433,38 @@
     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
    },
    "source": {
-    "status": "not_found",
-    "url": null,
-    "note": ""
+    "status": "paraphrased",
+    "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+    "note": "CNBC's transcript reads \"we've done a very thorough investigation, and the investigation showed that he did, I mean, he had bad judgment\" and continues \"but he did nothing wrong, other than\" a remark about Huang's chips."
    },
    "kind": "factual",
    "test": "True if a federal agency or the White House is documented to have conducted an investigation of Huang that concluded he did nothing wrong. False if a record shows no federal investigation took place, or that one found wrongdoing. Cannot be determined if no record of an investigation or its conclusion can be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "No federal agency or White House document reporting an investigation that cleared Huang was found; the only account is Trump's, who attributed it to Attorney General Todd Blanche's office. The Justice Department and Commerce Department inquiry into Megaspeed is open, and Nvidia's own board investigation is not federal and not finished.",
+   "check_run": "q202/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+     "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+    },
+    {
+     "label": "PBS NewsHour segment transcript (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+    },
+    {
+     "label": "AP via PBS, Nvidia board reinstates Huang",
+     "url": "https://www.pbs.org/newshour/nation/nvidia-board-unanimously-reinstates-jensen-huang-as-ceo-and-chairman"
+    },
+    {
+     "label": "Nvidia release on Huang's reinstatement (Nov. 23, 2026)",
+     "url": "https://nvidianews.nvidia.com/news/nvidia-board-reinstates-jensen-huang-as-president-ceo-and-board-director"
+    }
+   ]
   },
   {
    "id": 10,
@@ -452,8 +482,8 @@
     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
    },
    "source": {
-    "status": "not_found",
-    "url": null,
+    "status": "verbatim",
+    "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
     "note": ""
    },
    "kind": "opinion_or_prediction",
@@ -484,9 +514,9 @@
     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
    },
    "source": {
-    "status": "not_found",
-    "url": null,
-    "note": ""
+    "status": "paraphrased",
+    "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+    "note": "CNBC's transcript reads \"the bigger threat would be losing the brain power of somebody like Jensen. That would be a threat to me.\""
    },
    "kind": "opinion_or_prediction",
    "test": null,
@@ -516,8 +546,8 @@
     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
    },
    "source": {
-    "status": "not_found",
-    "url": null,
+    "status": "verbatim",
+    "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
     "note": ""
    },
    "kind": "opinion_or_prediction",
@@ -557,9 +587,9 @@
    "kind": "factual",
    "test": "True if Trump's own words in the CNBC interview, or another record, show he called Nvidia's board several times and spoke with Huang on Nov. 22. False if the interview or a record shows he did not contact the board or Huang. Cannot be determined if neither the interview text nor any record of the contacts can be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "The call with Huang is confirmed: in the CNBC interview Trump said he called Huang \"last night,\" Nov. 22. The board calls are not: he said he spoke to the board \"directly and indirectly\" and also \"I didn't call 'em previously, actually. I called 'em a little bit through representatives,\" and gave no count.",
+   "check_run": "q202/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
@@ -570,7 +600,20 @@
      "url": "https://www.pbs.org/newshour/politics/what-trump-told-pbs-news-about-jensen-huang-before-nvidia-reinstatement"
     }
    ],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+     "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+    },
+    {
+     "label": "PBS NewsHour segment transcript (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/show/why-trump-pushed-for-jensen-huangs-return-to-nvidia"
+    },
+    {
+     "label": "AP via PBS, Nvidia board reinstates Huang",
+     "url": "https://www.pbs.org/newshour/nation/nvidia-board-unanimously-reinstates-jensen-huang-as-ceo-and-chairman"
+    }
+   ]
   },
   {
    "id": 14,
