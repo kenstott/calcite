@@ -4,7 +4,7 @@
  "lede": [
   "Coverage on Nov. 23 and 24 centered on Nvidia's board reinstating chief executive Jensen Huang. President Trump said in a PBS News call and a CNBC interview that he had pressed for the return, and members of both parties in Congress called for hearings and investigations. Sen. Tim Scott announced that Huang will testify before the Senate Banking Committee on Dec. 3.",
   "Other stories covered Rep. Jimmy Gomez's resignation after a House Ethics Committee report, the coming vote for Senate Democratic leader between Chuck Schumer and Chris Van Hollen, the health care plans of congressional Democrats and of the president, the Republican Party after its midterm losses, and the Army's planned detonation of degraded explosive material in Iowa, which Missouri Gov. Mike Kehoe addressed.",
-  "The page lists 59 statements by 24 officeholders. Nineteen are factual claims or factual premises of predictions; their checks are listed with each statement, and any not yet returned are marked not yet checked. The other 40 are opinions, predictions or promises, listed without a check."
+  "The page lists 59 statements by 24 officeholders. Nineteen were factual claims or the factual premise of a prediction, and every one was checked: 10 were supported, 8 unsettled and 1 contradicted. The contradicted claim, that the conduct examined by the House Ethics Committee was consensual and broke no House rule, rests on the committee's own report. Three checks cite AskAmerica's Senate lobbying disclosures and two its export-control screening list. The other 40 statements are opinions, predictions or promises and are listed without a check."
  ],
  "stories": [
   {
@@ -2210,14 +2210,27 @@
    "kind": "factual",
    "test": "True if the planned detonation of lead azide in Iowa is carried out and controlled by a federal agency (the Army) rather than a state. False if a state agency directs or conducts it. Cannot be determined if the operator and authority cannot be identified.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "EPA's public notice names the U.S. Department of the Army as the permittee at the Iowa Army Ammunition Plant, and Iowa's health department says the Army is conducting the detonations under an EPA emergency permit while the state only coordinates.",
+   "check_run": "q212/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "EPA public notice, Iowa Army Ammunition Plant emergency permit",
+     "url": "https://www.epa.gov/node/301607"
+    },
+    {
+     "label": "Iowa HHS fact sheet on the lead azide detonation",
+     "url": "https://hhs.iowa.gov/media/19822/download"
+    },
+    {
+     "label": "AP via PBS NewsHour on the planned detonation (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/nation/getting-court-approval-u-s-army-to-detonate-degraded-bomb-making-material-in-iowa-on-wednesday"
+    }
+   ]
   },
   {
    "id": 58,
@@ -2242,14 +2255,27 @@
    "kind": "factual",
    "test": "True if the timing of the detonation is set by the Army or a federal court with no approval required from Iowa, Missouri or Illinois. False if any of those states must approve or can set the timing under a permit, order or law. Cannot be determined if the governing authority or court order cannot be read.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "AP reports that the Army chose the timing and that the 8th Circuit approved the EPA permit, and neither the EPA notice nor Iowa's fact sheet describes any approval role for Iowa, Missouri or Illinois. The permit text and the court order could not be read, and whether a state permit or order could bind the timing is a legal question no document read here decides.",
+   "check_run": "q212/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "AP via PBS NewsHour on the planned detonation (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/nation/getting-court-approval-u-s-army-to-detonate-degraded-bomb-making-material-in-iowa-on-wednesday"
+    },
+    {
+     "label": "Iowa HHS fact sheet on the lead azide detonation",
+     "url": "https://hhs.iowa.gov/media/19822/download"
+    },
+    {
+     "label": "EPA public notice, Iowa Army Ammunition Plant emergency permit",
+     "url": "https://www.epa.gov/node/301607"
+    }
+   ]
   },
   {
    "id": 59,
@@ -2274,14 +2300,23 @@
    "kind": "factual",
    "test": "True if Missouri state agencies have announced or are documented setting up added air, water, health or agriculture monitoring for the detonation. False if Missouri officials state no added monitoring is planned. Cannot be determined if no Missouri statement on monitoring can be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "The Missouri governor's news page lists a Nov. 20, 2026 release saying state health, agriculture, natural resources and other departments \"have implemented monitoring plans for air, water, agriculture, and public health\"; the release body itself could not be read directly.",
+   "check_run": "q212/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Missouri governor's press releases (Nov. 20, 2026 entry)",
+     "url": "https://governor.mo.gov/press-releases"
+    },
+    {
+     "label": "AP via PBS NewsHour on the planned detonation (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/nation/getting-court-approval-u-s-army-to-detonate-degraded-bomb-making-material-in-iowa-on-wednesday"
+    }
+   ]
   }
  ]
 }
