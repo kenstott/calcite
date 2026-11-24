@@ -1069,14 +1069,21 @@ final class QuestionDiagnostics {
         if (sql == null) {
             return;
         }
+        String scan;
+        try {
+            scan = ExclusionProbe.rowRemovingText(sql);
+        } catch (ExclusionProbe.Unavailable e) {
+            // Unparsed SQL cannot be split into clauses; the probe reports the parse failure.
+            scan = sql;
+        }
         ArrayNode predicates = MAPPER.createArrayNode();
         boolean pivotal = false;
-        java.util.regex.Matcher m = NOT_EQUAL_LITERAL.matcher(sql);
+        java.util.regex.Matcher m = NOT_EQUAL_LITERAL.matcher(scan);
         while (m.find()) {
             predicates.add(m.group(1) + " <> '" + m.group(2) + "'");
             pivotal |= PIVOTAL_UNIT.matcher(m.group(2)).find();
         }
-        m = NOT_IN_LIST.matcher(sql);
+        m = NOT_IN_LIST.matcher(scan);
         while (m.find()) {
             predicates.add(m.group(1) + " NOT IN (" + m.group(2).trim() + ")");
             pivotal |= PIVOTAL_UNIT.matcher(m.group(2)).find();
@@ -1086,7 +1093,7 @@ final class QuestionDiagnostics {
         while (da.find()) {
             diffAliases.add(da.group(1).toLowerCase(Locale.ROOT));
         }
-        m = IS_NOT_NULL.matcher(sql);
+        m = IS_NOT_NULL.matcher(scan);
         while (m.find()) {
             String col = m.group(1);
             String bare = col.contains(".") ? col.substring(col.lastIndexOf('.') + 1) : col;
