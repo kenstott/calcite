@@ -1317,14 +1317,35 @@
    "kind": "factual",
    "test": "True if U.S. export approvals for Nvidia to sell advanced AI chips to China numbering in the hundreds of thousands, including to buyers tied to China's military, are documented by a primary source or credible reporting. False if official records show Nvidia received no such approvals or far fewer. Cannot be determined if the number or recipients of approvals cannot be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "As reported by The Standard (Hong Kong) from a House Foreign Affairs Committee release, Commerce approved 879,000 Nvidia and AMD chips for Chinese buyers from December 2025 to May 2026, including Tencent, Alibaba and Baidu, which the report says are on the Pentagon's list of Chinese military companies; the Nvidia-only share is not given and the release could not be read directly. AskAmerica's Senate lobbying disclosures show Nvidia filed in-house lobbying reports every quarter of 2025, spending $620,000 to $1.9 million a quarter, with issues including export controls and the Chip Security Act.",
+   "check_run": "q206/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "law.lobbying_filings (Nvidia filings, 2025-2026)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#lobbying_filings-table",
+     "askamerica": true,
+     "sql": "SELECT filing_year, filing_period, registrant_name, client_name, income, expenses FROM law.lobbying_filings WHERE client_name ILIKE '%nvidia%' AND filing_year >= 2025 ORDER BY filing_year, filing_period FETCH FIRST 20 ROWS ONLY"
+    },
+    {
+     "label": "law.lobbying_activities (Nvidia issues, Q4 2025)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#lobbying_activities-table",
+     "askamerica": true,
+     "sql": "SELECT f.filing_year, f.filing_period, a.general_issue_code, substr(a.description,1,300) AS d FROM law.lobbying_activities a JOIN law.lobbying_filings f ON f.filing_uuid=a.filing_uuid WHERE f.registrant_name='NVIDIA CORPORATION' AND f.client_name='NVIDIA CORPORATION' AND f.filing_year=2025 AND f.filing_period='fourth_quarter' AND a.year=f.year FETCH FIRST 6 ROWS ONLY"
+    },
+    {
+     "label": "The Standard (Hong Kong) on the committee's chip-approval figures (Nov. 20, 2026)",
+     "url": "https://www.thestandard.com.hk/world/article/349075/US-signed-off-on-sales-of-nearly-900000-AI-chips-to-China-in-six-months-committee-says"
+    },
+    {
+     "label": "Senate Banking minority release, Banks and Warren on Nvidia export licenses (Mar. 24, 2026)",
+     "url": "https://www.banking.senate.gov/newsroom/minority/senators-banks-and-warren-urge-commerce-secretary-lutnick-to-suspend-or-reconsider-nvidia-export-licenses-amid-supermicro-chip-diversion-indictment"
+    }
+   ]
   },
   {
    "id": 35,
