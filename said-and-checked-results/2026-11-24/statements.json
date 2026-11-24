@@ -1137,14 +1137,23 @@
    "kind": "factual",
    "test": "True if there is no public record that Ossoff had endorsed Schumer or Van Hollen for Senate Democratic leader as of the week of Nov. 23, 2026. False if he is on record endorsing either before then. Cannot be determined if no record of his position can be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "No public endorsement by Ossoff of Schumer or Van Hollen was found: the AP story listing senators' positions and CBS News coverage of the race name none for him. The search covered those two stories and part of Ossoff's Senate press-release page; Axios and WABE reports describing him as noncommittal could not be read directly.",
+   "check_run": "q204/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "AP via PBS NewsHour, Senate leadership vote (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/politics/senate-leadership-vote-tests-newly-elected-democrats-promise-of-change"
+    },
+    {
+     "label": "CBS News, Van Hollen challenges Schumer",
+     "url": "https://www.cbsnews.com/news/chris-van-hollen-challenge-chuck-schumer-senate-majority-leader-democrat/"
+    }
+   ]
   },
   {
    "id": 30,
