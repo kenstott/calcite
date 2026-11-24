@@ -51,6 +51,10 @@ final class ContinuingResolutionsSupplement {
   private static final Pattern THROUGH =
       Pattern.compile("continuing[^.]*?\\bthrough (?:the earlier of )?"
           + "([A-Z][a-z]+ \\d{1,2}, \\d{4})", Pattern.CASE_INSENSITIVE);
+  /** An act that extends the earlier CR "through the enactment date of this division". */
+  private static final Pattern THROUGH_ENACTMENT =
+      Pattern.compile("extends the Continuing Appropriations Act, \\d{4},? through the "
+          + "enactment date of this division", Pattern.CASE_INSENSITIVE);
   private static final DateTimeFormatter LONG_DATE =
       DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US);
 
@@ -149,6 +153,10 @@ final class ContinuingResolutionsSupplement {
       Matcher m = THROUGH.matcher(summary);
       if (m.find()) {
         expiration = LocalDate.parse(m.group(1), LONG_DATE);
+      } else if (THROUGH_ENACTMENT.matcher(summary).find()) {
+        expiration = enacted;
+        note = "expiration is the act's own enactment date (it extends the earlier CR through "
+            + "that date)";
       } else {
         note = "expiration not stated in the Congress.gov summary";
       }

@@ -2344,6 +2344,21 @@ SELECT 'fiscal', 'continuing_resolutions', 'T7_cumulative_sequence',
 FROM (SELECT COUNT(*) AS n FROM (SELECT MIN(act_seq_cumulative) AS mn, MAX(act_seq_cumulative) AS mx, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true))
   WHERE mn <> 1 OR mx <> c);
 
+-- Acts after the newest CRS edition come from Congress.gov: P.L. 119-37 (FY2026, through 2026-01-30)
+-- and P.L. 119-103 (FY2027, through 2026-12-11) must be present with their expiration dates.
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T7_post_crs_acts',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'P.L. 119-37 (FY2026, 2025-11-12, exp 2026-01-30) and P.L. 119-103 (FY2027, 2026-09-02, exp 2026-12-11)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true)
+  WHERE (public_law = 'P.L. 119-37' AND fiscal_year = 2026 AND enactment_date = DATE '2025-11-12' AND expiration_date = DATE '2026-01-30')
+     OR (public_law = 'P.L. 119-103' AND fiscal_year = 2027 AND enactment_date = DATE '2026-09-02' AND expiration_date = DATE '2026-12-11'));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'continuing_resolutions', 'T7_post_crs_expiration',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Congress.gov-sourced acts with no expiration_date'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/continuing_resolutions', allow_moved_paths := true)
+  WHERE crs_report_version LIKE 'congress.gov:%' AND expiration_date IS NULL);
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: appropriations_timeliness_by_fy (CRS report table; partition col: type)
 -- ─────────────────────────────────────────────────────────────
