@@ -8677,7 +8677,12 @@ partitionedTables:
       expiration_date minus enactment_date (FY1977's first CR was enacted October 11, 1976 and
       counts 182 days). Includes full-year CRs (e.g. P.L. 119-4: 200 days to September 30,
       2025) and acts passed after a funding gap began (see federal_funding_gaps). Fiscal
-      years CRS has not yet added are absent; the table is replaced whole on each run. Acts
+      years CRS has not yet added are filled from the Congress.gov API: acts enacted after the
+      newest CRS edition whose title contains "Continuing Appropriations" (FY2026 and later) get
+      a row with public_law, enactment_date and the expiration date read from the act's
+      Congress.gov summary, but null duration_days and statutes_at_large; an act titled
+      otherwise that carries a CR (e.g. a consolidated act) is not found until CRS adds it. The
+      table is replaced whole on each run. Acts
       can overlap, so sum duration_days over a year with care; CRS's own per-year total for
       FY1998 on is interim_cr_total_days in appropriations_timeliness_by_fy. Source:
       https://www.everycrsreport.com/reports/R46595.html (CRS, public domain).
@@ -8701,7 +8706,7 @@ partitionedTables:
         type: integer
         nullable: false
         comment: >
-          Running count of CRs since FY1977 (1 to 207); unique
+          Running count of CRs since FY1977; unique
       - name: public_law
         type: string
         nullable: false
@@ -8709,9 +8714,10 @@ partitionedTables:
           Public law number as printed, e.g. P.L. 118-83
       - name: statutes_at_large
         type: string
-        nullable: false
+        nullable: true
         comment: >
-          Statutes at Large citation, e.g. 138 Stat. 1524
+          Statutes at Large citation, e.g. 138 Stat. 1524; null for acts added from Congress.gov
+          after the newest CRS edition
       - name: enactment_date
         type: date
         nullable: false
@@ -8761,6 +8767,8 @@ partitionedTables:
       # EveryCRSReport landing page and parses its HTML tables.
       url: "https://www.everycrsreport.com/reports/R46595.html"
       method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
       response:
         format: text
       rateLimit:

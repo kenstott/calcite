@@ -17,7 +17,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,6 +84,18 @@ public class ContinuingResolutionsTransformer implements DataProvider {
     if (rows.isEmpty()) {
       throw new IOException("continuing_resolutions: R46595 Table A-1 had no rows");
     }
+    int crsActs = rows.size();
+    Map<String, Object> lastRow = rows.get(rows.size() - 1);
+    Map<Integer, Integer> actsPerFy = new HashMap<Integer, Integer>();
+    for (Map<String, Object> r : rows) {
+      actsPerFy.merge((Integer) r.get("fiscal_year"), 1, Integer::sum);
+    }
+    rows.addAll(ContinuingResolutionsSupplement.rows(config.getSource(),
+        (String) lastRow.get("public_law"),
+        LocalDate.parse((String) lastRow.get("enactment_date")),
+        (Integer) lastRow.get("act_seq_cumulative"), actsPerFy, variables));
+    LOGGER.info("continuing_resolutions: {} acts after {} from Congress.gov",
+        rows.size() - crsActs, report.version());
     LOGGER.info("continuing_resolutions: {} acts from {}", rows.size(), report.version());
     return rows.iterator();
   }
