@@ -1562,7 +1562,8 @@ FROM (
   SELECT column_name, approx_unique
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_spot_prices', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'year')
+    -- process_name is a real constant: every spot series is 'Spot Price FOB'
+    AND column_name NOT IN ('type', 'year', 'process_name')
 ) t;
 
 -- T6: pk_nulls (report_date, price_year, series_id NOT NULL)
