@@ -4139,6 +4139,132 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # HRSA AHRF — county physician counts by specialty and data year (long format)
+  # ==========================================================================
+  - name: ahrf_physician_specialty
+    timeColumn: data_year
+    freshness:
+      type: last_modified
+    releaseWindow:
+      months: [8, 9, 10, 11, 12] # same HRSA AHRF annual release as ahrf_physician_supply
+    pattern: "type=ahrf_physician_specialty"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      HRSA Area Health Resources File (AHRF) county physician counts by specialty, in long
+      format: one row per county (county_fips), specialty and data_year, drawn from the
+      same AMA Physician Masterfile columns as ahrf_physician_supply but covering every
+      specialty family and every year suffix the release carries (two data years per
+      variable, 2022 and 2023 in the 2024-2025 release) instead of only the newest
+      all-specialty and primary-care totals. specialty is the AHRF column stem, e.g.
+      obgyn_gen (general obstetrics and gynecology), obgyn_subsp (OB-GYN subspecialties),
+      ped_gen (general pediatrics), psych, child_psych, gen_surg, anesth, emerg_med,
+      card_dis, ortho, derm; stems beginning all_ (all_gp, all_med_spec, all_surg_spec,
+      all_oth_spec) are HRSA group totals that overlap the individual specialties — do not
+      sum across them. md_physicians / do_physicians are non-federal MDs / DOs of that
+      specialty in all activities; the *_patient_care_physicians columns are the subset in
+      patient care; md_do_physicians is HRSA's combined MD+DO total (tot_md_do_*), which
+      includes federal physicians and is not populated for every specialty. Sum counties
+      by state_abbr for a state series (for example OB-GYN in Idaho:
+      specialty = 'obgyn_gen'). Counts are raw physicians, not rates; join
+      ahrf_physician_supply.population_estimate for a denominator. Years earlier than the
+      release's two data years are in HRSA's older AHRF releases and are not loaded.
+      Source: data.hrsa.gov/data/download, "Area Health Resources Files" county CSV
+      distribution (the *hp.csv health-professions file).
+
+    columns:
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: 5-digit county FIPS (fips_st_cnty) — PK part 1
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: fips_st (2-digit; FK to geo.state_ref)
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: st_name_abbrev (2-letter USPS; FK to geo.state_ref)
+      - name: county_name
+        type: string
+        nullable: true
+        comment: cnty_name
+      - name: specialty
+        type: string
+        nullable: false
+        comment: >
+          AHRF specialty column stem (md_nf_<specialty>_YY), e.g. obgyn_gen, obgyn_subsp,
+          ped_gen, psych — PK part 2. Stems starting all_ are overlapping group totals
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Four-digit year from the AHRF column suffix (_23 is 2023) — PK part 3
+      - name: md_physicians
+        type: long
+        nullable: true
+        comment: md_nf_<specialty>_YY — non-federal MDs of the specialty, all activities
+      - name: md_patient_care_physicians
+        type: long
+        nullable: true
+        comment: md_nf_<specialty>_all_pc_YY — non-federal MDs of the specialty in patient care
+      - name: do_physicians
+        type: long
+        nullable: true
+        comment: do_nf_<specialty>_YY — non-federal DOs of the specialty, all activities; null where AHRF has no DO column for the specialty
+      - name: do_patient_care_physicians
+        type: long
+        nullable: true
+        comment: do_nf_<specialty>_all_pc_YY — non-federal DOs of the specialty in patient care; null where AHRF has no DO column
+      - name: md_do_physicians
+        type: long
+        nullable: true
+        comment: tot_md_do_<specialty>_YY — HRSA combined MD+DO total (federal and non-federal); null where AHRF has no such column
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "ahrf_physician_specialty"'
+
+    source:
+      type: http
+      url: "https://data.hrsa.gov/data/download"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.AhrfPhysicianSpecialtyTransformer"
+
+    dimensions:
+      type:
+        - ahrf_physician_specialty
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # MEDICAID DRUG UTILIZATION — Socrata SODA API, ~2.5M records/year
   # Default dataset: 2023 data (d890d3a9-6b00-43fd-8b31-fcba4c8e2909)
   # ==========================================================================
@@ -11897,6 +12023,20 @@ constraints:
 
   ahrf_physician_supply:
     primaryKey: [county_fips]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links county state to geographic data
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+        comment: Links AHRF county row to geographic data
+
+  ahrf_physician_specialty:
+    primaryKey: [county_fips, specialty, data_year]
     foreignKeys:
       - columns: [state_abbr]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"

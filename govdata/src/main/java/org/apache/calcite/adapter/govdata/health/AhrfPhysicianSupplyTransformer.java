@@ -123,7 +123,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
    * the State-and-National ("SN") sibling file and the SAS/technical-documentation
    * distributions, which never match on the CSV + not-SN filter.
    */
-  private String findCountyCsvZipUrl(String html) {
+  String findCountyCsvZipUrl(String html) {
     Matcher m = HREF_PATTERN.matcher(html);
     String bestHref = null;
     int bestYear = -1;
@@ -162,7 +162,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return best;
   }
 
-  private String parseZip(byte[] zipBytes) throws IOException {
+  String parseZip(byte[] zipBytes) throws IOException {
     byte[] geoCsv = null;
     byte[] hpCsv = null;
     byte[] popCsv = null;
@@ -289,7 +289,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return best;
   }
 
-  private int requireIndex(List<String> headers, String name) {
+  int requireIndex(List<String> headers, String name) {
     int idx = headers.indexOf(name);
     if (idx < 0) {
       throw new IllegalStateException("AHRF: expected column '" + name + "' not found in CSV header");
@@ -297,7 +297,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return idx;
   }
 
-  private Map<String, List<String>> indexByColumn(CsvTable table, int keyIdx) {
+  Map<String, List<String>> indexByColumn(CsvTable table, int keyIdx) {
     Map<String, List<String>> map = new HashMap<>(table.rows.size() * 2);
     for (List<String> row : table.rows) {
       String key = value(row, keyIdx);
@@ -308,7 +308,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return map;
   }
 
-  private String value(List<String> row, int idx) {
+  String value(List<String> row, int idx) {
     if (idx < 0 || idx >= row.size()) {
       return null;
     }
@@ -316,7 +316,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return v.isEmpty() ? null : v;
   }
 
-  private Long parseLong(String s) {
+  Long parseLong(String s) {
     if (s == null) {
       return null;
     }
@@ -327,7 +327,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     }
   }
 
-  private Long sumNullable(Long a, Long b) {
+  Long sumNullable(Long a, Long b) {
     if (a == null && b == null) {
       return null;
     }
@@ -341,7 +341,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return (count * 100000.0) / population;
   }
 
-  private void put(ObjectNode row, String key, String value) {
+  void put(ObjectNode row, String key, String value) {
     if (value == null) {
       row.putNull(key);
     } else {
@@ -349,7 +349,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     }
   }
 
-  private void putLong(ObjectNode row, String key, Long value) {
+  void putLong(ObjectNode row, String key, Long value) {
     if (value == null) {
       row.putNull(key);
     } else {
@@ -357,7 +357,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     }
   }
 
-  private void putDouble(ObjectNode row, String key, Double value) {
+  void putDouble(ObjectNode row, String key, Double value) {
     if (value == null) {
       row.putNull(key);
     } else {
@@ -365,7 +365,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     }
   }
 
-  private CsvTable readCsv(byte[] csvBytes) throws IOException {
+  CsvTable readCsv(byte[] csvBytes) throws IOException {
     List<String> headers;
     List<List<String>> rows = new ArrayList<>();
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(
@@ -387,7 +387,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return new CsvTable(headers, rows);
   }
 
-  private byte[] readAll(InputStream is) throws IOException {
+  byte[] readAll(InputStream is) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     byte[] buf = new byte[65536];
     int len;
@@ -397,7 +397,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     return baos.toByteArray();
   }
 
-  private byte[] downloadBytes(String url) throws IOException {
+  byte[] downloadBytes(String url) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(180000);
@@ -419,7 +419,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
   }
 
   /** Minimal header + row holder for a parsed CSV file. */
-  private static final class CsvTable {
+  static final class CsvTable {
     final List<String> headers;
     final List<List<String>> rows;
 
