@@ -79,8 +79,6 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
 
   private static final String HMS_BASE_URL =
       "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile";
-  private static final String TIGER_COUNTY_URL_PATTERN =
-      "https://www2.census.gov/geo/tiger/TIGER{year}/COUNTY/tl_{year}_us_county.zip";
 
   /** Max TIGER year for which county boundaries are published. */
   private static final int MAX_TIGER_YEAR = 2023;
@@ -274,9 +272,10 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
     List<CountyGeometry> counties;
     try {
       counties = loadCountiesFromIceberg(year);
+    } catch (IOException e) {
+      throw e;
     } catch (Exception e) {
-      LOGGER.warn("Could not read counties from Iceberg ({}), falling back to TIGER download", e.getMessage());
-      counties = loadCountiesFromTiger(year, rawCache);
+      throw new IOException("Failed to read geo.counties for year=" + year + ": " + e.getMessage(), e);
     }
 
     LOGGER.info("Loaded {} county geometries for year={}", counties.size(), year);
@@ -367,46 +366,6 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
       throw new IOException("No county geometries found in Iceberg for year=" + tigerYear);
     }
     return counties;
-  }
-
-  /** Fallback: downloads and parses the TIGER county shapefile directly. */
-  private List<CountyGeometry> loadCountiesFromTiger(String year, RawCache rawCache)
-      throws IOException {
-    int tigerYear = Math.min(Integer.parseInt(year), MAX_TIGER_YEAR);
-    String url = TIGER_COUNTY_URL_PATTERN.replace("{year}", String.valueOf(tigerYear));
-    LOGGER.info("Downloading TIGER county shapefile for year={}: {}", tigerYear, url);
-
-    Path tempDir = null;
-    try {
-      tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("tiger_counties_");
-      File zipFile = new File(tempDir.toFile(), "counties.zip");
-
-      if (!downloadFile(url, zipFile, rawCache)) {
-        throw new IOException("Failed to download TIGER county shapefile from: " + url);
-      }
-      extractZip(zipFile, tempDir.toFile());
-
-      String prefix = findShapefilePrefix(tempDir.toFile());
-      if (prefix == null) {
-        throw new IOException("No shapefile found in TIGER county ZIP for year=" + tigerYear);
-      }
-
-      List<Object[]> records = TigerShapefileParser.parseShapefile(
-          tempDir.toFile(), prefix, new CountyAttributeMapper());
-
-      List<CountyGeometry> counties = new ArrayList<CountyGeometry>(records.size());
-      for (Object[] rec : records) {
-        String geoid  = (String) rec[0];
-        String sfips  = (String) rec[1];
-        Geometry geom = (Geometry) rec[2];
-        if (geoid != null && !geoid.isEmpty() && geom != null && !geom.isEmpty()) {
-          counties.add(new CountyGeometry(geoid, sfips, geom));
-        }
-      }
-      return counties;
-    } finally {
-      deleteTempDir(tempDir);
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -620,17 +579,6 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
   // ---------------------------------------------------------------------------
   // Attribute mappers
   // ---------------------------------------------------------------------------
-
-  /** Extracts GEOID, STATEFP, and geometry from a TIGER county feature. */
-  private static class CountyAttributeMapper implements TigerShapefileParser.AttributeMapper {
-    @Override public Object[] mapAttributes(TigerShapefileParser.ShapefileFeature feature) {
-      String geoid    = TigerShapefileParser.getStringAttribute(feature, "GEOID");
-      String stateFp  = TigerShapefileParser.getStringAttribute(feature, "STATEFP");
-      Object geomRaw  = feature.getAttribute("_GEOMETRY_");
-      Geometry geom   = (geomRaw instanceof Geometry) ? (Geometry) geomRaw : null;
-      return new Object[] { geoid, stateFp, geom };
-    }
-  }
 
   /** Extracts Density and geometry from an HMS smoke feature. */
   private static class SmokeAttributeMapper implements TigerShapefileParser.AttributeMapper {
