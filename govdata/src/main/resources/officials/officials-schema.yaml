@@ -875,10 +875,6 @@ partitionedTables:
         type: integer
         nullable: true
         comment: Roll calls the model classified wrongly for this member
-      - name: conditional
-        type: string
-        nullable: true
-        comment: Whether the score is conditional on a single-congress fit (Voteview flag)
       - name: nokken_poole_dim1
         type: double
         nullable: true

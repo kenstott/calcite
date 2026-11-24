@@ -28,7 +28,7 @@ import java.util.Map;
 public class VoteviewMemberTransformer implements RowTransformer {
 
   private static final String[] STRING_FIELDS = {
-      "chamber", "state_abbrev", "bioname", "bioguide_id", "conditional",
+      "chamber", "state_abbrev", "bioname", "bioguide_id",
   };
 
   private static final String[] INTEGER_FIELDS = {
