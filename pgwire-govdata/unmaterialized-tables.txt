@@ -32,6 +32,7 @@ fiscal.foreign_assistance_by_country
 fiscal.tanf_caseload
 fiscal.tanf_work_participation
 fiscal.treasury_auction_results
+health.ahrf_physician_specialty
 health.cdc_state_injury_mortality
 health.msha_coal_dust_samples
 health.msha_mnm_health_samples
