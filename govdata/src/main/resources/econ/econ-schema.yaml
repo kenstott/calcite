@@ -8115,11 +8115,20 @@ partitionedTables:
           total, monthly, thousands of units, seasonally adjusted annual rate; HOUST1F = single-family
           housing starts, monthly, thousands of units, seasonally adjusted annual rate; PERMIT =
           building permits for new housing units, monthly, thousands, seasonally adjusted annual rate;
-          PERMIT1 = single-family (1-unit) building permits, monthly, thousands, SAAR; PERMIT24 =
-          2-4 unit permits; PERMIT5 = 5+ unit permits; PERMITNSA / PERMIT1NSA = total / 1-unit permits
-          not seasonally adjusted; PERMITNE/PERMITMW/PERMITS/PERMITW = total permits by Census region;
-          HOUST5F = 5+ unit housing starts; COMPUTSA / COMPU1USA = total / 1-unit housing completions;
-          UNDCONTSA = housing units under construction (all Census New Residential Construction, via FRED);
+          PERMIT1 = single-family (1-unit) building permits, monthly, thousands, seasonally adjusted
+          annual rate; PERMIT24 = 2-4 unit building permits, monthly, thousands, seasonally adjusted
+          annual rate; PERMIT5 = 5+ unit building permits, monthly, thousands, seasonally adjusted
+          annual rate; PERMITNSA = total building permits, monthly, thousands, not seasonally adjusted;
+          PERMIT1NSA = single-family building permits, monthly, thousands, not seasonally adjusted;
+          PERMITNE = total building permits Northeast region, monthly, thousands, seasonally adjusted
+          annual rate; PERMITMW = total building permits Midwest region, monthly, thousands, seasonally
+          adjusted annual rate; PERMITS = total building permits South region, monthly, thousands,
+          seasonally adjusted annual rate; PERMITW = total building permits West region, monthly,
+          thousands, seasonally adjusted annual rate; HOUST5F = 5+ unit housing starts, monthly,
+          thousands of units, seasonally adjusted annual rate; COMPUTSA = total housing completions,
+          monthly, thousands of units, seasonally adjusted annual rate; COMPU1USA = single-family
+          housing completions, monthly, thousands of units, seasonally adjusted annual rate; UNDCONTSA =
+          housing units under construction, monthly, thousands of units, seasonally adjusted;
           EXHOSLUSM495S = existing home sales, monthly, units, seasonally adjusted annual rate;
           CSUSHPISA = S&P CoreLogic Case-Shiller U.S. national home price index (house prices),
           monthly, index Jan 2000=100; MSPUS = median sales price of houses sold in the United States
