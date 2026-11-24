@@ -45,6 +45,8 @@ FROM (
   UNION ALL
   SELECT 'federal_judges',           COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/federal_judges')
   UNION ALL
+  SELECT 'member_ideology',           COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology')
+  UNION ALL
   SELECT 'committees',                COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/committees')
   UNION ALL
   SELECT 'committee_membership',      COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership')
@@ -286,6 +288,86 @@ SELECT 'officials', 'federal_judges', 'T7_multi_appointment_coverage',
   n, 1, 'Judges with court_type_2 populated (elevated/multiple appointments)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_judges', allow_moved_paths := true)
       WHERE court_type_2 IS NOT NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: member_ideology
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true));
+
+-- T2: row_count (live Voteview download 2026-11-24 was 51,064 rows)
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T2_row_count',
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END,
+  n, 50000, 'Expected at least 50000 member-congress rows (live download was 51064)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL congress/chamber/icpsr rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true)
+      WHERE congress IS NULL OR chamber IS NULL OR icpsr IS NULL);
+
+-- T7: pk duplication guard
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (congress, chamber, icpsr) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT congress, chamber, icpsr FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true)
+        GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+-- T7: coverage — every Congress from 1 through at least 119 present
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T7_congress_coverage',
+  CASE WHEN mn = 1 AND mx >= 119 AND n = mx THEN 'pass' ELSE 'fail' END,
+  n, 119, 'Distinct congresses (expect 1..current with no gap); min=' || mn || ' max=' || mx
+FROM (SELECT MIN(congress) AS mn, MAX(congress) AS mx, COUNT(DISTINCT congress) AS n
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true));
+
+-- T7: scores in range and the 119th Senate is rankable (issue 1473 acceptance: Ron Johnson
+-- about 13th from the conservative end among sitting senators; Vance's row is also present)
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T7_senate_119_ranking',
+  CASE WHEN r BETWEEN 12 AND 15 THEN 'pass' ELSE 'fail' END,
+  r, 13, 'Rank of Ron Johnson (bioguide J000293) in the 119th Senate by nominate_dim1 desc'
+FROM (SELECT rk AS r FROM (
+        SELECT bioguide_id, RANK() OVER (ORDER BY nominate_dim1 DESC) AS rk
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true)
+        WHERE congress = 119 AND chamber = 'Senate' AND nominate_dim1 IS NOT NULL)
+      WHERE bioguide_id = 'J000293');
+
+INSERT INTO dq_results
+SELECT 'officials', 'member_ideology', 'T7_nominate_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'nominate_dim1 outside [-1.5, 1.5]'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/member_ideology', allow_moved_paths := true)
+      WHERE nominate_dim1 < -1.5 OR nominate_dim1 > 1.5);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: committees

@@ -17,6 +17,8 @@
 #     not assumed). The unitedstates project scrapes House/Senate committee pages on
 #     an automated, near-continuous cadence and is the de facto standard this data
 #     is sourced from across the open-government tooling ecosystem.
+#   - Voteview (UCLA, voteview.com/data) — member ideology (DW-NOMINATE) scores per Congress,
+#     one keyless CSV (HSall_members.csv); member_ideology table.
 #   - MIT Election Data + Science Lab (CC0) — U.S. House (1976-2018, from the Lab's GitHub
 #     repository MEDSL/constituency-returns, 1976-2018) and U.S. Senate (1976-2024, Harvard Dataverse
 #     doi:10.7910/DVN/PEJ5QU) election returns by district/state and candidate. The Lab's
@@ -55,6 +57,7 @@ comment: >
   receipt through committee action to confirmation/withdrawal. `federal_judges` covers
   every Article III judge ever commissioned, including appointing president and
   confirmation history, from the Federal Judicial Center's own biographical database.
+  `member_ideology` holds Voteview DW-NOMINATE ideology scores per member per Congress (UCLA).
   `committees` and `committee_membership` cover House/Senate/Joint committee structure,
   jurisdiction, and current rosters — the one table pair in this schema sourced from a
   community-maintained aggregator (unitedstates/congress-legislators) rather than a
@@ -767,6 +770,153 @@ partitionedTables:
         catalogType: hadoop
         warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
         tableName: federal_judges
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  - name: member_ideology
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=member_ideology/*.parquet"
+    partitions: *type_partition
+    comment: >
+      DW-NOMINATE ideology scores for every member of the House and Senate in every Congress
+      from the 1st to the current one, from Voteview (UCLA, voteview.com/data, "Member
+      Ideology", HSall_members.csv), the standard public measure computed from the roll-call
+      record. One row per (congress, chamber, icpsr); the file also carries a President row
+      per Congress with no scores. Joins to members on (bioguide_id, congress). To check a
+      claim such as "the 13th-most conservative senator", filter chamber = 'Senate' and one
+      congress and order by nominate_dim1 descending (conservative end first); rank only
+      members actually serving, because the file lists everyone who held a seat in the
+      Congress (the 119th Senate list includes JD Vance, who left in January 2025).
+      nominate_dim1 is a fixed-over-career score; nokken_poole_dim1 is re-estimated each
+      Congress. Scores for the current Congress are provisional and move as votes are cast.
+      Snapshot refreshed when the file changes (etag).
+
+    dimensions:
+      type:
+        - member_ideology
+
+    columns:
+      - name: congress
+        type: integer
+        nullable: false
+        comment: Congress number (1 = 1789-91; 119 = 2025-27)
+      - name: chamber
+        type: string
+        nullable: false
+        comment: House, Senate, or President (the President row carries no scores)
+      - name: icpsr
+        type: integer
+        nullable: false
+        comment: Voteview/ICPSR member id; with congress and chamber it is unique
+      - name: state_icpsr
+        type: integer
+        nullable: true
+        comment: ICPSR state code
+      - name: district_code
+        type: integer
+        nullable: true
+        comment: House district number (0 = at-large, 98/99 = senators and presidents)
+      - name: state_abbrev
+        type: string
+        nullable: true
+        comment: Two-letter state postal code (USA for President)
+      - name: party_code
+        type: integer
+        nullable: true
+        comment: Voteview party code (100 = Democratic, 200 = Republican, 328 = Independent)
+      - name: occupancy
+        type: integer
+        nullable: true
+        comment: Seat occupancy index when more than one member held the seat in the Congress
+      - name: last_means
+        type: integer
+        nullable: true
+        comment: How the member last came to office (Voteview code)
+      - name: bioname
+        type: string
+        nullable: true
+        comment: Member name, SURNAME, Given names (Nickname), as Voteview writes it
+      - name: bioguide_id
+        type: string
+        nullable: true
+        comment: Bioguide id; join key to members.bioguide_id. Null for the President rows and a few early members
+      - name: born
+        type: integer
+        nullable: true
+        comment: Birth year
+      - name: died
+        type: integer
+        nullable: true
+        comment: Death year; null while living
+      - name: nominate_dim1
+        type: double
+        nullable: true
+        comment: DW-NOMINATE first dimension (economic liberal -1 to conservative +1). Rank the chamber within a congress by this to say 'Nth most conservative'. Null when the member cast too few votes to be scored
+      - name: nominate_dim2
+        type: double
+        nullable: true
+        comment: DW-NOMINATE second dimension (cross-cutting issues of the era)
+      - name: nominate_log_likelihood
+        type: double
+        nullable: true
+        comment: Log-likelihood of this member's votes under the fitted model
+      - name: nominate_geo_mean_probability
+        type: double
+        nullable: true
+        comment: Geometric mean probability of the votes predicted correctly
+      - name: nominate_number_of_votes
+        type: integer
+        nullable: true
+        comment: Roll calls used to score the member in this congress
+      - name: nominate_number_of_errors
+        type: integer
+        nullable: true
+        comment: Roll calls the model classified wrongly for this member
+      - name: conditional
+        type: string
+        nullable: true
+        comment: Whether the score is conditional on a single-congress fit (Voteview flag)
+      - name: nokken_poole_dim1
+        type: double
+        nullable: true
+        comment: Nokken-Poole first-dimension score, estimated congress by congress so it can move within a career
+      - name: nokken_poole_dim2
+        type: double
+        nullable: true
+        comment: Nokken-Poole second-dimension score
+
+    source:
+      type: http
+      url: "https://voteview.com/static/data/out/members/HSall_members.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.officials.VoteviewMemberTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=member_ideology/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: member_ideology
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
@@ -2125,6 +2275,10 @@ constraints:
     # to members/nominations either: appointing_president_N is a free-text name, not an
     # ID — matching it to a member or nominee would be name-matching, not a real key
     # relationship, and isn't attempted here.
+  member_ideology:
+    primaryKey: [congress, chamber, icpsr]
+    # No enforced FK to members: join on (bioguide_id, congress); bioguide_id is null for the
+    # President rows and a few early members.
   committees:
     primaryKey: [committee_id]
   committee_membership:
