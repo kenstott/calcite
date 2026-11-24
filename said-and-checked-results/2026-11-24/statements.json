@@ -1615,14 +1615,29 @@
    "kind": "factual",
    "test": "True if a U.S. government body has officially identified Alice Huang as a spy or agent of a Chinese intelligence service. False if a U.S. government body has officially stated she is not a spy. Cannot be determined if the only accounts are reports that she is a suspected spy without an official finding.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "No U.S. government body was found to have officially identified Alice Huang as a spy, and none has said she is not one; the Nov. 16 Commerce and Justice Department statement describes an open criminal export-control investigation of Megaspeed and does not mention espionage. AskAmerica's screening-list data shows three Megaspeed companies (Malaysia, Singapore, Thailand) on the Commerce Entity List and no entry for her as an individual.",
+   "check_run": "q208/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "econ.export_control_restricted_parties (Megaspeed and Alice Huang entries)",
+     "url": "https://askamerica.ai/catalog/schemas/econ/#export_control_restricted_parties-table",
+     "askamerica": true,
+     "sql": "SELECT source_list, name, country, start_date FROM econ.export_control_restricted_parties WHERE name ILIKE '%megaspeed%' OR name ILIKE '%alice huang%' OR name ILIKE '%huang, alice%' FETCH FIRST 20 ROWS ONLY"
+    },
+    {
+     "label": "Commerce and Justice Department joint statement on Megaspeed (Nov. 16, 2026)",
+     "url": "https://www.justice.gov/opa/media/1472536/dl"
+    },
+    {
+     "label": "AP via PBS NewsHour, Huang's reinstatement sparks fury in Congress",
+     "url": "https://www.pbs.org/newshour/politics/huangs-reinstatement-at-nvidia-sparks-fury-in-congress-as-lawmakers-move-forward-with-hearings"
+    }
+   ]
   },
   {
    "id": 43,
