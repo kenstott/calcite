@@ -18,6 +18,7 @@ econ.national_industry_employment
 econ.osha_inspections
 econ.osha_violations
 econ.retail_sales_revision_vintages
+econ.social_security_retirement_applications
 econ.treasury_foreign_holdings
 edu.edfacts_chronic_absenteeism
 energy.eia_petroleum_spot_prices
