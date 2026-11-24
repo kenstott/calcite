@@ -151,7 +151,7 @@ _TXN_RE = re.compile(
 
 _SCALAR_FN_RE = re.compile(
     r"^\s*SELECT\s+(?:pg_catalog\.)?"
-    r"(current_user|session_user|current_database\(\)|current_schema\(\)|version\(\)"
+    r"(current_user|session_user|current_catalog|current_database\(\)|current_schema\(\)|version\(\)"
     r"|pg_backend_pid\(\)|pg_is_in_recovery\(\)|txid_current\(\)|pg_current_xact_id\(\))\s*$",
     re.IGNORECASE,
 )
@@ -1717,7 +1717,9 @@ def classify(sql: str) -> str:  # REQ-127, REQ-128, REQ-363
             if col.name.lower() in _SCALAR_NAMES:
                 return "INTERCEPT"
         for node in tree.walk():
-            if type(node).__name__ in ("CurrentUser", "CurrentDatabase", "CurrentSchema"):
+            if type(node).__name__ in (
+                "CurrentUser", "CurrentDatabase", "CurrentCatalog", "CurrentSchema"
+            ):
                 return "INTERCEPT"
     except Exception:
         lower = stripped.lower()
@@ -4118,7 +4120,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 return exp.Literal.string(setting_value(key))
         if type(node).__name__ == "CurrentUser":
             return exp.Literal.string(role_id)
-        if type(node).__name__ == "CurrentDatabase":
+        if type(node).__name__ in ("CurrentDatabase", "CurrentCatalog"):
             return exp.Literal.string(_DATABASE_NAME)
         if type(node).__name__ == "CurrentSchema":
             return exp.Literal.string("public")
@@ -4225,6 +4227,8 @@ def _handle_scalar(sql: str, role_id: str):
         return QueryResult(rows=[(role_id,)], column_names=["current_user"])
     if "current_database" in s:
         return QueryResult(rows=[(_DATABASE_NAME,)], column_names=["current_database"])
+    if "current_catalog" in s:
+        return QueryResult(rows=[(_DATABASE_NAME,)], column_names=["current_catalog"])
     if "version()" in s:
         return QueryResult(rows=[("PostgreSQL 14.0 on Provisa",)], column_names=["version"])
     if "current_schema()" in s:
