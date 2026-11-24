@@ -2191,7 +2191,16 @@ partitionedTables:
       1982-84=100: New vehicles (SETA01) with its New cars (SS45011) / New trucks (SS45021)
       subcomponents (not seasonally adjusted), plus Used cars and trucks (SETA02, from 1953)
       in both not-seasonally-adjusted (CUUR) and seasonally-adjusted (CUSR) forms — the
-      used-vehicle price series for collateral-value / auto-loan questions. Two related Transportation item codes are
+      used-vehicle price series for collateral-value / auto-loan questions. Also holds the
+      other Transportation item indexes from the same BLS file, NSA (CUUR) and, where BLS
+      publishes it, SA (CUSR): Motor fuel (SETB, SETB01 gasoline, SETB02 other motor fuels),
+      Motor vehicle parts and equipment (SETC, SETC01 tires, SETC02 vehicle accessories),
+      Motor vehicle maintenance and repair (SETD, SETD01 body work, SETD02 maintenance and
+      servicing, SETD03 repair), Motor vehicle insurance (SETE), Motor vehicle fees (SETF,
+      SETF01 state/local registration and licenses, SETF03 parking and other fees) and Public
+      transportation (SETG, SETG01 airline fares, SETG02 other intercity transportation,
+      SETG03 intracity transportation) — the series for auto-insurance, repair and parts
+      inflation versus vehicle prices, and airfare questions. Two related Transportation item codes are
       deliberately excluded: SS4501A (New cars and trucks) and SS45031 (New motorcycles)
       were both discontinued by BLS (last published 2022-03 and 2000-05 respectively) —
       loading them would add all-null tails, not real coverage. NATIONAL ONLY —
@@ -2213,10 +2222,13 @@ partitionedTables:
         nullable: true
         comment: >
           BLS CPI series identifier. This table is long-format: one row per (series, period), so
-          ALWAYS filter on series. The 5 series loaded are: CUUR0000SETA01 (New vehicles),
-          CUUR0000SS45011 (New cars), CUUR0000SS45021 (New trucks), CUUR0000SETA02 (Used cars
-          and trucks, NSA) and CUSR0000SETA02 (Used cars and trucks, seasonally adjusted).
-          All are index levels, not rates — compute inflation as a period-over-period change.
+          ALWAYS filter on series. Series: CUUR0000SETA01 (New vehicles), CUUR0000SS45011 (New
+          cars), CUUR0000SS45021 (New trucks), CUUR0000SETA02 / CUSR0000SETA02 (Used cars and
+          trucks, NSA / SA), and for each of SETB (Motor fuel), SETC (Parts and equipment),
+          SETD (Maintenance and repair), SETE (Motor vehicle insurance), SETF (Fees) and SETG
+          (Public transportation, incl. SETG01 airline fares) the item and sub-item codes in
+          both CUUR (NSA) and CUSR (SA) forms where BLS publishes them, e.g. CUUR0000SETD,
+          CUSR0000SETE. All are index levels, not rates — compute inflation as a period-over-period change.
         source: series_id
       - name: year
         type: integer
@@ -2262,12 +2274,12 @@ partitionedTables:
       rawCache:
         enabled: true
       # National U.S. city average (area 0000) only: NSA (CUUR) New vehicles + the 2
-      # live subcomponents, and Used cars and trucks SETA02 in NSA and SA (CUSR). This
-      # bulk file also carries the rest of the Transportation major group (motor fuel,
-      # airfares, etc.), which is out of scope here.
+      # live subcomponents, Used cars and trucks SETA02 in NSA and SA (CUSR), and the
+      # SETB-SETG item/sub-item series (NSA and SA). Aggregate groups (SAT, SAT1, SATCLTB),
+      # the discontinued SS4501A/SS45031 and the other SS* specials are not loaded.
       rowFilter:
         column: series_id
-        pattern: '^(CUUR0000(SETA01|SS45011|SS45021)|CU[US]R0000SETA02)$'
+        pattern: '^(CUUR0000(SETA01|SS45011|SS45021)|CU[US]R0000(SETA02|SETB|SETB01|SETB02|SETC|SETC01|SETC02|SETD|SETD01|SETD02|SETD03|SETE|SETF|SETF01|SETF03|SETG|SETG01|SETG02|SETG03))$'
 
     # Materialization configuration
     materialize:
