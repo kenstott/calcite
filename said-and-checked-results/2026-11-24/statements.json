@@ -1923,14 +1923,23 @@
    "kind": "factual",
    "test": "True if the House Ethics Committee report or Gomez's own statements describe conduct by Gomez outside his marriage. False if the report and record show no such conduct. Cannot be determined if neither the report nor his statement can be read.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "supported",
+   "finding": "The Ethics Committee report records that Gomez was married at the time of the encounter with a House staffer it examined and describes sexual contact with her and a past sexual relationship with a second employee; it also quotes his own reference to mistakes outside his marriage.",
+   "check_run": "q211/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "House Committee on Ethics report on Rep. Gomez (Nov. 23, 2026)",
+     "url": "https://ethics.house.gov/wp-content/uploads/2026/11/Committee-Report-Rep.-Gomez.pdf"
+    },
+    {
+     "label": "AP via PBS NewsHour on the Ethics report (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/politics/ethics-probe-finds-democratic-rep-jimmy-gomez-made-unwelcome-sexual-advances-to-a-staffer"
+    }
+   ]
   },
   {
    "id": 51,
@@ -1955,14 +1964,23 @@
    "kind": "factual",
    "test": "True if the Ethics Committee report omits testimony Gomez gave that bears on the findings. False if the report includes his testimony in full or he gave no testimony. Cannot be determined if the report and the record of his testimony cannot both be read.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "The report quotes Gomez's interview testimony on several points but does not reproduce it in full. The interview transcript and the report's exhibits could not be read, so whether omitted testimony bears on the findings could not be determined.",
+   "check_run": "q211/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "House Committee on Ethics report on Rep. Gomez (Nov. 23, 2026)",
+     "url": "https://ethics.house.gov/wp-content/uploads/2026/11/Committee-Report-Rep.-Gomez.pdf"
+    },
+    {
+     "label": "NPR on Gomez's resignation (Nov. 23, 2026)",
+     "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+    }
+   ]
   },
   {
    "id": 52,
@@ -1987,14 +2005,23 @@
    "kind": "factual",
    "test": "True if the Ethics Committee report quotes Gomez's interview selectively and he had no opportunity to respond to the final report before release. False if the report shows he was given the draft or final report and an opportunity to respond. Cannot be determined if the report's account of the process cannot be read.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "The report's procedural history says the committee interviewed 10 witnesses, including Gomez, and adopted the report on Nov. 19, but it does not say whether he was given a draft or a chance to respond. It quotes parts of his testimony, which by itself does not settle whether the quotation was selective.",
+   "check_run": "q211/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "House Committee on Ethics report on Rep. Gomez (Nov. 23, 2026)",
+     "url": "https://ethics.house.gov/wp-content/uploads/2026/11/Committee-Report-Rep.-Gomez.pdf"
+    },
+    {
+     "label": "NPR on Gomez's resignation (Nov. 23, 2026)",
+     "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
+    }
+   ]
   },
   {
    "id": 53,
@@ -2094,9 +2121,9 @@
    "kind": "factual",
    "test": "True if the Ethics Committee report finds Gomez's conduct consensual and finds no violation of the law or House rules. False if the report finds his advances were unwelcome or that he violated House rules. Cannot be determined if the report cannot be read.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "contradicted",
+   "finding": "The Ethics Committee report determined that Gomez violated clauses 1 and 18(b) of the House Code of Official Conduct by making unwelcome sexual advances toward a staffer, and found his account that the encounter was consensual \"not reconcilable\" with her testimony, which it judged credible. What remains open: this is a committee finding the House has not acted on; the committee recommended no sanction, and the report says the conduct could implicate D.C. misdemeanor law without any criminal process being under way.",
+   "check_run": "q211/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
@@ -2107,7 +2134,20 @@
      "url": "https://www.npr.org/2026/11/23/g-s1-155142/california-democrat-rep-gomez-resigns-following-ethics-report-on-sexual-misconduct-allegations"
     }
    ],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "House Committee on Ethics report on Rep. Gomez (Nov. 23, 2026)",
+     "url": "https://ethics.house.gov/wp-content/uploads/2026/11/Committee-Report-Rep.-Gomez.pdf"
+    },
+    {
+     "label": "Ethics Committee chair and ranking member statement on Rep. Gomez",
+     "url": "https://ethics.house.gov/press-releases/statement-of-the-chairman-and-ranking-member-of-the-committee-on-ethics-regarding-representative-jimmy-gomez-2/"
+    },
+    {
+     "label": "AP via PBS NewsHour on the Ethics report (Nov. 23, 2026)",
+     "url": "https://www.pbs.org/newshour/politics/ethics-probe-finds-democratic-rep-jimmy-gomez-made-unwelcome-sexual-advances-to-a-staffer"
+    }
+   ]
   },
   {
    "id": 56,
