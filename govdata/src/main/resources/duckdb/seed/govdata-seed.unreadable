@@ -1,5 +1,2 @@
-edu.edfacts_chronic_absenteeism	read as no columns
 patents.patent_publication_cpc	read as no columns
 patents.patent_publication_applicants	read as no columns
-disasters.fema_nfhl_lomrs	read as no columns
-disasters.fema_firm_panels	read as no columns
