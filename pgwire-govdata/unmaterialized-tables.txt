@@ -38,6 +38,8 @@ health.nchs_state_low_birthweight
 health.nchs_state_preterm_births
 health.rhtp_state_awards
 housing.cfpb_mortgage_performance
+housing.tract_house_price_index
+housing.zip_house_price_index
 law.bill_amendment_text_versions
 officials.presidential_results_by_district
 patents.patent_publication_applicants
