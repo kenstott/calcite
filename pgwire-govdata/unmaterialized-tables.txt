@@ -17,6 +17,7 @@ econ.osha_violations
 econ.retail_sales_revision_vintages
 econ.treasury_foreign_holdings
 edu.edfacts_chronic_absenteeism
+energy.eia_petroleum_spot_prices
 energy.eia_plant_generation
 environment.attains_cause_summary
 environment.attains_state_use_summary
