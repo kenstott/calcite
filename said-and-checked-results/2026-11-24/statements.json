@@ -670,14 +670,31 @@
    "kind": "factual",
    "test": "True if, around the passage of the Affordable Care Act in 2010, Obama publicly described the law as a first step, a starter home or not the final answer. False if his statements at the time presented it as complete and no such description from then can be found while his later 'starter home' remarks are dated years afterwards. Cannot be determined if his statements from 2010 cannot be found.",
    "premise": null,
-   "result": "not_checked",
-   "finding": null,
-   "check_run": null,
+   "result": "unsettled",
+   "finding": "Obama's March 2010 remarks to the House Democratic Caucus, after the House vote and at the signing contain no \"starter home\", \"first step\" or \"not the answer\" wording, though on March 20 he said: \"Now, is this bill perfect? Of course not. Will this solve every single problem in our health care system right away? No.\" The remarks say the law was not a complete solution, but they do not use the explicit framing he describes.",
+   "check_run": "q203/askamerica/2026-11-24",
    "counter_statements": [],
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "evidence": []
+   "evidence": [
+    {
+     "label": "Remarks to the House Democratic Caucus (Mar. 20, 2010), American Presidency Project",
+     "url": "https://www.presidency.ucsb.edu/documents/remarks-the-house-democratic-caucus"
+    },
+    {
+     "label": "Remarks on House passage (Mar. 21, 2010), American Presidency Project",
+     "url": "https://www.presidency.ucsb.edu/documents/remarks-house-representatives-passage-health-care-reform-legislation"
+    },
+    {
+     "label": "Signing remarks (Mar. 23, 2010), American Presidency Project",
+     "url": "https://www.presidency.ucsb.edu/documents/remarks-signing-the-patient-protection-and-affordable-care-act"
+    },
+    {
+     "label": "Compilation of Presidential Documents DCPD-201000196",
+     "url": "https://www.govinfo.gov/content/pkg/DCPD-201000196/pdf/DCPD-201000196.pdf"
+    }
+   ]
   },
   {
    "id": 16,
