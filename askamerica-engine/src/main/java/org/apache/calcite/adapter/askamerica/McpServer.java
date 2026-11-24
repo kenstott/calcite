@@ -8410,6 +8410,13 @@ public class McpServer {
         java.util.List<String> centralMissing = new java.util.ArrayList<>(centralFigures);
         centralMissing.retainAll(missing);
         if (centralMissing.isEmpty() && 2 * missing.size() <= figures.size()) {
+            java.util.Set<String> urlHeadline = headlineWords(articleUrl);
+            if (urlHeadline.size() >= MIN_HEADLINE_WORDS && !carriesHeadline(urlHeadline, text)) {
+                return "validation refused: `article_copy_url` " + copyUrl + " does not carry the "
+                    + "article headline's words (" + urlHeadline + ") together in one passage, so it "
+                    + "is a different story on the same topic, not a copy. Find a page that "
+                    + "carries the headline, web_fetch it and name it, or set `article_unavailable`.";
+            }
             return null;
         }
         return "validation refused: `article_copy_url` " + copyUrl + " is missing "
@@ -8441,9 +8448,20 @@ public class McpServer {
         }
         java.util.List<String> loaded = COPY_LOADED.get(norm);
         if (loaded != null && !loaded.isEmpty()) {
-            return "validation refused: `article_unavailable` is set but the copy search loaded "
-                + loaded + ". Extract the claims from one that is the same story and name it in "
-                + "`article_copy_url`.";
+            java.util.Set<String> headline = headlineWords(articleUrl);
+            java.util.List<String> sameStory = new java.util.ArrayList<>();
+            for (String u : loaded) {
+                java.util.List<String> pages = FETCHED_TEXT.get(normalizeUrlForMatch(u));
+                if (headline.size() < MIN_HEADLINE_WORDS
+                        || (pages != null && carriesHeadline(headline, String.join("\n", pages)))) {
+                    sameStory.add(u);
+                }
+            }
+            if (!sameStory.isEmpty()) {
+                return "validation refused: `article_unavailable` is set but the copy search loaded "
+                    + sameStory + ". Extract the claims from one that is the same story and name "
+                    + "it in `article_copy_url`.";
+            }
         }
         java.util.List<String> problems = new java.util.ArrayList<>();
         boolean graded = false;
@@ -8474,6 +8492,51 @@ public class McpServer {
 
     /** Fraction of the article's headline words its copy must carry when the claims hold no figure. */
     private static final double HEADLINE_COPY_SHARE = 0.6;
+
+    /** Fewest headline words that identify a story; fewer cannot tell it from its topic. */
+    private static final int MIN_HEADLINE_WORDS = 3;
+    /** Share of the headline's words that must sit together for a page to carry the headline. */
+    private static final double HEADLINE_WINDOW_SHARE = 0.8;
+    /** Characters within which the headline's words must fall: a title, lede or caption. */
+    private static final int HEADLINE_WINDOW_CHARS = 240;
+
+    /**
+     * Whether the page carries the headline: at least {@link #HEADLINE_WINDOW_SHARE} of the
+     * headline's words fall within one {@link #HEADLINE_WINDOW_CHARS}-character passage. A
+     * different story on the same topic scatters those words across unrelated paragraphs.
+     */
+    static boolean carriesHeadline(java.util.Set<String> headline, String pageText) {
+        String lower = pageText.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<String> words = new java.util.ArrayList<>(headline);
+        int need = (int) Math.ceil(HEADLINE_WINDOW_SHARE * words.size());
+        java.util.List<int[]> hits = new java.util.ArrayList<>();
+        for (int i = 0; i < words.size(); i++) {
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\\b" + java.util.regex.Pattern.quote(words.get(i))).matcher(lower);
+            while (m.find()) {
+                hits.add(new int[] {m.start(), i});
+            }
+        }
+        hits.sort((a, b) -> Integer.compare(a[0], b[0]));
+        int[] count = new int[words.size()];
+        int distinct = 0;
+        int lo = 0;
+        for (int hi = 0; hi < hits.size(); hi++) {
+            if (count[hits.get(hi)[1]]++ == 0) {
+                distinct++;
+            }
+            while (hits.get(hi)[0] - hits.get(lo)[0] > HEADLINE_WINDOW_CHARS) {
+                if (--count[hits.get(lo)[1]] == 0) {
+                    distinct--;
+                }
+                lo++;
+            }
+            if (distinct >= need) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /** Headline words: the last non-identifier path segment of the article URL, split on hyphens. */
     private static java.util.Set<String> headlineWords(String articleUrl) {
@@ -8524,7 +8587,7 @@ public class McpServer {
                 shared++;
             }
         }
-        if (shared < HEADLINE_COPY_SHARE * headline.size()) {
+        if (shared < HEADLINE_COPY_SHARE * headline.size() || !carriesHeadline(headline, copyText)) {
             return "validation refused: `article_copy_url` " + copyUrl + " carries " + shared
                 + " of the article headline's " + headline.size() + " words (" + headline
                 + "), so it is a different story, not a copy. web_search the headline in quotes "

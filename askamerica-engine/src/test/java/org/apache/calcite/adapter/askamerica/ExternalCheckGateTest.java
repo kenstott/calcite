@@ -842,7 +842,36 @@ class ExternalCheckGateTest {
         String n = McpServer.normalizeUrlForMatch(ARTICLE);
         McpServer.COPY_SEARCHED.add(n);
         McpServer.COPY_LOADED.put(n, java.util.Collections.singletonList("https://x.example/a"));
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch("https://x.example/a"),
+            java.util.Collections.singletonList(page("DC record evictions deepen the housing "
+                + "crisis.")));
         assertNotNull(unavailableGate(UNAVAILABLE_CLAIMS, UNAVAILABLE_TITLE));
+    }
+
+    /** Daily news check 2026-11-24, q4: the copy search loaded an older story on the same
+     *  topic, and the gate refused the honest exit and accepted it as the copy. */
+    @Test void aLoadedSameTopicStoryDoesNotBlockTheUnavailableExit() throws Exception {
+        String n = McpServer.normalizeUrlForMatch(ARTICLE);
+        String other = "https://x.example/other";
+        McpServer.COPY_SEARCHED.add(n);
+        McpServer.COPY_LOADED.put(n, java.util.Collections.singletonList(other));
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(other),
+            java.util.Collections.singletonList(page("Rents rose. A record number of "
+                + "tenants were helped. " + "Unrelated paragraph. ".repeat(30)
+                + "Evictions in another city fell, the housing office said, and the crisis "
+                + "line was busy.")));
+        assertNull(unavailableGate(UNAVAILABLE_CLAIMS, UNAVAILABLE_TITLE));
+    }
+
+    @Test void aSameTopicPageIsNotACopyEvenWhenAFigureMatches() throws Exception {
+        String copy = "https://www.aol.com/articles/other-story.html";
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
+            java.util.Collections.singletonList(page("Record rents hit tenants. "
+                + "Unrelated paragraph. ".repeat(30) + "Evictions fell 2.5% to 16,750 as the "
+                + "housing market cooled and a crisis line opened.")));
+        String problem = articleTextGate(CLAIMS, copy);
+        assertNotNull(problem);
+        assertTrue(problem.contains("different story"), problem);
     }
 
     @Test void unavailableArticlePublishesWithArticleOnlyClaimsNotCheckable() throws Exception {
@@ -921,7 +950,7 @@ class ExternalCheckGateTest {
         assertTrue(articleTextGate(CLAIMS, copy).contains("is missing 2 of the claims' 2"));
 
         McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
-            java.util.Collections.singletonList(page("U.S. traffic deaths fell 2.5% to 16,750.")));
+            java.util.Collections.singletonList(page("DC record evictions deepen the housing crisis. U.S. traffic deaths fell 2.5% to 16,750.")));
         assertNull(articleTextGate(CLAIMS, copy));
     }
 
@@ -941,7 +970,7 @@ class ExternalCheckGateTest {
 
         McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
             java.util.Collections.singletonList(
-                page("Deaths fell 2.5% to 16,750 from 17,175 in the first half.")));
+                page("DC record evictions deepen the housing crisis. Deaths fell 2.5% to 16,750 from 17,175 in the first half.")));
         assertNull(articleTextGate(claims, copy));
     }
 
