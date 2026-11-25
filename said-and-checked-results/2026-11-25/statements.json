@@ -122,7 +122,7 @@
       "speaker": "Donald Trump",
       "office": "President of the United States",
       "party": "R",
-      "context": "In a CNBC interview on Nov. 24, 2026, President Trump described the effect on the stock market of Jensen Huang's return as Nvidia CEO.",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump described the effect on the stock market of Jensen Huang's return as Nvidia CEO.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "Economy and Jobs",
       "speaker_state": null,
@@ -133,17 +133,26 @@
         "url": "https://www.npr.org/2026/11/24/nx-s1-6051045/trump-takes-credit-for-jensen-huang-returns-to-nvidia-says-its-good-for-the-economy"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": ""
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "CNBC's transcript reads \"it's taking the whole market\"."
       },
       "kind": "factual",
-      "test": "True if Nvidia's share price and a broad market index (S&P 500 or Nasdaq Composite) both rose from the last close before the reinstatement was announced through the close before the interview. False if Nvidia shares or the broad index fell over that period. Cannot be determined if price data for those days cannot be read.",
+      "test": "True if Nvidia's share price and a broad market index (S&P 500 or Nasdaq Composite) both rose on Nov. 23, 2026, the trading day of the morning interview, from the Nov. 20 close. False if either was down that day. Cannot be determined if price data for those days cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "As reported by AP, Nvidia shares opened 33% higher on Nov. 23, the morning of the interview, and the S&P 500 rose 4.7% that day, which fits the claim; no exchange price record for that day could be read directly.",
+      "evidence": [
+        {
+          "label": "AP via PBS NewsHour, Nvidia board reinstates Huang",
+          "url": "https://www.pbs.org/newshour/nation/nvidia-board-unanimously-reinstates-jensen-huang-as-ceo-and-chairman"
+        },
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -154,7 +163,7 @@
       "speaker": "Donald Trump",
       "office": "President of the United States",
       "party": "R",
-      "context": "In a CNBC interview on Nov. 24, 2026, President Trump said he spoke to Nvidia's board and persuaded it to reinstate Jensen Huang as CEO.",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump said he spoke to Nvidia's board and persuaded it to reinstate Jensen Huang as CEO.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "AI and Technology",
       "speaker_state": null,
@@ -165,17 +174,30 @@
         "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": ""
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "CNBC's transcript reads \"I spoke to 'em. Let me just put it that way, and I convinced 'em.\""
       },
       "kind": "factual",
       "test": "True if Nvidia, a board member or another primary record confirms Trump spoke with Nvidia's board members before the reinstatement and the board acknowledged his urging. False if Nvidia or a board member states on record that the president had no contact with the board on the matter. Cannot be determined if no primary account of the board's contacts is available.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "In the same interview Trump declined to say whom he spoke to (\"I was represented at the board\"). Nvidia's Nov. 23 release credits \"input from senior levels of the United States government\" without naming him, and no board member has confirmed or denied contact.",
+      "evidence": [
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        },
+        {
+          "label": "Nvidia release on Huang's reinstatement, SEC 8-K exhibit (Nov. 23, 2026)",
+          "url": "https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000090/nov23pressrelease.htm"
+        },
+        {
+          "label": "CNBC on Trump and the Nvidia board (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/trump-nvidia-jensen-huang.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -192,7 +214,7 @@
       "speaker": "Donald Trump",
       "office": "President of the United States",
       "party": "R",
-      "context": "President Trump said in a CNBC interview that U.S. officials assured Nvidia that CEO Jensen Huang, who had an affair with a suspected Chinese spy, posed no national security risk.",
+      "context": "President Trump said in a CNBC phone interview on Nov. 23, 2026 that U.S. officials assured Nvidia that CEO Jensen Huang, who had an affair with a suspected Chinese spy, posed no national security risk.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "Defense and National Security",
       "speaker_state": null,
@@ -203,17 +225,26 @@
         "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": ""
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "In CNBC's transcript Trump says Nvidia's board \"did ask for assurance on the national security threat and we gave them assurance at least with everything we know.\""
       },
       "kind": "factual",
       "test": "True if a primary record (an Nvidia statement or filing, or an official government statement) shows U.S. officials told Nvidia that Huang did not present a national security risk. False if officials stated on record that they gave no such assurance or assessed Huang as a risk. Cannot be determined if no primary account of the officials' communications with Nvidia is available.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "supported",
+      "finding": "Nvidia's Nov. 23 release says the board \"received input from senior levels of the United States government, and based on that input\" is confident Huang's reinstatement \"poses no national security risk.\" The board's own investigation and the Justice and Commerce Department inquiry into Megaspeed remain open.",
+      "evidence": [
+        {
+          "label": "Nvidia release on Huang's reinstatement, SEC 8-K exhibit (Nov. 23, 2026)",
+          "url": "https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000090/nov23pressrelease.htm"
+        },
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -230,7 +261,7 @@
       "speaker": "Donald Trump",
       "office": "President of the United States",
       "party": "R",
-      "context": "In a CNBC interview on Nov. 24, 2026, President Trump said Nvidia CEO Jensen Huang had apologized over the extramarital affairs that led to his resignation.",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump said Nvidia CEO Jensen Huang had apologized over the extramarital affairs that led to his resignation.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "AI and Technology",
       "speaker_state": null,
@@ -241,17 +272,26 @@
         "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
+        "status": "verbatim",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
         "note": ""
       },
       "kind": "factual",
       "test": "True if Huang's own public statements or Nvidia's published statements show he apologized to the company, publicly, and to his family. False if Huang's public statements contain no apology. Cannot be determined if no primary statement by Huang can be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "Huang's Nov. 17 statement says he \"deeply regret[s]\" the problems he created for the board, owns his mistakes and tells his family \"I love you\"; it does not use the words apologize or sorry, and any private apology cannot be checked.",
+      "evidence": [
+        {
+          "label": "Huang's statement on his resignation (Nov. 17, 2026), CNBC",
+          "url": "https://www.cnbc.com/2026/11/17/nvidia-jensen-huang-statement.html"
+        },
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -262,7 +302,7 @@
       "speaker": "Donald Trump",
       "office": "President of the United States",
       "party": "R",
-      "context": "In a CNBC interview on Nov. 24, 2026, President Trump explained why Nvidia CEO Jensen Huang's situation differs from other executives' scandals.",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump explained why Nvidia CEO Jensen Huang's situation differs from other executives' scandals.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "AI and Technology",
       "speaker_state": null,
@@ -273,8 +313,8 @@
         "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
+        "status": "verbatim",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
         "note": ""
       },
       "kind": "opinion_or_prediction",
@@ -294,7 +334,7 @@
       "speaker": "Donald Trump",
       "office": "President of the United States",
       "party": "R",
-      "context": "In a CNBC interview on Nov. 24, 2026, President Trump characterized the Nvidia scandal over CEO Jensen Huang's affairs.",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump characterized the Nvidia scandal over CEO Jensen Huang's affairs.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "AI and Technology",
       "speaker_state": null,
@@ -305,9 +345,9 @@
         "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": ""
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "CNBC's transcript reads \"it showed how advanced this company is, how incredibly advanced it is with respect to chips\"; the story has \"with respect to him\"."
       },
       "kind": "opinion_or_prediction",
       "test": null,
@@ -326,7 +366,7 @@
       "speaker": "Donald Trump",
       "office": "President of the United States",
       "party": "R",
-      "context": "In a CNBC interview on Nov. 24, 2026, President Trump gave his reason for pushing Nvidia to reinstate CEO Jensen Huang.",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump gave his reason for pushing Nvidia to reinstate CEO Jensen Huang.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "AI and Technology",
       "speaker_state": null,
@@ -337,8 +377,8 @@
         "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
+        "status": "verbatim",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
         "note": ""
       },
       "kind": "opinion_or_prediction",
@@ -588,7 +628,7 @@
       "speaker": "Tim Scott",
       "office": "U.S. Senator",
       "party": "R",
-      "context": "Sen. Scott, who chairs the Senate Banking Committee, announced on Nov. 24, 2026 that Nvidia CEO Jensen Huang will testify before the committee.",
+      "context": "Sen. Scott, who chairs the Senate Banking Committee, announced on Nov. 23, 2026 that Nvidia CEO Jensen Huang will testify before the committee.",
       "topic": "Nvidia CEO reinstatement",
       "broad_topic": "AI and Technology",
       "speaker_state": "SC",
