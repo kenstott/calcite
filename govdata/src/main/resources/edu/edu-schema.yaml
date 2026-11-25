@@ -2330,6 +2330,8 @@ partitionedTables:
       level_of_study: 1=undergraduate, 2=graduate.
       tuition_type: 1=in-district, 2=in-state, 3=out-of-state, 4=out-of-district.
       Use tuition_type=2 for in-state and tuition_type=3 for out-of-state comparisons.
+      Charge columns are null where the source reports the amount as missing, not
+      applicable or suppressed.
       Data only available through year=2021 (the Urban Institute academic-year-tuition
       endpoint has no more recent years); use ipeds_institutions/college_scorecard for
       more current institution data.
