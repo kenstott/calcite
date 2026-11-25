@@ -33,7 +33,7 @@ log_info "DEBUG: GOVDATA_CACHE_DIR='${GOVDATA_CACHE_DIR:-<unset>}'"
 # ── argument parsing ──────────────────────────────────────────────────────────
 SCHEMA="${1:-}"
 if [ -z "$SCHEMA" ]; then
-  echo "Usage: $(basename "$0") <schema> [--mode daily|historical] [--dry-run]" >&2
+  echo "Usage: $(basename "$0") <schema> [--mode daily|historical] [--rebuild|--etl-resume] [--dry-run]" >&2
   exit 1
 fi
 
@@ -106,7 +106,11 @@ export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v
 # years whatever --start-year/--tables say, and refuse a second one (exit 3, before anything is created).
 # The claim is per bucket: a DQ run in the isolated -dq bucket never conflicts with a production run, which
 # is the point of having one; a run that targets the production bucket does conflict with production
-# remediation of the same schema. A dry run starts nothing and takes no claim. Released in _on_exit.
+# remediation of the same schema. Released in _on_exit.
+#
+# --dry-run changes nothing outside this run directory: no teardown, no ETL, no result upload, no GitHub
+# issue. With --rebuild or --etl-resume it logs the plan and stops; without them it runs the read-only DQ
+# SQL. It therefore takes no claim and registers no writer guard.
 if ! $DRY_RUN; then
   CLAIM_DIR="${GOVDATA_CLAIM_DIR:-$SCRIPT_DIR/runs/claims}"
   if ! claim_schema_years "$CLAIM_DIR" "$$" "s3://${GOVDATA_DQ_BUCKET}" "$SCHEMA" 0 9999 \
@@ -132,7 +136,7 @@ mkdir -p "$RUN_DIR"
 # treats keyword modes it can't bound from the id string alone. Uses the ".foreground" opt-in
 # because this script runs its guarded work synchronously in its own process, not through
 # run-pool.sh's detached-launcher wrapper.
-if [ "$GOVDATA_DQ_BUCKET" = "govdata-parquet-v1" ]; then
+if ! $DRY_RUN && [ "$GOVDATA_DQ_BUCKET" = "govdata-parquet-v1" ]; then
   _SCHEMA_YEAR_PID_DIR="$SCRIPT_DIR/runs/pids"
   mkdir -p "$_SCHEMA_YEAR_PID_DIR"
   _SCHEMA_YEAR_GUARD_ID="worker-${SCHEMA}-historical"
@@ -191,6 +195,10 @@ _extract_root_cause() {
 _file_script_error_issue() {
   _SCRIPT_COMPLETE=true
   local detail="$1"
+  if $DRY_RUN; then
+    log_info "$WORKER_ID: --dry-run — not filing an issue: ${detail}"
+    return
+  fi
   if ! command -v gh >/dev/null 2>&1; then
     log_info "$WORKER_ID: gh not found in PATH ($PATH) — skipping issue filing"
     return
@@ -324,6 +332,26 @@ _cf_reset_bucket() {
   fi
   log_info "$WORKER_ID: bucket '$bucket' reset complete"
 }
+
+# ── dry run of a rebuild/resume: log the plan and stop ───────────────────────
+# DQ over data that was not rebuilt says nothing about the rebuild, so no verdict is produced.
+if $DRY_RUN && { $REBUILD || $ETL_RESUME; }; then
+  if $REBUILD; then
+    log_info "$WORKER_ID: [dry-run] would create any missing DQ buckets: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}, and the raw cache bucket of GOVDATA_CACHE_DIR"
+    if [ -n "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
+      log_info "$WORKER_ID: [dry-run] would delete every object under s3://${GOVDATA_DQ_BUCKET}/${SCHEMA}/"
+    else
+      log_info "$WORKER_ID: [dry-run] would delete the Iceberg metadata of every table under s3://${GOVDATA_DQ_BUCKET}/${SCHEMA}/"
+    fi
+    log_info "$WORKER_ID: [dry-run] would delete s3://${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/"
+    log_info "$WORKER_ID: [dry-run] would delete the Postgres tracker rows of schema=${SCHEMA} for s3://${GOVDATA_DQ_BUCKET}"
+  fi
+  log_info "$WORKER_ID: [dry-run] would run the daily ETL worker, then the historical worker from year ${REBUILD_START_YEAR:-$(get_dq_start_year "$SCHEMA")}, into s3://${GOVDATA_DQ_BUCKET}"
+  log_info "$WORKER_ID: [dry-run] would then run ${DQ_SQL}, upload the results and update the DQ issue"
+  log_info "$WORKER_ID: --dry-run — nothing changed"
+  _SCRIPT_COMPLETE=true
+  exit 0
+fi
 
 # ── rebuild/resume: optional teardown + ETL before DQ ────────────────────────
 # --rebuild       → teardown + ETL + DQ (full clean reproduction)
@@ -663,7 +691,7 @@ _gh_available() {
   [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] && return 0
   gh auth status --hostname github.com >/dev/null 2>&1
 }
-if _gh_available; then
+if ! $DRY_RUN && _gh_available; then
   # Ensure labels exist (no-op if already present)
   gh label create "dq"      --color "#0075ca" --description "Data quality"    --repo kenstott/calcite 2>/dev/null || true
   gh label create "dq-warn" --color "#e4e669" --description "DQ warning"      --repo kenstott/calcite 2>/dev/null || true
