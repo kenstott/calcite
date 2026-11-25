@@ -7531,7 +7531,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage of the S0501 subject table on this path is 2010; minYear is a publish year (vintage + dataLag 2)
       geography:
         - state
 
@@ -7656,7 +7658,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage of the S0501 subject table on this path is 2010; minYear is a publish year (vintage + dataLag 2)
       geography:
         - state
 
