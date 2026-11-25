@@ -114,57 +114,34 @@ Specify exact `schema:mode` pairs to skip the alias expansion:
 
 ---
 
-## 3. Data fix (data-fix.sh)
+## 3. Data fix (force-reprocess.sh, data_purge.sh)
 
-Use `data-fix.sh` when a schema or table needs to be re-ingested from scratch. It performs three steps in order:
+Run these from `govdata/scripts/parallel/`.
 
-1. Deletes Iceberg/parquet data in R2 via `rclone purge`.
-2. Invalidates the tracker so the ETL treats the cleared data as unseen.
-3. Launches `run-pool.sh` to re-ingest.
+### Reprocess tables in place
 
-Both the R2 data and the tracker must be cleared. Clearing the tracker alone is insufficient — the ETL detects existing parquet on R2 and marks it complete without re-downloading.
-
-### Usage
+`force-reprocess.sh` re-runs the named tables past their tracker-complete state. It deletes no Iceberg data and no tracker rows. Use it first.
 
 ```bash
-# Re-ingest all tables in a schema
-./data-fix.sh <schema> <mode>
-
-# Re-ingest one table
-./data-fix.sh <schema> <mode> <table>
-
-# Re-ingest multiple tables
-./data-fix.sh <schema> <mode> <table1> <table2>
+./force-reprocess.sh --schema econ --tables industry_gdp --dry-run
+./force-reprocess.sh --schema econ --tables industry_gdp
+./force-reprocess.sh --schema census --tables cps_voting_supplement --start 1996
 ```
 
-### Options
+Add `--force-download` when the fix changes how a response is fetched or parsed, so cached raw responses are fetched again.
 
-| Flag | Purpose |
-|------|---------|
-| `--dry-run` | Print what would be deleted and run without taking action |
-| `--force` | Pass `FORCE=true` to run-pool (bypasses release-window checks) |
+### Rebuild tables from empty
 
-### Examples
+`data_purge.sh` deletes the whole Iceberg table, all years, and its tracker state. It does not start the ETL.
 
 ```bash
-# Re-ingest all FEC daily tables
-./data-fix.sh fec daily
-
-# Re-ingest one specific table
-./data-fix.sh crime historical crimes_by_agency
-
-# Preview what would be deleted without changing anything
-./data-fix.sh econ daily --dry-run
-
-# Force re-ingest bypassing the release window
-./data-fix.sh weather daily --force
+../data_purge.sh --schema fec --tables committee_contributions --dry-run
+../data_purge.sh --schema fec --tables committee_contributions
+./run-pool.sh --schema fec historical
+./run-pool.sh --schema fec daily
 ```
 
-### Tracker mechanics
-
-**Single table (or list):** Sets `GOVDATA_FORCE_REPROCESS_TABLES=<table>`, which causes `GovDataSchemaFactory` to call `tracker.invalidateTableCompletion()` for each named table before the ETL run.
-
-**All tables:** Sets `FORCE_FRESH=true`, which passes `freshStart=true` into the model operand. `GovDataSchemaFactory` calls `tracker.clearAllCompletions()` for the schema, writing a `_all/cleared` sentinel. Every subsequent tracker lookup for that schema returns null (not complete) for the duration of the run.
+It deletes on the rclone remote named by `GOVDATA_RCLONE_REMOTE` in `govdata/.env.prod` (`GOVDATA_DQ_RCLONE_REMOTE` with `--env dq`), the store the ETL reads and writes. The R2 mirror is updated by `sync-to-r2.sh`. `--raw` also deletes the table's raw response cache.
 
 ---
 

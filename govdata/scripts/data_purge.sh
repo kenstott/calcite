@@ -17,7 +17,6 @@
 #
 # data_purge.sh — Purge tracker entries and Iceberg tables for a set of tables.
 #
-# Unlike data_fix.sh (which writes a "cleared" tracker marker and triggers ETL),
 # data_purge.sh fully deletes:
 #   1. The Iceberg table directory at <parquet bucket>/<schema>/<table>
 #   2. All tracker entries matching year=*/source_key=<table>/* (both per-year
@@ -50,11 +49,10 @@
 #
 # --env selects the BUCKET-NAME set; --remote (optional) overrides the object-store ENDPOINT
 # (rclone remote) independently, so the two can be mixed:
-# --env prod (default): prod bucket names (govdata-parquet-v1 / -tracker-v1); remote defaults to r2.
-# --env dq:             DQ bucket names (GOVDATA_DQ_*); remote defaults to $GOVDATA_DQ_RCLONE_REMOTE.
-# --remote <name>:      force the rclone remote, e.g. `--env prod --remote minio` purges the prod
-#                       bucket names on a local MinIO endpoint (the store used when .env.prod points
-#                       AWS_ENDPOINT_OVERRIDE at localhost).
+# --env prod (default): prod bucket names (govdata-parquet-v1 / -tracker-v1); remote is
+#                       $GOVDATA_RCLONE_REMOTE, the store the ETL reads and writes.
+# --env dq:             DQ bucket names (GOVDATA_DQ_*); remote is $GOVDATA_DQ_RCLONE_REMOTE.
+# --remote <name>:      use this rclone remote instead of the environment's.
 #
 set -euo pipefail
 # shellcheck source=/dev/null
@@ -97,10 +95,8 @@ Examples:
 
 Flags:
   --remote  Override the rclone remote (the object-store endpoint) independent of the bucket-name
-            set chosen by --env. Defaults: --env prod -> r2, --env dq -> \$GOVDATA_DQ_RCLONE_REMOTE.
-            Use e.g. `--env prod --remote minio` to purge the PROD bucket names on a LOCAL MinIO
-            endpoint (the store a deployment reads/writes when .env.prod points AWS_ENDPOINT_OVERRIDE
-            at localhost). The DuckDB tracker read follows AWS_ENDPOINT_OVERRIDE from the sourced env.
+            set chosen by --env. Defaults: --env prod -> \$GOVDATA_RCLONE_REMOTE,
+            --env dq -> \$GOVDATA_DQ_RCLONE_REMOTE.
   --raw     Also purge the raw HTTP cache for each table: the object store at
             <raw bucket>/<schema>/<table> (GOVDATA_RAW_DIR, default
             s3://govdata-raw-v1, via the env's rclone remote) plus the local
@@ -146,7 +142,11 @@ if [[ "$ENV_NAME" == "dq" ]]; then
   RCLONE_REMOTE="${GOVDATA_DQ_RCLONE_REMOTE}"
 else
   PARQUET_BUCKET="${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}"
-  RCLONE_REMOTE="r2"
+  RCLONE_REMOTE="${GOVDATA_RCLONE_REMOTE:-}"
+  if [[ -z "$RCLONE_REMOTE" && -z "$REMOTE_OVERRIDE" ]]; then
+    echo "Error: GOVDATA_RCLONE_REMOTE is not set (check .env.prod) and no --remote was given" >&2
+    exit 1
+  fi
 fi
 
 # ── Tracker ───────────────────────────────────────────────────────────────────
@@ -156,11 +156,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/tracker_pg.sh"
 PG_NS="$(pg_ns_for_schema "$PARQUET_BUCKET" "$SCHEMA")" || exit 2
 echo "Tracker schema: ${PG_NS}"
 
-# --remote decouples the object-store endpoint from the bucket-name set chosen by --env. The
-# rclone deletes target RCLONE_REMOTE while the DuckDB tracker read targets AWS_ENDPOINT_OVERRIDE
-# (from the sourced env). e.g. `--env prod --remote minio` purges the prod bucket NAMES
-# (govdata-parquet-v1 / govdata-tracker-v1) on a LOCAL MinIO endpoint — the store this deployment
-# actually reads/writes when .env.prod points AWS_ENDPOINT_OVERRIDE at localhost.
+# --remote selects the object-store endpoint independently of the bucket-name set chosen by --env.
 if [[ -n "$REMOTE_OVERRIDE" ]]; then
   RCLONE_REMOTE="$REMOTE_OVERRIDE"
 fi
