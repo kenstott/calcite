@@ -9099,6 +9099,9 @@ partitionedTables:
         pattern: "type=ssa_oasdi_county/year=*/"
       partition:
         columns: [type, year]
+        # The year partition holds the data year, not the publish-year dimension value.
+        valueSource:
+          year: effective_year
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/health"
         tableName: ssa_oasdi_county
