@@ -2726,8 +2726,10 @@ partitionedTables:
       - name: result_value
         type: double
         nullable: true
-        expression: 'TRY_CAST(src."ResultMeasureValue" AS DOUBLE)'
-        comment: Measured result value
+        # TRY_CAST reads the source text "Inf" and "nan" as non-finite doubles. Neither is a
+        # measurement, so both are NULL like any other non-numeric result text.
+        expression: 'CASE WHEN isfinite(TRY_CAST(src."ResultMeasureValue" AS DOUBLE)) THEN TRY_CAST(src."ResultMeasureValue" AS DOUBLE) END'
+        comment: Measured result value; NULL when the source publishes no finite number
       - name: result_unit
         type: string
         nullable: true

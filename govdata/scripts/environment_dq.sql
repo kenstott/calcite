@@ -667,6 +667,10 @@ INSERT INTO dq_results
 SELECT 'environment', 'water_quality_samples', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL monitoring_location_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_quality_samples', allow_moved_paths := true) WHERE monitoring_location_id IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'water_quality_samples', 'T7_non_finite_result_value',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'result_value rows holding Infinity or NaN'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_quality_samples', allow_moved_paths := true) WHERE NOT isfinite(result_value));
 
 -- ============================================================================
 -- VIEW: environmental_burden_by_county (air_quality_annual left-joined cross-schema to
