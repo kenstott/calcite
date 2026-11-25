@@ -53,8 +53,6 @@ public class GovInfoHearingProvider extends AbstractCongressDocumentProvider {
   static final String WITNESSES = "committee_hearing_witnesses";
 
   private static final String MODS_NS = "http://www.loc.gov/mods/v3";
-  private static final String METADATA =
-      "https://www.govinfo.gov/metadata/pkg/%s/mods.xml";
   /** The earliest change stamp: lists every package of the Congress. */
   private static final String SINCE = "1990-01-01T00:00:00Z";
 
@@ -99,7 +97,8 @@ public class GovInfoHearingProvider extends AbstractCongressDocumentProvider {
         listed.add(id.asText());
         if (id.asText().startsWith("CHRG-")) {
           items.put(id.asText(), new Item("congress=" + congress + "/package=" + id.asText(),
-              modified.asText(), String.format(java.util.Locale.ROOT, METADATA, id.asText())));
+              modified.asText(), String.format(java.util.Locale.ROOT,
+                  "https://www.govinfo.gov/metadata/pkg/%s/mods.xml", id.asText())));
         }
       }
       JsonNode link = page.get("nextPage");
