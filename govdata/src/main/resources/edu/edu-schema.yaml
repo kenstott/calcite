@@ -2456,7 +2456,11 @@ partitionedTables:
     comment: >
       Dept of Ed College Scorecard institution-level outcomes. Earnings, debt,
       completion rates, and enrollment demographics. One row per institution per
-      vintage year. Joins to ipeds_institutions via id=unitid or ope8_id=opeid.
+      Scorecard data file year (year 2018 = the 2018-19 data file; each metric's
+      student cohort and reference period can be earlier — see the publisher's data
+      dictionary cohort map). A metric the publisher does not report in a year's
+      file is null for that whole year. carnegie_basic, locale, hbcu, tribal and
+      hispanic_serving are the current directory value, repeated across years. Joins to ipeds_institutions via id=unitid or ope8_id=opeid.
       API key required (API_DATA_GOV); PrivacySuppressed values are null.
       Earnings field is mean (not median) at 10yr — median available at 8yr.
       For program-level (CIP code / credential) earnings, see college_scorecard_programs
@@ -2478,7 +2482,7 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: Data vintage year — PK component
+        comment: Scorecard data file year (2018 = 2018-19 data file) — PK component
       - name: name
         type: string
         nullable: true
@@ -2498,15 +2502,15 @@ partitionedTables:
       - name: carnegie_basic
         type: int
         nullable: true
-        comment: Carnegie basic classification (integer code)
+        comment: Carnegie basic classification (integer code) — current directory value, not specific to year
       - name: hbcu
         type: int
         nullable: true
-        comment: HBCU flag (1=yes)
+        comment: HBCU flag (1=yes) — current directory value, not specific to year
       - name: tribal
         type: int
         nullable: true
-        comment: Tribal college flag (1=yes)
+        comment: Tribal college flag (1=yes) — current directory value, not specific to year
       - name: hispanic_serving
         type: int
         nullable: true
@@ -2518,15 +2522,15 @@ partitionedTables:
       - name: locale
         type: int
         nullable: true
-        comment: NCES locale code
+        comment: NCES locale code — current directory value, not specific to year
       - name: size
         type: int
         nullable: true
-        comment: Total enrollment (latest.student.size)
+        comment: Total enrollment ({year}.student.size)
       - name: pell_grant_rate
         type: double
         nullable: true
-        comment: Share of students receiving Pell grants (latest.aid.pell_grant_rate)
+        comment: Share of students receiving Pell grants ({year}.aid.pell_grant_rate)
       - name: completion_rate_4yr
         type: double
         nullable: true
@@ -2587,7 +2591,7 @@ partitionedTables:
       parameters:
         api_key: "${API_DATA_GOV}"
         per_page: "100"
-        fields: "id,ope8_id,ope6_id,school.name,school.city,school.state,school.ownership,school.carnegie_basic,school.minority_serving.historically_black,school.minority_serving.tribal,school.minority_serving.hispanic,school.online_only,school.locale,latest.student.size,latest.aid.pell_grant_rate,latest.completion.completion_rate_4yr_150nt,latest.completion.completion_rate_less_than_4yr_150nt,latest.student.retention_rate.four_year.full_time,latest.aid.median_debt.completers.overall,latest.aid.median_debt.noncompleters,latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings,latest.earnings.8_yrs_after_entry.median_earnings,latest.student.demographics.median_family_income,latest.repayment.3_yr_default_rate,latest.cost.avg_net_price.public,latest.cost.avg_net_price.private,latest.cost.tuition.in_state,latest.cost.tuition.out_of_state"
+        fields: "id,ope8_id,ope6_id,{year}.school.name,{year}.school.city,{year}.school.state,{year}.school.ownership,school.carnegie_basic,school.minority_serving.historically_black,school.minority_serving.tribal,school.minority_serving.hispanic,{year}.school.online_only,school.locale,{year}.student.size,{year}.aid.pell_grant_rate,{year}.completion.completion_rate_4yr_150nt,{year}.completion.completion_rate_less_than_4yr_150nt,{year}.student.retention_rate.four_year.full_time,{year}.aid.median_debt.completers.overall,{year}.aid.median_debt.noncompleters,{year}.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings,{year}.earnings.8_yrs_after_entry.median_earnings,{year}.student.demographics.median_family_income,{year}.repayment.3_yr_default_rate,{year}.cost.avg_net_price.public,{year}.cost.avg_net_price.private,{year}.cost.tuition.in_state,{year}.cost.tuition.out_of_state"
       response:
         format: json
         dataPath: "results"
@@ -2603,6 +2607,9 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+        # Cache namespace for the year-prefixed field list; the cache path does not include
+        # request parameters.
+        sharedKey: college_scorecard_data_year
       incremental:
         yearParam: "year"
         yearRange:
@@ -2664,7 +2671,9 @@ partitionedTables:
 
     comment: >
       Dept of Ed College Scorecard program-level outcomes by CIP 4-digit code.
-      One row per institution × program × credential level per year.
+      One row per institution × program × credential level per Scorecard data file
+      year (earnings cohorts are pooled and earlier than the file year). An earnings
+      measure the publisher does not report in a year's file is null for that year.
       Earnings by field of study — the most granular post-graduation outcome data.
       Joins to ipeds_completions via (unitid=unit_id, cipcode LIKE cip_code+'%').
       PrivacySuppressed values are null. Institution-level scorecard outcomes (overall
@@ -2683,7 +2692,7 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: Data vintage year — PK component
+        comment: Scorecard data file year (2018 = 2018-19 data file) — PK component
       - name: cip_code
         type: string
         nullable: false
@@ -2732,7 +2741,7 @@ partitionedTables:
       parameters:
         api_key: "${API_DATA_GOV}"
         per_page: "100"
-        fields: "latest.programs.cip_4_digit.unit_id,latest.programs.cip_4_digit.ope6_id,latest.programs.cip_4_digit.code,latest.programs.cip_4_digit.title,latest.programs.cip_4_digit.credential.level,latest.programs.cip_4_digit.credential.title,latest.programs.cip_4_digit.counts.ipeds_awards1,latest.programs.cip_4_digit.earnings.1_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.4_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.5_yr.overall_median_earnings,latest.programs.cip_4_digit.earnings.1_yr.pell_median_earnings,latest.programs.cip_4_digit.earnings.1_yr.nonpell_median_earnings"
+        fields: "{year}.programs.cip_4_digit.unit_id,{year}.programs.cip_4_digit.ope6_id,{year}.programs.cip_4_digit.code,{year}.programs.cip_4_digit.title,{year}.programs.cip_4_digit.credential.level,{year}.programs.cip_4_digit.credential.title,{year}.programs.cip_4_digit.counts.ipeds_awards1,{year}.programs.cip_4_digit.earnings.1_yr.overall_median_earnings,{year}.programs.cip_4_digit.earnings.4_yr.overall_median_earnings,{year}.programs.cip_4_digit.earnings.5_yr.overall_median_earnings,{year}.programs.cip_4_digit.earnings.1_yr.pell_median_earnings,{year}.programs.cip_4_digit.earnings.1_yr.nonpell_median_earnings"
       response:
         format: json
         dataPath: "results"
@@ -2748,6 +2757,9 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
+        # Cache namespace for the year-prefixed field list; the cache path does not include
+        # request parameters.
+        sharedKey: college_scorecard_programs_data_year
       incremental:
         yearParam: "year"
         yearRange:

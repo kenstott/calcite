@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * Transforms College Scorecard program-level (CIP 4-digit) responses.
  *
  * <p>Each institution record in the Scorecard API response contains a
- * {@code programs.cip_4_digit} array of program objects. This transformer
+ * {@code <year>.programs.cip_4_digit} array of program objects, holding that year's data file. This transformer
  * expands that array: one output row per (institution, program, credential).
  * "PrivacySuppressed" values are mapped to null.
  *
@@ -37,7 +37,7 @@ public class CollegeScorecardProgramsResponseTransformer implements ResponseTran
       LoggerFactory.getLogger(CollegeScorecardProgramsResponseTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String PRIVACY_SUPPRESSED = "PrivacySuppressed";
-  private static final String PROGRAMS_KEY = "latest.programs.cip_4_digit";
+  private static final String PROGRAMS_SUFFIX = ".programs.cip_4_digit";
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -55,6 +55,10 @@ public class CollegeScorecardProgramsResponseTransformer implements ResponseTran
       }
 
       String year = context.getDimensionValues().get("year");
+      if (year == null) {
+        throw new IllegalStateException("Scorecard Programs: year dimension is required");
+      }
+      String programsKey = year + PROGRAMS_SUFFIX;
 
       ArrayNode out = MAPPER.createArrayNode();
       for (JsonNode institution : results) {
@@ -62,8 +66,11 @@ public class CollegeScorecardProgramsResponseTransformer implements ResponseTran
           continue;
         }
 
-        // The programs array is nested under the dot-notation key "programs.cip_4_digit"
-        JsonNode programs = institution.path(PROGRAMS_KEY);
+        // The programs array is under the flat dot-notation key
+        if (!institution.has(programsKey)) {
+          throw new IllegalStateException("Scorecard Programs: response lacks field " + programsKey);
+        }
+        JsonNode programs = institution.get(programsKey);
         if (!programs.isArray() || programs.size() == 0) {
           continue;
         }
@@ -75,13 +82,7 @@ public class CollegeScorecardProgramsResponseTransformer implements ResponseTran
           ObjectNode row = MAPPER.createObjectNode();
 
           // Year dimension
-          if (year != null) {
-            try {
-              row.put("year", Integer.parseInt(year));
-            } catch (NumberFormatException e) {
-              row.put("year", year);
-            }
-          }
+          row.put("year", Integer.parseInt(year));
 
           // DQ-012: log when PK components are missing; write null so outer joins work
           JsonNode unitIdNode = prog.path("unit_id");
