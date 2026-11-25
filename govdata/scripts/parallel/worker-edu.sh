@@ -144,7 +144,7 @@ run_ungrouped_edu_tables() {
     "idea|district_special_ed_counts" \
     "crdc-el|district_el_enrollment" \
     "edfacts-ca|edfacts_chronic_absenteeism" \
-    "scorecard|college_scorecard,college_scorecard_programs" \
+    "scorecard|college_scorecard,college_scorecard_programs,college_scorecard_latest" \
     "fsa|fsa_pslf_discharge_summary,fsa_loan_portfolio_status,fsa_loan_delinquency" \
     "sevis|sevis_student_counts")" || return 1
 
@@ -196,7 +196,7 @@ run_historical_cadence() {
 
   if [ -n "${API_DATA_GOV:-}" ]; then
     run_edu_model "edu-initial-scorecard" \
-      '"college_scorecard", "college_scorecard_programs"' "$START" "$END"
+      '"college_scorecard", "college_scorecard_programs", "college_scorecard_latest"' "$START" "$END"
   else
     log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
   fi
@@ -229,6 +229,16 @@ run_annual_cadence() {
         '"college_scorecard", "college_scorecard_programs"' "$START"
     else
       log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard tables"
+    fi
+  fi
+
+  # college_scorecard_latest: no releaseWindow (the publisher updates latest.* on no fixed
+  # calendar); freshness: hash writes only when the values changed.
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "college_scorecard_latest"; then
+    if [ -n "${API_DATA_GOV:-}" ]; then
+      run_edu_model "edu-annual-scorecard-latest" '"college_scorecard_latest"' "$START"
+    else
+      log_info "$WORKER_ID: API_DATA_GOV not set — skipping college_scorecard_latest"
     fi
   fi
 

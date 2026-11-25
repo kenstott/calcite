@@ -2780,6 +2780,199 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  # ==========================================================================
+  # COLLEGE SCORECARD LATEST — the API's current latest.* values, no year axis
+  # API: api.data.gov/ed/collegescorecard/v1/schools.json (~6,300 institutions)
+  # ==========================================================================
+  - name: college_scorecard_latest
+    # Latest-snapshot table: the publisher refreshes latest.* several times a year on no fixed
+    # calendar, so there is no releaseWindow. Each run re-fetches; the hash gate writes only
+    # when the rows changed, and dataset_type: snapshot fails a run that fetched nothing.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=college_scorecard_latest/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+
+    comment: >
+      Latest snapshot of Dept of Ed College Scorecard institution-level outcomes, one row per
+      institution, holding the values the API serves today as latest.*: mean earnings 10 years
+      after entry, median earnings 8 years after entry, median family income, median debt,
+      default rate, completion and retention rates, Pell share, enrollment, net price and
+      tuition. It is NOT a time series: there is no year column, the whole table is replaced
+      when the publisher updates, and each measure's reference year or student cohort differs
+      from measure to measure (see the publisher's data dictionary cohort map). For values by
+      data file year use college_scorecard; some measures, including mean_earnings_10yr and
+      median_family_income, are populated here even where the year-partitioned data files do
+      not report them. name, city, state, ownership and the institution flags are current
+      directory values. Hispanic-serving status is not carried (the publisher withdrew it).
+      Joins to ipeds_institutions via id=unitid (choose an ipeds year). Money columns are
+      nominal US dollars and rate columns are fractions from 0 to 1. PrivacySuppressed values
+      are null. API key required (API_DATA_GOV).
+
+    columns:
+      - name: id
+        type: int
+        nullable: false
+        comment: "IPEDS unit ID — primary key; matches ipeds_institutions.unitid and college_scorecard.id (id)"
+      - name: ope8_id
+        type: string
+        nullable: true
+        comment: "OPE ID 8-digit (ope8_id)"
+      - name: ope6_id
+        type: string
+        nullable: true
+        comment: "OPE ID 6-digit (ope6_id)"
+      - name: name
+        type: string
+        nullable: true
+        comment: "Institution name (school.name)"
+      - name: city
+        type: string
+        nullable: true
+        comment: "City (school.city)"
+      - name: state
+        type: string
+        nullable: true
+        comment: "State abbreviation — FK to geo.state_ref.state_abbr (school.state)"
+      - name: ownership
+        type: int
+        nullable: true
+        comment: "1=public, 2=private nonprofit, 3=private for-profit (school.ownership)"
+      - name: carnegie_basic
+        type: int
+        nullable: true
+        comment: "Carnegie basic classification (integer code) (school.carnegie_basic)"
+      - name: hbcu
+        type: int
+        nullable: true
+        comment: "HBCU flag (1=yes) (school.minority_serving.historically_black)"
+      - name: tribal
+        type: int
+        nullable: true
+        comment: "Tribal college flag (1=yes) (school.minority_serving.tribal)"
+      - name: online_only
+        type: int
+        nullable: true
+        comment: "Online-only institution (1=yes) (school.online_only)"
+      - name: locale
+        type: int
+        nullable: true
+        comment: "NCES locale code (school.locale)"
+      - name: size
+        type: int
+        nullable: true
+        comment: "Total enrollment, latest value (latest.student.size)"
+      - name: pell_grant_rate
+        type: double
+        nullable: true
+        comment: "Share of students receiving Pell grants, latest value (latest.aid.pell_grant_rate)"
+      - name: completion_rate_4yr
+        type: double
+        nullable: true
+        comment: "Completion rate at 150% of normal time for 4-year institutions, latest value (latest.completion.completion_rate_4yr_150nt)"
+      - name: completion_rate_2yr
+        type: double
+        nullable: true
+        comment: "Completion rate at 150% of normal time for institutions below 4 years, latest value (latest.completion.completion_rate_less_than_4yr_150nt)"
+      - name: retention_rate_fulltime
+        type: double
+        nullable: true
+        comment: "First-time full-time student retention rate (4-year), latest value (latest.student.retention_rate.four_year.full_time)"
+      - name: median_debt_completers
+        type: double
+        nullable: true
+        comment: "Median federal loan debt at completion, latest value (latest.aid.median_debt.completers.overall)"
+      - name: median_debt_noncompleters
+        type: double
+        nullable: true
+        comment: "Median federal loan debt for non-completers, latest value (latest.aid.median_debt.noncompleters)"
+      - name: mean_earnings_10yr
+        type: int
+        nullable: true
+        comment: "Mean (not median) earnings 10 years after entry for students working and not enrolled, latest value (latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings)"
+      - name: median_earnings_8yr
+        type: double
+        nullable: true
+        comment: "Median earnings 8 years after entry, latest value (latest.earnings.8_yrs_after_entry.median_earnings)"
+      - name: median_family_income
+        type: int
+        nullable: true
+        comment: "Median family income of students, latest value (latest.student.demographics.median_family_income)"
+      - name: default_rate_3yr
+        type: double
+        nullable: true
+        comment: "3-year student loan cohort default rate, latest value (latest.repayment.3_yr_default_rate)"
+      - name: avg_net_price_public
+        type: int
+        nullable: true
+        comment: "Average net price after aid, public institutions, latest value (latest.cost.avg_net_price.public)"
+      - name: avg_net_price_private
+        type: int
+        nullable: true
+        comment: "Average net price after aid, private institutions, latest value (latest.cost.avg_net_price.private)"
+      - name: tuition_in_state
+        type: int
+        nullable: true
+        comment: "In-state tuition and fees, latest value (latest.cost.tuition.in_state)"
+      - name: tuition_out_state
+        type: int
+        nullable: true
+        comment: "Out-of-state tuition and fees, latest value (latest.cost.tuition.out_of_state)"
+
+    source:
+      type: http
+      url: "https://api.data.gov/ed/collegescorecard/v1/schools.json"
+      method: GET
+      parameters:
+        api_key: "${API_DATA_GOV}"
+        per_page: "100"
+        sort: "id"
+        fields: "id,ope8_id,ope6_id,school.name,school.city,school.state,school.ownership,school.carnegie_basic,school.minority_serving.historically_black,school.minority_serving.tribal,school.online_only,school.locale,latest.student.size,latest.aid.pell_grant_rate,latest.completion.completion_rate_4yr_150nt,latest.completion.completion_rate_less_than_4yr_150nt,latest.student.retention_rate.four_year.full_time,latest.aid.median_debt.completers.overall,latest.aid.median_debt.noncompleters,latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings,latest.earnings.8_yrs_after_entry.median_earnings,latest.student.demographics.median_family_income,latest.repayment.3_yr_default_rate,latest.cost.avg_net_price.public,latest.cost.avg_net_price.private,latest.cost.tuition.in_state,latest.cost.tuition.out_of_state"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: PAGE_ZERO
+          pageSize: 100
+          limitParam: "per_page"
+          pageParam: "page"
+          countPath: "metadata.total"
+      rateLimit:
+        requestsPerSecond: 2.0
+        maxRetries: 5
+        retryOn: [429, 500, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.CollegeScorecardLatestResponseTransformer"
+
+    dimensions:
+      type:
+        - college_scorecard_latest
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=college_scorecard_latest/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/edu"
+        tableName: college_scorecard_latest
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # ---------------------------------------------------------------------------
   # IMLS PUBLIC LIBRARIES SURVEY — OUTLETS — pls_fy{year}_csv.zip (snapshot per year)
   # ---------------------------------------------------------------------------
@@ -5270,6 +5463,15 @@ constraints:
         targetTable: ipeds_institutions
         targetColumns: [unitid, year]
         comment: Links Scorecard institution to IPEDS directory via unitid
+      - columns: [state]
+        targetSchema: "geo"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+        comment: Links institution state to geographic state record
+
+  college_scorecard_latest:
+    primaryKey: [id]
+    foreignKeys:
       - columns: [state]
         targetSchema: "geo"
         targetTable: state_ref

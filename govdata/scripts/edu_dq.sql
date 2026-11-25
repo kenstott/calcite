@@ -44,6 +44,7 @@ INSERT INTO dq_existence_counts SELECT 'ipeds_admissions', COUNT(*) FROM (SELECT
 INSERT INTO dq_existence_counts SELECT 'ipeds_financial_aid',    COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'college_scorecard',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'college_scorecard_latest', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1);
@@ -70,7 +71,7 @@ FROM dq_existence_counts;
 SELECT '=== T2: ROW COUNTS ===' AS section;
 
 -- Tables with releaseWindow constraints are legitimately empty outside their ingest window.
--- always_populated: ccd_schools, college_scorecard, college_scorecard_programs, ipeds_institutions → fail when empty
+-- always_populated: ccd_schools, college_scorecard, college_scorecard_programs, college_scorecard_latest, ipeds_institutions → fail when empty
 -- release_window:   all others → warn when empty (expected during off-window periods)
 --
 -- Cap-aware thresholds: three tables declare a table-level dqRowLimit in edu-schema.yaml, so in
@@ -95,6 +96,7 @@ INSERT INTO dq_row_count_counts SELECT 'ipeds_admissions', COUNT(*), 1000 FROM i
 INSERT INTO dq_row_count_counts SELECT 'ipeds_financial_aid',                  COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true);  -- dqRowLimit=3000/year
+INSERT INTO dq_row_count_counts SELECT 'college_scorecard_latest',             COUNT(*),  5500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true);  -- 6,272 institutions served 2026-11-25
 INSERT INTO dq_row_count_counts SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true);  -- dqRowLimit=50000/year
 INSERT INTO dq_row_count_counts SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true);  -- ~14,088 LEAs/year verified FY2023
@@ -111,7 +113,7 @@ INSERT INTO dq_results
 SELECT 'edu', tbl, 'row_count',
   CASE
     WHEN n >= thresh                     THEN 'pass'
-    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions','fsa_pslf_discharge_summary','fsa_loan_portfolio_status','fsa_loan_delinquency','sevis_student_counts') THEN 'fail'
+    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','college_scorecard_latest','ipeds_institutions','fsa_pslf_discharge_summary','fsa_loan_portfolio_status','fsa_loan_delinquency','sevis_student_counts') THEN 'fail'
     ELSE 'warn'
   END,
   CAST(n AS VARCHAR), CAST(thresh AS VARCHAR), NULL
@@ -135,6 +137,7 @@ SELECT 'ipeds_admissions' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}
 SELECT 'ipeds_financial_aid'      AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1;
+SELECT 'college_scorecard_latest' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true) LIMIT 1;
 SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1;
 SELECT 'library_outlets'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1;
 SELECT 'f33_district_finance'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1;
@@ -1557,6 +1560,67 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', a
 WHERE year = 2022 AND sex = 'all'
   AND ((geo_level = 'national' AND enrolled = 48268200 AND percent_numerator = 13406900 AND rate_pct = 27.8)
     OR (geo_level = 'state' AND state_name = 'OREGON' AND subgroup_code = 'ALLSEA' AND rate_pct = 43.8));
+
+-- college_scorecard_latest: latest-snapshot table, PK id
+INSERT INTO dq_results
+SELECT 'edu', 'college_scorecard_latest', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name <> 'type';
+
+INSERT INTO dq_results
+SELECT 'edu', 'college_scorecard_latest', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+
+INSERT INTO dq_results
+SELECT 'edu', 'college_scorecard_latest', 'pk_nulls',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true)
+WHERE id IS NULL;
+
+INSERT INTO dq_results
+SELECT 'edu', 'college_scorecard_latest', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (SELECT id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true) GROUP BY id HAVING COUNT(*) > 1);
+
+INSERT INTO dq_results
+SELECT 'edu', 'college_scorecard_latest', 'value_ranges',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true)
+WHERE ownership NOT IN (1, 2, 3)
+  OR size < 0
+  OR pell_grant_rate NOT BETWEEN 0 AND 1
+  OR completion_rate_4yr NOT BETWEEN 0 AND 1
+  OR completion_rate_2yr NOT BETWEEN 0 AND 1
+  OR retention_rate_fulltime NOT BETWEEN 0 AND 1
+  OR default_rate_3yr NOT BETWEEN 0 AND 1
+  OR mean_earnings_10yr NOT BETWEEN 1000 AND 1000000
+  OR median_earnings_8yr NOT BETWEEN 1000 AND 1000000
+  OR median_family_income < 0
+  OR median_debt_completers < 0
+  OR tuition_in_state < 0
+  OR tuition_out_state < 0;
+
+-- The table exists to hold the latest earnings and family income: most institutions that
+-- report anything report these, so a mostly-null column means a field mapping broke
+INSERT INTO dq_results
+SELECT 'edu', 'college_scorecard_latest', 'latest_measures_populated',
+  CASE WHEN LEAST(n_earn, n_income, n_size) >= 3000 THEN 'pass' ELSE 'fail' END,
+  CONCAT_WS(', ', 'mean_earnings_10yr:' || n_earn, 'median_family_income:' || n_income,
+    'size:' || n_size),
+  '>=3000 each', NULL
+FROM (
+  SELECT COUNT(mean_earnings_10yr) AS n_earn, COUNT(median_family_income) AS n_income,
+    COUNT(size) AS n_size
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_latest', allow_moved_paths=true)
+);
 
 -- ============================================================
 -- ALL RESULTS
