@@ -30,11 +30,33 @@ comment: >
   survey (NASS QuickStats), farm income and wealth (ERS), and crop insurance
   experience (RMA Summary of Business); USDA FAS weekly Export Sales Reporting
   (net sales, outstanding sales, and shipments by commodity and destination
-  country, published every Thursday); plus USGS estimated agricultural
+  country, published every Thursday); monthly U.S. agricultural exports and
+  imports by partner country and HS-10 commodity on the USDA FAS agricultural
+  product definition; plus USGS estimated agricultural
   pesticide use by county (NAWQA Pesticide National Synthesis Project). County-
   and state-level, joinable to geo.counties / geo.state_ref via state_fips_code +
   county_code, to disasters (drought/storm) for yield-impact analysis, and to
   econ.fred_indicators for commodity-price context.
+
+# ============================================================================
+# USDA FAS GATS COMMODITY CATALOG
+# ============================================================================
+# FasAgriculturalTradeTransformer reads this to decide which Census HS-10 rows are
+# agricultural products (agricultural_exports / agricultural_imports). The catalog flags
+# each HS-10 code; the chapter lists below are the HS chapters those tables request and
+# must cover every chapter in which the catalog marks a current code agricultural (the
+# transformer fails the fetch when it does not).
+fasGatsCatalog:
+  url: "https://api.fas.usda.gov/api/gats/commodities"
+  apiKey: "${API_DATA_GOV}"
+  exportChapters: &ag_export_chapters
+    ['01', '02', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15',
+     '16', '17', '18', '19', '20', '21', '22', '23', '24', '29', '33', '35', '38', '41',
+     '43', '50', '51', '52', '53']
+  importChapters: &ag_import_chapters
+    ['01', '02', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15',
+     '16', '17', '18', '19', '20', '21', '22', '23', '24', '29', '33', '35', '38', '41',
+     '43', '50', '51', '52', '53', '98']
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -282,6 +304,22 @@ dimension_values:
     type: json_catalog
     source: "/ag/fas-commodities.json"
     path: "commodities[*].commodityCode"
+
+  # Census monthly trade data years. Complete calendar years only (dataLag 1); a year is
+  # first fetched from March of the following year, after December's release. The Census
+  # timeseries API starts in 2013.
+  ag_trade_year_range: &ag_trade_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2013}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    minYear: 2014
+    dataLag: 1
+    releaseMonth: 3
+    descending: true
+
+  ag_trade_months: &ag_trade_months
+    type: list
+    values: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
   # NASS geographic aggregation levels ingested (county + state; national totals
   # are derivable and out of scope for the county/state fan-out).
@@ -2757,6 +2795,301 @@ partitionedTables:
         batchPartitionColumns: [domain]
         incrementalKeys: [domain]
 
+  # ---------------------------------------------------------------------------
+  # AGRICULTURAL_EXPORTS — Census HS-10 monthly exports, USDA agricultural codes only
+  # ---------------------------------------------------------------------------
+  # One request per HS chapter x month returns every partner country. National HS-10
+  # without a commodity filter is answered with HTTP 524, hence the chapter fan-out.
+  - name: agricultural_exports
+    pattern: "type=agricultural_exports/year=*/month=*/chapter=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+        - name: month
+          type: VARCHAR
+        - name: chapter
+          type: VARCHAR
+    comment: >
+      Monthly U.S. agricultural exports by destination country and HS-10 commodity: the
+      series behind USDA's "U.S. agricultural exports to <country>" figures (FAS GATS /
+      ERS FATUS agricultural total). Value is U.S. DOMESTIC exports (re-exports of foreign
+      goods excluded), FAS value in current U.S. dollars, calendar months, complete years
+      from 2013. Only HS-10 codes that the USDA FAS commodity catalog marks as agricultural
+      products are held, so SUM(value_usd) is an agricultural total; it includes cotton,
+      hides and skins, essential oils, ethanol and distilled spirits and excludes fish,
+      forest products and natural rubber. For a country's annual total filter
+      geo_level = 'country' and country_name (upper case, e.g. 'THAILAND') and group by
+      year. For the world total use geo_level = 'world'. Never sum across geo_level values.
+      USDA fiscal years run October-September. Source: U.S. Census Bureau international
+      trade API, classified with the FAS GATS commodity catalog. Use instead of
+      econ.trade_exports HS chapters 1-24, which is a different product definition.
+      Weekly export-sales commitments are in ag.fas_export_sales.
+
+    dimensions:
+      type:
+        - agricultural_exports
+      chapter:
+        type: list
+        values: *ag_export_chapters
+      year: *ag_trade_year_range
+      month: *ag_trade_months
+
+    columns:
+      - name: year
+        type: int
+        nullable: false
+        expression: 'TRY_CAST(src."YEAR" AS INTEGER)'
+        comment: Calendar year of the trade month
+      - name: month
+        type: string
+        nullable: false
+        expression: 'src."MONTH"'
+        comment: Calendar month, two digits '01'-'12'
+      - name: country_code
+        type: string
+        nullable: false
+        expression: 'src."CTY_CODE"'
+        comment: Census destination country code
+      - name: country_name
+        type: string
+        nullable: true
+        expression: 'src."CTY_NAME"'
+        comment: Census destination country name, upper case
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: >
+          CASE
+            WHEN src."CTY_CODE" = '-' THEN 'world'
+            WHEN src."CTY_CODE" LIKE '0%' THEN 'bloc'
+            WHEN src."CTY_CODE" LIKE '%XXX' THEN 'continent'
+            ELSE 'country'
+          END
+        comment: >
+          Row granularity from the Census country code: 'world' (total for all countries),
+          'bloc' (0xxx trade-organization groups), 'continent' (NXXX codes) or
+          'country'. Filter to one value before summing.
+      - name: hs10
+        type: string
+        nullable: false
+        expression: 'src."E_COMMODITY"'
+        comment: HS 10-digit commodity code (Schedule B / HS export code)
+      - name: commodity_description
+        type: string
+        nullable: true
+        expression: 'src."COMMODITY_DESCRIPTION"'
+        comment: Commodity description from the USDA FAS commodity catalog
+      - name: hs6
+        type: string
+        nullable: false
+        expression: 'LEFT(src."E_COMMODITY", 6)'
+        comment: HS 6-digit prefix (derived), join key to econ.trade_exports.hs6
+      - name: value_usd
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."ALL_VAL_MO" AS BIGINT)'
+        comment: Domestic export value for the month, FAS value in U.S. dollars
+      - name: quantity
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."QTY_1_MO" AS BIGINT)'
+        comment: Quantity for the month in quantity_unit; units differ by commodity, so sum only within one quantity_unit
+      - name: quantity_unit
+        type: string
+        nullable: true
+        expression: 'src."UNIT_QY1"'
+        comment: Unit of quantity (T, KG, NO, L, ...), '-' where the commodity has none
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/intltrade/exports/hs?get=CTY_CODE,CTY_NAME,E_COMMODITY,ALL_VAL_MO,QTY_1_MO,UNIT_QY1&COMM_LVL=HS10&DF=1&YEAR={effective_year}&MONTH={month}&E_COMMODITY={chapter}*&key={env:CENSUS_API_KEY}"
+      method: GET
+      parallel: 1
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.FasAgriculturalTradeTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=agricultural_exports/year=*/month=*/chapter=*/"
+      partition:
+        columns: [type, year, month, chapter]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # AGRICULTURAL_IMPORTS — Census HS-10 monthly imports, USDA agricultural codes only
+  # ---------------------------------------------------------------------------
+  # One request per HS chapter x month returns every partner country. National HS-10
+  # without a commodity filter is answered with HTTP 524, hence the chapter fan-out.
+  - name: agricultural_imports
+    pattern: "type=agricultural_imports/year=*/month=*/chapter=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+        - name: month
+          type: VARCHAR
+        - name: chapter
+          type: VARCHAR
+    comment: >
+      Monthly U.S. agricultural imports by origin country and HS-10 commodity, on the USDA
+      agricultural product definition (FAS GATS / ERS FATUS agricultural total). Value is
+      imports for consumption, customs value in current U.S. dollars, calendar months,
+      complete years from 2013. Only HS-10 codes that the USDA FAS commodity catalog marks
+      as agricultural products are held, so SUM(value_usd) is an agricultural total; it
+      includes coffee, cocoa, wine and distilled spirits and excludes fish, seafood, forest
+      products and natural rubber. For a country's annual total filter geo_level = 'country'
+      and country_name (upper case, e.g. 'THAILAND') and group by year. For the world total
+      use geo_level = 'world'. Never sum across geo_level values. USDA fiscal years run
+      October-September. Source: U.S. Census Bureau international trade API, classified
+      with the FAS GATS commodity catalog.
+
+    dimensions:
+      type:
+        - agricultural_imports
+      chapter:
+        type: list
+        values: *ag_import_chapters
+      year: *ag_trade_year_range
+      month: *ag_trade_months
+
+    columns:
+      - name: year
+        type: int
+        nullable: false
+        expression: 'TRY_CAST(src."YEAR" AS INTEGER)'
+        comment: Calendar year of the trade month
+      - name: month
+        type: string
+        nullable: false
+        expression: 'src."MONTH"'
+        comment: Calendar month, two digits '01'-'12'
+      - name: country_code
+        type: string
+        nullable: false
+        expression: 'src."CTY_CODE"'
+        comment: Census origin country code
+      - name: country_name
+        type: string
+        nullable: true
+        expression: 'src."CTY_NAME"'
+        comment: Census origin country name, upper case
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: >
+          CASE
+            WHEN src."CTY_CODE" = '-' THEN 'world'
+            WHEN src."CTY_CODE" LIKE '0%' THEN 'bloc'
+            WHEN src."CTY_CODE" LIKE '%XXX' THEN 'continent'
+            ELSE 'country'
+          END
+        comment: >
+          Row granularity from the Census country code: 'world' (total for all countries),
+          'bloc' (0xxx trade-organization groups), 'continent' (NXXX codes) or
+          'country'. Filter to one value before summing.
+      - name: hs10
+        type: string
+        nullable: false
+        expression: 'src."I_COMMODITY"'
+        comment: HS 10-digit commodity code (HTS import code)
+      - name: commodity_description
+        type: string
+        nullable: true
+        expression: 'src."COMMODITY_DESCRIPTION"'
+        comment: Commodity description from the USDA FAS commodity catalog
+      - name: hs6
+        type: string
+        nullable: false
+        expression: 'LEFT(src."I_COMMODITY", 6)'
+        comment: HS 6-digit prefix (derived), join key to econ.trade_imports.hs6
+      - name: value_usd
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CON_VAL_MO" AS BIGINT)'
+        comment: Imports for consumption for the month, customs value in U.S. dollars
+      - name: quantity
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."CON_QY1_MO" AS BIGINT)'
+        comment: Quantity for the month in quantity_unit; units differ by commodity, so sum only within one quantity_unit
+      - name: quantity_unit
+        type: string
+        nullable: true
+        expression: 'src."UNIT_QY1"'
+        comment: Unit of quantity (T, KG, NO, L, ...), '-' where the commodity has none
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/timeseries/intltrade/imports/hs?get=CTY_CODE,CTY_NAME,I_COMMODITY,CON_VAL_MO,CON_QY1_MO,UNIT_QY1&COMM_LVL=HS10&YEAR={effective_year}&MONTH={month}&I_COMMODITY={chapter}*&key={env:CENSUS_API_KEY}"
+      method: GET
+      parallel: 1
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.FasAgriculturalTradeTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=agricultural_imports/year=*/month=*/chapter=*/"
+      partition:
+        columns: [type, year, month, chapter]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2781,6 +3114,12 @@ constraints:
         comment: >
           Area M49 / ISO 3166-1 numeric (unpadded) links to ref.countries. Metadata
           only; FAO regional/economic-group areas (is_aggregate=true) do not resolve.
+
+  agricultural_exports:
+    primaryKey: [type, year, month, chapter, country_code, hs10]
+
+  agricultural_imports:
+    primaryKey: [type, year, month, chapter, country_code, hs10]
 
   nass_crop_production:
     # Uniqueness = program source x geography x full data-item (short_desc) x

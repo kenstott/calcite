@@ -720,3 +720,115 @@ SELECT 'ag', 'food_dollar_series', 'T7_farm_share_2024',
 FROM (SELECT MAX(value) AS v FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true)
   WHERE year = 2024 AND channel = 'Food-at-home' AND aggregation = 'Channel total'
     AND category_name = 'Farm share' AND unit = 'Cents per domestic food dollar');
+
+-- ------------------------------------------------------------
+-- TABLE: agricultural_exports (partition cols: type, year, month, chapter; PK: country_code, hs10, year, month)
+-- Monthly Census HS-10 exports filtered to USDA FAS agricultural codes.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (at least one full year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No such columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No such columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL key or value rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true)
+  WHERE country_code IS NULL OR hs10 IS NULL OR year IS NULL OR month IS NULL OR value_usd IS NULL);
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, month, country_code, hs10) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, month, country_code, hs10 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true) GROUP BY year, month, country_code, hs10 HAVING COUNT(*) > 1));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T7_agricultural_only',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows in non-agricultural chapters (fish 03, fuels 27, rubber 40, wood 44, pulp 47) other than FAS-flagged codes'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true) WHERE LEFT(hs10, 2) IN ('03', '27', '40'));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T7_all_months',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Years without all 12 months'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true) GROUP BY year HAVING COUNT(DISTINCT month) <> 12));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T7_countries_sum_to_world',
+  CASE WHEN n > 0 AND worst <= 0.001 THEN 'pass' ELSE 'fail' END, worst, 0.001, 'Largest yearly relative gap between summed countries and the Census world rows'
+FROM (SELECT COUNT(*) AS n, MAX(ABS(c - w) / w) AS worst FROM (
+  SELECT year, SUM(value_usd) FILTER (WHERE geo_level = 'country') AS c,
+    SUM(value_usd) FILTER (WHERE geo_level = 'world') AS w
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true) GROUP BY year));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_exports', 'T8_thailand_2025',
+  CASE WHEN ABS(v - 1342512355) <= 1342512355 * 0.02 THEN 'pass' ELSE 'fail' END, v, 1342512355, '2025 Thailand agricultural exports, USD (USDA GATS/ERS basis, within 2% for Census revisions)'
+FROM (SELECT SUM(value_usd) AS v FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_exports', allow_moved_paths := true) WHERE year = 2025 AND country_name = 'THAILAND' AND geo_level = 'country');
+
+-- ------------------------------------------------------------
+-- TABLE: agricultural_imports (partition cols: type, year, month, chapter; PK: country_code, hs10, year, month)
+-- Monthly Census HS-10 imports filtered to USDA FAS agricultural codes.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (at least one full year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No such columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No such columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL key or value rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true)
+  WHERE country_code IS NULL OR hs10 IS NULL OR year IS NULL OR month IS NULL OR value_usd IS NULL);
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, month, country_code, hs10) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, month, country_code, hs10 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true) GROUP BY year, month, country_code, hs10 HAVING COUNT(*) > 1));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T7_agricultural_only',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows in non-agricultural chapters (fish 03, fuels 27, rubber 40, wood 44, pulp 47) other than FAS-flagged codes'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true) WHERE LEFT(hs10, 2) IN ('03', '27', '40'));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T7_all_months',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Years without all 12 months'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true) GROUP BY year HAVING COUNT(DISTINCT month) <> 12));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T7_countries_sum_to_world',
+  CASE WHEN n > 0 AND worst <= 0.001 THEN 'pass' ELSE 'fail' END, worst, 0.001, 'Largest yearly relative gap between summed countries and the Census world rows'
+FROM (SELECT COUNT(*) AS n, MAX(ABS(c - w) / w) AS worst FROM (
+  SELECT year, SUM(value_usd) FILTER (WHERE geo_level = 'country') AS c,
+    SUM(value_usd) FILTER (WHERE geo_level = 'world') AS w
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true) GROUP BY year));
+INSERT INTO dq_results
+SELECT 'ag', 'agricultural_imports', 'T8_thailand_2025',
+  CASE WHEN ABS(v - 4071578725) <= 4071578725 * 0.02 THEN 'pass' ELSE 'fail' END, v, 4071578725, '2025 Thailand agricultural imports, USD (USDA GATS/ERS basis, within 2% for Census revisions)'
+FROM (SELECT SUM(value_usd) AS v FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/agricultural_imports', allow_moved_paths := true) WHERE year = 2025 AND country_name = 'THAILAND' AND geo_level = 'country');
