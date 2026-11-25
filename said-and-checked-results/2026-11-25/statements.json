@@ -646,10 +646,19 @@
       "kind": "factual",
       "test": "True if the Senate Banking Committee's published schedule or a statement from Sen. Scott lists a hearing with Jensen Huang testifying on Dec. 3, 2026. False if the committee's schedule lists that hearing on a different date or without Huang. Cannot be determined if no committee schedule or statement can be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "supported",
+      "finding": "The Senate Banking Committee's hearing page lists a full committee hearing on Thursday, Dec. 3, 2026, \"Protecting America's AI Advantage: Oversight of U.S. Export Controls,\" with Jensen Huang of Nvidia as the witness. No dated announcement was found to confirm it was made on Monday.",
+      "evidence": [
+        {
+          "label": "Senate Banking Committee hearing page (Dec. 3, 2026)",
+          "url": "https://www.banking.senate.gov/hearings/protecting-americas-ai-advantage-oversight-of-us-export-controls"
+        },
+        {
+          "label": "Senate Banking Committee hearings list",
+          "url": "https://www.banking.senate.gov/hearings"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
