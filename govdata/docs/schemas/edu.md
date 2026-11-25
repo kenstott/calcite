@@ -28,6 +28,7 @@ IPEDS bulk downloads.
 | `ipeds_financials` | IPEDS institutional finance: revenues, expenditures by function, assets, endowment by institution and year | IPEDS bulk XLSX | Annual |
 | `ipeds_tuition` | IPEDS tuition and fees: in-state, out-of-state, on-campus room/board costs by institution and year | IPEDS bulk XLSX | Annual |
 | `college_scorecard` | College Scorecard institutional outcomes: admission rate, SAT/ACT scores, retention, graduation rate, median earnings, median debt | College Scorecard API | Annual |
+| `college_scorecard_latest` | Latest snapshot (not a time series) of College Scorecard institution-level `latest.*` values: earnings, family income, debt, completion, cost; replaced when the publisher updates | College Scorecard API | Irregular, several per year |
 | `college_scorecard_programs` | College Scorecard program-level earnings and debt by institution, CIP code, and credential level | College Scorecard programs API | Annual |
 
 ---

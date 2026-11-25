@@ -735,6 +735,11 @@ Discrepancies from original plan:
 | tuition_in_state | INTEGER | `latest.cost.tuition.in_state` | In-state tuition |
 | tuition_out_state | INTEGER | `latest.cost.tuition.out_of_state` | Out-of-state tuition |
 
+**Latest-value table (`college_scorecard_latest`):** one row per institution (primary key `id`)
+holding the `latest.*` values the API serves today. It has no year column and is not a time
+series; it is replaced when the values change. It carries the institution-level columns above
+except `year` and `hispanic_serving`. Use `college_scorecard` for values by data file year.
+
 **Program-level table (`college_scorecard_programs`):**
 
 | Column | Type | API Field | Description |

@@ -72,6 +72,7 @@ Understanding release windows helps schedule annual cron jobs. The recurring wor
 | IPEDS Institutions/Completions/Tuition | November | `ipeds_institutions`, `ipeds_completions`, `ipeds_tuition` | Fall Data Collection release |
 | IPEDS Financials | January | `ipeds_financials` | Finance survey lags other IPEDS surveys by ~2 months |
 | College Scorecard | October | `college_scorecard`, `college_scorecard_programs` | Annual cohort data release |
+| College Scorecard (latest values) | Any day | `college_scorecard_latest` | Daily re-fetch; written only when the values change |
 | NAEP Assessments | January–March (odd years) | `naep_scores` | Biennial NAEP cycles: grades 4/8 reading/math |
 | CRDC Civil Rights Data | ~18 months after survey year | `crdc_schools` | Even-year surveys; e.g., 2020-21 survey released late 2022 |
 
