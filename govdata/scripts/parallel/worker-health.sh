@@ -270,6 +270,8 @@ run_ungrouped_health_tables() {
   run_health_model "health-ungrouped" "$unassigned"
 }
 
+require_requested_tables_exist health || exit 1
+
 case "$MODE" in
 
   historical)

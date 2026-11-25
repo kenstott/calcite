@@ -102,12 +102,12 @@ run_cyber_model() {
   shift 3
   local extra_operands="${1:-}"
 
-  # An empty table_csv (cyber_threat's own call, since the hourly/weekly/static/otx-initial
-  # split was collapsed into one threat-$MODE call) means this caller never named an explicit
-  # table set to begin with — "run whatever the schema currently wants", same as before
-  # filter_enabled_tables existed. That's a different case from GOVDATA_TABLES scoping a real
-  # list down to nothing: skip filtering entirely rather than treating "no list given" as "zero
-  # tables match", which would silently no-op this model on every single run.
+  # An empty table_csv (the cyber_threat call) names no explicit table set: the model runs
+  # every table in the schema. With GOVDATA_TABLES (--tables) set, the schema's own table list
+  # is the set to filter.
+  if [ -z "$table_csv" ] && [ -n "${GOVDATA_TABLES:-}" ]; then
+    table_csv="$(schema_tables "$schema" all)" || return 1
+  fi
   local enabled_tables=""
   if [ -n "$table_csv" ]; then
     table_csv="$(drop_tables_unknown_to_jar "$schema" "$table_csv")" || return 1
@@ -167,6 +167,12 @@ ENDJSON
 }
 
 # ── modes ─────────────────────────────────────────────────────────────────────
+
+_cyber_run_schemas=()
+for _s in cyber_vuln cyber_threat; do
+  should_run "$_s" && _cyber_run_schemas+=("$_s")
+done
+require_requested_tables_exist "${_cyber_run_schemas[@]}" || exit 1
 
 case "$MODE" in
 

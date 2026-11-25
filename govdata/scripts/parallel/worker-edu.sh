@@ -82,9 +82,12 @@ EDU_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/edu/edu-schema.yaml"
 run_edu_model() {
   local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
-  enabled_tables="$(drop_quoted_tables_unknown_to_jar edu "$enabled_tables")" || return 1
+  # Every group funnels through here, so GOVDATA_TABLES (--tables) is applied once: a group
+  # with none of the requested tables is skipped, not run.
+  enabled_tables="$(drop_tables_unknown_to_jar edu "$(echo "$enabled_tables" | tr -d '" ')")" || return 1
+  enabled_tables="$(filter_enabled_tables "$enabled_tables")"
   if [ -z "$enabled_tables" ]; then
-    log_info "$WORKER_ID: skipping $model_name — none of its tables are in the staged jar's schema"
+    log_info "$WORKER_ID: skipping $model_name — no tables to run (GOVDATA_TABLES=${GOVDATA_TABLES:-})"
     return 0
   fi
 
@@ -319,6 +322,8 @@ run_biennial_cadence() {
       '"crdc_schools"' "$BIENNIAL_START"
   fi
 }
+
+require_requested_tables_exist edu || exit 1
 
 case "$MODE" in
 

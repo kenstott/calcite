@@ -1897,12 +1897,6 @@ schema_yaml_resource() {
   esac
 }
 
-# Filter a bespoke worker's hardcoded per-model table list down to a GOVDATA_TABLES override.
-# The schemas with their own model-building function (worker-health.sh, worker-health-rebuild.sh,
-# worker-cyber.sh, worker-edu.sh, worker-lands.sh, worker-patents.sh) bypass build_inline_model
-# entirely, so GOVDATA_TABLES (the --tables scoping worker-dq-run.sh exports) was silently a
-# no-op for all of them: a run always covered every table in the hardcoded per-model group,
-# regardless of what --tables asked for.
 # Lists a schema's tables straight from the schema YAML bundled in the running jar, so a
 # worker can tell what it is *supposed* to cover rather than trusting a hand-maintained list.
 #
@@ -2009,20 +2003,10 @@ drop_tables_unknown_to_jar() {
   echo "${out%,}"
 }
 
-# Same as drop_tables_unknown_to_jar for a list whose names are double-quoted ("a","b"), echoing
-# the surviving names double-quoted again. Empty output means every table was dropped.
-#
-# Usage: quoted=$(drop_quoted_tables_unknown_to_jar <schema> '"t1","t2"')
-drop_quoted_tables_unknown_to_jar() {
-  local schema="$1" quoted_csv="$2" kept _t out=""
-  kept="$(drop_tables_unknown_to_jar "$schema" "$(echo "$quoted_csv" | tr -d '" ')")" || return 1
-  IFS=',' read -ra _kept_arr <<< "$kept"
-  for _t in "${_kept_arr[@]}"; do
-    [ -n "$_t" ] && out="${out}\"${_t}\","
-  done
-  echo "${out%,}"
-}
-
+# Filters a bespoke worker's per-model table list down to the GOVDATA_TABLES (--tables)
+# override. Workers with their own model-building function (worker-health.sh, worker-cyber.sh,
+# worker-edu.sh, worker-lands.sh, worker-patents.sh) do not go through build_inline_model, so
+# each applies this to every group it runs.
 #
 # Usage: filtered=$(filter_enabled_tables "table1,table2,table3")
 #   Echoes a JSON-array-ready, double-quoted, comma-separated list for the group. With
@@ -2055,6 +2039,28 @@ filter_enabled_tables() {
     [[ "$wanted" == *",${_t},"* ]] && out="${out}\"${_t}\","
   done
   echo "${out%,}"
+}
+
+# A bespoke worker skips every group that holds none of the GOVDATA_TABLES names, so a name no
+# schema declares would end as a successful run that loaded nothing. Fails, naming each such name.
+#
+# Usage: require_requested_tables_exist <schema> [<schema>...]
+require_requested_tables_exist() {
+  [ -n "${GOVDATA_TABLES:-}" ] || return 0
+  local _schema _tables known="," _w missing=""
+  for _schema in "$@"; do
+    _tables="$(schema_tables "$_schema" all)" || return 1
+    known="${known}${_tables},"
+  done
+  IFS=',' read -ra _req_arr <<< "$GOVDATA_TABLES"
+  for _w in "${_req_arr[@]}"; do
+    _w="$(echo "$_w" | xargs)"
+    [ -n "$_w" ] || continue
+    [[ "$known" == *",${_w},"* ]] || missing="${missing}${_w},"
+  done
+  [ -z "$missing" ] && return 0
+  echo "ERROR: GOVDATA_TABLES names tables not in the jar's $* schema YAML: ${missing%,}" >&2
+  return 1
 }
 
 # A run stopped by the sec.gov cool-down is deferred, not failed: the refusal is the expected
