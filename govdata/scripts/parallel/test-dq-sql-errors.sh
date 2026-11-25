@@ -53,11 +53,11 @@ write_sql() { # $1 = file, remaining = table names
     done
   } > "$f"
 }
-run() { # output in $out, rc in $rc
+run() { # args passed to the runner; output in $out, rc in $rc
   out=$(env -i HOME="$T" PATH="$T/bin:/usr/bin:/bin" GOVDATA_TMPDIR="$T/tmp" \
     GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq AWS_ENDPOINT_OVERRIDE="http://127.0.0.1:1" \
     AWS_ACCESS_KEY_ID=testkeyid AWS_SECRET_ACCESS_KEY=testsecretvalue GOVDATA_CACHE_DIR="s3://zz-raw" \
-    timeout 60 bash "$P/worker-dq-run.sh" zzerr --dry-run 2>&1); rc=$?
+    timeout 60 bash "$P/worker-dq-run.sh" zzerr --dry-run "$@" 2>&1); rc=$?
 }
 
 write_sql "$S/zzerr_dq.sql" good_one absent_table good_two
@@ -72,6 +72,48 @@ write_sql "$S/zzerr_dq.sql" good_one good_two
 run
 [ $rc -eq 0 ] && [[ "$out" == *"SCHEMA RESULT: PASS"* ]] \
   && ok "a script with no errors still passes" || bad "clean run: rc=$rc $out"
+
+# --tables: statements for unbuilt tables, directly or through a view, are left out
+B='s3://${GOVDATA_DQ_BUCKET}/zzerr'
+scan() { echo "iceberg_scan('$B/$1', allow_moved_paths=true)"; }
+write_scoped_sql() { # $1 = file
+  local ins="INSERT INTO dq_results SELECT 'zzerr'"
+  cat > "$1" <<SQL
+CREATE TEMP TABLE dq_results (schema VARCHAR, tbl VARCHAR, test VARCHAR, status VARCHAR, value VARCHAR, threshold VARCHAR, detail VARCHAR);
+-- a comment; with a semicolon and an apostrophe's quote
+$ins, 'good_one', 'row_count', 'pass', '1', '1', '$B/good_one';
+$ins, 'out_one', 'row_count', 'pass', '1', '1', NULL FROM $(scan out_one);
+CREATE TEMP VIEW out_view AS SELECT * FROM $(scan out_two);
+$ins, 'derived', 'row_count', 'pass', '1', '1', NULL FROM out_view;
+$ins, 'good_one', 'orphans', 'pass', '1', '1', '$B/good_one' FROM out_view;
+$ins, t, 'existence', 'fail', '0', '1', NULL FROM (VALUES ('out_one')) v(t);
+SQL
+}
+write_scoped_sql "$S/zzerr_dq.sql"
+run --tables good_one
+[ $rc -eq 0 ] && [[ "$out" == *"SCHEMA RESULT: PASS"* ]] \
+  && ok "a scoped run ignores tables outside --tables" || bad "scoped: rc=$rc $out"
+[[ "$out" == *"a check reading good_one needs out_two, outside --tables"* ]] \
+  && ok "a check left out for an in-scope table is listed" || bad "not-run list: $out"
+
+# a cross-table statement that errors on the out-of-scope side is listed, not counted
+write_scoped_sql "$S/zzerr_dq.sql"
+# (a missing local table stands in for the unbuilt one, so nothing goes to the network)
+echo "INSERT INTO dq_results SELECT 'zzerr', 'good_one', 'join', 'pass', '1', '1', '$B/good_one $B/out_one' FROM \"zzerr/out_one\";" >> "$S/zzerr_dq.sql"
+run --tables good_one
+[ $rc -eq 0 ] && [[ "$out" == *"need out_one, outside --tables"* ]] \
+  && ok "an out-of-scope statement error is not counted" || bad "mixed: rc=$rc $out"
+
+write_scoped_sql "$S/zzerr_dq.sql"
+echo 'INSERT INTO dq_results SELECT * FROM no_such_table;' >> "$S/zzerr_dq.sql"
+run --tables good_one
+[ $rc -eq 1 ] && [[ "$out" == *"SCHEMA RESULT: FAIL (fails=1 warns=0)"* ]] \
+  && ok "an unattributed error still fails a scoped run" || bad "unresolved: rc=$rc $out"
+
+write_scoped_sql "$S/zzerr_dq.sql"
+run --tables nothing_checked
+[ $rc -eq 1 ] && [[ "$out" == *"no check reading any of the --tables"* ]] \
+  && ok "a scope with no checks fails" || bad "empty scope: rc=$rc $out"
 
 # a long path is cut short in DuckDB's snippet; the prefix still identifies the table
 printf "INSERT INTO t SELECT 1 FROM iceberg_scan('s3://b/zzerr/district_assessments', allow_moved_paths=true);\n" > "$T/known.sql"

@@ -22,7 +22,11 @@ one per (table, error message), with the number of statements that raised it.
 Only the error's first line is reported. The SQL snippet DuckDB prints under it is read to
 name the table and is never copied, because the DQ SQL carries substituted credentials.
 
-Usage: dq_sql_errors.py <duckdb-log> <dq-sql> <duckdb-exit-code>
+In a --tables run (the fourth argument) an error naming a table outside the scope produces no
+row: dq_scope.py has already left out the statements that read only such tables, so it comes
+from a cross-table check that cannot run. It is listed on stderr. An unresolved error counts.
+
+Usage: dq_sql_errors.py <duckdb-log> <dq-sql> <duckdb-exit-code> [<comma-separated-tables>]
 """
 
 import collections
@@ -74,10 +78,11 @@ def errors(log_lines, known):
 
 
 def main(argv):
-    if len(argv) != 4:
+    if len(argv) not in (4, 5):
         sys.stderr.write(__doc__)
         return 2
-    log_path, sql_path, exit_code = argv[1:]
+    log_path, sql_path, exit_code = argv[1:4]
+    scope = {name.strip() for name in argv[4].split(",")} if len(argv) == 5 else None
     with open(sql_path, encoding="utf-8") as handle:
         known = set(TABLE_PATH.findall(handle.read()))
     with open(log_path, encoding="utf-8", errors="replace") as handle:
@@ -88,6 +93,10 @@ def main(argv):
     writer = csv.writer(sys.stdout, lineterminator="\n")
     writer.writerow(["table_name", "value", "detail"])
     for (table, message), count in found.items():
+        if scope is not None and table != UNRESOLVED and table not in scope:
+            sys.stderr.write("not run: %d statement(s) need %s, outside --tables: %s\n"
+                             % (count, table, message))
+            continue
         writer.writerow([table, count, message])
     return 0
 
