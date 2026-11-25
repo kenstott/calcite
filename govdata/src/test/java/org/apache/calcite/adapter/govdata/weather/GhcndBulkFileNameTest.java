@@ -16,39 +16,41 @@
  */
 package org.apache.calcite.adapter.govdata.weather;
 
-import org.apache.calcite.adapter.file.etl.PipelineClock;
-
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** Tests the by_year cache file naming of {@link GhcndBulkDataProvider}. */
 @Tag("unit")
 class GhcndBulkFileNameTest {
 
-  @Test void currentYearIsKeyedByRefreshMonth() {
-    String year = String.valueOf(PipelineClock.currentYear());
-    assertEquals("ghcnd_bulk_" + year + "_m11.csv.gz",
-        GhcndBulkDataProvider.bulkFileName(year, "11"));
+  private static final LocalDate TODAY = LocalDate.of(2026, 11, 25);
+
+  @Test void currentYearIsStampedWithIsoWeek() {
+    assertEquals("ghcnd_bulk_2026_w2026-48.csv.gz",
+        GhcndBulkDataProvider.bulkFileName("2026", TODAY));
   }
 
-  @Test void previousYearIsKeyedByRefreshMonth() {
-    String year = String.valueOf(PipelineClock.currentYear() - 1);
-    assertEquals("ghcnd_bulk_" + year + "_m12.csv.gz",
-        GhcndBulkDataProvider.bulkFileName(year, "12"));
+  @Test void previousYearIsStampedWithIsoWeek() {
+    assertEquals("ghcnd_bulk_2025_w2026-48.csv.gz",
+        GhcndBulkDataProvider.bulkFileName("2025", TODAY));
   }
 
-  @Test void closedYearKeepsSingleName() {
-    String year = String.valueOf(PipelineClock.currentYear() - 2);
-    assertEquals("ghcnd_bulk_" + year + ".csv.gz",
-        GhcndBulkDataProvider.bulkFileName(year, "11"));
+  @Test void closedYearUsesFinalName() {
+    assertEquals("ghcnd_bulk_2024_final.csv.gz",
+        GhcndBulkDataProvider.bulkFileName("2024", TODAY));
   }
 
-  @Test void openYearWithoutRefreshMonthFails() {
-    String year = String.valueOf(PipelineClock.currentYear());
-    assertThrows(IllegalStateException.class,
-        () -> GhcndBulkDataProvider.bulkFileName(year, null));
+  @Test void newWeekChangesTheName() {
+    assertEquals("ghcnd_bulk_2026_w2026-49.csv.gz",
+        GhcndBulkDataProvider.bulkFileName("2026", TODAY.plusWeeks(1)));
+  }
+
+  @Test void januaryDaysOfThePreviousIsoYearKeepThatWeekYear() {
+    assertEquals("ghcnd_bulk_2026_w2026-53.csv.gz",
+        GhcndBulkDataProvider.bulkFileName("2026", LocalDate.of(2027, 1, 1)));
   }
 }
