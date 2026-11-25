@@ -354,6 +354,36 @@ public class IcebergTableWriter {
     replacePartitionsDataFiles(allDataFiles, false);
   }
 
+  private void assertNoPartitionShrinks(List<DataFile> newFiles) {
+    Map<String, Long> incoming = new java.util.LinkedHashMap<>();
+    for (DataFile f : newFiles) {
+      incoming.merge(f.partition().toString(), f.recordCount(), Long::sum);
+    }
+    if (table.currentSnapshot() == null) {
+      return;
+    }
+    Map<String, Long> existing = new java.util.HashMap<>();
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        String key = task.file().partition().toString();
+        if (incoming.containsKey(key)) {
+          existing.merge(key, task.file().recordCount(), Long::sum);
+        }
+      }
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException("Cannot read existing partitions of "
+          + table.name() + " to check for shrinkage", e);
+    }
+    for (Map.Entry<String, Long> e : incoming.entrySet()) {
+      long before = existing.getOrDefault(e.getKey(), 0L);
+      if (e.getValue() < before) {
+        throw new IllegalStateException("Refusing to replace partition " + e.getKey() + " of "
+            + table.name() + ": it would shrink from " + before + " to " + e.getValue()
+            + " rows (failOnPartitionShrink)");
+      }
+    }
+  }
+
   /**
    * Same as {@link #replacePartitionsDataFiles(List)}, with the option to force manifest
    * scanning onto the calling thread instead of Iceberg's process-wide
@@ -363,9 +393,22 @@ public class IcebergTableWriter {
    *     being alive — see {@link #directExecutorIfRequested}
    */
   public void replacePartitionsDataFiles(List<DataFile> allDataFiles, boolean runOnCallingThread) {
+    replacePartitionsDataFiles(allDataFiles, runOnCallingThread, false);
+  }
+
+  /**
+   * Same as {@link #replacePartitionsDataFiles(List, boolean)}; when {@code failOnShrink} is set,
+   * throws before committing if any partition the files touch would end up with fewer rows than
+   * the table currently holds for it.
+   */
+  public void replacePartitionsDataFiles(List<DataFile> allDataFiles, boolean runOnCallingThread,
+      boolean failOnShrink) {
     if (allDataFiles.isEmpty()) {
       LOGGER.debug("No data files to replace partitions");
       return;
+    }
+    if (failOnShrink) {
+      assertNoPartitionShrinks(allDataFiles);
     }
     if (table.properties().containsKey(SORTED_BY_PROPERTY)) {
       underCommitLock(() -> table.updateProperties().remove(SORTED_BY_PROPERTY).commit());

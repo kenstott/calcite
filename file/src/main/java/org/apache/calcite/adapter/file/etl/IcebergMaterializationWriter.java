@@ -212,6 +212,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   private Map<String, String> partitionValueSource = Collections.emptyMap();
   private boolean overwritePartitions = false;
+  private boolean failOnPartitionShrink = false;
 
   /**
    * True when the partition key does not determine the fetch unit, so several units feed one
@@ -309,6 +310,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       this.maxRetries = icebergConfig.getMaxRetries();
       this.retryDelayMs = icebergConfig.getRetryDelayMs();
       this.overwritePartitions = icebergConfig.isReplacingPartitionsThisRun();
+      this.failOnPartitionShrink = icebergConfig.isFailOnPartitionShrink();
       if (icebergConfig.isOverwritePartitions() && !this.overwritePartitions) {
         LOGGER.info("Iceberg write: append mode selected by operand {}={}",
             icebergConfig.getAppendWhenOperand(), icebergConfig.getAppendWhenValue());
@@ -1826,7 +1828,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
       long commitStart = System.currentTimeMillis();
       if (!toReplace.isEmpty()) {
-        tableWriter.replacePartitionsDataFiles(toReplace, runOnCallingThread);
+        tableWriter.replacePartitionsDataFiles(toReplace, runOnCallingThread,
+            failOnPartitionShrink);
         totalRecordsCommitted += sumRecordCounts(toReplace);
       }
       if (!toAppend.isEmpty()) {

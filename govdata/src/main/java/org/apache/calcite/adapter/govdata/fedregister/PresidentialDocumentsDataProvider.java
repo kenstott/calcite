@@ -90,6 +90,12 @@ public class PresidentialDocumentsDataProvider implements CachingDataProvider {
     LocalDate to = from.plusMonths(1).minusDays(1);
 
     List<String> packageIds = listPackages(from, to, apiKey);
+    List<String> confirm = listPackages(from, to, apiKey);
+    if (!new LinkedHashSet<String>(packageIds).equals(new LinkedHashSet<String>(confirm))) {
+      throw new IOException("presidential_documents: two listings of " + from + " to " + to
+          + " disagree (" + packageIds.size() + " vs " + confirm.size() + " packages); "
+          + "refusing to build the month from an unstable listing");
+    }
     LOGGER.info("presidential_documents: {} packages issued {} to {}", packageIds.size(), from, to);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(packageIds.size());
@@ -118,7 +124,21 @@ public class PresidentialDocumentsDataProvider implements CachingDataProvider {
         }
         ids.add(id);
       }
+      JsonNode count = root.get("count");
+      if (count == null || !count.canConvertToInt()) {
+        throw new IOException("presidential_documents: CPD listing has no count: " + from + " to "
+            + to);
+      }
+      int pageSize = root.path("packages").size();
       String next = text(root, "nextPage");
+      if (next == null && ids.size() != count.asInt()) {
+        throw new IOException("presidential_documents: CPD listing " + from + " to " + to
+            + " reports count=" + count.asInt() + " but returned " + ids.size() + " packages");
+      }
+      if (pageSize == 0 && next != null) {
+        throw new IOException("presidential_documents: empty CPD page with a nextPage for "
+            + from + " to " + to);
+      }
       offsetMark = next == null ? null : queryParam(next, "offsetMark");
     }
     return ids;
