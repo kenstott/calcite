@@ -7389,7 +7389,7 @@ partitionedTables:
         type: VARCHAR
         nullable: true
       - name: dose
-        comment: "Dose or milestone, e.g. ≥3 Doses, Full Series, or for Hep B the timed doses ≥1 Dose, 1 Day / ≥1 Dose, 2 Day / ≥1 Dose, 3 Day (Birth Dose). Empty or null where vaccine already names the dose or series"
+        comment: "Dose or milestone, e.g. ≥3 Doses, Full Series, or for Hep B the timed doses ≥1 Dose, 1 Day / ≥1 Dose, 2 Day / ≥1 Dose, 3 Day (Birth Dose). Null where vaccine already names the dose or series"
         type: VARCHAR
         nullable: true
       - name: geography_type
@@ -7419,12 +7419,12 @@ partitionedTables:
         nullable: true
         expression: 'CAST(NULLIF(src."coverage_estimate", ''NA'') AS DOUBLE)'
       - name: ci_95_lower
-        comment: "Lower bound of the 95 percent confidence interval, percent. Null where no interval is published"
+        comment: "Lower bound of the 95 percent confidence interval, percent, as published. Can be negative for very small samples. Null where no interval is published"
         type: DOUBLE
         nullable: true
         expression: 'CAST(SPLIT_PART(src."_95_ci", '' to '', 1) AS DOUBLE)'
       - name: ci_95_upper
-        comment: "Upper bound of the 95 percent confidence interval, percent. Null where no interval is published"
+        comment: "Upper bound of the 95 percent confidence interval, percent, as published. CDC publishes three small-sample Hep A subgroup intervals (South Dakota, Kansas) that do not contain the estimate, two of them with the upper bound below the lower bound. Null where no interval is published"
         type: DOUBLE
         nullable: true
         expression: 'CAST(SPLIT_PART(src."_95_ci", '' to '', 2) AS DOUBLE)'

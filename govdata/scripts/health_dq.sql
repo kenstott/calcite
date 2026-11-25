@@ -1146,13 +1146,22 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/c
       WHERE vaccine IS NULL OR geography_type IS NULL OR geography IS NULL OR birth_cohort IS NULL
          OR dimension_type IS NULL OR dimension IS NULL);
 
+-- The lower bound is not floored: CDC publishes normal-approximation intervals that go below 0
 INSERT INTO dq_results
 SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T7_value_ranges',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, 0, 'Rows with estimate or CI outside 0-100, or CI lower above upper'
+  n, 0, 'Rows with estimate or CI upper outside 0-100, or CI lower above 100'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true)
-      WHERE coverage_estimate NOT BETWEEN 0 AND 100 OR ci_95_lower NOT BETWEEN 0 AND 100
-         OR ci_95_upper NOT BETWEEN 0 AND 100 OR ci_95_lower > ci_95_upper);
+      WHERE coverage_estimate NOT BETWEEN 0 AND 100 OR ci_95_upper NOT BETWEEN 0 AND 100 OR ci_95_lower > 100);
+
+-- 3 rows upstream at 2026-11-25: South Dakota Hep A "62.4 to 51.4" and "61.8 to 51.4", Kansas
+-- Hep A 66.0 with "53.2 to 61.3"
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T7_ci_brackets_estimate',
+  CASE WHEN n <= 3 THEN 'pass' ELSE 'fail' END,
+  n, 3, 'Rows whose estimate is outside its own confidence interval'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true)
+      WHERE coverage_estimate < ci_95_lower OR coverage_estimate > ci_95_upper);
 
 -- NA is published for ~1.5% of rows; a mostly-null estimate means the parse broke
 INSERT INTO dq_results
