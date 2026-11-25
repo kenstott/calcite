@@ -95,6 +95,24 @@ class SsaOasdiCountyTransformerTest {
     }
   }
 
+  @Test void cleansLabelsAndSkipsAreasWithoutFigures() throws IOException {
+    try (XSSFWorkbook wb = stateWorkbook(
+        area(null, "Total,\nVirginia", 51, 100),
+        area("Bedford\u00a0a", null, 51019, 60),
+        area("Prince of Wales-\n    Outer Ketchikan", null, 51021, 20),
+        area("Lower Connecticut\n  River Valley", null, 51023, 20),
+        new Object[] {"Bedford", null, 51515, "a", "a", "a", "a", "a", "a", "a", "a", "a"})) {
+      ArrayNode rows = new SsaOasdiCountyTransformer().stateRows(wb, "VA", 2014);
+      assertEquals(4, rows.size());
+      assertEquals("Total, Virginia", byFips(rows, null).get("county_name").asText());
+      assertEquals("Bedford", byFips(rows, "51019").get("county_name").asText());
+      assertEquals("Prince of Wales-Outer Ketchikan",
+          byFips(rows, "51021").get("county_name").asText());
+      assertEquals("Lower Connecticut River Valley",
+          byFips(rows, "51023").get("county_name").asText());
+    }
+  }
+
   @Test void failsWhenCodeColumnDoesNotHoldStateCodes() throws IOException {
     try (XSSFWorkbook wb = stateWorkbook(
         area(null, "Total, Alabama", 952511, 100),

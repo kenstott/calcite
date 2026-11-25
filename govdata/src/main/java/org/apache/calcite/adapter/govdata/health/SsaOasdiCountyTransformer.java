@@ -157,7 +157,7 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
 
   private CountyRow findDc(Sheet sheet) {
     for (Row row : sheet) {
-      if (DC_NAME.equals(trimmed(row.getCell(0)))) {
+      if (DC_NAME.equals(label(row.getCell(0)))) {
         return readMeasures(row);
       }
     }
@@ -214,7 +214,7 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
         continue;
       }
       Double ansi = cellDouble(row.getCell(2));
-      String nameA = trimmed(row.getCell(0));
+      String nameA = label(row.getCell(0));
       if (ansi == null) {
         if (nameA != null && cellDouble(row.getCell(3)) != null) {
           throw new IllegalStateException("SSA OASDI county: area '" + nameA
@@ -222,13 +222,18 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
         }
         continue;
       }
-      String nameB = trimmed(row.getCell(1));
+      String nameB = label(row.getCell(1));
       boolean isTotal = nameA == null && nameB != null;
       if (!isTotal && nameA == null) {
         throw new IllegalStateException("SSA OASDI county: unnamed area, sheet "
             + sheet.getSheetName() + " row " + (r + 1));
       }
       CountyRow cr = readMeasures(row);
+      // A listed area with no figure in any column (a county equivalent dissolved before the
+      // snapshot, e.g. Bedford city) is not a data row.
+      if (!isTotal && cr.hasNoFigures()) {
+        continue;
+      }
       long code = ansi.longValue();
       if (isTotal) {
         if (stateCode != null) {
@@ -236,8 +241,7 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
               + sheet.getSheetName() + " row " + (r + 1));
         }
         stateCode = code >= 1000 ? code / 1000 : code;
-        // Some years suffix the total label with a footnote letter ("Total, Maryland b").
-        cr.name = nameB.replaceFirst(" [a-z]$", "");
+        cr.name = nameB;
       } else {
         cr.name = nameA;
         cr.countyFips = leftPad(String.valueOf(code), 5, '0');
@@ -275,12 +279,19 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
     return cr;
   }
 
-  private String trimmed(Cell cell) {
+  /**
+   * A label cell on one line, without layout artifacts: wrapped lines are rejoined, non-breaking
+   * and repeated spaces become one space, and a trailing footnote letter ("Total, Maryland b") is
+   * dropped. Null for an empty cell.
+   */
+  private String label(Cell cell) {
     String s = cellString(cell);
-    if (s == null || s.trim().isEmpty()) {
+    if (s == null) {
       return null;
     }
-    return s.trim();
+    s = s.replace('\u00a0', ' ').replaceAll("-\\s*\\n\\s*", "-").replaceAll("\\s+", " ").trim()
+        .replaceFirst(" [a-z]$", "");
+    return s.isEmpty() ? null : s;
   }
 
   private static String leftPad(String s, int len, char pad) {
@@ -304,5 +315,11 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
     Double disabledWorkers;
     Double spousesDisability;
     Double childrenDisability;
+
+    boolean hasNoFigures() {
+      return total == null && retiredWorkers == null && spousesRetirement == null
+          && childrenRetirement == null && widowersParents == null && childrenSurvivors == null
+          && disabledWorkers == null && spousesDisability == null && childrenDisability == null;
+    }
   }
 }

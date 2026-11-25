@@ -2915,7 +2915,7 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health
 INSERT INTO dq_results
 SELECT 'health', 'ssa_oasdi_county', 'T7_total_count_reconciles',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
-  bad, 0, 'Rows where total_count differs from the sum of its 7 beneficiary-type components by >1%'
+  bad, 0, 'Rows where total_count differs from the sum of its beneficiary-type components by >1% and more than 25 (SSA rounds county figures to 5)'
 FROM (
   SELECT COUNT(*) AS bad FROM (
     SELECT total_count,
@@ -2927,6 +2927,7 @@ FROM (
     WHERE total_count IS NOT NULL AND total_count > 0
   ) x
   WHERE ABS(x.total_count - x.component_sum) / x.total_count > 0.01
+    AND ABS(x.total_count - x.component_sum) > 25
 );
 
 -- T7: every year carries one state-total row for each of the 50 states plus DC
