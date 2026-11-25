@@ -33,7 +33,8 @@ import java.util.Set;
  *   <li>{@code rma} — RMA Summary of Business (crop insurance)</li>
  *   <li>{@code ers} — ERS Farm Income and Wealth Statistics</li>
  *   <li>{@code fsa} — FSA program/conservation payments</li>
- *   <li>{@code fas} — FAS Export Sales Reporting (weekly export sales)</li>
+ *   <li>{@code fas} — FAS Export Sales Reporting (weekly export sales) and agricultural
+ *       exports/imports by country (Census HS-10, FAS product definition)</li>
  * </ul>
  */
 public class AgSchemaFactory implements GovDataSubSchemaFactory {
@@ -60,7 +61,9 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
   ));
 
   private static final Set<String> FAS_TABLES = new HashSet<>(Arrays.asList(
-      "fas_export_sales"
+      "fas_export_sales",
+      "agricultural_exports",
+      "agricultural_imports"
   ));
 
   @Override
