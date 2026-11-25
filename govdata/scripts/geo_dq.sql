@@ -51,72 +51,41 @@ CREATE TEMP TABLE dq_results (
 -- T1 — EXISTENCE CHECKS
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'states'                  AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/states',                  allow_moved_paths := true) LIMIT 1)) AS n;
+INSERT INTO dq_existence_counts SELECT 'counties',                        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties',                allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'places',                          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/places',                  allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'zctas',                           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zctas',                   allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'census_tracts',                   (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_tracts',           allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'block_groups',                    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/block_groups',            allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'cbsa',                            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cbsa',                   allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'congressional_districts',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/congressional_districts', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'school_districts',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/school_districts',        allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'state_legislative_lower',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_lower', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'state_legislative_upper',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_upper', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'county_subdivisions',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_subdivisions',     allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'tribal_areas',                    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tribal_areas',            allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'urban_areas',                     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/urban_areas',             allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'pumas',                           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/pumas',                   allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'voting_districts',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/voting_districts',        allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'zip_county_crosswalk',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_county_crosswalk',    allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'zip_cbsa_crosswalk',              (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cbsa_crosswalk',      allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'tract_zip_crosswalk',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tract_zip_crosswalk',     allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'zip_tract_crosswalk',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_tract_crosswalk',     allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'zip_cd_crosswalk',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cd_crosswalk',        allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'county_zip_crosswalk',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_zip_crosswalk',    allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'cd_zip_crosswalk',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cd_zip_crosswalk',        allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'rural_urban_continuum',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/rural_urban_continuum',   allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'ruca_codes',                      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/ruca_codes',              allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'gazetteer_counties',              (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_counties',  allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'gazetteer_places',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_places',    allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'gazetteer_zctas',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_zctas',     allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'watersheds_huc2',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc2',         allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'watersheds_huc4',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc4',         allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'watersheds_huc8',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc8',         allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'watersheds_huc12',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc12',        allow_moved_paths := true) LIMIT 1));
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'states'                  AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/states',                  allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'counties',                        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties',                allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'places',                          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/places',                  allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'zctas',                           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zctas',                   allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'census_tracts',                   (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_tracts',           allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'block_groups',                    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/block_groups',            allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'cbsa',                            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cbsa',                   allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'congressional_districts',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/congressional_districts', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'school_districts',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/school_districts',        allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'state_legislative_lower',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_lower', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'state_legislative_upper',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_upper', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'county_subdivisions',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_subdivisions',     allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'tribal_areas',                    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tribal_areas',            allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'urban_areas',                     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/urban_areas',             allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'pumas',                           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/pumas',                   allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'voting_districts',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/voting_districts',        allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'zip_county_crosswalk',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_county_crosswalk',    allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'zip_cbsa_crosswalk',              (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cbsa_crosswalk',      allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'tract_zip_crosswalk',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tract_zip_crosswalk',     allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'zip_tract_crosswalk',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_tract_crosswalk',     allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'zip_cd_crosswalk',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cd_crosswalk',        allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'county_zip_crosswalk',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_zip_crosswalk',    allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'cd_zip_crosswalk',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cd_zip_crosswalk',        allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'rural_urban_continuum',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/rural_urban_continuum',   allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'ruca_codes',                      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/ruca_codes',              allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'gazetteer_counties',              (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_counties',  allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'gazetteer_places',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_places',    allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'gazetteer_zctas',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_zctas',     allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'watersheds_huc2',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc2',         allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'watersheds_huc4',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc4',         allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'watersheds_huc8',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc8',         allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'watersheds_huc12',                (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc12',        allow_moved_paths := true) LIMIT 1))
-)
 SELECT
   'geo'                                          AS schema,
   tbl,
@@ -125,81 +94,50 @@ SELECT
   n::VARCHAR                                     AS value,
   '1'                                            AS threshold,
   CASE WHEN n = 0 THEN 'table is empty or missing' ELSE 'ok' END AS detail
-FROM counts;
+FROM dq_existence_counts;
 
 -- ============================================================================
 -- T2 — ROW COUNT CHECKS
 -- ============================================================================
 
+CREATE TEMP TABLE dq_row_count_counts (tbl VARCHAR, n BIGINT, threshold BIGINT);
+INSERT INTO dq_row_count_counts SELECT 'states'                  AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/states',                  allow_moved_paths := true)) AS n, 50      AS threshold;
+INSERT INTO dq_row_count_counts SELECT 'counties',                        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties',                allow_moved_paths := true)),      3000;
+INSERT INTO dq_row_count_counts SELECT 'places',                          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/places',                  allow_moved_paths := true)),      10000;
+INSERT INTO dq_row_count_counts SELECT 'zctas',                           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zctas',                   allow_moved_paths := true)),      30000;
+INSERT INTO dq_row_count_counts SELECT 'census_tracts',                   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_tracts',           allow_moved_paths := true)),      70000;
+INSERT INTO dq_row_count_counts SELECT 'block_groups',                    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/block_groups',            allow_moved_paths := true)),      200000;
+INSERT INTO dq_row_count_counts SELECT 'cbsa',                            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cbsa',                   allow_moved_paths := true)),      800;
+INSERT INTO dq_row_count_counts SELECT 'congressional_districts',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/congressional_districts', allow_moved_paths := true)),      400;
+INSERT INTO dq_row_count_counts SELECT 'school_districts',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/school_districts',        allow_moved_paths := true)),      10000;
+INSERT INTO dq_row_count_counts SELECT 'state_legislative_lower',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_lower', allow_moved_paths := true)),      4000;
+INSERT INTO dq_row_count_counts SELECT 'state_legislative_upper',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_upper', allow_moved_paths := true)),      1500;
+INSERT INTO dq_row_count_counts SELECT 'county_subdivisions',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_subdivisions',     allow_moved_paths := true)),      30000;
+INSERT INTO dq_row_count_counts SELECT 'tribal_areas',                    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tribal_areas',            allow_moved_paths := true)),      500;
+INSERT INTO dq_row_count_counts SELECT 'urban_areas',                     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/urban_areas',             allow_moved_paths := true)),      2000;
+INSERT INTO dq_row_count_counts SELECT 'pumas',                           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/pumas',                   allow_moved_paths := true)),      2000;
+INSERT INTO dq_row_count_counts SELECT 'voting_districts',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/voting_districts',        allow_moved_paths := true)),      100000;
+INSERT INTO dq_row_count_counts SELECT 'zip_county_crosswalk',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_county_crosswalk',    allow_moved_paths := true)),      40000;
+INSERT INTO dq_row_count_counts SELECT 'zip_cbsa_crosswalk',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cbsa_crosswalk',      allow_moved_paths := true)),      25000;
+INSERT INTO dq_row_count_counts SELECT 'tract_zip_crosswalk',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tract_zip_crosswalk',     allow_moved_paths := true)),      100000;
+INSERT INTO dq_row_count_counts SELECT 'zip_tract_crosswalk',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_tract_crosswalk',     allow_moved_paths := true)),      100000;
+INSERT INTO dq_row_count_counts SELECT 'zip_cd_crosswalk',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cd_crosswalk',        allow_moved_paths := true)),      40000;
+INSERT INTO dq_row_count_counts SELECT 'county_zip_crosswalk',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_zip_crosswalk',    allow_moved_paths := true)),      40000;
+INSERT INTO dq_row_count_counts SELECT 'cd_zip_crosswalk',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cd_zip_crosswalk',        allow_moved_paths := true)),      40000;
+INSERT INTO dq_row_count_counts SELECT 'rural_urban_continuum',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/rural_urban_continuum',   allow_moved_paths := true)),      3000;
+INSERT INTO dq_row_count_counts SELECT 'ruca_codes',                      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/ruca_codes',              allow_moved_paths := true)),      70000;
+INSERT INTO dq_row_count_counts SELECT 'gazetteer_counties',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_counties',  allow_moved_paths := true)),   3000;
+INSERT INTO dq_row_count_counts SELECT 'gazetteer_places',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_places',    allow_moved_paths := true)),   25000;
+INSERT INTO dq_row_count_counts SELECT 'gazetteer_zctas',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_zctas',     allow_moved_paths := true)),   30000;
+INSERT INTO dq_row_count_counts SELECT 'watersheds_huc2',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc2',         allow_moved_paths := true)),      20;
+INSERT INTO dq_row_count_counts SELECT 'watersheds_huc4',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc4',         allow_moved_paths := true)),      200;
+INSERT INTO dq_row_count_counts SELECT 'watersheds_huc8',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc8',         allow_moved_paths := true)),      2000;
+-- USGS WBD is a static national dataset re-partitioned by year.
+-- Actual counts per year: HUC2=44, HUC4=220, HUC8=660, HUC12=1320.
+-- Thresholds set to ~90% of 16-year total to allow for partial ingestion.
+INSERT INTO dq_row_count_counts SELECT 'watersheds_huc12',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc12',        allow_moved_paths := true)),      1000;
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'states'                  AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/states',                  allow_moved_paths := true)) AS n, 50      AS threshold
-  UNION ALL
-  SELECT 'counties',                        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/counties',                allow_moved_paths := true)),      3000
-  UNION ALL
-  SELECT 'places',                          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/places',                  allow_moved_paths := true)),      10000
-  UNION ALL
-  SELECT 'zctas',                           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zctas',                   allow_moved_paths := true)),      30000
-  UNION ALL
-  SELECT 'census_tracts',                   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_tracts',           allow_moved_paths := true)),      70000
-  UNION ALL
-  SELECT 'block_groups',                    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/block_groups',            allow_moved_paths := true)),      200000
-  UNION ALL
-  SELECT 'cbsa',                            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cbsa',                   allow_moved_paths := true)),      800
-  UNION ALL
-  SELECT 'congressional_districts',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/congressional_districts', allow_moved_paths := true)),      400
-  UNION ALL
-  SELECT 'school_districts',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/school_districts',        allow_moved_paths := true)),      10000
-  UNION ALL
-  SELECT 'state_legislative_lower',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_lower', allow_moved_paths := true)),      4000
-  UNION ALL
-  SELECT 'state_legislative_upper',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_legislative_upper', allow_moved_paths := true)),      1500
-  UNION ALL
-  SELECT 'county_subdivisions',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_subdivisions',     allow_moved_paths := true)),      30000
-  UNION ALL
-  SELECT 'tribal_areas',                    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tribal_areas',            allow_moved_paths := true)),      500
-  UNION ALL
-  SELECT 'urban_areas',                     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/urban_areas',             allow_moved_paths := true)),      2000
-  UNION ALL
-  SELECT 'pumas',                           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/pumas',                   allow_moved_paths := true)),      2000
-  UNION ALL
-  SELECT 'voting_districts',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/voting_districts',        allow_moved_paths := true)),      100000
-  UNION ALL
-  SELECT 'zip_county_crosswalk',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_county_crosswalk',    allow_moved_paths := true)),      40000
-  UNION ALL
-  SELECT 'zip_cbsa_crosswalk',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cbsa_crosswalk',      allow_moved_paths := true)),      25000
-  UNION ALL
-  SELECT 'tract_zip_crosswalk',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/tract_zip_crosswalk',     allow_moved_paths := true)),      100000
-  UNION ALL
-  SELECT 'zip_tract_crosswalk',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_tract_crosswalk',     allow_moved_paths := true)),      100000
-  UNION ALL
-  SELECT 'zip_cd_crosswalk',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zip_cd_crosswalk',        allow_moved_paths := true)),      40000
-  UNION ALL
-  SELECT 'county_zip_crosswalk',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_zip_crosswalk',    allow_moved_paths := true)),      40000
-  UNION ALL
-  SELECT 'cd_zip_crosswalk',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/cd_zip_crosswalk',        allow_moved_paths := true)),      40000
-  UNION ALL
-  SELECT 'rural_urban_continuum',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/rural_urban_continuum',   allow_moved_paths := true)),      3000
-  UNION ALL
-  SELECT 'ruca_codes',                      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/ruca_codes',              allow_moved_paths := true)),      70000
-  UNION ALL
-  SELECT 'gazetteer_counties',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_counties',  allow_moved_paths := true)),   3000
-  UNION ALL
-  SELECT 'gazetteer_places',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_places',    allow_moved_paths := true)),   25000
-  UNION ALL
-  SELECT 'gazetteer_zctas',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/gazetteer_zctas',     allow_moved_paths := true)),   30000
-  UNION ALL
-  SELECT 'watersheds_huc2',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc2',         allow_moved_paths := true)),      20
-  UNION ALL
-  SELECT 'watersheds_huc4',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc4',         allow_moved_paths := true)),      200
-  UNION ALL
-  SELECT 'watersheds_huc8',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc8',         allow_moved_paths := true)),      2000
-  UNION ALL
-  -- USGS WBD is a static national dataset re-partitioned by year.
-  -- Actual counts per year: HUC2=44, HUC4=220, HUC8=660, HUC12=1320.
-  -- Thresholds set to ~90% of 16-year total to allow for partial ingestion.
-  SELECT 'watersheds_huc12',                (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/watersheds_huc12',        allow_moved_paths := true)),      1000
-)
 SELECT
   'geo'                                                       AS schema,
   tbl,
@@ -211,7 +149,7 @@ SELECT
     THEN 'row count below threshold'
     ELSE 'ok'
   END                                                         AS detail
-FROM counts;
+FROM dq_row_count_counts;
 
 
 -- T3 (sample rows) omitted: geo geometry tables have intermittent SSL/timeout errors on R2
@@ -647,21 +585,18 @@ WHERE area_sq_km IS NOT NULL AND area_sq_km = 0;
 -- row_count only — deliberately minimal, to be deepened per table.
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts_2 (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts_2 SELECT 'census_divisions' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_divisions', allow_moved_paths := true) LIMIT 1)) AS n;
+INSERT INTO dq_existence_counts_2 SELECT 'census_regions'  , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_regions', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'state_ref'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_ref', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'zcta_ref'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zcta_ref', allow_moved_paths := true) LIMIT 1));
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'census_divisions' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_divisions', allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'census_regions'  , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/census_regions', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'state_ref'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/state_ref', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'zcta_ref'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/zcta_ref', allow_moved_paths := true) LIMIT 1))
-)
 SELECT 'geo', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
-FROM counts;
+FROM dq_existence_counts_2;
 
 -- ============================================================================
 -- TABLE CHECKS — county_adjacency

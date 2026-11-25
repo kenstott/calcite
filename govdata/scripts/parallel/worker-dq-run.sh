@@ -588,10 +588,20 @@ if [ $DQ_EXIT -ne 0 ]; then
     _file_script_error_issue "DuckDB exited with code ${DQ_EXIT} — table likely missing or schema misconfigured. Check log: \`${LOG_FILE}\`"
     exit 1
   fi
-  # DuckDB exited non-zero but results were written (e.g. T3 sample SELECT hit HTTP 403
-  # mid-script but COPY completed). Continue to verdict — the actual DQ checks are in
-  # the result file.
-  log_info "$WORKER_ID: DuckDB exited with code $DQ_EXIT but results parquet was written — checking verdict (non-fatal statement error, see log)"
+  # DuckDB runs on past a failed statement, and that statement's checks are then absent from
+  # the results. Record each one as a failing 'sql_error' result so the verdict covers it.
+  log_info "$WORKER_ID: DuckDB exited with code $DQ_EXIT — recording the failed statements as sql_error results"
+  python3 "$SCRIPT_DIR/dq_sql_errors.py" "$LOG_FILE" "$DQ_SQL" "$DQ_EXIT" > "$TMP_DIR/sql_errors.csv"
+  duckdb -c "
+    COPY (
+      SELECT * FROM read_parquet('${RESULT_LOCAL}')
+      UNION ALL BY NAME
+      SELECT '${SCHEMA}' AS schema, table_name, 'sql_error' AS test, 'fail' AS status,
+             value, '0' AS threshold, detail, DATE '${RUN_DATE}' AS run_date,
+             '${MODE}' AS run_type, '${SCHEMA}' AS schema_name
+      FROM read_csv('${TMP_DIR}/sql_errors.csv', header = true, all_varchar = true)
+    ) TO '${TMP_DIR}/results_with_errors.parquet' (FORMAT PARQUET);"
+  mv "$TMP_DIR/results_with_errors.parquet" "$RESULT_LOCAL"
 fi
 
 # ── verdict ───────────────────────────────────────────────────────────────────
@@ -617,7 +627,7 @@ log_info "$WORKER_ID: SCHEMA RESULT: $VERDICT (fails=$FAIL_COUNT warns=$WARN_COU
 # Print failing tests for immediate visibility
 if [ "$FAIL_COUNT" -gt 0 ]; then
   log_info "$WORKER_ID: failing tests:"
-  duckdb -c "SELECT tbl AS table_name, test, value, threshold, detail FROM read_parquet('${RESULT_LOCAL}') WHERE status='fail' ORDER BY tbl, test;" 2>/dev/null || true
+  duckdb -c "SELECT table_name, test, value, threshold, detail FROM read_parquet('${RESULT_LOCAL}') WHERE status='fail' ORDER BY table_name, test;"
 fi
 
 # ── upload results ────────────────────────────────────────────────────────────

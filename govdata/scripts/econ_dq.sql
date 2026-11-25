@@ -37,6 +37,56 @@ CREATE TEMP TABLE dq_results (
 -- T1: EXISTENCE — each table must have at least 1 readable row
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'employment_statistics' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics', allow_moved_paths := true) LIMIT 1) t) AS n;
+INSERT INTO dq_existence_counts SELECT 'inflation_metrics',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'regional_cpi',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',         allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'metro_cpi',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'food_cpi',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi',             allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'regional_food_cpi',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'metro_food_cpi',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_wages',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'national_wages',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'national_industry_employment',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'metro_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'metro_wages',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'county_qcew',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'county_wages',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',         allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'jolts_regional',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'jolts_state',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'wage_growth',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'osha_inspections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'osha_violations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'treasury_foreign_holdings', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'social_security_trustees_projections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'social_security_trust_fund_operations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'regional_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',  allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'treasury_yields',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'federal_debt',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',         allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'world_indicators',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators',     allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'fred_indicators',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'national_accounts',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_accounts',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_personal_income',(SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_personal_income',allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_gdp',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_gdp',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_quarterly_income',(SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_income',allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_quarterly_gdp',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_gdp',  allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'state_consumption',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_consumption',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'regional_income',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_income',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'ita_data',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',             allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'gdp_statistics',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'industry_gdp',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',         allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'trade_exports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',        allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'trade_imports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',        allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'trade_exports_critical_minerals', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'trade_imports_critical_minerals', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'labor_productivity',   (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',   allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'regional_price_parities', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1) t);
+
 INSERT INTO dq_results
 SELECT
   'econ'    AS schema,
@@ -46,61 +96,69 @@ SELECT
   CAST(n AS VARCHAR)  AS value,
   '1'                 AS threshold,
   CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END AS detail
-FROM (
-  SELECT 'employment_statistics' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics', allow_moved_paths := true) LIMIT 1) t) AS n
-  UNION ALL SELECT 'inflation_metrics',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'regional_cpi',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'metro_cpi',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'food_cpi',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi',             allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'regional_food_cpi',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'metro_food_cpi',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_wages',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'national_wages',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'national_industry_employment',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'metro_industry',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'metro_wages',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'county_qcew',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'county_wages',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'jolts_regional',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'jolts_state',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'wage_growth',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'osha_inspections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'osha_violations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'treasury_foreign_holdings', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'social_security_trustees_projections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'social_security_trust_fund_operations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'regional_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',  allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'treasury_yields',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'federal_debt',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'world_indicators',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators',     allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'fred_indicators',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'national_accounts',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_accounts',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_personal_income',(SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_personal_income',allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_gdp',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_gdp',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_quarterly_income',(SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_income',allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_quarterly_gdp',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_gdp',  allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'state_consumption',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_consumption',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'regional_income',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_income',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'ita_data',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',             allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'gdp_statistics',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'industry_gdp',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'trade_exports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',        allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'trade_imports',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',        allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'trade_exports_critical_minerals', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'trade_imports_critical_minerals', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'labor_productivity',   (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',   allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'regional_price_parities', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1) t)
-) src
+FROM dq_existence_counts
 WHERE tbl NOT IN ('jolts_regional', 'jolts_state') OR n > 0;
 
 -- ============================================================================
 -- T2: ROW COUNT — conservative minimums based on known data scale
 -- ============================================================================
+
+CREATE TEMP TABLE dq_row_count_counts (tbl VARCHAR, n BIGINT, threshold BIGINT);
+INSERT INTO dq_row_count_counts SELECT 'employment_statistics'  AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics',  allow_moved_paths := true)) AS n, 50     AS threshold;
+INSERT INTO dq_row_count_counts SELECT 'inflation_metrics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',     allow_moved_paths := true)), 50;
+INSERT INTO dq_row_count_counts SELECT 'regional_cpi',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',          allow_moved_paths := true)), 80;
+INSERT INTO dq_row_count_counts SELECT 'metro_cpi',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',             allow_moved_paths := true)), 200;
+INSERT INTO dq_row_count_counts SELECT 'food_cpi',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi',              allow_moved_paths := true)), 3000;  -- 8 series x ~59yr x 12mo bulk file, full history regardless of GOVDATA_START_YEAR
+INSERT INTO dq_row_count_counts SELECT 'regional_food_cpi',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi',     allow_moved_paths := true)), 80;   -- mirrors regional_cpi: same 4-series API fetch
+INSERT INTO dq_row_count_counts SELECT 'metro_food_cpi',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi',        allow_moved_paths := true)), 200;  -- mirrors metro_cpi: same 20-series API fetch
+INSERT INTO dq_row_count_counts SELECT 'state_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',        allow_moved_paths := true)), 19000;  -- DQ window = current + 1 lookback year (by design). Within that window ~19.7K rows is the true floor; 20000 was set against a stale assumption. Separate concern under investigation: older years carry far fewer distinct series than the current year (truncated historical series fetch).
+INSERT INTO dq_row_count_counts SELECT 'state_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',           allow_moved_paths := true)), 200;
+INSERT INTO dq_row_count_counts SELECT 'national_wages',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages',        allow_moved_paths := true)), 2000;  -- ~4531 agglvl/industry/own rows per year confirmed live 2026-09-13 against the real 2023 file; 2000 gives headroom under the DQ sample window
+INSERT INTO dq_row_count_counts SELECT 'national_industry_employment', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment', allow_moved_paths := true)), 5000;  -- one year of CES: ~400 industries x 12 months x S/U; 5000 is well under the sample window
+INSERT INTO dq_row_count_counts SELECT 'metro_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',        allow_moved_paths := true)), 7000;  -- BLS rejects nonexistent metro×industry series (HTTP 400); ~7456 valid rows is the real ceiling, not 10000
+INSERT INTO dq_row_count_counts SELECT 'metro_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',           allow_moved_paths := true)), 100;
+INSERT INTO dq_row_count_counts SELECT 'county_qcew',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',           allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'county_wages',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',          allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 0;
+INSERT INTO dq_row_count_counts SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 0;
+INSERT INTO dq_row_count_counts SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 10;  -- recalibrated: BLS wage_growth yields ~15 rows for the DQ window; 50 was prod-scale
+INSERT INTO dq_row_count_counts SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000;  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
+INSERT INTO dq_row_count_counts SELECT 'osha_inspections',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true)), 200000;  -- ~30-40k inspections/yr over 2019 onward; DQ run may cover fewer years
+INSERT INTO dq_row_count_counts SELECT 'osha_violations',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)), 200000;
+INSERT INTO dq_row_count_counts SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50;  -- one row per year 1975-2026
+INSERT INTO dq_row_count_counts SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)), 20000;  -- CSL carries ~26,000 listings
+INSERT INTO dq_row_count_counts SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20;  -- one row per year 2005-2026
+INSERT INTO dq_row_count_counts SELECT 'treasury_foreign_holdings',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)), 8000;  -- monthly 2012-2026, ~40-50 holders per month
+INSERT INTO dq_row_count_counts SELECT 'social_security_trustees_projections',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)), 30;  -- 3 funds x reports 2016-2026
+INSERT INTO dq_row_count_counts SELECT 'social_security_trust_fund_operations',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true)), 220;  -- OASI 1937-2025 (89) + DI 1957-2025 (69) + OASDI (69) = 227
+INSERT INTO dq_row_count_counts SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200;
+INSERT INTO dq_row_count_counts SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300;
+INSERT INTO dq_row_count_counts SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 400;
+INSERT INTO dq_row_count_counts SELECT 'world_indicators',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators',      allow_moved_paths := true)), 400;
+INSERT INTO dq_row_count_counts SELECT 'fred_indicators',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators',       allow_moved_paths := true)), 3000;
+INSERT INTO dq_row_count_counts SELECT 'national_accounts',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_accounts',     allow_moved_paths := true)), 100;
+INSERT INTO dq_row_count_counts SELECT 'state_personal_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_personal_income', allow_moved_paths := true)), 300;
+INSERT INTO dq_row_count_counts SELECT 'state_gdp',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_gdp',             allow_moved_paths := true)), 300;
+INSERT INTO dq_row_count_counts SELECT 'state_quarterly_income',(SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_income',allow_moved_paths := true)), 1000;
+INSERT INTO dq_row_count_counts SELECT 'state_quarterly_gdp',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_gdp',   allow_moved_paths := true)), 1000;
+INSERT INTO dq_row_count_counts SELECT 'state_consumption',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_consumption',     allow_moved_paths := true)), 300;
+INSERT INTO dq_row_count_counts SELECT 'regional_income',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_income',       allow_moved_paths := true)), 100;
+INSERT INTO dq_row_count_counts SELECT 'ita_data',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',              allow_moved_paths := true)), 10;
+INSERT INTO dq_row_count_counts SELECT 'gdp_statistics',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',        allow_moved_paths := true)), 100;
+INSERT INTO dq_row_count_counts SELECT 'industry_gdp',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',          allow_moved_paths := true)), 1000;
+  -- trade: monthly HS-6 × country (~321k export / ~213k import rows per month at prod scale),
+  -- streamed with a bounded DQ row cap; a low floor just confirms the partition ingested.
+INSERT INTO dq_row_count_counts SELECT 'trade_exports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',         allow_moved_paths := true)), 100;
+INSERT INTO dq_row_count_counts SELECT 'trade_imports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',         allow_moved_paths := true)), 100;
+  -- trade_*_critical_minerals: curated to 9 HS-2 chapters at HS-10, ~1k-17k rows/chapter/month;
+  -- a low floor just confirms the partition ingested for the DQ-scoped month.
+INSERT INTO dq_row_count_counts SELECT 'trade_exports_critical_minerals', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true)), 50;
+INSERT INTO dq_row_count_counts SELECT 'trade_imports_critical_minerals', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true)), 50;
+  -- labor_productivity: 6 series x 4 quarters/year x DQ lookback window (2 years) = ~48 rows
+INSERT INTO dq_row_count_counts SELECT 'labor_productivity',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',    allow_moved_paths := true)), 10;
+  -- regional_price_parities: 2 tablenames x 5 line_codes x (~52 areas for SARPP + ~387 for MARPP) is prod-scale;
+  -- DQ lookback window (2 years) still yields well over 100 rows.
+INSERT INTO dq_row_count_counts SELECT 'regional_price_parities',(SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities',allow_moved_paths := true)), 100;
 
 INSERT INTO dq_results
 SELECT
@@ -116,63 +174,7 @@ SELECT
   CASE WHEN n >= threshold THEN 'row count meets minimum'
        ELSE 'row count below minimum — ingestion may be incomplete or failed'
   END AS detail
-FROM (
-  SELECT 'employment_statistics'  AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/employment_statistics',  allow_moved_paths := true)) AS n, 50     AS threshold
-  UNION ALL SELECT 'inflation_metrics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics',     allow_moved_paths := true)), 50
-  UNION ALL SELECT 'regional_cpi',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_cpi',          allow_moved_paths := true)), 80
-  UNION ALL SELECT 'metro_cpi',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_cpi',             allow_moved_paths := true)), 200
-  UNION ALL SELECT 'food_cpi',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/food_cpi',              allow_moved_paths := true)), 3000  -- 8 series x ~59yr x 12mo bulk file, full history regardless of GOVDATA_START_YEAR
-  UNION ALL SELECT 'regional_food_cpi',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_food_cpi',     allow_moved_paths := true)), 80   -- mirrors regional_cpi: same 4-series API fetch
-  UNION ALL SELECT 'metro_food_cpi',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_food_cpi',        allow_moved_paths := true)), 200  -- mirrors metro_cpi: same 20-series API fetch
-  UNION ALL SELECT 'state_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry',        allow_moved_paths := true)), 19000  -- DQ window = current + 1 lookback year (by design). Within that window ~19.7K rows is the true floor; 20000 was set against a stale assumption. Separate concern under investigation: older years carry far fewer distinct series than the current year (truncated historical series fetch).
-  UNION ALL SELECT 'state_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_wages',           allow_moved_paths := true)), 200
-  UNION ALL SELECT 'national_wages',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_wages',        allow_moved_paths := true)), 2000  -- ~4531 agglvl/industry/own rows per year confirmed live 2026-09-13 against the real 2023 file; 2000 gives headroom under the DQ sample window
-  UNION ALL SELECT 'national_industry_employment', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment', allow_moved_paths := true)), 5000  -- one year of CES: ~400 industries x 12 months x S/U; 5000 is well under the sample window
-  UNION ALL SELECT 'metro_industry',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry',        allow_moved_paths := true)), 7000  -- BLS rejects nonexistent metro×industry series (HTTP 400); ~7456 valid rows is the real ceiling, not 10000
-  UNION ALL SELECT 'metro_wages',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_wages',           allow_moved_paths := true)), 100
-  UNION ALL SELECT 'county_qcew',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_qcew',           allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'county_wages',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',          allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 0
-  UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 0
-  UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 10  -- recalibrated: BLS wage_growth yields ~15 rows for the DQ window; 50 was prod-scale
-  UNION ALL SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
-  UNION ALL SELECT 'osha_inspections',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true)), 200000  -- ~30-40k inspections/yr over 2019 onward; DQ run may cover fewer years
-  UNION ALL SELECT 'osha_violations',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)), 200000
-  UNION ALL SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50  -- one row per year 1975-2026
-  UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)), 20000  -- CSL carries ~26,000 listings
-  UNION ALL SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20  -- one row per year 2005-2026
-  UNION ALL SELECT 'treasury_foreign_holdings',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)), 8000  -- monthly 2012-2026, ~40-50 holders per month
-  UNION ALL SELECT 'social_security_trustees_projections',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)), 30  -- 3 funds x reports 2016-2026
-  UNION ALL SELECT 'social_security_trust_fund_operations',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true)), 220  -- OASI 1937-2025 (89) + DI 1957-2025 (69) + OASDI (69) = 227
-  UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
-  UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300
-  UNION ALL SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 400
-  UNION ALL SELECT 'world_indicators',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/world_indicators',      allow_moved_paths := true)), 400
-  UNION ALL SELECT 'fred_indicators',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators',       allow_moved_paths := true)), 3000
-  UNION ALL SELECT 'national_accounts',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_accounts',     allow_moved_paths := true)), 100
-  UNION ALL SELECT 'state_personal_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_personal_income', allow_moved_paths := true)), 300
-  UNION ALL SELECT 'state_gdp',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_gdp',             allow_moved_paths := true)), 300
-  UNION ALL SELECT 'state_quarterly_income',(SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_income',allow_moved_paths := true)), 1000
-  UNION ALL SELECT 'state_quarterly_gdp',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_quarterly_gdp',   allow_moved_paths := true)), 1000
-  UNION ALL SELECT 'state_consumption',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_consumption',     allow_moved_paths := true)), 300
-  UNION ALL SELECT 'regional_income',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_income',       allow_moved_paths := true)), 100
-  UNION ALL SELECT 'ita_data',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ita_data',              allow_moved_paths := true)), 10
-  UNION ALL SELECT 'gdp_statistics',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_statistics',        allow_moved_paths := true)), 100
-  UNION ALL SELECT 'industry_gdp',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_gdp',          allow_moved_paths := true)), 1000
-  -- trade: monthly HS-6 × country (~321k export / ~213k import rows per month at prod scale),
-  -- streamed with a bounded DQ row cap; a low floor just confirms the partition ingested.
-  UNION ALL SELECT 'trade_exports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports',         allow_moved_paths := true)), 100
-  UNION ALL SELECT 'trade_imports',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports',         allow_moved_paths := true)), 100
-  -- trade_*_critical_minerals: curated to 9 HS-2 chapters at HS-10, ~1k-17k rows/chapter/month;
-  -- a low floor just confirms the partition ingested for the DQ-scoped month.
-  UNION ALL SELECT 'trade_exports_critical_minerals', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_exports_critical_minerals', allow_moved_paths := true)), 50
-  UNION ALL SELECT 'trade_imports_critical_minerals', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_imports_critical_minerals', allow_moved_paths := true)), 50
-  -- labor_productivity: 6 series x 4 quarters/year x DQ lookback window (2 years) = ~48 rows
-  UNION ALL SELECT 'labor_productivity',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',    allow_moved_paths := true)), 10
-  -- regional_price_parities: 2 tablenames x 5 line_codes x (~52 areas for SARPP + ~387 for MARPP) is prod-scale;
-  -- DQ lookback window (2 years) still yields well over 100 rows.
-  UNION ALL SELECT 'regional_price_parities',(SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities',allow_moved_paths := true)), 100
-) src;
+FROM dq_row_count_counts;
 
 -- ============================================================================
 -- T3: SAMPLE — print 1 row per table to console (informational only)
@@ -200,7 +202,7 @@ SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'social_security_cola'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1;
 SELECT 'export_control_restricted_parties' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1;
 SELECT 'medicare_part_b_premiums'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1;
-SELECT 'treasury_foreign_holdings' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1; LIMIT 1;
+SELECT 'treasury_foreign_holdings' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_trustees_projections'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_trust_fund_operations'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trust_fund_operations', allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_employment'    AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',    allow_moved_paths := true) LIMIT 1;
@@ -1322,33 +1324,24 @@ FROM (
 -- row_count only — deliberately minimal, to be deepened per table.
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts_2 (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts_2 SELECT 'comtrade_flows'        AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) LIMIT 1)) AS n;
+INSERT INTO dq_existence_counts_2 SELECT 'fdi_activities'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'fdi_direct_investment', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_direct_investment', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'iip_positions'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/iip_positions', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'ilostat_indicators'   , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ilostat_indicators', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'jolts_industry'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_industry', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'trade_by_state'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_by_state', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'usitc_additional_duty_lists', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'usitc_tariff_schedule', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariff_schedule', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts_2 SELECT 'usitc_tariffs'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariffs', allow_moved_paths := true) LIMIT 1));
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'comtrade_flows'        AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'fdi_activities'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'fdi_direct_investment', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_direct_investment', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'iip_positions'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/iip_positions', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'ilostat_indicators'   , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ilostat_indicators', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'jolts_industry'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_industry', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'trade_by_state'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_by_state', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'usitc_additional_duty_lists', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'usitc_tariff_schedule', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariff_schedule', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'usitc_tariffs'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariffs', allow_moved_paths := true) LIMIT 1))
-)
 SELECT 'econ', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
-FROM counts;
+FROM dq_existence_counts_2;
 
 -- trade_imports/trade_exports/trade_by_state: geo_level domain — Census interleaves
 -- world/bloc/continent aggregate rows with individual-country rows under one CTY_CODE

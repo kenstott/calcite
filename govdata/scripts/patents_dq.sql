@@ -1054,23 +1054,19 @@ FROM (SELECT COUNT(DISTINCT quarter) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_B
 -- row_count only — deliberately minimal, to be deepened per table.
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'trademark_case_file'      AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_case_file', allow_moved_paths := true) LIMIT 1)) AS n;
+INSERT INTO dq_existence_counts SELECT 'trademark_classification', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_classification', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'trademark_intl_class'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_intl_class', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'trademark_owner'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_owner', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'trademark_statement'     , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_statement', allow_moved_paths := true) LIMIT 1));
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'trademark_case_file'      AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_case_file', allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'trademark_classification', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_classification', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'trademark_intl_class'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_intl_class', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'trademark_owner'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_owner', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'trademark_statement'     , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/trademark_statement', allow_moved_paths := true) LIMIT 1))
-)
 SELECT 'patents', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
-FROM counts;
+FROM dq_existence_counts;
 
 -- ============================================================================
 -- T8 — primary-key duplication for the 5 tables above (deepening the deliberately-minimal

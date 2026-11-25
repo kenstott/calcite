@@ -25,41 +25,43 @@ CREATE TEMP TABLE dq_results (
 -- ============================================================
 -- T1: EXISTENCE
 -- COUNT of a LIMIT 1 subquery: 1 = readable, 0 = empty table.
--- If the Iceberg metadata is missing, DuckDB aborts here — that IS the signal.
+-- One INSERT per table: a table with no Iceberg metadata loses only its own row, and the
+-- runner records the failed statement as a sql_error result.
 -- ============================================================
 SELECT '=== T1: EXISTENCE ===' AS section;
+
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'ccd_districts'            AS tbl, COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts',           allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ccd_schools',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools',            allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'naep_scores',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_scores',            allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'crdc_schools',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools',           allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_institutions',     COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions',     allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_completions',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions',      allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_tuition',          COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition',          allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_financials',       COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_fall_enrollment', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_admissions', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_financial_aid',    COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'college_scorecard',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'district_special_ed_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'district_el_enrollment',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'edfacts_chronic_absenteeism', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'fsa_loan_portfolio_status', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'fsa_loan_delinquency', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'sevis_student_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true) LIMIT 1);
 
 INSERT INTO dq_results
 SELECT 'edu', tbl, 'existence',
   CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
   CAST(n AS VARCHAR), '1',
   CASE WHEN n > 0 THEN 'readable and non-empty' ELSE 'accessible but empty' END
-FROM (
-  SELECT 'ccd_districts'            AS tbl, COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts',           allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ccd_schools',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools',            allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'naep_scores',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_scores',            allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'crdc_schools',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools',           allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ipeds_institutions',     COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions',     allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ipeds_completions',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions',      allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ipeds_tuition',          COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition',          allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ipeds_financials',       COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ipeds_fall_enrollment', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ipeds_admissions', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ipeds_financial_aid',    COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'college_scorecard',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'district_special_ed_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'district_el_enrollment',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'edfacts_chronic_absenteeism', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'fsa_loan_portfolio_status', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'fsa_loan_delinquency', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'sevis_student_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true) LIMIT 1)
-);
+FROM dq_existence_counts;
 
 -- ============================================================
 -- T2: ROW COUNTS
@@ -79,6 +81,32 @@ SELECT '=== T2: ROW COUNTS ===' AS section;
 --   crdc_schools               dqRowLimit=5000/yr×topic  → floor  500
 --   college_scorecard_programs dqRowLimit=3000/year      → floor  500
 -- Uncapped tables keep the original non-zero floor (100, or 10 for biennial state-level NAEP).
+CREATE TEMP TABLE dq_row_count_counts (tbl VARCHAR, n BIGINT, thresh BIGINT);
+INSERT INTO dq_row_count_counts SELECT 'ccd_districts'            AS tbl, COUNT(*) AS n, 100 AS thresh FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts',           allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ccd_schools',                          COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools',            allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'naep_scores',                          COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_scores',            allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'crdc_schools',                         COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools',           allow_moved_paths=true);  -- dqRowLimit=5000/yr×topic
+INSERT INTO dq_row_count_counts SELECT 'ipeds_institutions',                   COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions',     allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_completions',                    COUNT(*),  1000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions',      allow_moved_paths=true);  -- dqRowLimit=5000/year
+INSERT INTO dq_row_count_counts SELECT 'ipeds_tuition',                        COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition',          allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_financials',                     COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_fall_enrollment', COUNT(*), 10000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_admissions', COUNT(*), 1000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_financial_aid',                  COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true);  -- dqRowLimit=3000/year
+INSERT INTO dq_row_count_counts SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true);  -- dqRowLimit=50000/year
+INSERT INTO dq_row_count_counts SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true);  -- ~14,088 LEAs/year verified FY2023
+INSERT INTO dq_row_count_counts SELECT 'district_special_ed_counts',           COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true);  -- ~16,000-18,500 LEAs/year verified 2020-2024
+INSERT INTO dq_row_count_counts SELECT 'district_el_enrollment',              COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true);  -- ~17,700 LEAs/collection verified 2020-21 and 2021-22
+INSERT INTO dq_row_count_counts SELECT 'edfacts_chronic_absenteeism',          COUNT(*), 100000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true);  -- ~390,000-475,000 rows per year (state + ~17,900 LEAs x subgroup x sex), 2020-2022
+INSERT INTO dq_row_count_counts SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true);  -- dqRowLimit=2000/(year,grade)
+INSERT INTO dq_row_count_counts SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true);  -- ~44 rows verified live 2026-09-27
+INSERT INTO dq_row_count_counts SELECT 'fsa_loan_portfolio_status',            COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true);  -- 4 portfolios x ~50 quarters x 7-8 statuses
+INSERT INTO dq_row_count_counts SELECT 'fsa_loan_delinquency',                 COUNT(*),   300       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true);  -- 3 portfolios x ~45 quarters x 6 buckets
+INSERT INTO dq_row_count_counts SELECT 'sevis_student_counts',                 COUNT(*), 500000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true);  -- ~72 months x ~229 countries x non-zero breakdown cells; ~844k rows verified 2026-11-16 (all non-zero cells of the feed)
+
 INSERT INTO dq_results
 SELECT 'edu', tbl, 'row_count',
   CASE
@@ -87,32 +115,7 @@ SELECT 'edu', tbl, 'row_count',
     ELSE 'warn'
   END,
   CAST(n AS VARCHAR), CAST(thresh AS VARCHAR), NULL
-FROM (
-  SELECT 'ccd_districts'            AS tbl, COUNT(*) AS n, 100 AS thresh FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts',           allow_moved_paths=true)
-  UNION ALL SELECT 'ccd_schools',                          COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools',            allow_moved_paths=true)
-  UNION ALL SELECT 'naep_scores',                          COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_scores',            allow_moved_paths=true)
-  UNION ALL SELECT 'crdc_schools',                         COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/crdc_schools',           allow_moved_paths=true)  -- dqRowLimit=5000/yr×topic
-  UNION ALL SELECT 'ipeds_institutions',                   COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions',     allow_moved_paths=true)
-  UNION ALL SELECT 'ipeds_completions',                    COUNT(*),  1000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_completions',      allow_moved_paths=true)  -- dqRowLimit=5000/year
-  UNION ALL SELECT 'ipeds_tuition',                        COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition',          allow_moved_paths=true)
-  UNION ALL SELECT 'ipeds_financials',                     COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true)
-  UNION ALL SELECT 'ipeds_fall_enrollment', COUNT(*), 10000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true)
-  UNION ALL SELECT 'ipeds_admissions', COUNT(*), 1000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true)
-  UNION ALL SELECT 'ipeds_financial_aid',                  COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true)
-  UNION ALL SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true)
-  UNION ALL SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true)  -- dqRowLimit=3000/year
-  UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true)
-  UNION ALL SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true)  -- dqRowLimit=50000/year
-  UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
-  UNION ALL SELECT 'district_special_ed_counts',           COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)  -- ~16,000-18,500 LEAs/year verified 2020-2024
-  UNION ALL SELECT 'district_el_enrollment',              COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true)  -- ~17,700 LEAs/collection verified 2020-21 and 2021-22
-  UNION ALL SELECT 'edfacts_chronic_absenteeism',          COUNT(*), 100000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/edfacts_chronic_absenteeism', allow_moved_paths=true)  -- ~390,000-475,000 rows per year (state + ~17,900 LEAs x subgroup x sex), 2020-2022
-  UNION ALL SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true)  -- dqRowLimit=2000/(year,grade)
-  UNION ALL SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)  -- ~44 rows verified live 2026-09-27
-  UNION ALL SELECT 'fsa_loan_portfolio_status',            COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)  -- 4 portfolios x ~50 quarters x 7-8 statuses
-  UNION ALL SELECT 'fsa_loan_delinquency',                 COUNT(*),   300       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true)  -- 3 portfolios x ~45 quarters x 6 buckets
-  UNION ALL SELECT 'sevis_student_counts',                 COUNT(*), 500000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true)  -- ~72 months x ~229 countries x non-zero breakdown cells; ~844k rows verified 2026-11-16 (all non-zero cells of the feed)
-);
+FROM dq_row_count_counts;
 
 -- ============================================================
 -- T3: SAMPLE ROW — one row per table for visual inspection (not stored in dq_results)

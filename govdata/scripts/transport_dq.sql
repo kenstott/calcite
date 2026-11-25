@@ -712,33 +712,24 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transpor
 -- row_count only — deliberately minimal, to be deepened per table.
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'cfs_shipments'           AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_shipments', allow_moved_paths := true) LIMIT 1)) AS n;
+INSERT INTO dq_existence_counts SELECT 'faa_aircraft_master'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_aircraft_master', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'faa_aircraft_reference' , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_aircraft_reference', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'faa_engine_reference'   , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_engine_reference', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'fmcsa_carriers'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/fmcsa_carriers', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'ntsb_aviation_accidents', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/ntsb_aviation_accidents', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'bridges'                , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'cfs_sctg_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_sctg_ref', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'cfs_mode_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_mode_ref', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'atc_facility_staffing'  , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true) LIMIT 1));
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'cfs_shipments'           AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_shipments', allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'faa_aircraft_master'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_aircraft_master', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'faa_aircraft_reference' , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_aircraft_reference', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'faa_engine_reference'   , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_engine_reference', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'fmcsa_carriers'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/fmcsa_carriers', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'ntsb_aviation_accidents', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/ntsb_aviation_accidents', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'bridges'                , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridges', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'cfs_sctg_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_sctg_ref', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'cfs_mode_ref'           , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/cfs_mode_ref', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'atc_facility_staffing'  , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/atc_facility_staffing', allow_moved_paths := true) LIMIT 1))
-)
 SELECT 'transport', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
-FROM counts;
+FROM dq_existence_counts;
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: bridges (FHWA NBI; partition cols: type, year; dqRowLimit 20000 — single-fetch
