@@ -2332,9 +2332,9 @@ partitionedTables:
       Use tuition_type=2 for in-state and tuition_type=3 for out-of-state comparisons.
       Charge columns are null where the source reports the amount as missing, not
       applicable or suppressed.
-      Data only available through year=2021 (the Urban Institute academic-year-tuition
-      endpoint has no more recent years); use ipeds_institutions/college_scorecard for
-      more current institution data.
+      Covers academic years 2015-2023. From year=2022 the source also lists several
+      hundred more institution rows whose charges are all null, so count non-null
+      charges rather than rows when comparing coverage across years.
 
     columns:
       - name: unitid
@@ -2412,7 +2412,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2015
-        maxYear: 2021   # Urban Institute academic-year-tuition endpoint only has data through 2021
+        maxYear: 2023         # latest year the Urban Institute academic-year-tuition endpoint serves; bump when a newer year publishes
 
     materialize:
       enabled: true
