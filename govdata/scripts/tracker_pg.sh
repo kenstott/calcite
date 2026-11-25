@@ -1,16 +1,16 @@
 #!/bin/bash
-# Postgres tracker helpers shared by data_purge.sh, data_fix.sh, and parallel/data-fix.sh.
+# Postgres tracker helpers shared by data_purge.sh and force-reprocess.sh.
 #
 # The S3 tracker keeps its state as marker parquet under
 # <tracker bucket>/<schema>/year=*/source_key=*/, so the scripts reach it with path globs and
 # DuckDB rewrites. The Postgres tracker keeps the identical state as rows in pipeline_tracker /
 # table_completion, so the same operations are plain DELETEs — but nothing in the scripts spoke
 # SQL, which meant a pg deployment silently got the Iceberg table dropped with every accession
-# still marked complete. These functions give both scripts the pg half.
+# still marked complete. These functions give the scripts the pg half.
 #
 # Mirrors PGPipelineTracker: the tables live in a schema derived from the parquet bucket name so
-# dq and prod never mix, and markCleared is a DELETE (not a state change), which is why purge and
-# fix both express themselves as DELETEs here.
+# dq and prod never mix, and markCleared is a DELETE (not a state change), which is why purge
+# expresses itself as DELETEs here.
 
 # Derives the PG schema from a parquet bucket, matching PGPipelineTracker.sanitizeNamespace:
 # strip the URI scheme, lowercase, collapse non-alphanumerics to _, trim leading/trailing _.
@@ -246,9 +246,8 @@ sec_accession_suffixes_for_tables() {
   done
 }
 
-# Invalidates one table's completion the way data_fix.sh does on S3: there the script appends a
-# marker row with state='cleared'; here the same two facts are the pipeline_tracker row and the
-# separate table_completion record PGPipelineTracker keeps, so both are written.
+# Invalidates one table's completion: a state='cleared' pipeline_tracker row plus removal of the
+# separate table_completion record PGPipelineTracker keeps.
 pg_tracker_clear_completion() {
   local ns="$1" table="$2" dry_run="$3"
   if [[ "$dry_run" == "true" ]]; then

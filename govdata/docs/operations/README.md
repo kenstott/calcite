@@ -193,7 +193,7 @@ historical depth filling in afterward.
 
 ### Step 1 — Highest priority: current-year SEC + reference data (queryable within hours)
 
-These are fast workers that unlock the rest of the pipeline: company identifiers (ref) are
+These are fast workers that the rest of the pipeline depends on: company identifiers (ref) are
 needed to cross-reference SEC filings, and current-year filings (2026+) are the most
 immediately useful data.
 
@@ -346,17 +346,19 @@ The embeddings pipeline runs independently of the ETL pool — see the [Embeddin
 ./run-pool.sh --schema health daily       # health recurring workers only
 ```
 
-### Re-ingesting from scratch (data-fix.sh)
+### Reprocessing and re-ingesting from scratch
 
-Use `data-fix.sh` when a schema or table has corrupt, missing, or stale data that a normal daily run won't fix. It deletes R2 data via `rclone purge`, invalidates the tracker, then re-ingests via run-pool.
+Run these from `govdata/scripts/parallel/`.
 
-    ./data-fix.sh <schema> <mode>                   # all tables in schema
-    ./data-fix.sh <schema> <mode> <table>           # one table
-    ./data-fix.sh <schema> <mode> <t1> <t2> ...     # multiple tables
-    ./data-fix.sh fec daily --dry-run               # preview without deleting
-    ./data-fix.sh weather daily --force             # bypass release-window checks
+    ./force-reprocess.sh --schema <s> --tables <t1,t2> --dry-run    # preview
+    ./force-reprocess.sh --schema <s> --tables <t1,t2>              # re-run tables in place, deletes nothing
 
-Both R2 data and the tracker must be cleared — clearing the tracker alone is insufficient because the ETL detects existing parquet and marks it complete without re-downloading.
+To rebuild a table from empty, `data_purge.sh` deletes the whole Iceberg table, all years, and its tracker state on the `GOVDATA_RCLONE_REMOTE` store (the one the ETL reads and writes). Then run the pool:
+
+    ../data_purge.sh --schema <s> --tables <t1,t2> --dry-run        # preview
+    ../data_purge.sh --schema <s> --tables <t1,t2>
+    ./run-pool.sh --schema <s> historical
+    ./run-pool.sh --schema <s> daily
 
 ### Running data quality checks (worker-dq-run.sh)
 

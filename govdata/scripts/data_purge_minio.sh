@@ -15,20 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# data_purge_minio.sh — data_purge.sh, hardcoded to the local MinIO remote.
+# data_purge_minio.sh — data_purge.sh, pinned to the local MinIO remote.
 #
-# data_purge.sh defaults to `--env prod` -> rclone remote "r2" (Cloudflare R2), which is
-# NOT the bucket that model-verify.sh --mode local / real queries read (they hit the local
-# MinIO mirror at AWS_ENDPOINT_OVERRIDE, via rclone remote "minio"). Running data_purge.sh
-# bare therefore reports a clean "Purged N files" / "already empty" while the actual data
-# the rest of the toolchain reads is untouched — confirmed live 2026-08-29: 27 tables across
-# sec/fedregister/cyber_threat/ref/patents were "purged" against r2 while MinIO still held
-# full pre-purge row counts (sec.financial_line_items: 303M rows, xbrl_relationships: 292M).
-#
-# This wrapper forces --remote minio so that mistake cannot recur silently. It passes
-# through every other flag unchanged, rejecting an explicit --remote from the caller (to
-# avoid a confusing "minio but actually not minio" footgun) — use data_purge.sh directly if
-# you genuinely need a remote other than minio.
+# Passes through every flag unchanged and rejects an explicit --remote, so a caller of this
+# script can only ever purge MinIO. Use data_purge.sh directly for a different remote.
 #
 # Usage: data_purge_minio.sh --schema <schema> --tables <t1,t2,...> [--env prod|dq] [--raw] [--dry-run]
 

@@ -18,15 +18,11 @@
 # force-reprocess.sh — reprocess specific table(s) past their own tracker-complete state,
 # using the pipeline's real self-healing path instead of manual tracker/Iceberg surgery.
 #
-# Background: data-fix.sh/data_purge.sh force a reprocess by deleting or invalidating tracker
-# rows before re-running — surgery that is easy to get wrong (this session found two real bugs
-# that way: data-fix.sh's clear touched a sentinel no per-combo skip check even reads, and a
-# naive "clear every completed table" query reached into unrelated schemas because
-# table_completion has no schema column). GOVDATA_FORCE_REPROCESS_TABLES instead makes
-# EtlPipeline itself skip its normal tracker-based skip logic for the named table(s) — the exact
-# same code path the pipeline already uses to self-heal a stale/missing-data table. No tracker
-# row or Iceberg data is touched by this script; only rerun the affected table(s), so it is safe
-# to invoke repeatedly and cheap to get wrong (worst case: some redundant reprocessing).
+# GOVDATA_FORCE_REPROCESS_TABLES makes EtlPipeline itself skip its normal tracker-based skip
+# logic for the named table(s) — the same code path the pipeline uses to self-heal a
+# stale/missing-data table. No tracker row or Iceberg data is touched by this script; it only
+# reruns the affected table(s), so it is safe to invoke repeatedly and cheap to get wrong (worst
+# case: some redundant reprocessing).
 #
 # Scoping:
 #   Historical range defaults to [oldest year already marked complete for this schema in
@@ -408,7 +404,7 @@ if ! $SKIP_DAILY; then
 fi
 
 # ── Validate: each table's as_of must have moved forward, or the reprocess did not actually
-#    touch it (the exact failure mode data-fix.sh's clear had — the pool exits 0 either way).
+#    touch it (the pool exits 0 either way).
 echo "=================================================="
 echo "Validation"
 echo "=================================================="

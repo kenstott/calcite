@@ -167,7 +167,7 @@ What's *not* avoidable by moving data: the ~20 referencing files still need thei
 `govdata/src/main/java/.../etl/IcebergMaintenanceRunner.java`,
 `file/src/main/java/.../similarity/SemanticSearch.java`,
 `file/src/main/java/.../etl/PostProcessConfig.java` and `SchemaLifecycleProcessor.java`,
-seven `govdata/scripts/vss-*.py`/`.sh` scripts, plus `reset-sec-iceberg-tables.sh`,
+seven `govdata/scripts/vss-*.py`/`.sh` scripts, plus
 `parallel/fix-sec.sh`, `iceberg-compact.sh`, `spot-check-iceberg.sh`, `model-verify.sh`,
 `data_purge.sh`, and three test classes — that's real work regardless of move-vs-recompute.
 Nor is generating the *new* content avoidable: the row-concat mode and the new
