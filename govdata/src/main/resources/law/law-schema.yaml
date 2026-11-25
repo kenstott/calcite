@@ -89,6 +89,11 @@ comment: >
   `bill_text_versions`, `bill_related_bills`, `bill_amendments`, `bill_amendment_actions`,
   `bill_amendment_cosponsors`, `bill_amendment_text_versions`, `bill_action_committees`, `bill_recorded_votes`, `bill_titles`,
   `bill_summaries`, `bill_cbo_cost_estimates`, `bill_committee_reports` and `bill_notes`;
+  congressional committee activity — `committee_meetings` (hearings, markups and meetings of
+  both chambers with dates, including scheduled ones, from the Congress.gov API) with
+  `committee_meeting_committees` and `committee_meeting_witnesses` (House only), and
+  `committee_hearings` with `committee_hearing_witnesses` (published hearing transcripts of
+  both chambers and their witnesses, from GovInfo);
   and federal lobbying disclosures from LDA.gov — `lobbying_filings` (LD-1 registrations and
   LD-2 quarterly reports: who lobbied for whom and for how much) with `lobbying_activities`
   (the issues, in free text that names bills), `lobbying_activity_lobbyists`,
@@ -6755,6 +6760,522 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # COMMITTEE_MEETINGS — one row per committee meeting or hearing
+  # ---------------------------------------------------------------------------
+  - name: committee_meetings
+    pattern: "type=committee_meetings/congress=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_congress
+    comment: >
+      Congressional committee meetings, hearings and markups of the House and Senate, one
+      row per meeting (event), from the Congress.gov API: when and where a committee met
+      or is scheduled to meet, the title, the type (Hearing, Meeting, Markup, Open
+      Hearing, Closed Hearing, ... as the source words it) and the status (Scheduled,
+      Rescheduled, Postponed, Canceled). Covers oversight hearings that concern no bill,
+      and meetings announced for future dates. Coverage as served by the source: a handful
+      of events for the 111th and 112th Congresses, House events from the 113th (2013),
+      Senate events from the 116th (2019). The committees holding each meeting are in
+      committee_meeting_committees and listed witnesses in committee_meeting_witnesses.
+      The source lists witnesses for House meetings only; for who testified at a Senate
+      hearing see committee_hearing_witnesses, which comes from published transcripts and
+      therefore lags the hearing by months or more. The current Congress is re-read daily;
+      a meeting is re-fetched only when the source's updateDate for it changes.
+
+    dimensions:
+      type:
+        - committee_meetings
+      congress: *congress_range
+      refresh_date: *bill_refresh_date
+
+    columns:
+      - <<: *partition_congress
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "House, Senate or NoChamber (as the source files it); with congress and event_id identifies the meeting"
+      - name: event_id
+        type: string
+        nullable: false
+        comment: "Congress.gov committee meeting event id"
+      - name: meeting_type
+        type: string
+        nullable: true
+        comment: "Type as the source words it (Hearing, Open Hearing, Markup, Meeting, ...)"
+      - name: meeting_status
+        type: string
+        nullable: true
+        comment: "Scheduled, Rescheduled, Postponed or Canceled"
+      - name: title
+        type: string
+        nullable: true
+        comment: "Title or subject of the meeting"
+      - name: meeting_date
+        type: string
+        nullable: true
+        comment: "Date of the meeting in Washington time (YYYY-MM-DD)"
+      - name: meeting_datetime_utc
+        type: string
+        nullable: true
+        comment: "Start timestamp as the source gives it (ISO 8601, UTC)"
+      - name: location_building
+        type: string
+        nullable: true
+        comment: "Building"
+      - name: location_room
+        type: string
+        nullable: true
+        comment: "Room"
+      - name: location_address
+        type: string
+        nullable: true
+        comment: "Address of a meeting held away from the Capitol complex, as the source gives it"
+      - name: witness_count
+        type: integer
+        nullable: false
+        comment: "Witnesses the source lists for the meeting; 0 for Senate meetings, for which it lists none"
+      - name: transcript_jacket_numbers
+        type: string
+        nullable: true
+        comment: "GPO jacket numbers of the published transcripts, comma-separated; each matches committee_hearings.jacket_number"
+      - name: video_url
+        type: string
+        nullable: true
+        comment: "First video link the source lists"
+      - name: update_date
+        type: string
+        nullable: false
+        comment: "When the source last changed the record (ISO 8601, UTC)"
+
+    source:
+      type: http
+      url: "https://api.congress.gov/v3/committee-meeting/{congress}"
+      method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
+        User-Agent: "govdata-etl"
+      parameters:
+        dq_record_limit: "600"
+      response:
+        format: json
+      # The api.data.gov key is shared with other tables; two requests a second stays well
+      # under its hourly allowance.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 502, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressCommitteeMeetingProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=committee_meetings/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: committee_meetings
+        batchPartitionColumns: [congress]
+        incrementalKeys: [congress]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # COMMITTEE_MEETING_COMMITTEES — the committee(s) holding each meeting
+  # ---------------------------------------------------------------------------
+  - name: committee_meeting_committees
+    pattern: "type=committee_meeting_committees/congress=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_congress
+    comment: >
+      The committee or subcommittee holding each congressional committee meeting or
+      hearing, one row per (meeting, committee), from the Congress.gov API; a joint
+      meeting has one row per committee. Join to committee_meetings on (congress, chamber,
+      event_id) and to officials.committees on committee_id.
+
+    dimensions:
+      type:
+        - committee_meeting_committees
+      congress: *congress_range
+      refresh_date: *bill_refresh_date
+
+    columns:
+      - <<: *partition_congress
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "House, Senate or NoChamber (as the source files it); with congress and event_id identifies the meeting"
+      - name: event_id
+        type: string
+        nullable: false
+        comment: "Congress.gov committee meeting event id"
+      - name: committee_system_code
+        type: string
+        nullable: false
+        comment: "Congress.gov committee code (e.g. ssbk00 for Senate Banking, Housing, and Urban Affairs)"
+      - name: committee_id
+        type: string
+        nullable: true
+        expression: "upper(CASE WHEN substr(src.\"committee_system_code\", 5, 2) = '00' THEN substr(src.\"committee_system_code\", 1, 4) ELSE src.\"committee_system_code\" END)"
+        comment: "committee_system_code in the form officials.committees uses: upper case, with the 00 that marks a full committee removed (hsju00 becomes HSJU, hsif14 becomes HSIF14). Joins to officials.committees.committee_id"
+      - name: committee_name
+        type: string
+        nullable: true
+        comment: "Committee or subcommittee name, prefixed by chamber"
+
+    source:
+      type: http
+      url: "https://api.congress.gov/v3/committee-meeting/{congress}"
+      method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
+        User-Agent: "govdata-etl"
+      parameters:
+        dq_record_limit: "600"
+      response:
+        format: json
+      # The api.data.gov key is shared with other tables; two requests a second stays well
+      # under its hourly allowance.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 502, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressCommitteeMeetingProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=committee_meeting_committees/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: committee_meeting_committees
+        batchPartitionColumns: [congress]
+        incrementalKeys: [congress]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # COMMITTEE_MEETING_WITNESSES — one row per listed witness
+  # ---------------------------------------------------------------------------
+  - name: committee_meeting_witnesses
+    pattern: "type=committee_meeting_witnesses/congress=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_congress
+    comment: >
+      Witnesses listed for congressional committee meetings and hearings, one row per
+      (meeting, witness), with name, position and organization, from the Congress.gov API.
+      The source lists witnesses for House meetings only: it carries none for Senate
+      meetings, so no row here means nothing about a Senate hearing's witnesses (use
+      committee_hearing_witnesses for published Senate transcripts). Join to
+      committee_meetings on (congress, chamber, event_id).
+
+    dimensions:
+      type:
+        - committee_meeting_witnesses
+      congress: *congress_range
+      refresh_date: *bill_refresh_date
+
+    columns:
+      - <<: *partition_congress
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "House, Senate or NoChamber (as the source files it); with congress and event_id identifies the meeting"
+      - name: event_id
+        type: string
+        nullable: false
+        comment: "Congress.gov committee meeting event id"
+      - name: witness_seq
+        type: integer
+        nullable: false
+        comment: "Position of the witness in the source list, from 1"
+      - name: witness_name
+        type: string
+        nullable: true
+        comment: "Name as the source prints it, often with an honorific"
+      - name: position
+        type: string
+        nullable: true
+        comment: "Position or title"
+      - name: organization
+        type: string
+        nullable: true
+        comment: "Organization represented"
+
+    source:
+      type: http
+      url: "https://api.congress.gov/v3/committee-meeting/{congress}"
+      method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
+        User-Agent: "govdata-etl"
+      parameters:
+        dq_record_limit: "600"
+      response:
+        format: json
+      # The api.data.gov key is shared with other tables; two requests a second stays well
+      # under its hourly allowance.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 502, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.CongressCommitteeMeetingProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=committee_meeting_witnesses/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: committee_meeting_witnesses
+        batchPartitionColumns: [congress]
+        incrementalKeys: [congress]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # COMMITTEE_HEARINGS — one row per published hearing transcript
+  # ---------------------------------------------------------------------------
+  - name: committee_hearings
+    pattern: "type=committee_hearings/congress=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_congress
+    comment: >
+      Published transcripts of congressional committee hearings of the House, Senate and
+      joint committees, one row per GovInfo package, from the GovInfo CHRG collection:
+      title, date or dates held, committee, subcommittee, S. Hrg. citation and GPO jacket
+      number. A transcript is published months or years after the hearing, so recent and
+      scheduled hearings are not here (see committee_meetings for those); one package can
+      cover several hearing days (appropriations volumes especially). Witnesses are in
+      committee_hearing_witnesses. The current Congress is re-listed daily; a record is
+      re-fetched only when GovInfo changes it.
+
+    dimensions:
+      type:
+        - committee_hearings
+      congress: *congress_range
+      refresh_date: *bill_refresh_date
+
+    columns:
+      - <<: *partition_congress
+      - name: package_id
+        type: string
+        nullable: false
+        comment: "GovInfo package id (e.g. CHRG-119shrg65582)"
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "House, Senate or Joint"
+      - name: session_number
+        type: integer
+        nullable: true
+        comment: "Session of that Congress"
+      - name: hearing_number
+        type: string
+        nullable: true
+        comment: "Hearing number within the Congress, when numbered"
+      - name: jacket_number
+        type: integer
+        nullable: true
+        comment: "GPO jacket number; matches committee_meetings.transcript_jacket_numbers"
+      - name: citation
+        type: string
+        nullable: true
+        comment: "Preferred citation (e.g. S. Hrg. 119-547)"
+      - name: title
+        type: string
+        nullable: true
+        comment: "Title of the published hearing"
+      - name: first_held_date
+        type: string
+        nullable: true
+        comment: "First date the hearing was held (YYYY-MM-DD)"
+      - name: last_held_date
+        type: string
+        nullable: true
+        comment: "Last date held (YYYY-MM-DD); equals first_held_date for a one-day hearing"
+      - name: held_dates
+        type: string
+        nullable: true
+        comment: "All dates held, comma-separated"
+      - name: committee_system_code
+        type: string
+        nullable: true
+        comment: "Committee code of the first committee the record names (e.g. ssju00)"
+      - name: committee_id
+        type: string
+        nullable: true
+        expression: "upper(CASE WHEN substr(src.\"committee_system_code\", 5, 2) = '00' THEN substr(src.\"committee_system_code\", 1, 4) ELSE src.\"committee_system_code\" END)"
+        comment: "committee_system_code in the form officials.committees uses: upper case, with the 00 that marks a full committee removed (hsju00 becomes HSJU, hsif14 becomes HSIF14). Joins to officials.committees.committee_id"
+      - name: committee_name
+        type: string
+        nullable: true
+        comment: "Name of that committee"
+      - name: subcommittee_name
+        type: string
+        nullable: true
+        comment: "Subcommittee of that committee, when the record names one"
+      - name: committee_system_codes
+        type: string
+        nullable: true
+        comment: "All committee codes the record names, comma-separated"
+      - name: witness_count
+        type: integer
+        nullable: false
+        comment: "Witnesses the record lists; 0 when it lists none"
+      - name: details_url
+        type: string
+        nullable: false
+        comment: "GovInfo page of the transcript"
+      - name: last_modified_date
+        type: string
+        nullable: false
+        comment: "Date GovInfo last changed the package (YYYY-MM-DD, UTC)"
+
+    source:
+      type: http
+      url: "https://api.govinfo.gov/collections/CHRG"
+      method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
+        User-Agent: "govdata-etl"
+      parameters:
+        dq_record_limit: "300"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 3
+        retryOn: [429, 500, 502, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.GovInfoHearingProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=committee_hearings/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: committee_hearings
+        batchPartitionColumns: [congress]
+        incrementalKeys: [congress]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # COMMITTEE_HEARING_WITNESSES — one row per witness of a published hearing
+  # ---------------------------------------------------------------------------
+  - name: committee_hearing_witnesses
+    pattern: "type=committee_hearing_witnesses/congress=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_congress
+    comment: >
+      Who testified at (or filed a statement for) each published congressional committee
+      hearing, House, Senate and joint, one row per (transcript package, witness entry),
+      from the GovInfo CHRG metadata. witness is the record's own text: its format varies
+      ("Last, First", "First Last, Title, Organization", sometimes a joint prepared
+      statement line), so search it with LIKE rather than matching a name exactly. Not
+      every record lists witnesses, Senate ones less often than House ones. Published
+      transcripts lag hearings by months or more. Join to committee_hearings on
+      package_id.
+
+    dimensions:
+      type:
+        - committee_hearing_witnesses
+      congress: *congress_range
+      refresh_date: *bill_refresh_date
+
+    columns:
+      - <<: *partition_congress
+      - name: package_id
+        type: string
+        nullable: false
+        comment: "GovInfo package id (e.g. CHRG-119shrg65582)"
+      - name: witness_seq
+        type: integer
+        nullable: false
+        comment: "Position of the entry in the record, from 1"
+      - name: witness
+        type: string
+        nullable: false
+        comment: "Witness entry as printed (name, often with title and organization)"
+
+    source:
+      type: http
+      url: "https://api.govinfo.gov/collections/CHRG"
+      method: GET
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
+        User-Agent: "govdata-etl"
+      parameters:
+        dq_record_limit: "300"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 3
+        retryOn: [429, 500, 502, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.GovInfoHearingProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=committee_hearing_witnesses/congress=*/"
+      partition:
+        columns: [type, congress]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: committee_hearing_witnesses
+        batchPartitionColumns: [congress]
+        incrementalKeys: [congress]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -7375,3 +7896,41 @@ constraints:
       - columns: [filing_id]
         targetTable: fd_filings
         targetColumns: [filing_id]
+
+  committee_meetings:
+    primaryKey: [congress, chamber, event_id]
+
+  committee_meeting_committees:
+    primaryKey: [congress, chamber, event_id, committee_system_code]
+    foreignKeys:
+      - columns: [congress, chamber, event_id]
+        targetTable: committee_meetings
+        targetColumns: [congress, chamber, event_id]
+      - columns: [committee_id]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: committees
+        targetColumns: [committee_id]
+        comment: "Committee or subcommittee, via the normalized committee_id"
+
+  committee_meeting_witnesses:
+    primaryKey: [congress, chamber, event_id, witness_seq]
+    foreignKeys:
+      - columns: [congress, chamber, event_id]
+        targetTable: committee_meetings
+        targetColumns: [congress, chamber, event_id]
+
+  committee_hearings:
+    primaryKey: [package_id]
+    foreignKeys:
+      - columns: [committee_id]
+        targetSchema: "${OFFICIALS_SCHEMA_NAME:officials}"
+        targetTable: committees
+        targetColumns: [committee_id]
+        comment: "Committee or subcommittee, via the normalized committee_id"
+
+  committee_hearing_witnesses:
+    primaryKey: [package_id, witness_seq]
+    foreignKeys:
+      - columns: [package_id]
+        targetTable: committee_hearings
+        targetColumns: [package_id]

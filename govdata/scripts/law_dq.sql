@@ -8,7 +8,8 @@
 --         bill_action_committees, bill_recorded_votes, bill_titles, bill_summaries,
 --         bill_cbo_cost_estimates, bill_committee_reports, bill_notes, scotus_reports_cases,
 --         scotus_slip_opinions, scotus_dockets, scotus_docket_entries, member_stock_transactions,
---         member_roll_call_votes,
+--         member_roll_call_votes, committee_meetings, committee_meeting_committees,
+--         committee_meeting_witnesses, committee_hearings, committee_hearing_witnesses,
 --         fd_filings, fd_assets, fd_income, fd_transactions, fd_liabilities, fd_gifts, fd_travel,
 --         fd_positions, fd_agreements, fd_compensation (Senate eFD financial disclosures)
 -- All tables are Iceberg; reads via iceberg_scan.
@@ -5139,6 +5140,410 @@ FROM (SELECT COUNT(*) AS n FROM (
         WHERE vote_cast NOT IN ('Yea', 'Nay', 'Aye', 'No', 'Present', 'Not Voting')
           AND COALESCE(legis_num, '') NOT IN ('QUORUM')
           AND COALESCE(vote_question, '') NOT ILIKE '%Election of the Speaker%'));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: committee_meetings
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T2_row_count',
+  CASE WHEN n >= 300 THEN 'pass' ELSE 'fail' END,
+  n, 300, 'Expected at least 300 rows in a scoped run'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL congress, chamber, event_id, update_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true)
+      WHERE congress IS NULL OR chamber IS NULL OR event_id IS NULL OR update_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (congress, chamber, event_id) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+    SELECT congress, chamber, event_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true)
+    GROUP BY congress, chamber, event_id HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T7_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with chamber outside House/Senate/NoChamber or a malformed meeting_date'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true)
+      WHERE chamber NOT IN ('House', 'Senate', 'NoChamber')
+         OR NOT regexp_full_match(meeting_date, '(19|20)[0-9]{2}-[0-9]{2}-[0-9]{2}'));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T7_both_chambers',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Distinct chambers among House and Senate'
+FROM (SELECT COUNT(DISTINCT chamber) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true) WHERE chamber IN ('House', 'Senate'));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T7_required_content',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Rows with no title or meeting_date'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true)
+      WHERE title IS NULL OR meeting_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meetings', 'T7_witness_count_matches',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Meetings whose witness_count differs from their committee_meeting_witnesses rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true) m
+      LEFT JOIN (SELECT congress, chamber, event_id, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true)
+                 GROUP BY ALL) w USING (congress, chamber, event_id)
+      WHERE m.witness_count <> COALESCE(w.c, 0));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: committee_meeting_committees
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_committees', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_committees', 'T2_row_count',
+  CASE WHEN n >= 300 THEN 'pass' ELSE 'fail' END,
+  n, 300, 'Expected at least 300 rows in a scoped run'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_committees', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_committees', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_committees', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL congress, chamber, event_id, committee_system_code, committee_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true)
+      WHERE congress IS NULL OR chamber IS NULL OR event_id IS NULL OR committee_system_code IS NULL OR committee_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_committees', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (congress, chamber, event_id, committee_system_code) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+    SELECT congress, chamber, event_id, committee_system_code FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true)
+    GROUP BY congress, chamber, event_id, committee_system_code HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_committees', 'T7_orphan_rows',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with no committee_meetings parent'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_committees', allow_moved_paths := true) c
+      ANTI JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true) p ON c.congress = p.congress AND c.chamber = p.chamber AND c.event_id = p.event_id);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: committee_meeting_witnesses
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T2_row_count',
+  CASE WHEN n >= 300 THEN 'pass' ELSE 'fail' END,
+  n, 300, 'Expected at least 300 rows in a scoped run'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      -- the source lists witnesses for House meetings only, so chamber is constant
+      AND column_name NOT IN ('type', 'congress', 'chamber')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL congress, chamber, event_id, witness_seq rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true)
+      WHERE congress IS NULL OR chamber IS NULL OR event_id IS NULL OR witness_seq IS NULL);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (congress, chamber, event_id, witness_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+    SELECT congress, chamber, event_id, witness_seq FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true)
+    GROUP BY congress, chamber, event_id, witness_seq HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T7_orphan_rows',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with no committee_meetings parent'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true) c
+      ANTI JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meetings', allow_moved_paths := true) p ON c.congress = p.congress AND c.chamber = p.chamber AND c.event_id = p.event_id);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_meeting_witnesses', 'T7_witness_named',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Rows with no witness_name'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true)
+      WHERE witness_name IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: committee_hearings
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Expected at least 100 rows in a scoped run'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL package_id, chamber, details_url rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true)
+      WHERE package_id IS NULL OR chamber IS NULL OR details_url IS NULL);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (package_id) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+    SELECT package_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true)
+    GROUP BY package_id HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T7_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with chamber outside House/Senate/Joint, a package id not CHRG-<congress>, or dates out of order'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true)
+      WHERE chamber NOT IN ('House', 'Senate', 'Joint')
+         OR package_id NOT LIKE 'CHRG-' || congress || '%'
+         OR first_held_date > last_held_date);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T7_required_content',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Rows with no title or held date'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true)
+      WHERE title IS NULL OR first_held_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearings', 'T7_witness_count_matches',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Hearings whose witness_count differs from their committee_hearing_witnesses rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true) h
+      LEFT JOIN (SELECT package_id, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true)
+                 GROUP BY ALL) w USING (package_id)
+      WHERE h.witness_count <> COALESCE(w.c, 0));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: committee_hearing_witnesses
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearing_witnesses', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearing_witnesses', 'T2_row_count',
+  CASE WHEN n >= 200 THEN 'pass' ELSE 'fail' END,
+  n, 200, 'Expected at least 200 rows in a scoped run'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearing_witnesses', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearing_witnesses', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'congress')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearing_witnesses', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL package_id, witness_seq, witness rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true)
+      WHERE package_id IS NULL OR witness_seq IS NULL OR witness IS NULL);
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearing_witnesses', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (package_id, witness_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+    SELECT package_id, witness_seq FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true)
+    GROUP BY package_id, witness_seq HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'law', 'committee_hearing_witnesses', 'T7_orphan_rows',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with no committee_hearings parent'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearing_witnesses', allow_moved_paths := true) c
+      ANTI JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_hearings', allow_moved_paths := true) p ON c.package_id = p.package_id);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

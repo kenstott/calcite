@@ -39,6 +39,12 @@ import java.util.Map;
  *       {@code bill_summaries}, {@code bill_cbo_cost_estimates},
  *       {@code bill_committee_reports}, {@code bill_notes}) — one XML file per bill, read by
  *       {@link CongressBillStatusProvider}, fanned out by Congress and bill type.</li>
+ *   <li>{@code committee_meetings}, {@code committee_meeting_committees} and
+ *       {@code committee_meeting_witnesses} — committee meetings and hearings from the
+ *       Congress.gov API, read by {@link CongressCommitteeMeetingProvider}.</li>
+ *   <li>{@code committee_hearings} and {@code committee_hearing_witnesses} — published hearing
+ *       transcripts and their witnesses from GovInfo, read by
+ *       {@link GovInfoHearingProvider}.</li>
  * </ul>
  *
  * <p>Example model configuration:
