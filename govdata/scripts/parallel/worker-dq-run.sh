@@ -525,6 +525,18 @@ log_info "$WORKER_ID: running DQ for schema=$SCHEMA mode=$MODE"
 log_info "$WORKER_ID: DQ script: $DQ_SQL"
 log_info "$WORKER_ID: log: $LOG_FILE"
 
+# A --tables run rebuilds only those tables, so it runs only the checks that read them.
+RUN_SQL="$DQ_SQL"
+if [ -n "${GOVDATA_TABLES:-}" ]; then
+  RUN_SQL="$TMP_DIR/scoped_dq.sql"
+  log_info "$WORKER_ID: DQ checks scoped to --tables ${GOVDATA_TABLES}"
+  if ! python3 "$SCRIPT_DIR/dq_scope.py" "$DQ_SQL" "$GOVDATA_TABLES" > "$RUN_SQL"; then
+    log_info "$WORKER_ID: SCHEMA RESULT: FAIL (script error)"
+    _file_script_error_issue "Could not scope ${DQ_SQL} to --tables ${GOVDATA_TABLES}"
+    exit 1
+  fi
+fi
+
 DQ_EXIT=0
 {
   # DuckDB 1.5.2+ disables Iceberg version guessing by default; enable it for our internal tables.
@@ -557,7 +569,7 @@ CREATE OR REPLACE SECRET r2 (
 _DUCKDB_PREAMBLE_
 
   # Substitute env vars referenced in the DQ SQL (credentials, endpoints)
-  envsubst < "$DQ_SQL"
+  envsubst < "$RUN_SQL"
 
   # Append COPY to write structured results to a local Parquet file before the session ends.
   # dq_results is a TEMP TABLE created inside the DQ SQL — it is still in scope here.
@@ -591,7 +603,8 @@ if [ $DQ_EXIT -ne 0 ]; then
   # DuckDB runs on past a failed statement, and that statement's checks are then absent from
   # the results. Record each one as a failing 'sql_error' result so the verdict covers it.
   log_info "$WORKER_ID: DuckDB exited with code $DQ_EXIT — recording the failed statements as sql_error results"
-  python3 "$SCRIPT_DIR/dq_sql_errors.py" "$LOG_FILE" "$DQ_SQL" "$DQ_EXIT" > "$TMP_DIR/sql_errors.csv"
+  python3 "$SCRIPT_DIR/dq_sql_errors.py" "$LOG_FILE" "$DQ_SQL" "$DQ_EXIT" \
+    ${GOVDATA_TABLES:+"$GOVDATA_TABLES"} > "$TMP_DIR/sql_errors.csv"
   duckdb -c "
     COPY (
       SELECT * FROM read_parquet('${RESULT_LOCAL}')
