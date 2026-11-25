@@ -20,16 +20,44 @@ for c in aws rclone psql gh curl python3 duckdb; do
 done
 chmod +x "$T/bin/"*
 
-run() { # bucket args... -> output in $out, rc in $rc, external calls in $CALLS
+TRACKER=govdata-tracker-v1-dq
+run() { # bucket args... -> output in $out, rc in $rc, external calls in $CALLS; $TRACKER names the results bucket
   local bucket="$1"; shift
   : > "$CALLS"
   out=$(env -i HOME="$T" PATH="$T/bin:/usr/bin:/bin" GOVDATA_TMPDIR="$T/tmp" GOVDATA_CLAIM_DIR="$T/claims" \
-    GOVDATA_DQ_BUCKET="$bucket" GOVDATA_DQ_RCLONE_REMOTE=zzremote AWS_ENDPOINT_OVERRIDE="http://127.0.0.1:1" \
+    ${bucket:+GOVDATA_DQ_BUCKET="$bucket"} ${TRACKER:+GOVDATA_DQ_TRACKER_BUCKET="$TRACKER"} \
+    GOVDATA_DQ_RCLONE_REMOTE=zzremote AWS_ENDPOINT_OVERRIDE="http://127.0.0.1:1" \
     AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=y GOVDATA_CACHE_DIR="s3://zz-raw" \
     timeout 60 bash "$P/worker-dq-run.sh" zzdry "$@" 2>&1); rc=$?
 }
 
-for bucket in govdata-parquet-v1-dq govdata-parquet-v1; do
+untouched() { [ ! -s "$CALLS" ] && [ ! -e "$P/runs" ] && [ -z "$(ls "$T/claims")" ]; }
+
+# an unnamed bucket stops every kind of run before anything happens
+for flags in "" "--rebuild" "--etl-resume" "--dry-run" "--rebuild --dry-run"; do
+  # shellcheck disable=SC2086
+  run "" $flags
+  [ $rc -eq 1 ] && [[ "$out" == *"GOVDATA_DQ_BUCKET is not set"* ]] && untouched \
+    && ok "no data bucket, '$flags': refused" || bad "no data bucket '$flags': rc=$rc $(cat "$CALLS") $out"
+  # shellcheck disable=SC2086
+  TRACKER="" run govdata-parquet-v1-dq $flags
+  [ $rc -eq 1 ] && [[ "$out" == *"GOVDATA_DQ_TRACKER_BUCKET is not set"* ]] && untouched \
+    && ok "no tracker bucket, '$flags': refused" || bad "no tracker bucket '$flags': rc=$rc $(cat "$CALLS") $out"
+done
+
+# a run that writes refuses any bucket that is not a -dq bucket
+for flags in "--rebuild" "--etl-resume" "--rebuild --dry-run"; do
+  # shellcheck disable=SC2086
+  run govdata-parquet-v1 $flags
+  [ $rc -eq 1 ] && [[ "$out" == *"must end in -dq"* ]] && untouched \
+    && ok "production data bucket, '$flags': refused" || bad "prod data '$flags': rc=$rc $(cat "$CALLS") $out"
+  # shellcheck disable=SC2086
+  TRACKER=govdata-tracker-v1 run govdata-parquet-v1-dq $flags
+  [ $rc -eq 1 ] && [[ "$out" == *"must end in -dq"* ]] && untouched \
+    && ok "non-dq tracker bucket, '$flags': refused" || bad "prod tracker '$flags': rc=$rc $(cat "$CALLS") $out"
+done
+
+for bucket in govdata-parquet-v1-dq; do
   for flags in "--rebuild" "--etl-resume" "--rebuild --etl-resume"; do
     # shellcheck disable=SC2086
     run "$bucket" $flags --start-year 2020 --dry-run

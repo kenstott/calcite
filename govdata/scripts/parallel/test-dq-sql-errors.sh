@@ -55,7 +55,8 @@ write_sql() { # $1 = file, remaining = table names
 }
 run() { # args passed to the runner; output in $out, rc in $rc
   out=$(env -i HOME="$T" PATH="$T/bin:/usr/bin:/bin" GOVDATA_TMPDIR="$T/tmp" \
-    GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq GOVDATA_DQ_RCLONE_REMOTE=zzremote AWS_ENDPOINT_OVERRIDE="http://127.0.0.1:1" \
+    GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq GOVDATA_DQ_TRACKER_BUCKET=govdata-tracker-v1-dq \
+    GOVDATA_DQ_RCLONE_REMOTE=zzremote AWS_ENDPOINT_OVERRIDE="http://127.0.0.1:1" \
     AWS_ACCESS_KEY_ID=testkeyid AWS_SECRET_ACCESS_KEY=testsecretvalue GOVDATA_CACHE_DIR="s3://zz-raw" \
     timeout 60 bash "$P/worker-dq-run.sh" zzerr --dry-run "$@" 2>&1); rc=$?
 }

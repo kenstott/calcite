@@ -28,7 +28,8 @@ run() { # extra-env... -- args... -> output in $out, rc in $rc, external calls i
   shift
   : > "$CALLS"
   out=$(env -i HOME="$T" PATH="$T/bin:/usr/bin:/bin" GOVDATA_TMPDIR="$T/tmp" GOVDATA_CLAIM_DIR="$T/claims" \
-    GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=y \
+    GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq GOVDATA_DQ_TRACKER_BUCKET=govdata-tracker-v1-dq \
+    AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=y \
     GOVDATA_CACHE_DIR="s3://zz-raw" "${envs[@]}" \
     timeout 60 bash "$P/worker-dq-run.sh" zzrem "$@" 2>&1); rc=$?
 }
