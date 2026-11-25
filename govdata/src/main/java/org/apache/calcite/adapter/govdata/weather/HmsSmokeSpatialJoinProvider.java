@@ -129,7 +129,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
     int monthInt = Integer.parseInt(month);
     String tigerYear = String.valueOf(Math.max(yearInt, 2010));
 
-    List<CountyGeometry> counties = getCountyGeometries(tigerYear, rawCache);
+    List<CountyGeometry> counties = getCountyGeometries(tigerYear);
     if (counties.isEmpty()) {
       LOGGER.warn("No county geometries for year={} — returning empty", tigerYear);
       return new ArrayList<Map<String, Object>>().iterator();
@@ -262,7 +262,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
   // County geometry loading — reads from materialized geo.counties Iceberg table
   // ---------------------------------------------------------------------------
 
-  private List<CountyGeometry> getCountyGeometries(String year, RawCache rawCache)
+  private List<CountyGeometry> getCountyGeometries(String year)
       throws IOException {
     List<CountyGeometry> cached = COUNTY_CACHE.get(year);
     if (cached != null) {
