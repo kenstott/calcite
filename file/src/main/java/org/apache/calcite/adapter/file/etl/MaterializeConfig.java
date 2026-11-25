@@ -568,6 +568,7 @@ public class MaterializeConfig {
     private final long compactionSmallFileSizeBytes;
     private final int metadataPreviousVersionsMax;
     private final boolean overwritePartitions;
+    private final boolean failOnPartitionShrink;
     private final String appendWhenOperand;
     private final String appendWhenValue;
     private final int incrementalTtlDays;
@@ -600,6 +601,7 @@ public class MaterializeConfig {
           ? builder.compactionSmallFileSizeBytes : 10L * 1024 * 1024; // 10MB default
       this.metadataPreviousVersionsMax = builder.metadataPreviousVersionsMax;
       this.overwritePartitions = builder.overwritePartitions;
+      this.failOnPartitionShrink = builder.failOnPartitionShrink;
       this.appendWhenOperand = builder.appendWhenOperand;
       this.appendWhenValue = builder.appendWhenValue;
       this.incrementalTtlDays = builder.incrementalTtlDays;
@@ -693,6 +695,15 @@ public class MaterializeConfig {
 
     public boolean isOverwritePartitions() {
       return overwritePartitions;
+    }
+
+    /**
+     * Whether an overwrite that would leave a partition with fewer rows than it already holds
+     * fails instead of committing. For sources whose complete result is a listing that can come
+     * back short without an error.
+     */
+    public boolean isFailOnPartitionShrink() {
+      return failOnPartitionShrink;
     }
 
     /**
@@ -857,6 +868,11 @@ public class MaterializeConfig {
         builder.overwritePartitions((Boolean) overwriteObj);
       }
 
+      Object failOnShrinkObj = map.get("failOnPartitionShrink");
+      if (failOnShrinkObj instanceof Boolean) {
+        builder.failOnPartitionShrink((Boolean) failOnShrinkObj);
+      }
+
       Object appendWhenOperandObj = map.get("appendWhenOperand");
       if (appendWhenOperandObj instanceof String) {
         builder.appendWhenOperand((String) appendWhenOperandObj);
@@ -910,6 +926,7 @@ public class MaterializeConfig {
       private long compactionSmallFileSizeBytes;
       private int metadataPreviousVersionsMax;
       private boolean overwritePartitions = true;
+      private boolean failOnPartitionShrink = false;
       private String appendWhenOperand;
       private String appendWhenValue;
       private int incrementalTtlDays;
@@ -991,6 +1008,11 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder metadataPreviousVersionsMax(int metadataPreviousVersionsMax) {
         this.metadataPreviousVersionsMax = metadataPreviousVersionsMax;
+        return this;
+      }
+
+      public IcebergConfigBuilder failOnPartitionShrink(boolean failOnPartitionShrink) {
+        this.failOnPartitionShrink = failOnPartitionShrink;
         return this;
       }
 

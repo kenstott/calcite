@@ -513,6 +513,7 @@ partitionedTables:
         batchPartitionColumns: [year, month]
         incrementalKeys: [year, month]
         overwritePartitions: true
+        failOnPartitionShrink: true
         runMaintenance: true
         snapshotRetentionDays: 7
 
