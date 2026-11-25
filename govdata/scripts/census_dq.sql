@@ -646,6 +646,106 @@ FROM (
 );
 
 -- ----------------------------------------------------------------------------
+-- acs_living_arrangements / acs1_living_arrangements (B09021, vintage 2015+): us, state,
+-- county and cbsa rows. T6 covers year/geography/geo_name; T8 the geography keys.
+-- ----------------------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'census', 'acs_living_arrangements', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1',
+  'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_living_arrangements', 'T2_row_count',
+  CASE WHEN n >= 30000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '30000',
+  'Expected >= 30000 rows across us, state, county and cbsa for all vintages'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true));
+
+SELECT 'acs_living_arrangements' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true) LIMIT 1;
+
+INSERT INTO dq_results SELECT 'census', 'acs_living_arrangements', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results SELECT 'census', 'acs_living_arrangements', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_living_arrangements', 'T6_pk_nulls',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with NULL year, geography, geo_name or the geography level key'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true) WHERE year IS NULL OR geography IS NULL OR geo_name IS NULL OR (geography = 'state' AND state IS NULL) OR (geography = 'county' AND county_fips IS NULL) OR (geography = 'cbsa' AND cbsa_code IS NULL));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_living_arrangements', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows where arrangement counts do not sum to the band total, or the age bands do not sum to all adults, or any count is NULL'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true) WHERE adults_total IS DISTINCT FROM adults_lives_alone + adults_with_spouse + adults_with_unmarried_partner + adults_child_of_householder + adults_other_relative + adults_nonrelative OR age_18_34_total IS DISTINCT FROM age_18_34_lives_alone + age_18_34_with_spouse + age_18_34_with_unmarried_partner + age_18_34_child_of_householder + age_18_34_other_relative + age_18_34_nonrelative OR age_35_64_total IS DISTINCT FROM age_35_64_lives_alone + age_35_64_with_spouse + age_35_64_with_unmarried_partner + age_35_64_child_of_householder + age_35_64_other_relative + age_35_64_nonrelative OR age_65_plus_total IS DISTINCT FROM age_65_plus_lives_alone + age_65_plus_with_spouse + age_65_plus_with_unmarried_partner + age_65_plus_child_of_householder + age_65_plus_other_relative + age_65_plus_nonrelative OR adults_total IS DISTINCT FROM age_18_34_total + age_35_64_total + age_65_plus_total OR adults_lives_alone IS DISTINCT FROM age_18_34_lives_alone + age_35_64_lives_alone + age_65_plus_lives_alone OR adults_with_spouse IS DISTINCT FROM age_18_34_with_spouse + age_35_64_with_spouse + age_65_plus_with_spouse OR adults_with_unmarried_partner IS DISTINCT FROM age_18_34_with_unmarried_partner + age_35_64_with_unmarried_partner + age_65_plus_with_unmarried_partner OR adults_child_of_householder IS DISTINCT FROM age_18_34_child_of_householder + age_35_64_child_of_householder + age_65_plus_child_of_householder OR adults_other_relative IS DISTINCT FROM age_18_34_other_relative + age_35_64_other_relative + age_65_plus_other_relative OR adults_nonrelative IS DISTINCT FROM age_18_34_nonrelative + age_35_64_nonrelative + age_65_plus_nonrelative);
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_living_arrangements', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'vintages missing a us row, 52 state rows, or county and cbsa rows'
+FROM (SELECT COUNT(*) AS bad FROM (SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true) GROUP BY year HAVING COUNT(*) FILTER (WHERE geography = 'us') <> 1 OR COUNT(*) FILTER (WHERE geography = 'state') <> 52 OR COUNT(*) FILTER (WHERE geography = 'county') < 800 OR COUNT(*) FILTER (WHERE geography = 'cbsa') < 500));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_living_arrangements', 'expected_values',
+  CASE WHEN n >= 9 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '9',
+  'distinct vintages loaded (2015 onward)'
+FROM (SELECT COUNT(DISTINCT year) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_living_arrangements', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'duplicate (year, geography, state, county, cbsa_code) keys'
+FROM (SELECT COUNT(*) AS bad FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_living_arrangements', allow_moved_paths := true) GROUP BY year, geography, state, county, cbsa_code HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs1_living_arrangements', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1',
+  'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs1_living_arrangements', 'T2_row_count',
+  CASE WHEN n >= 12000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '12000',
+  'Expected >= 12000 rows across us, state, county and cbsa for all vintages'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true));
+
+SELECT 'acs1_living_arrangements' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true) LIMIT 1;
+
+INSERT INTO dq_results SELECT 'census', 'acs1_living_arrangements', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results SELECT 'census', 'acs1_living_arrangements', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+
+INSERT INTO dq_results
+SELECT 'census', 'acs1_living_arrangements', 'T6_pk_nulls',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with NULL year, geography, geo_name or the geography level key'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true) WHERE year IS NULL OR geography IS NULL OR geo_name IS NULL OR (geography = 'state' AND state IS NULL) OR (geography = 'county' AND county_fips IS NULL) OR (geography = 'cbsa' AND cbsa_code IS NULL));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs1_living_arrangements', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows where arrangement counts do not sum to the band total, or the age bands do not sum to all adults, or any count is NULL'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true) WHERE adults_total IS DISTINCT FROM adults_lives_alone + adults_with_spouse + adults_with_unmarried_partner + adults_child_of_householder + adults_other_relative + adults_nonrelative OR age_18_34_total IS DISTINCT FROM age_18_34_lives_alone + age_18_34_with_spouse + age_18_34_with_unmarried_partner + age_18_34_child_of_householder + age_18_34_other_relative + age_18_34_nonrelative OR age_35_64_total IS DISTINCT FROM age_35_64_lives_alone + age_35_64_with_spouse + age_35_64_with_unmarried_partner + age_35_64_child_of_householder + age_35_64_other_relative + age_35_64_nonrelative OR age_65_plus_total IS DISTINCT FROM age_65_plus_lives_alone + age_65_plus_with_spouse + age_65_plus_with_unmarried_partner + age_65_plus_child_of_householder + age_65_plus_other_relative + age_65_plus_nonrelative OR adults_total IS DISTINCT FROM age_18_34_total + age_35_64_total + age_65_plus_total OR adults_lives_alone IS DISTINCT FROM age_18_34_lives_alone + age_35_64_lives_alone + age_65_plus_lives_alone OR adults_with_spouse IS DISTINCT FROM age_18_34_with_spouse + age_35_64_with_spouse + age_65_plus_with_spouse OR adults_with_unmarried_partner IS DISTINCT FROM age_18_34_with_unmarried_partner + age_35_64_with_unmarried_partner + age_65_plus_with_unmarried_partner OR adults_child_of_householder IS DISTINCT FROM age_18_34_child_of_householder + age_35_64_child_of_householder + age_65_plus_child_of_householder OR adults_other_relative IS DISTINCT FROM age_18_34_other_relative + age_35_64_other_relative + age_65_plus_other_relative OR adults_nonrelative IS DISTINCT FROM age_18_34_nonrelative + age_35_64_nonrelative + age_65_plus_nonrelative);
+
+INSERT INTO dq_results
+SELECT 'census', 'acs1_living_arrangements', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'vintages missing a us row, 52 state rows, or county and cbsa rows'
+FROM (SELECT COUNT(*) AS bad FROM (SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true) GROUP BY year HAVING COUNT(*) FILTER (WHERE geography = 'us') <> 1 OR COUNT(*) FILTER (WHERE geography = 'state') <> 52 OR COUNT(*) FILTER (WHERE geography = 'county') < 800 OR COUNT(*) FILTER (WHERE geography = 'cbsa') < 500));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs1_living_arrangements', 'expected_values',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1',
+  'national 2025 row with the published 18-34 total 73730334 and child of householder 24795700 (api.census.gov, verified 2026-11-25)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true) WHERE geography = 'us' AND year = 2025 AND age_18_34_total = 73730334 AND age_18_34_child_of_householder = 24795700);
+
+INSERT INTO dq_results
+SELECT 'census', 'acs1_living_arrangements', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'duplicate (year, geography, state, county, cbsa_code) keys'
+FROM (SELECT COUNT(*) AS bad FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_living_arrangements', allow_moved_paths := true) GROUP BY year, geography, state, county, cbsa_code HAVING COUNT(*) > 1));
+
+-- ----------------------------------------------------------------------------
 -- pep_components_of_change: PEP county components (bulk co-est{vintage}-alldata.csv),
 -- one row per county per data year 2010..latest. Not sampled: the whole table is read.
 -- ----------------------------------------------------------------------------
