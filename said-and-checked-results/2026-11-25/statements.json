@@ -4,7 +4,7 @@
   "lede": [
     "Coverage on Nov. 24 again centered on Nvidia's reinstatement of chief executive Jensen Huang. President Trump said in a CNBC interview that he had spoken to the company's board and convinced it, and Democratic senators, governors and a House member criticized the decision. Sen. Tim Scott announced that Huang will testify before the Senate Banking Committee on Dec. 3.",
     "Other stories covered Rep. Jamie Raskin's letters to companies in which Donald Trump Jr.'s firm 1789 Capital invested, a HUD rule ending housing aid for families with ineligible noncitizen members, which HUD Secretary Scott Turner defended, records of the search of Rep. Ilhan Omar's home, a Defense Department directive on contacts with Canada described by Sen. Mike Rounds, the president's Medal of Freedom for Rudy Giuliani, and the White House turkey pardon.",
-    "The page lists 26 statements by 12 officeholders. Thirteen are factual claims; checks are in progress and statements not yet checked are marked so. The other 13 are opinions, predictions, promises or personal attacks and are listed without a check."
+    "The page lists 26 statements by 12 officeholders. Thirteen are factual claims, and every one was checked: 4 were supported, 8 unsettled and 1 contradicted. The contradicted claim, HUD Secretary Turner's statement that the rule guarantees only citizens and eligible noncitizens will live in HUD-funded housing, rests on the rule's own text, which keeps a temporary deferral of termination of up to 18 months. One check cites AskAmerica's federal contract records and one its Federal Register records. The other 13 statements are opinions, promises or personal attacks and are listed without a check."
   ],
   "stories": [
     {
@@ -974,10 +974,19 @@
       "kind": "factual",
       "test": "True if the final rule's text states it implements the noncitizen eligibility provision (Section 214) of the Housing and Community Development Act of 1980 and leaves none of that section's requirements unimplemented. False if the rule cites a different authority. Cannot be determined if whether it implements the Act 'fully' turns on a legal reading of the statute.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "The final rule revises HUD's Section 214 regulations under the 1980 Act, but describes its changes as bringing them \"into greater alignment\" with Section 214 and keeps proration and deferral where the statute requires them. Whether that is full implementation turns on a legal reading of the statute.",
+      "evidence": [
+        {
+          "label": "HUD final rule, Verification of Eligible Status (Federal Register 2026-23003)",
+          "url": "https://public-inspection.federalregister.gov/2026-23003.pdf"
+        },
+        {
+          "label": "42 U.S.C. 1436a (Section 214), Cornell LII",
+          "url": "https://www.law.cornell.edu/uscode/text/42/1436a"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -1006,10 +1015,19 @@
       "kind": "factual",
       "test": "True if the final rule's text ends assistance for any household that includes a member who is neither a citizen nor an eligible noncitizen, so that only citizens and eligible noncitizens reside in HUD-assisted units. False if the rule lets ineligible noncitizens keep residing in HUD-funded housing (for example under deferral or prorated assistance). Cannot be determined if the rule text cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "contradicted",
+      "finding": "The rule makes prorated assistance temporary pending verification but \"preserves the temporary deferral of termination of assistance, available in HUD's discretion for up to 18 months\"; HUD's analysis counts 19,810 mixed families eligible for it, so ineligible members can keep living in assisted units for a period. What remains open is the end state after deferral, which limits assistance to fully eligible households, and the states' lawsuit against the rule.",
+      "evidence": [
+        {
+          "label": "HUD final rule, Verification of Eligible Status (Federal Register 2026-23003)",
+          "url": "https://public-inspection.federalregister.gov/2026-23003.pdf"
+        },
+        {
+          "label": "42 U.S.C. 1436a (Section 214), Cornell LII",
+          "url": "https://www.law.cornell.edu/uscode/text/42/1436a"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -1038,10 +1056,15 @@
       "kind": "factual",
       "test": "True if HUD's final rule or its regulatory impact analysis estimates a reallocation of up to $218 million to eligible households on waiting lists. False if HUD's published estimate is a different amount. Cannot be determined if HUD's published analysis cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "supported",
+      "finding": "The rule's analysis estimates a redistribution of \"approximately $167 million to $218 million annually in rental assistance from mixed-status families to fully eligible households currently awaiting assistance,\" so $218 million is the top of HUD's range. The rule says fully eligible households, not Americans.",
+      "evidence": [
+        {
+          "label": "HUD final rule, Verification of Eligible Status (Federal Register 2026-23003)",
+          "url": "https://public-inspection.federalregister.gov/2026-23003.pdf"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
