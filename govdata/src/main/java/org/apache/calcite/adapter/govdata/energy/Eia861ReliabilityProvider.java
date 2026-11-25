@@ -10,8 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.energy;
 
-import org.apache.calcite.adapter.file.etl.RequestContext;
-
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -21,13 +19,14 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
  * Parses the EIA-861 "Reliability" file (bundled in the same annual ZIP archive that
- * {@link Eia861UtilityTransformer} downloads for {@code eia_utility_annual}) into one row per
+ * {@link Eia861UtilityProvider} downloads for {@code eia_utility_annual}) into one row per
  * (report_year, utility_id, state_abbr): the utility's SAIDI / SAIFI / CAIDI interruption
  * indices from the "Reliability_States" sheet.
  *
@@ -38,7 +37,7 @@ import java.util.zip.ZipInputStream;
  * while the number of header rows differs (2013-2016 have two, 2023 has three), so the data
  * rows are located by the "Data Year" header row and the layout is verified against it.
  */
-public class Eia861ReliabilityTransformer extends EiaBulkXlsxTransformer {
+public class Eia861ReliabilityProvider extends Eia861ArchiveProvider {
 
   private static final String SHEET_NAME = "Reliability_States";
 
@@ -68,30 +67,9 @@ public class Eia861ReliabilityTransformer extends EiaBulkXlsxTransformer {
   private static final String[] OTHER_NO_MED = {
       "other_saidi_without_med", "other_saifi_without_med", "other_caidi_without_med"};
 
-  @Override
-  public String transform(String response, RequestContext context) {
-    String url = context.getUrl();
-    Map<String, String> dims = context.getDimensionValues();
-    String yearStr = dims != null ? dims.get("effective_year") : null;
-    if (yearStr == null || yearStr.isEmpty()) {
-      throw new IllegalStateException("EIA-861 Reliability: effective_year dimension missing");
-    }
-    int year = Integer.parseInt(yearStr);
-
-    // EIA moved 2024+ data out of /archive/zip/ to /zip/ (same move eia_utility_annual handles).
-    if (year >= 2024) {
-      url = url.replace("/archive/zip/", "/zip/");
-    }
-    try {
-      return parseReliabilityZip(downloadBytes(url), year);
-    } catch (Exception e) {
-      throw new RuntimeException("EIA-861 Reliability: failed to parse ZIP from " + url, e);
-    }
-  }
-
-  private String parseReliabilityZip(byte[] zipBytes, int year) throws Exception {
+  @Override protected String parseArchive(InputStream archive, int year) throws Exception {
     byte[] xlsx = null;
-    ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes));
+    ZipInputStream zis = new ZipInputStream(archive);
     try {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
@@ -217,11 +195,5 @@ public class Eia861ReliabilityTransformer extends EiaBulkXlsxTransformer {
     } else {
       out.put(name, value.trim());
     }
-  }
-
-  @Override
-  protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
-    // Never invoked: transform() above is fully overridden because the source is a ZIP archive.
-    return parseReliabilitySheet(workbook, 0);
   }
 }

@@ -149,8 +149,7 @@ dimension_values:
   # EIA-861 utility annual year range (2008+; pre-2008 XLSX format differs).
   # dataLag: 1, releaseMonth: 10 — the final f861{effective_year}.zip is posted about 10 months
   # after year end (the 2025 final on 2026-10-07), so year N is requested from October of N+1.
-  # A year not yet posted redirects to an HTML page. The URL templates {effective_year} to hit
-  # the available file.
+  # A year the EIA-861 landing page does not link yet is skipped (see Eia861ArchiveProvider).
   eia_utility_years: &eia_utility_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
@@ -735,7 +734,7 @@ partitionedTables:
       power marketers, and energy service providers. Fields include entity type, NERC region,
       service type, customer counts and sales by sector (residential, commercial, industrial,
       transportation), revenue, peak demand, and net generation. One row per utility + year.
-      The transformer downloads and parses the annual ZIP archive of XLSX files from EIA.
+      The provider downloads and parses the annual ZIP archive of XLSX files from EIA.
       Cross-references geo.state_ref via state_abbr.
 
       To reach a utility's cross-schema identity FROM another schema rather than by name,
@@ -866,15 +865,17 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{effective_year}.zip"
+      # The landing page; the provider reads each year's archive location from its links.
+      url: "https://www.eia.gov/electricity/data/eia861/"
       method: GET
       parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
-      response:
-        format: TEXT
-      rawCache: *raw_cache_enabled
+      rawCache:
+        enabled: true
+        sharedKey: eia861_archive   # one ZIP per year serves all three EIA-861 tables
+        keyVars: [effective_year]
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia861UtilityTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.energy.Eia861UtilityProvider"
 
     materialize:
       format: iceberg
@@ -959,15 +960,17 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{effective_year}.zip"
+      # The landing page; the provider reads each year's archive location from its links.
+      url: "https://www.eia.gov/electricity/data/eia861/"
       method: GET
       parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
-      response:
-        format: TEXT
-      rawCache: *raw_cache_enabled
+      rawCache:
+        enabled: true
+        sharedKey: eia861_archive   # one ZIP per year serves all three EIA-861 tables
+        keyVars: [effective_year]
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia861ServiceTerritoryTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.energy.Eia861ServiceTerritoryProvider"
 
     materialize:
       format: iceberg
@@ -1121,15 +1124,17 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.eia.gov/electricity/data/eia861/archive/zip/f861{effective_year}.zip"
+      # The landing page; the provider reads each year's archive location from its links.
+      url: "https://www.eia.gov/electricity/data/eia861/"
       method: GET
       parallel: 1   # bulk-XLSX: rebuilds a POI workbook per fetch — keep sequential (see eia_power_plants)
-      response:
-        format: TEXT
-      rawCache: *raw_cache_enabled
+      rawCache:
+        enabled: true
+        sharedKey: eia861_archive   # one ZIP per year serves all three EIA-861 tables
+        keyVars: [effective_year]
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.energy.Eia861ReliabilityTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.energy.Eia861ReliabilityProvider"
 
     materialize:
       format: iceberg
