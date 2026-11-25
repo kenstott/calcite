@@ -247,13 +247,14 @@ FROM (SELECT
   COUNT(*) FILTER (WHERE year > 2015 AND COALESCE(satwr25, satwr75, actwr25, actwr75) IS NOT NULL) AS n_late
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true));
 
+-- hispanic_serving: College Scorecard removed the indicator in its 2026-10-15 release.
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard', 'all_null_cols',
   CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name', 'hispanic_serving');
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard_programs', 'all_null_cols',

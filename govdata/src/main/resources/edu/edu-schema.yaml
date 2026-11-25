@@ -2512,7 +2512,10 @@ partitionedTables:
       - name: hispanic_serving
         type: int
         nullable: true
-        comment: Hispanic-serving institution (1=yes)
+        comment: >-
+          Hispanic-serving institution (1=yes, 0=no). College Scorecard removed this
+          indicator from its source data in the 2026-10-15 release, so rows fetched
+          from that release onward are null; null means not published, not "no".
       - name: online_only
         type: int
         nullable: true
