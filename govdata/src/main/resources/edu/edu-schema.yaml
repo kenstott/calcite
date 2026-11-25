@@ -2554,15 +2554,15 @@ partitionedTables:
       - name: mean_earnings_10yr
         type: int
         nullable: true
-        comment: "Mean earnings 10yr after entry for working non-enrolled students (note: mean, not median)"
+        comment: "Mean earnings 10yr after entry for working non-enrolled students (note: mean, not median). Null for 2018 onward: no yearly data file in that range reports it"
       - name: median_earnings_8yr
         type: double
         nullable: true
-        comment: Median earnings 8yr after entry (earnings.8_yrs_after_entry.median_earnings)
+        comment: Median earnings 8yr after entry (earnings.8_yrs_after_entry.median_earnings). Reported only in some data files (2020 and 2022 among those from 2018); null in the others
       - name: median_family_income
         type: int
         nullable: true
-        comment: Median family income of entering students
+        comment: "Median family income of entering students. Null for 2018 onward: no yearly data file in that range reports it"
       - name: default_rate_3yr
         type: double
         nullable: true
@@ -2673,7 +2673,8 @@ partitionedTables:
       Dept of Ed College Scorecard program-level outcomes by CIP 4-digit code.
       One row per institution × program × credential level per Scorecard data file
       year (earnings cohorts are pooled and earlier than the file year). An earnings
-      measure the publisher does not report in a year's file is null for that year.
+      measure the publisher does not report in a year's file is null for that year, and
+      the newest data files can carry no field-of-study rows at all.
       Earnings by field of study — the most granular post-graduation outcome data.
       Joins to ipeds_completions via (unitid=unit_id, cipcode LIKE cip_code+'%').
       PrivacySuppressed values are null. Institution-level scorecard outcomes (overall
