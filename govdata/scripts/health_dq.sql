@@ -1107,6 +1107,81 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/c
       WHERE vaccine = 'MMR' AND geography = 'United States' AND school_year = '2025-26');
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_nis_child_vaccination_coverage (data.cdc.gov Socrata fhky-rtsk; NIS-Child)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true));
+
+-- 141,052 upstream at 2026-11-25
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T2_row_count',
+  CASE WHEN n >= 135000 THEN 'pass' ELSE 'fail' END,
+  n, 135000, 'Expected ~141,000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+);
+
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL vaccine, geography, birth_cohort, dimension_type or dimension'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true)
+      WHERE vaccine IS NULL OR geography_type IS NULL OR geography IS NULL OR birth_cohort IS NULL
+         OR dimension_type IS NULL OR dimension IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with estimate or CI outside 0-100, or CI lower above upper'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true)
+      WHERE coverage_estimate NOT BETWEEN 0 AND 100 OR ci_95_lower NOT BETWEEN 0 AND 100
+         OR ci_95_upper NOT BETWEEN 0 AND 100 OR ci_95_lower > ci_95_upper);
+
+-- NA is published for ~1.5% of rows; a mostly-null estimate means the parse broke
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T7_estimate_populated',
+  CASE WHEN n >= 0.95 THEN 'pass' ELSE 'fail' END,
+  n, 0.95, 'Share of rows with a coverage estimate'
+FROM (SELECT COUNT(coverage_estimate)::DOUBLE / NULLIF(COUNT(*), 0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true));
+
+-- MMWR 73(38): HepB birth dose, born 2018-2019, 80.3% (95% CI 79.4-81.1)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T7_hepb_birth_dose_published',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'US HepB birth dose 2018-2019 matches MMWR 80.3 (79.4-81.1)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true)
+      WHERE vaccine = 'Hep B' AND dose = '≥1 Dose, 3 Day (Birth Dose)' AND geography = 'United States'
+        AND birth_cohort = '2018-2019' AND dimension = '0-3 Days'
+        AND coverage_estimate = 80.3 AND ci_95_lower = 79.4 AND ci_95_upper = 81.1);
+
+-- T8: pk duplication
+INSERT INTO dq_results
+SELECT 'health', 'cdc_nis_child_vaccination_coverage', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicated primary-key groups'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_nis_child_vaccination_coverage', allow_moved_paths := true)
+  GROUP BY type, vaccine, dose, geography_type, geography, birth_cohort, dimension_type, dimension
+  HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: cdc_teen_birth_rates_county (data.cdc.gov Socrata; one paginated JSON artifact)
 -- ─────────────────────────────────────────────────────────────
 

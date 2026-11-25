@@ -7364,6 +7364,123 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: cdc_nis_child_vaccination_coverage
+    timeColumn: birth_cohort  # observation time; this table has no column named 'year'
+    # Socrata serves a version-based ETag and a Last-Modified on a HEAD, so the dataset's
+    # own version is the change signal.
+    freshness:
+      type: etag
+    comment: >
+      Vaccination coverage among young children (0-35 months), from CDC's National
+      Immunization Survey-Child (NIS-Child, ChildVaxView), released annually. One row per
+      vaccine x dose x geography x birth_cohort x dimension_type x dimension, with the percent
+      estimate, its 95 percent confidence interval and sample size. Covers the hepatitis B
+      birth dose (vaccine = 'Hep B', dose = '≥1 Dose, 3 Day (Birth Dose)'), MMR, DTaP, polio,
+      Hib, varicella, PCV, hepatitis A, rotavirus, influenza and the combined 7-vaccine series.
+      Geography is national, HHS region, state, territory and selected local areas. Single
+      birth-year rows are reported under dimension_type = 'Age' (the birth dose uses dimension
+      '0-3 Days'; many other vaccines use '24 Months'); dimension_type = 'Overall' and the
+      insurance, poverty, race/ethnicity and urbanicity breakdowns are reported for fewer,
+      pooled cohorts. Birth years start at 2011. Complements cdc_school_vaccination_coverage
+      (kindergarten entrants).
+    columns:
+      - name: vaccine
+        comment: "Vaccine or series: DTaP, Polio, Hib, Hep B, PCV, Hep A, Rotavirus, Influenza, Combined 7 Series, and two values that carry the dose in the name (≥1 Dose MMR, ≥1 Dose Varicella)"
+        type: VARCHAR
+        nullable: true
+      - name: dose
+        comment: "Dose or milestone, e.g. ≥3 Doses, Full Series, or for Hep B the timed doses ≥1 Dose, 1 Day / ≥1 Dose, 2 Day / ≥1 Dose, 3 Day (Birth Dose). Empty or null where vaccine already names the dose or series"
+        type: VARCHAR
+        nullable: true
+      - name: geography_type
+        comment: "HHS Regions/National or States/Local Areas"
+        type: VARCHAR
+        nullable: true
+      - name: geography
+        comment: "United States, Region 1 to Region 10, a state or territory name, or a local area (e.g. IL-City of Chicago, TX-Rest of state)"
+        type: VARCHAR
+        nullable: true
+      - name: birth_cohort
+        comment: "Child birth year (e.g. 2021) or pooled birth-year cohort (e.g. 2020-2021). Single years and pooled cohorts overlap: filter to one form before aggregating"
+        type: VARCHAR
+        nullable: true
+        expression: 'src."year_season"'
+      - name: dimension_type
+        comment: "Breakdown family: Age (age by which the dose was received), Overall, Insurance Coverage, Poverty, Race and Ethnicity, Urbanicity"
+        type: VARCHAR
+        nullable: true
+      - name: dimension
+        comment: "Breakdown value within dimension_type, e.g. 24 Months or 0-3 Days for Age, Any Medicaid for Insurance Coverage"
+        type: VARCHAR
+        nullable: true
+      - name: coverage_estimate
+        comment: "Estimated coverage, percent. Null where CDC publishes NA (estimate suppressed)"
+        type: DOUBLE
+        nullable: true
+        expression: 'CAST(NULLIF(src."coverage_estimate", ''NA'') AS DOUBLE)'
+      - name: ci_95_lower
+        comment: "Lower bound of the 95 percent confidence interval, percent. Null where no interval is published"
+        type: DOUBLE
+        nullable: true
+        expression: 'CAST(SPLIT_PART(src."_95_ci", '' to '', 1) AS DOUBLE)'
+      - name: ci_95_upper
+        comment: "Upper bound of the 95 percent confidence interval, percent. Null where no interval is published"
+        type: DOUBLE
+        nullable: true
+        expression: 'CAST(SPLIT_PART(src."_95_ci", '' to '', 2) AS DOUBLE)'
+      - name: population_sample_size
+        comment: "Number of surveyed children the estimate is based on. Null where not published"
+        type: BIGINT
+        nullable: true
+        expression: 'CAST(src."population_sample_size" AS BIGINT)'
+      - name: type
+        comment: "Constant record-type discriminator cdc_nis_child_vaccination_coverage"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/fhky-rtsk.json"
+      method: GET
+      parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
+        "$limit": "50000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 50000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_nis_child_vaccination_coverage
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: cdc_teen_birth_rates_county
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
@@ -11912,6 +12029,9 @@ constraints:
 
   cdc_covid_vaccinations:
     primaryKey: [type, date, demographic_category]
+
+  cdc_nis_child_vaccination_coverage:
+    primaryKey: [type, vaccine, dose, geography_type, geography, birth_cohort, dimension_type, dimension]
 
   cms_hospital_quality:
     primaryKey: [type, facility_id]
