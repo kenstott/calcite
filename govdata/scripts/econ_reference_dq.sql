@@ -2,7 +2,8 @@
 -- Economic Reference Data Quality Checks
 -- Schema: econ_reference
 -- Tables: jolts_industries, jolts_dataelements, bls_geographies, naics_sectors,
---         nipa_tables, regional_linecodes, fred_series, oe_industries, oe_occupations
+--         nipa_tables, regional_linecodes, fred_series, fred_curated_series, oe_industries,
+--         oe_occupations
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns per table.
 -- NOTE: fred_series T7 expects 5 distinct categories (5/7 configured; categories 1
@@ -623,6 +624,71 @@ FROM (
   SELECT COUNT(DISTINCT category) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_series', allow_moved_paths := true)
 );
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fred_curated_series
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'econ_reference', 'fred_curated_series', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true));
+
+-- T2: one row per curated series (the list in econ-schema.yaml holds more than 80)
+INSERT INTO dq_results
+SELECT 'econ_reference', 'fred_curated_series', 'T2_row_count',
+  CASE WHEN n >= 80 THEN 'pass' ELSE 'fail' END,
+  n, 80, 'Expected one row per curated FRED series'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'econ_reference', 'fred_curated_series', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0, CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true))
+  WHERE null_percentage = 100.0 AND column_name NOT IN ('type')
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'econ_reference', 'fred_curated_series', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0, CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true))
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'econ_reference', 'fred_curated_series', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL series or title'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true) WHERE series IS NULL OR title IS NULL);
+
+-- T7: the typical-worker pay series are described (fred_indicators_enriched inner-joins here)
+INSERT INTO dq_results
+SELECT 'econ_reference', 'fred_curated_series', 'T7_expected_values',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END,
+  n, 4, 'CPS usual weekly earnings median and percentile series present'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true)
+  WHERE series IN ('LES1252881500Q', 'LES1252881600Q', 'LEU0252911200Q', 'LEU0252911500Q'));
+
+-- T8: series is unique
+INSERT INTO dq_results
+SELECT 'econ_reference', 'fred_curated_series', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate series keys'
+FROM (SELECT COUNT(*) - COUNT(DISTINCT series) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ_reference/fred_curated_series', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
 -- SUMMARY

@@ -890,7 +890,7 @@ partitionedTables:
         - name: category
           type: INTEGER
     comment: >
-      FRED series discovery/metadata catalog: series id, title, observation date range (observation_start/observation_end), frequency, units, seasonal adjustment, last-updated timestamp, and popularity scores — one row per series, partitioned by category (7 top-level FRED categories: Production & Business Activity, Population/Employment/Labor Markets, National Accounts, Prices, Discontinued/Legacy, Money/Banking/Finance, International Data; up to 1000 series fetched per category). This is a lookup/discovery catalog only, not observation data — see econ.fred_indicators for the curated ~51-series time series values (enumerated in that table's series column comment).
+      FRED series discovery/metadata catalog: series id, title, observation date range (observation_start/observation_end), frequency, units, seasonal adjustment, last-updated timestamp, and popularity scores — one row per series, partitioned by category (7 top-level FRED categories: Production & Business Activity, Population/Employment/Labor Markets, National Accounts, Prices, Discontinued/Legacy, Money/Banking/Finance, International Data; up to 1000 series fetched per category). This is a lookup/discovery catalog only, not observation data — see econ.fred_indicators for the curated time series values (enumerated in that table's series column comment).
     columns:
       - name: series
         type: string
@@ -899,7 +899,7 @@ partitionedTables:
         comment: >
           Unique FRED series identifier (e.g. 'UNRATE', 'GDP'). This is the catalog of everything
           FRED publishes, so use it to decode or discover series; the econ.fred_indicators
-          observations table loads only a curated 51-series subset, enumerated in that table's
+          observations table loads only a curated subset, enumerated in that table's
           series column comment.
       - name: title
         type: string
@@ -1138,6 +1138,25 @@ partitionedTables:
         - "AWHMAN"
         - "JTSJOL"
         - "TEMPHELPS"
+        - "LES1252881500Q"
+        - "LES1252881600Q"
+        - "LEU0252881500Q"
+        - "LEU0252881600Q"
+        - "LEU0252911200Q"
+        - "LEU0252911300Q"
+        - "LEU0252911400Q"
+        - "LEU0252911500Q"
+        - "LES1252881800Q"
+        - "LES1252881900Q"
+        - "LES1252882700Q"
+        - "LES1252882800Q"
+        - "LEU0252883600Q"
+        - "LEU0252884500Q"
+        - "LEU0252885400Q"
+        - "LEU0252916700Q"
+        - "LEU0252917300Q"
+        - "LEU0254929400Q"
+        - "LEU0252918500Q"
         - "CPIAUCSL"
         - "CPIAUCNS"
         - "CPILFESL"
