@@ -1127,6 +1127,51 @@ FROM (
   WHERE series IN ('FYFSGDA188S', 'FYFSD', 'DFF')
 );
 
+-- CPS usual weekly earnings (typical-worker pay): the full-time median in current and constant
+-- dollars must be present with plausible values, and the published distribution must be ordered
+-- (10th <= 25th <= median <= 75th <= 90th percentile) on every quarter that carries all five.
+-- Row floor scales with the loaded span (DFF years - 1, three quarters each, max 8).
+INSERT INTO dq_results
+SELECT
+  'econ', 'fred_indicators', 'expected_values',
+  CASE WHEN n_nom >= min_rows AND n_real >= min_rows AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n_nom AS VARCHAR) || ' nominal rows, ' || CAST(n_real AS VARCHAR) || ' real rows, ' || CAST(bad AS VARCHAR) || ' out of range',
+  '>=' || CAST(min_rows AS VARCHAR) || ' rows each (loaded years ' || CAST(loaded_years AS VARCHAR) || '), 0 out of range',
+  'LES1252881500Q in [100,5000] and LES1252881600Q in [200,700] present'
+FROM (
+  SELECT COUNT(*) FILTER (WHERE series = 'LES1252881500Q' AND value IS NOT NULL) AS n_nom,
+         COUNT(*) FILTER (WHERE series = 'LES1252881600Q' AND value IS NOT NULL) AS n_real,
+         COUNT(*) FILTER (WHERE (series = 'LES1252881500Q' AND value NOT BETWEEN 100 AND 5000)
+                             OR (series = 'LES1252881600Q' AND value NOT BETWEEN 200 AND 700)) AS bad,
+         COUNT(DISTINCT year(date)) FILTER (WHERE series = 'DFF') AS loaded_years,
+         LEAST(8, GREATEST(1, (COUNT(DISTINCT year(date)) FILTER (WHERE series = 'DFF') - 1) * 3)) AS min_rows
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators', allow_moved_paths := true)
+  WHERE series IN ('LES1252881500Q', 'LES1252881600Q', 'DFF') AND (series = 'DFF' OR year(date) >= 1979)
+);
+
+INSERT INTO dq_results
+SELECT
+  'econ', 'fred_indicators', 'expected_values',
+  CASE WHEN n > 0 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR) || ' complete quarters, ' || CAST(bad AS VARCHAR) || ' out of order',
+  '>0 quarters, 0 out of order',
+  'CPS weekly earnings percentiles ordered p10<=p25<=p50<=p75<=p90'
+FROM (
+  SELECT COUNT(*) AS n,
+         COUNT(*) FILTER (WHERE NOT (p10 <= p25 AND p25 <= p50 AND p50 <= p75 AND p75 <= p90)) AS bad
+  FROM (
+    SELECT date,
+           MAX(value) FILTER (WHERE series = 'LEU0252911200Q') AS p10,
+           MAX(value) FILTER (WHERE series = 'LEU0252911300Q') AS p25,
+           MAX(value) FILTER (WHERE series = 'LEU0252881500Q') AS p50,
+           MAX(value) FILTER (WHERE series = 'LEU0252911400Q') AS p75,
+           MAX(value) FILTER (WHERE series = 'LEU0252911500Q') AS p90
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators', allow_moved_paths := true)
+    GROUP BY date
+  )
+  WHERE p10 IS NOT NULL AND p25 IS NOT NULL AND p50 IS NOT NULL AND p75 IS NOT NULL AND p90 IS NOT NULL
+);
+
 -- employment_statistics: CPS rate/ratio series values in [0, 100]
 -- Headline unemployment rate and LFPR plus the by-educational-attainment breakouts
 -- (unemployment rate LNS140276xx, LFPR LNS113276xx, emp-pop ratio LNS123276xx).

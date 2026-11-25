@@ -396,6 +396,26 @@ dimension_values:
     - "AWHMAN"
     - "JTSJOL"
     - "TEMPHELPS"
+    # Typical-worker pay: BLS CPS usual weekly earnings (LEU/LES series) via FRED
+    - "LES1252881500Q"
+    - "LES1252881600Q"
+    - "LEU0252881500Q"
+    - "LEU0252881600Q"
+    - "LEU0252911200Q"
+    - "LEU0252911300Q"
+    - "LEU0252911400Q"
+    - "LEU0252911500Q"
+    - "LES1252881800Q"
+    - "LES1252881900Q"
+    - "LES1252882700Q"
+    - "LES1252882800Q"
+    - "LEU0252883600Q"
+    - "LEU0252884500Q"
+    - "LEU0252885400Q"
+    - "LEU0252916700Q"
+    - "LEU0252917300Q"
+    - "LEU0254929400Q"
+    - "LEU0252918500Q"
     # Inflation
     - "CPIAUCSL"
     - "CPIAUCNS"      # CPI all items, not seasonally adjusted (FRED id; replaced invalid BLS CUUR0000SA0)
@@ -8198,7 +8218,11 @@ partitionedTables:
         - name: month
           type: VARCHAR
     comment: >
-      Federal Reserve Economic Data (FRED) time series raw observations. For metadata (series name, units, frequency, etc.), JOIN with reference_fred_curated_series or use fred_indicators_enriched view.
+      Federal Reserve Economic Data (FRED) time series raw observations. Includes BLS Current
+      Population Survey median, decile and quartile usual weekly earnings of full-time wage and
+      salary workers (the typical or ordinary worker's pay, unlike the CES average earnings in
+      wage_growth and employment tables; series LES1252881500Q current dollars, LES1252881600Q
+      inflation-adjusted, quarterly from 1979, dated the first day of the quarter). For metadata (series name, units, frequency, etc.), JOIN with reference_fred_curated_series or use fred_indicators_enriched view.
     columns:
       - name: series
         type: string
@@ -8302,7 +8326,40 @@ partitionedTables:
           negative = deficit, from 1929 (OMB Historical Table 1.2 via FRED, the latest fiscal year
           appears only after OMB/BEA publish GDP for it); FYFSD = federal budget surplus or deficit
           in millions of dollars (the dollar deficit), annual by fiscal year, dated the fiscal-year
-          end (June 30 through 1976, September 30 after), negative = deficit, from 1901.
+          end (June 30 through 1976, September 30 after), negative = deficit, from 1901;
+          LES1252881500Q = median usual weekly earnings, full-time wage and salary workers 16 years
+          and over (typical worker pay), quarterly, current dollars, seasonally adjusted (BLS CPS);
+          LES1252881600Q = median usual weekly real earnings, full-time wage and salary workers 16
+          years and over, quarterly, constant 1982-84 CPI-adjusted dollars, seasonally adjusted;
+          LEU0252881500Q = median usual weekly earnings, full-time workers, quarterly, current
+          dollars, not seasonally adjusted; LEU0252881600Q = median usual weekly real earnings,
+          full-time workers, quarterly, constant 1982-84 dollars, not seasonally adjusted;
+          LEU0252911200Q = first decile (10th percentile) usual weekly earnings, full-time workers,
+          quarterly, current dollars, not seasonally adjusted, from 2000; LEU0252911300Q = first
+          quartile (25th percentile) usual weekly earnings, full-time workers, quarterly, current
+          dollars, not seasonally adjusted, from 2000; LEU0252911400Q = third quartile (75th
+          percentile) usual weekly earnings, full-time workers, quarterly, current dollars, not
+          seasonally adjusted, from 2000; LEU0252911500Q = ninth decile (90th percentile) usual weekly
+          earnings, full-time workers, quarterly, current dollars, not seasonally adjusted, from 2000;
+          LES1252881800Q = median usual weekly earnings, men working full time, quarterly, current
+          dollars, seasonally adjusted; LES1252881900Q = median usual weekly real earnings, men
+          working full time, quarterly, constant 1982-84 dollars, seasonally adjusted; LES1252882700Q
+          = median usual weekly earnings, women working full time, quarterly, current dollars,
+          seasonally adjusted; LES1252882800Q = median usual weekly real earnings, women working full
+          time, quarterly, constant 1982-84 dollars, seasonally adjusted; LEU0252883600Q = median
+          usual weekly earnings, White full-time workers, quarterly, current dollars, not seasonally
+          adjusted, from 2000; LEU0252884500Q = median usual weekly earnings, Black or African
+          American full-time workers, quarterly, current dollars, not seasonally adjusted, from 2000;
+          LEU0252885400Q = median usual weekly earnings, Hispanic or Latino full-time workers,
+          quarterly, current dollars, not seasonally adjusted, from 2000; LEU0252916700Q = median
+          usual weekly earnings, full-time workers 25 and over with less than a high school diploma,
+          quarterly, current dollars, not seasonally adjusted, from 2000; LEU0252917300Q = median
+          usual weekly earnings, full-time workers 25 and over, high school graduates with no college,
+          quarterly, current dollars, not seasonally adjusted, from 2000; LEU0254929400Q = median
+          usual weekly earnings, full-time workers 25 and over with some college or an associate
+          degree, quarterly, current dollars, not seasonally adjusted, from 2000; LEU0252918500Q =
+          median usual weekly earnings, full-time workers 25 and over with a bachelor's degree or
+          higher, quarterly, current dollars, not seasonally adjusted, from 2000.
       - *date_column
       - name: value
         type: double
@@ -8370,6 +8427,26 @@ partitionedTables:
         - "AWHMAN"       # Average weekly hours: manufacturing
         - "JTSJOL"       # JOLTS job openings, total nonfarm
         - "TEMPHELPS"    # Employees, temporary help services
+        # Typical-worker pay: BLS CPS usual weekly earnings via FRED
+        - "LES1252881500Q"
+        - "LES1252881600Q"
+        - "LEU0252881500Q"
+        - "LEU0252881600Q"
+        - "LEU0252911200Q"
+        - "LEU0252911300Q"
+        - "LEU0252911400Q"
+        - "LEU0252911500Q"
+        - "LES1252881800Q"
+        - "LES1252881900Q"
+        - "LES1252882700Q"
+        - "LES1252882800Q"
+        - "LEU0252883600Q"
+        - "LEU0252884500Q"
+        - "LEU0252885400Q"
+        - "LEU0252916700Q"
+        - "LEU0252917300Q"
+        - "LEU0254929400Q"
+        - "LEU0252918500Q"
         # Inflation
         - "CPIAUCSL"     # CPI all items (seasonally adjusted)
         - "CPIAUCNS"     # CPI all items, not seasonally adjusted (FRED id; was BLS CUUR0000SA0 — invalid in FRED)
@@ -8492,7 +8569,7 @@ partitionedTables:
         # stale marker, simply never dispatched. Raised to 1986, DCOILWTICO's own real
         # observation_start (confirmed live via FRED's /fred/series metadata endpoint), so
         # WTI crude - the series the reported gap was filed against - gets its actual
-        # history rather than 2026-only. The 60 curated series do not share one start date
+        # history rather than 2026-only. The curated series do not share one start date
         # (DFF reaches 1954, DTWEXBGS only 2006), and a year before a given series' own
         # start simply returns an empty observations array rather than erring (already
         # relied upon by this table's own current-year-in-progress handling above), so
