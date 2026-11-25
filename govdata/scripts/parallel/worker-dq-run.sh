@@ -99,6 +99,12 @@ fi
 export GOVDATA_DQ_BUCKET="${GOVDATA_DQ_BUCKET:-govdata-parquet-v1}"
 export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"
 
+# The DQ object store: the ETL, the teardown, the DQ queries and the result upload all address it.
+if [ -z "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
+  echo "ERROR: AWS_ENDPOINT_OVERRIDE is not set (see .env.dq.sample)" >&2
+  exit 1
+fi
+
 # ── One DQ run per (DQ bucket, schema) ──
 # --rebuild purges the WHOLE schema in the DQ bucket before re-running the ETL, so two DQ runs of the same
 # schema in the same bucket tear each other's data down mid-run (three `ag --rebuild` for one table were
@@ -111,6 +117,14 @@ export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v
 # --dry-run changes nothing outside this run directory: no teardown, no ETL, no result upload, no GitHub
 # issue. With --rebuild or --etl-resume it logs the plan and stops; without them it runs the read-only DQ
 # SQL. It therefore takes no claim and registers no writer guard.
+_DQ_CLAIM_HELD=false
+_DQ_GUARD_FILES=()
+_release_guards() {
+  if [ "${#_DQ_GUARD_FILES[@]}" -gt 0 ]; then rm -f "${_DQ_GUARD_FILES[@]}"; fi
+  if $_DQ_CLAIM_HELD; then release_schema_years_claim "$CLAIM_DIR" "$$"; fi
+}
+trap '_release_guards' EXIT   # replaced by _on_exit below, which also calls it
+
 if ! $DRY_RUN; then
   CLAIM_DIR="${GOVDATA_CLAIM_DIR:-$SCRIPT_DIR/runs/claims}"
   if ! claim_schema_years "$CLAIM_DIR" "$$" "s3://${GOVDATA_DQ_BUCKET}" "$SCHEMA" 0 9999 \
@@ -118,7 +132,6 @@ if ! $DRY_RUN; then
     exit 3
   fi
   _DQ_CLAIM_HELD=true
-  trap 'release_schema_years_claim "$CLAIM_DIR" "$$"' EXIT   # replaced by _on_exit below, which also releases
 fi
 
 WORKER_ID="worker-dq-${SCHEMA}-${MODE}"
@@ -144,9 +157,12 @@ if ! $DRY_RUN && [ "$GOVDATA_DQ_BUCKET" = "govdata-parquet-v1" ]; then
     echo "ERROR: $_conflict_msg" >&2
     exit 1
   fi
-  echo $$ > "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.pid"
-  touch "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.foreground"
-  trap 'rm -f "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.pid" "$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}.foreground"' EXIT
+  _guard="$_SCHEMA_YEAR_PID_DIR/${_SCHEMA_YEAR_GUARD_ID}"
+  # An .exit marker left by an earlier worker of this id would make the conflict check skip this guard.
+  rm -f "${_guard}.exit"
+  _DQ_GUARD_FILES=("${_guard}.pid" "${_guard}.foreground")
+  echo $$ > "${_guard}.pid"
+  touch "${_guard}.foreground"
 fi
 
 if [ ! -f "$DQ_SQL" ]; then
@@ -296,7 +312,7 @@ ${log_sections}" \
 _on_exit() {
   local code=$?
   [ -n "${TMP_DIR:-}" ] && rm -rf "$TMP_DIR"
-  if [ "${_DQ_CLAIM_HELD:-false}" = true ]; then release_schema_years_claim "$CLAIM_DIR" "$$"; fi
+  _release_guards
   if [ "$code" -ne 0 ] && ! $_SCRIPT_COMPLETE; then
     _file_script_error_issue "Script exited unexpectedly with code ${code} — see log: \`${LOG_FILE}\`"
   fi
@@ -338,11 +354,7 @@ _cf_reset_bucket() {
 if $DRY_RUN && { $REBUILD || $ETL_RESUME; }; then
   if $REBUILD; then
     log_info "$WORKER_ID: [dry-run] would create any missing DQ buckets: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}, and the raw cache bucket of GOVDATA_CACHE_DIR"
-    if [ -n "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
-      log_info "$WORKER_ID: [dry-run] would delete every object under s3://${GOVDATA_DQ_BUCKET}/${SCHEMA}/"
-    else
-      log_info "$WORKER_ID: [dry-run] would delete the Iceberg metadata of every table under s3://${GOVDATA_DQ_BUCKET}/${SCHEMA}/"
-    fi
+    log_info "$WORKER_ID: [dry-run] would delete every object under s3://${GOVDATA_DQ_BUCKET}/${SCHEMA}/"
     log_info "$WORKER_ID: [dry-run] would delete s3://${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/"
     log_info "$WORKER_ID: [dry-run] would delete the Postgres tracker rows of schema=${SCHEMA} for s3://${GOVDATA_DQ_BUCKET}"
   fi
@@ -370,9 +382,6 @@ if $REBUILD || $ETL_RESUME; then
 if $REBUILD; then
   log_info "$WORKER_ID: --rebuild: starting teardown for schema=$SCHEMA (bucket=$GOVDATA_DQ_BUCKET)"
 
-  # Delete only Iceberg metadata directories per table — avoids Class A per-object
-  # delete charges on parquet data files. Tables become invisible to Iceberg so the
-  # ETL re-creates them. Orphaned data files are cleaned up by Iceberg maintenance.
   # Ensure DQ buckets exist using the same S3 endpoint/credentials as the Java ETL.
   # Falls back through aws CLI → python3 SigV4 → rclone, in order of reliability.
   _ensure_bucket() {
@@ -422,21 +431,11 @@ PYEOF
   fi
   log_info "$WORKER_ID: --rebuild: DQ buckets verified: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}, ${_raw_cache_bucket:-local}"
   log_info "$WORKER_ID: --rebuild: removing Iceberg metadata for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
-  if [ -n "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
-    # MinIO: no Class A charges, so purge all data files for the schema.
-    # This prevents the ETL fast-path from reusing stale data written by
-    # an older engine (e.g. null expression: columns from pre-DuckDB evaluator).
-    log_info "$WORKER_ID: --rebuild: full data purge for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET} (MinIO)"
-    python3 "$(dirname "${BASH_SOURCE[0]}")/s3_purge_prefix.py" "${AWS_ENDPOINT_OVERRIDE}" \
-        "${GOVDATA_DQ_BUCKET}" "${SCHEMA}" "${DQ_S3_TIMEOUT_SECONDS:-30}" "${DQ_S3_ATTEMPTS:-3}"
-  else
-    # R2: metadata-only teardown avoids Class A charges on data files.
-    _dq_tables=$(rclone lsd "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" | awk '{print $NF}')
-    for table in $_dq_tables; do
-      log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
-      rclone purge "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata"
-    done
-  fi
+  # Purge all data files for the schema, so the ETL cannot reuse stale data written by
+  # an older engine (e.g. null expression: columns from pre-DuckDB evaluator).
+  log_info "$WORKER_ID: --rebuild: full data purge for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
+  python3 "$(dirname "${BASH_SOURCE[0]}")/s3_purge_prefix.py" "${AWS_ENDPOINT_OVERRIDE}" \
+      "${GOVDATA_DQ_BUCKET}" "${SCHEMA}" "${DQ_S3_TIMEOUT_SECONDS:-30}" "${DQ_S3_ATTEMPTS:-3}"
 fi  # end iceberg/data teardown (only when --rebuild)
 
   # DQ ETL is just the STANDARD daily/historical workers, parameterized by DQ variables:
@@ -547,8 +546,8 @@ DQ_EXIT=0
 {
   # DuckDB 1.5.2+ disables Iceberg version guessing by default; enable it for our internal tables.
   # DuckDB 1.5.2+ ignores SET s3_* for iceberg and auto-loads ~/.aws/credentials instead.
-  # CREATE SECRET overrides that and routes all S3/iceberg traffic to R2.
-  _raw_ep="${AWS_ENDPOINT_OVERRIDE:-https://21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com}"
+  # CREATE SECRET overrides that and routes all S3/iceberg traffic to AWS_ENDPOINT_OVERRIDE.
+  _raw_ep="$AWS_ENDPOINT_OVERRIDE"
   # DuckDB ENDPOINT needs host:port only (no scheme). Detect SSL from prefix.
   if [[ "$_raw_ep" == http://* ]]; then
     _r2_endpoint="${_raw_ep#http://}"
