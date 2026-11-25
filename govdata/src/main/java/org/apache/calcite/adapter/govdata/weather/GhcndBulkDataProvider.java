@@ -27,6 +27,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.temporal.IsoFields;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -35,6 +37,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -141,28 +144,26 @@ public class GhcndBulkDataProvider implements DataProvider {
 
     ensureStationsLoaded();
 
-    String gzPath = cachePath(bulkFileName(year, variables.get("refresh_month")));
+    String gzPath = cachePath(bulkFileName(year, PipelineClock.today()));
     downloadIfAbsent(gzPath, BULK_URL_TEMPLATE.replace("{year}", year));
 
     return new BulkIterator(streamSortedFilteredLines(gzPath, year), year);
   }
 
   /**
-   * Cache file name for a by_year file. NCEI keeps appending to the current year's file and
-   * revising the previous year's, and the cache is never overwritten, so those two years are
-   * keyed by the {@code refresh_month} dimension: a new month is a cache miss and a fresh
-   * download. Older years are final and keep a single name.
+   * Cache file name for a by_year file. The cache is never overwritten, and NCEI keeps appending
+   * to the current year's file and revising the previous year's, so those two years are stamped
+   * with the ISO week of {@code today}: a new week is a cache miss and a fresh download. An older
+   * year is cached under a {@code final} name, which is first written after the year has closed.
+   * The stamp comes from the clock and not from a model operand, so every run mode resolves the
+   * same file on the same day.
    */
-  static String bulkFileName(String year, String refreshMonth) {
-    boolean open = Integer.parseInt(year) >= PipelineClock.currentYear() - 1;
-    if (open) {
-      if (refreshMonth == null || refreshMonth.isEmpty()) {
-        throw new IllegalStateException(
-            "GhcndBulkDataProvider requires 'refresh_month' dimension for open year " + year);
-      }
-      return "ghcnd_bulk_" + year + "_m" + refreshMonth + ".csv.gz";
+  static String bulkFileName(String year, LocalDate today) {
+    if (Integer.parseInt(year) < today.getYear() - 1) {
+      return "ghcnd_bulk_" + year + "_final.csv.gz";
     }
-    return "ghcnd_bulk_" + year + ".csv.gz";
+    return String.format(Locale.ROOT, "ghcnd_bulk_%s_w%d-%02d.csv.gz", year,
+        today.get(IsoFields.WEEK_BASED_YEAR), today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
   }
 
   // ---------------------------------------------------------------------------

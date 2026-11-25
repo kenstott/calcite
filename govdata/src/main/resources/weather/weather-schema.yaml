@@ -902,9 +902,9 @@ partitionedTables:
   # ---------------------------------------------------------------------------
   - name: ghcnd_daily
     # NCEI appends to the current year's by_year file daily and revises the previous year's, so
-    # the two most recently published years are reopened each run. The provider keys their
-    # cached download by refresh_month, so each reopened year is re-downloaded once a month;
-    # the hash check skips the write when a year is unchanged.
+    # the two most recently published years are reopened each run. The provider stamps their
+    # cached download with the ISO week, so each is re-downloaded once a week; the hash check
+    # skips the write when a year is unchanged.
     lookbackPeriods: 2
     freshness:
       type: hash
@@ -936,9 +936,6 @@ partitionedTables:
       type:
         - ghcnd_daily
       year: *ghcnd_year_range
-      # Cache buster (see lookbackPeriods above). Deliberately a single value: a multi-value
-      # dimension with no partition column would multiply rows.
-      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     columns:
       - name: station_id
