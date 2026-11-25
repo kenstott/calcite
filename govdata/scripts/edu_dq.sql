@@ -224,7 +224,25 @@ SELECT 'edu', 'ipeds_admissions', 'all_null_cols',
   CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true))
 WHERE null_percentage = 100.0
-  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name',
+                          'satwr25', 'satwr75', 'actwr25', 'actwr75');
+
+-- ipeds_admissions writing percentiles: the NCES ADM files carry them for year 2014-2015 only,
+-- so each must be populated whenever those years are loaded and null in every later year.
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_admissions', 'writing_scores_year_scope',
+  CASE WHEN (n_early > 0 AND LEAST(s25, s75, a25, a75) = 0) OR n_late > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n_late AS VARCHAR), '0',
+  'rows<=2015=' || n_early || ' satwr25=' || s25 || ' satwr75=' || s75 || ' actwr25=' || a25
+    || ' actwr75=' || a75 || ' rows>2015 with a writing score=' || n_late
+FROM (SELECT
+  COUNT(*) FILTER (WHERE year <= 2015) AS n_early,
+  COUNT(satwr25) FILTER (WHERE year <= 2015) AS s25,
+  COUNT(satwr75) FILTER (WHERE year <= 2015) AS s75,
+  COUNT(actwr25) FILTER (WHERE year <= 2015) AS a25,
+  COUNT(actwr75) FILTER (WHERE year <= 2015) AS a75,
+  COUNT(*) FILTER (WHERE year > 2015 AND COALESCE(satwr25, satwr75, actwr25, actwr75) IS NOT NULL) AS n_late
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true));
 
 INSERT INTO dq_results
 SELECT 'edu', 'college_scorecard', 'all_null_cols',
