@@ -152,6 +152,8 @@ run_ungrouped_lands_tables() {
 
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
+require_requested_tables_exist lands || exit 1
+
 case "$MODE" in
 
   once)
