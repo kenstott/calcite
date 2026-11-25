@@ -65,7 +65,7 @@ class CollegeScorecardTransformerTest {
   @Test void programRowsComeFromTheRequestedYear() throws Exception {
     String response = "{\"results\":[{\"2018.programs.cip_4_digit\":[{\"unit_id\":100663,"
         + "\"code\":\"0502\",\"credential\":{\"level\":3},"
-        + "\"counts\":{\"ipeds_awards1\":5}}]},{\"2018.programs.cip_4_digit\":null}]}";
+        + "\"counts\":{\"ipeds_awards1\":5}}]},{\"2018.programs.cip_4_digit\":null},{}]}";
 
     JsonNode rows =
         parse(new CollegeScorecardProgramsResponseTransformer().transform(response, YEAR_2018));

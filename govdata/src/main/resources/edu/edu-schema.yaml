@@ -2607,9 +2607,6 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
-        # Cache namespace for the year-prefixed field list; the cache path does not include
-        # request parameters.
-        sharedKey: college_scorecard_data_year
       incremental:
         yearParam: "year"
         yearRange:
@@ -2623,6 +2620,9 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2018
+      # Cache key only. The publisher revises every year's data file with each annual release,
+      # and the raw cache path is built from the dimension values.
+      release: ["${GOVDATA_CURRENT_YEAR}"]
 
     materialize:
       enabled: true
@@ -2757,9 +2757,6 @@ partitionedTables:
         retryOn: [429, 500, 503]
       rawCache:
         enabled: true
-        # Cache namespace for the year-prefixed field list; the cache path does not include
-        # request parameters.
-        sharedKey: college_scorecard_programs_data_year
       incremental:
         yearParam: "year"
         yearRange:
@@ -2773,6 +2770,9 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2018
+      # Cache key only. The publisher revises every year's data file with each annual release,
+      # and the raw cache path is built from the dimension values.
+      release: ["${GOVDATA_CURRENT_YEAR}"]
 
     materialize:
       enabled: true

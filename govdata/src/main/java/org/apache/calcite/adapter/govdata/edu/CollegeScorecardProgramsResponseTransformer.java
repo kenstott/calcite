@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Iterator;
+
 /**
  * Transforms College Scorecard program-level (CIP 4-digit) responses.
  *
@@ -66,11 +68,17 @@ public class CollegeScorecardProgramsResponseTransformer implements ResponseTran
           continue;
         }
 
-        // The programs array is under the flat dot-notation key
-        if (!institution.has(programsKey)) {
-          throw new IllegalStateException("Scorecard Programs: response lacks field " + programsKey);
+        // The programs array is under the flat dot-notation key. The API omits the key when
+        // the year's data file has no field-of-study data, so only another year's key is an error.
+        Iterator<String> keys = institution.fieldNames();
+        while (keys.hasNext()) {
+          String key = keys.next();
+          if (key.endsWith(PROGRAMS_SUFFIX) && !key.equals(programsKey)) {
+            throw new IllegalStateException("Scorecard Programs: response holds " + key
+                + " where " + programsKey + " was requested");
+          }
         }
-        JsonNode programs = institution.get(programsKey);
+        JsonNode programs = institution.path(programsKey);
         if (!programs.isArray() || programs.size() == 0) {
           continue;
         }
