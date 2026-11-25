@@ -892,10 +892,19 @@
       "kind": "factual",
       "test": "True if the released search-warrant records (inventory or return) list 17 items seized from Rep. Omar's home, including phones, notebooks, a Somali-language children's book and a camera. False if the inventory lists a different number of items or none of those items. Cannot be determined if the inventory was not released or is redacted on the point.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "The court filings unsealed on Nov. 23 are heavily redacted and, as AP describes them, include no inventory of what was seized; the 67-page search warrant affidavit remains sealed. The 17-item count rests on Omar's own account and is neither confirmed nor contradicted by a released record.",
+      "evidence": [
+        {
+          "label": "AP via PBS NewsHour on the unsealed records (Nov. 24, 2026)",
+          "url": "https://www.pbs.org/newshour/politics/records-show-how-doj-judge-debated-constitutional-implications-of-searching-rep-ilhan-omars-home"
+        },
+        {
+          "label": "AP via PBS NewsHour, Omar's account of the search",
+          "url": "https://www.pbs.org/newshour/politics/rep-ilhan-omar-says-she-will-move-out-of-her-washington-dc-home-after-federal-search"
+        }
+      ],
+      "check_run": "q204/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
