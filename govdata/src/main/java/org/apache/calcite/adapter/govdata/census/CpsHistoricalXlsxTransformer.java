@@ -130,7 +130,7 @@ public abstract class CpsHistoricalXlsxTransformer implements ResponseTransforme
     void visit(Row row, ObjectNode node);
   }
 
-  private static byte[] download(String url) throws IOException {
+  static byte[] download(String url) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
