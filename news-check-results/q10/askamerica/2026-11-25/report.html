@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The CIDRAP article's claims about newborn hepatitis B vaccination rates, the ACIP vote and the Truveta study are somewhat biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The CIDRAP article's claims about newborn hepatitis B vaccination rates, the ACIP vote and the Truveta study are somewhat biased and mostly accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://www.cidrap.umn.edu/public-health-alerts/hepatitis-b-vaccination-rates-us-newborns-falling-public-health-alerts-report">https://www.cidrap.umn.edu/public-health-alerts/hepatitis-b-vaccination-rates-us-newborns-falling-public-health-alerts-report</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">US births (warehouse) used to check the 3.6M denominator</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">US live births, CDC WONDER</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="62" y1="276" x2="390" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="54" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="62" y1="221" x2="390" y2="221" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="54" y="225" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1M</text>
+      <line class="grid" x1="62" y1="166" x2="390" y2="166" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="54" y="170" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2M</text>
+      <line class="grid" x1="62" y1="111" x2="390" y2="111" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="54" y="115" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3M</text>
+      <line class="grid" x1="62" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="54" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4M</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="62" y1="56" x2="62" y2="276" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="62" y1="276" x2="390" y2="276" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="166" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 166)">Births</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2018" class="tick" x="85.43" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="132.29" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="179.14" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="226" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="272.86" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="319.71" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="366.57" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+    </g>
+    <g id="p1-series-births" class="series">
+      <g class="hover">
+        <title>2018 — Births: 3,791,712</title>
+        <rect id="p1-mark-births-2018" class="bar" x="70.43" y="67.46" width="28.99" height="208.54" fill="#2563eb"/>
+        <rect class="hit" x="70.43" y="56" width="28.99" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2019 — Births: 3,747,540</title>
+        <rect id="p1-mark-births-2019" class="bar" x="117.29" y="69.89" width="28.99" height="206.11" fill="#2563eb"/>
+        <rect class="hit" x="117.29" y="56" width="28.99" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2020 — Births: 3,613,647</title>
+        <rect id="p1-mark-births-2020" class="bar" x="164.15" y="77.25" width="28.99" height="198.75" fill="#2563eb"/>
+        <rect class="hit" x="164.15" y="56" width="28.99" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Births: 3,664,292</title>
+        <rect id="p1-mark-births-2021" class="bar" x="211.01" y="74.46" width="28.99" height="201.54" fill="#2563eb"/>
+        <rect class="hit" x="211.01" y="56" width="28.99" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Births: 3,667,758</title>
+        <rect id="p1-mark-births-2022" class="bar" x="257.86" y="74.27" width="28.99" height="201.73" fill="#2563eb"/>
+        <rect class="hit" x="257.86" y="56" width="28.99" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Births: 3,596,017</title>
+        <rect id="p1-mark-births-2023" class="bar" x="304.72" y="78.22" width="28.99" height="197.78" fill="#2563eb"/>
+        <rect class="hit" x="304.72" y="56" width="28.99" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Births: 3,628,934</title>
+        <rect id="p1-mark-births-2024" class="bar" x="351.58" y="76.41" width="28.99" height="199.59" fill="#2563eb"/>
+        <rect class="hit" x="351.58" y="56" width="28.99" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62269/a/74777314a76d944c0b12d403b8282c0a.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: 1 Pinocchio. Nearly every number matches the NEJM Evidence paper (read in full). Flaws: HBsAg called an antibody (it is an antigen); the lede implies the decline followed the ACIP downgrade though the paper says it began in mid-2023 and predated the vote; a single EHR sample (Truveta) is presented as the national rate; 'median' where the paper says 'mean'. Warehouse births (about 3.6M per year) confirm the study's denominator. The NEJM Evidence editorial and index pages returned HTTP 403; the Vaccine Integrity Project report (Dec 2, 2025) loaded and only supports that it exists and is CIDRAP-led.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 88/100 — mostly honest</strong> &middot; <strong>Bias +33/100 — somewhat biased</strong></p><p>13 claims graded, 0 not gradable, 4 fell short. In this article only.</p></div>
+<p><strong>9</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>1</strong> mostly false &middot; <strong>13</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>1</td><td>The rate of babies receiving a dose of hepatitis B vaccine at birth has fallen from 80.0% from 2020 to 2022 to just 65.6% this year after federal advisers downgraded the preventive measure last year</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-false"><td>2</td><td>of which 0.18% were positive for HBV antibodies (HBsAg)</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Almost a year ago, the Advisory Committee on Immunization Practices voted to replace a universal recommendation for the hepatitis B vaccine at birth—which had been in place since 1991—with individual decision-making for infants of mothers who test negative for HBV without presenting data to support the decision.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/anti-science/cdc-advisers-drop-decades-old-universal-hepatitis-b-birth-dose-recommendation-suggest">CIDRAP ACIP vote</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>Newborn vaccination rates were 76.4% in 2018 and 79.8% in 2022 (with a median of 80.0% from 2020 to 2022), then began to decline in mid-2023, falling to 65.6% in June 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>3</td><td>They analyzed data on 1.3 million infants born to 1.1 million women. Of the pregnancies, 90.5% had evidence of an HBV test</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>4</td><td>The proportion of mothers with no test recorded during pregnancy was 15.6% in 2018 and 7.6% in 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>5</td><td>Over the study period, 1,016,149 newborns (75.9%) received hepatitis B vaccination within a day of birth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>6</td><td>Newborn vaccination rates were 96.9% over the study period in babies whose mothers tested positive for HBV infection, compared with 75.9% among mothers who tested negative, 76.8% among mothers who had an unknown status, and 75.4% among those with no evidence of a test.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>7</td><td>Hepatitis B vaccination rates were 97% to 98% for infants born to mothers who tested positive for HBsAg during pregnancy from 2018 through 2025, but that rate dropped to 93.9% from January through June 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>8</td><td>about 360,000 infants each year are born to mothers who aren't screen for the virus</td><td><strong>true</strong></td><td>Checked against: <code>health.cdc_wonder_natality</code>; <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>9</td><td>more than 640 infants a year are born to mothers with a hepatitis B virus (HBV) infection who are not tested</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>11</td><td>The decision came on the heels of a report by the Vaccine Integrity Project (VIP) demonstrating the safety, effectiveness, and public health benefits of the birth dose. The VIP is led by the University of Minnesota's Center for Infectious Disease Research and Policy</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/searchable-download/Universal%20Hepatitis%20B%20Vaccination%20at%20Birth%202Dec2025.pdf">VIP report PDF</a></td></tr><tr class="verdict-true"><td>12</td><td>That schedule reduced the number of recommended routine vaccines from 17 to 11, though a federal judge in March blocked the changes.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/childhood-vaccines/hhs-announces-unprecedented-overhaul-us-childhood-vaccine-schedule">CIDRAP HHS</a>; <a href="https://www.cidrap.umn.edu/childhood-vaccines/federal-judge-blocks-kennedy-s-changes-childhood-vaccine-policy">CIDRAP judge</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>13</td><td>Newborn vaccination rates were 76.4% in 2018 and 79.8% in 2022 (with a median of 80.0% from 2020 to 2022), then began to decline in mid-2023, falling to 65.6% in June 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>12</td><td>That schedule reduced the number of recommended routine vaccines from 17 to 11, though a federal judge in March blocked the changes.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/childhood-vaccines/hhs-announces-unprecedented-overhaul-us-childhood-vaccine-schedule">CIDRAP HHS</a>; <a href="https://www.cidrap.umn.edu/childhood-vaccines/federal-judge-blocks-kennedy-s-changes-childhood-vaccine-policy">CIDRAP judge</a></td></tr><tr class="verdict-true"><td>11</td><td>The decision came on the heels of a report by the Vaccine Integrity Project (VIP) demonstrating the safety, effectiveness, and public health benefits of the birth dose. The VIP is led by the University of Minnesota's Center for Infectious Disease Research and Policy</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/searchable-download/Universal%20Hepatitis%20B%20Vaccination%20at%20Birth%202Dec2025.pdf">VIP report PDF</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Almost a year ago, the Advisory Committee on Immunization Practices voted to replace a universal recommendation for the hepatitis B vaccine at birth—which had been in place since 1991—with individual decision-making for infants of mothers who test negative for HBV without presenting data to support the decision.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/anti-science/cdc-advisers-drop-decades-old-universal-hepatitis-b-birth-dose-recommendation-suggest">CIDRAP ACIP vote</a></td></tr><tr class="verdict-true"><td>9</td><td>more than 640 infants a year are born to mothers with a hepatitis B virus (HBV) infection who are not tested</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>8</td><td>about 360,000 infants each year are born to mothers who aren't screen for the virus</td><td><strong>true</strong></td><td>Checked against: <code>health.cdc_wonder_natality</code>; <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>7</td><td>Hepatitis B vaccination rates were 97% to 98% for infants born to mothers who tested positive for HBsAg during pregnancy from 2018 through 2025, but that rate dropped to 93.9% from January through June 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>6</td><td>Newborn vaccination rates were 96.9% over the study period in babies whose mothers tested positive for HBV infection, compared with 75.9% among mothers who tested negative, 76.8% among mothers who had an unknown status, and 75.4% among those with no evidence of a test.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>5</td><td>Over the study period, 1,016,149 newborns (75.9%) received hepatitis B vaccination within a day of birth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>4</td><td>The proportion of mothers with no test recorded during pregnancy was 15.6% in 2018 and 7.6% in 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>3</td><td>They analyzed data on 1.3 million infants born to 1.1 million women. Of the pregnancies, 90.5% had evidence of an HBV test</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-false"><td>2</td><td>of which 0.18% were positive for HBV antibodies (HBsAg)</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The rate of babies receiving a dose of hepatitis B vaccine at birth has fallen from 80.0% from 2020 to 2022 to just 65.6% this year after federal advisers downgraded the preventive measure last year</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>8</td><td>about 360,000 infants each year are born to mothers who aren't screen for the virus</td><td><strong>true</strong></td><td>Checked against: <code>health.cdc_wonder_natality</code>; <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Almost a year ago, the Advisory Committee on Immunization Practices voted to replace a universal recommendation for the hepatitis B vaccine at birth—which had been in place since 1991—with individual decision-making for infants of mothers who test negative for HBV without presenting data to support the decision.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/anti-science/cdc-advisers-drop-decades-old-universal-hepatitis-b-birth-dose-recommendation-suggest">CIDRAP ACIP vote</a></td></tr><tr class="verdict-true"><td>7</td><td>Hepatitis B vaccination rates were 97% to 98% for infants born to mothers who tested positive for HBsAg during pregnancy from 2018 through 2025, but that rate dropped to 93.9% from January through June 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>9</td><td>more than 640 infants a year are born to mothers with a hepatitis B virus (HBV) infection who are not tested</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>Newborn vaccination rates were 76.4% in 2018 and 79.8% in 2022 (with a median of 80.0% from 2020 to 2022), then began to decline in mid-2023, falling to 65.6% in June 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>6</td><td>Newborn vaccination rates were 96.9% over the study period in babies whose mothers tested positive for HBV infection, compared with 75.9% among mothers who tested negative, 76.8% among mothers who had an unknown status, and 75.4% among those with no evidence of a test.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-false"><td>2</td><td>of which 0.18% were positive for HBV antibodies (HBsAg)</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>5</td><td>Over the study period, 1,016,149 newborns (75.9%) received hepatitis B vaccination within a day of birth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>12</td><td>That schedule reduced the number of recommended routine vaccines from 17 to 11, though a federal judge in March blocked the changes.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/childhood-vaccines/hhs-announces-unprecedented-overhaul-us-childhood-vaccine-schedule">CIDRAP HHS</a>; <a href="https://www.cidrap.umn.edu/childhood-vaccines/federal-judge-blocks-kennedy-s-changes-childhood-vaccine-policy">CIDRAP judge</a></td></tr><tr class="verdict-true"><td>11</td><td>The decision came on the heels of a report by the Vaccine Integrity Project (VIP) demonstrating the safety, effectiveness, and public health benefits of the birth dose. The VIP is led by the University of Minnesota's Center for Infectious Disease Research and Policy</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/searchable-download/Universal%20Hepatitis%20B%20Vaccination%20at%20Birth%202Dec2025.pdf">VIP report PDF</a></td></tr><tr class="verdict-true"><td>4</td><td>The proportion of mothers with no test recorded during pregnancy was 15.6% in 2018 and 7.6% in 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The rate of babies receiving a dose of hepatitis B vaccine at birth has fallen from 80.0% from 2020 to 2022 to just 65.6% this year after federal advisers downgraded the preventive measure last year</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>3</td><td>They analyzed data on 1.3 million infants born to 1.1 million women. Of the pregnancies, 90.5% had evidence of an HBV test</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>2</td><td>of which 0.18% were positive for HBV antibodies (HBsAg)</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Almost a year ago, the Advisory Committee on Immunization Practices voted to replace a universal recommendation for the hepatitis B vaccine at birth—which had been in place since 1991—with individual decision-making for infants of mothers who test negative for HBV without presenting data to support the decision.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/anti-science/cdc-advisers-drop-decades-old-universal-hepatitis-b-birth-dose-recommendation-suggest">CIDRAP ACIP vote</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>Newborn vaccination rates were 76.4% in 2018 and 79.8% in 2022 (with a median of 80.0% from 2020 to 2022), then began to decline in mid-2023, falling to 65.6% in June 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The rate of babies receiving a dose of hepatitis B vaccine at birth has fallen from 80.0% from 2020 to 2022 to just 65.6% this year after federal advisers downgraded the preventive measure last year</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>3</td><td>They analyzed data on 1.3 million infants born to 1.1 million women. Of the pregnancies, 90.5% had evidence of an HBV test</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>4</td><td>The proportion of mothers with no test recorded during pregnancy was 15.6% in 2018 and 7.6% in 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>5</td><td>Over the study period, 1,016,149 newborns (75.9%) received hepatitis B vaccination within a day of birth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>6</td><td>Newborn vaccination rates were 96.9% over the study period in babies whose mothers tested positive for HBV infection, compared with 75.9% among mothers who tested negative, 76.8% among mothers who had an unknown status, and 75.4% among those with no evidence of a test.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>7</td><td>Hepatitis B vaccination rates were 97% to 98% for infants born to mothers who tested positive for HBsAg during pregnancy from 2018 through 2025, but that rate dropped to 93.9% from January through June 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>8</td><td>about 360,000 infants each year are born to mothers who aren't screen for the virus</td><td><strong>true</strong></td><td>Checked against: <code>health.cdc_wonder_natality</code>; <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>9</td><td>more than 640 infants a year are born to mothers with a hepatitis B virus (HBV) infection who are not tested</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>11</td><td>The decision came on the heels of a report by the Vaccine Integrity Project (VIP) demonstrating the safety, effectiveness, and public health benefits of the birth dose. The VIP is led by the University of Minnesota's Center for Infectious Disease Research and Policy</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/searchable-download/Universal%20Hepatitis%20B%20Vaccination%20at%20Birth%202Dec2025.pdf">VIP report PDF</a></td></tr><tr class="verdict-true"><td>12</td><td>That schedule reduced the number of recommended routine vaccines from 17 to 11, though a federal judge in March blocked the changes.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/childhood-vaccines/hhs-announces-unprecedented-overhaul-us-childhood-vaccine-schedule">CIDRAP HHS</a>; <a href="https://www.cidrap.umn.edu/childhood-vaccines/federal-judge-blocks-kennedy-s-changes-childhood-vaccine-policy">CIDRAP judge</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>10</td><td>Almost a year ago, the Advisory Committee on Immunization Practices voted to replace a universal recommendation for the hepatitis B vaccine at birth—which had been in place since 1991—with individual decision-making for infants of mothers who test negative for HBV without presenting data to support the decision.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/anti-science/cdc-advisers-drop-decades-old-universal-hepatitis-b-birth-dose-recommendation-suggest">CIDRAP ACIP vote</a></td></tr><tr class="verdict-true"><td>12</td><td>That schedule reduced the number of recommended routine vaccines from 17 to 11, though a federal judge in March blocked the changes.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/childhood-vaccines/hhs-announces-unprecedented-overhaul-us-childhood-vaccine-schedule">CIDRAP HHS</a>; <a href="https://www.cidrap.umn.edu/childhood-vaccines/federal-judge-blocks-kennedy-s-changes-childhood-vaccine-policy">CIDRAP judge</a></td></tr><tr class="verdict-true"><td>8</td><td>about 360,000 infants each year are born to mothers who aren't screen for the virus</td><td><strong>true</strong></td><td>Checked against: <code>health.cdc_wonder_natality</code>; <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>The rate of babies receiving a dose of hepatitis B vaccine at birth has fallen from 80.0% from 2020 to 2022 to just 65.6% this year after federal advisers downgraded the preventive measure last year</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-false"><td>2</td><td>of which 0.18% were positive for HBV antibodies (HBsAg)</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>Newborn vaccination rates were 76.4% in 2018 and 79.8% in 2022 (with a median of 80.0% from 2020 to 2022), then began to decline in mid-2023, falling to 65.6% in June 2026.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>3</td><td>They analyzed data on 1.3 million infants born to 1.1 million women. Of the pregnancies, 90.5% had evidence of an HBV test</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>4</td><td>The proportion of mothers with no test recorded during pregnancy was 15.6% in 2018 and 7.6% in 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>5</td><td>Over the study period, 1,016,149 newborns (75.9%) received hepatitis B vaccination within a day of birth.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>6</td><td>Newborn vaccination rates were 96.9% over the study period in babies whose mothers tested positive for HBV infection, compared with 75.9% among mothers who tested negative, 76.8% among mothers who had an unknown status, and 75.4% among those with no evidence of a test.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>7</td><td>Hepatitis B vaccination rates were 97% to 98% for infants born to mothers who tested positive for HBsAg during pregnancy from 2018 through 2025, but that rate dropped to 93.9% from January through June 2026.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>9</td><td>more than 640 infants a year are born to mothers with a hepatitis B virus (HBV) infection who are not tested</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></td></tr><tr class="verdict-true"><td>11</td><td>The decision came on the heels of a report by the Vaccine Integrity Project (VIP) demonstrating the safety, effectiveness, and public health benefits of the birth dose. The VIP is led by the University of Minnesota's Center for Infectious Disease Research and Policy</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cidrap.umn.edu/sites/default/files/searchable-download/Universal%20Hepatitis%20B%20Vaccination%20at%20Birth%202Dec2025.pdf">VIP report PDF</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-mostly-true"><summary>#1 &middot; <strong>mostly true</strong> &mdash; The rate of babies receiving a dose of hepatitis B vaccine at birth has fallen from 80.0% from 2020 to 2022 to just 65.6% this year after federal advisers downgraded the preventive measure last year</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>65.6% 2026; 79.8% 2022<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says the fall came 'after' the downgrade; the paper says the decline began in mid-2023 and predated the vote, and the sample is Truveta EHR, not national.</dd>
+<dt>Windows tested</dt><dd>2020-22 mean: 80.0%; 2026 Jan-Jun: 65.6%</dd>
+<dt>Warehouse searched for</dt><dd>hepatitis B birth dose vaccination newborns</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#2 &middot; <strong>mostly false</strong> &mdash; of which 0.18% were positive for HBV antibodies (HBsAg)</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>paper: 0.18% HBsAg-positive<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says antibodies; the paper says HBsAg-positive, a surface antigen. The 0.18% figure is right.</dd>
+<dt>Evidence found and set aside because</dt><dd>The 0.18% passage in the paper confirms the figure but calls the marker HBsAg-positive, not antibody-positive, so the figure matches while the label is wrong.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; They analyzed data on 1.3 million infants born to 1.1 million women. Of the pregnancies, 90.5% had evidence of an HBV test</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>1,338,961 infants; 1,075,767 mothers; 90.5%<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The proportion of mothers with no test recorded during pregnancy was 15.6% in 2018 and 7.6% in 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>15.6% and 7.6%<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Over the study period, 1,016,149 newborns (75.9%) received hepatitis B vaccination within a day of birth.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>1,016,149 of 1,338,961 = 75.9%<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Newborn vaccination rates were 96.9% over the study period in babies whose mothers tested positive for HBV infection, compared with 75.9% among mothers who tested negative, 76.8% among mothers who had an unknown status, and 75.4% among those with no evidence of a test.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>same figures in paper<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Hepatitis B vaccination rates were 97% to 98% for infants born to mothers who tested positive for HBsAg during pregnancy from 2018 through 2025, but that rate dropped to 93.9% from January through June 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>paper: 97-98% through 2025, 93.9% Jan-Jun 2026<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; about 360,000 infants each year are born to mothers who aren't screen for the virus</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>births 2023 3,596,017; 2024 3,628,934 <code>health.cdc_wonder_natality</code></dd>
+<dt>Independent evidence</dt><dd>authors' estimate: 10% x 3.6M<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+<dt>Why</dt><dd>This is the authors' estimate (applying a 90% screening rate to about 3.6M births), and the arithmetic matches. 'No evidence of screening' in EHR is not proof of no screening.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; more than 640 infants a year are born to mothers with a hepatitis B virus (HBV) infection who are not tested</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>0.18% x 360,000 = 648 (authors' estimate)<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+<dt>Why</dt><dd>Estimate that matches the paper's arithmetic.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; Almost a year ago, the Advisory Committee on Immunization Practices voted to replace a universal recommendation for the hepatitis B vaccine at birth—which had been in place since 1991—with individual decision-making for infants of mothers who test negative for HBV without presenting data to support the decision.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>vote Dec 5 2025, 8-3<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/anti-science/cdc-advisers-drop-decades-old-universal-hepatitis-b-birth-dose-recommendation-suggest">CIDRAP ACIP vote</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says no data was presented to support the decision; CIDRAP's own vote story says the meeting included risk-benefit discussion and only quotes Hibbeln saying no science was presented on the before-or-after-two-months timing point.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; The decision came on the heels of a report by the Vaccine Integrity Project (VIP) demonstrating the safety, effectiveness, and public health benefits of the birth dose. The VIP is led by the University of Minnesota's Center for Infectious Disease Research and Policy</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>VIP report dated Dec 2, 2025 (3 days before the vote); supported by CIDRAP unrestricted gift; authors from UMN-CIDRAP<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/searchable-download/Universal%20Hepatitis%20B%20Vaccination%20at%20Birth%202Dec2025.pdf">VIP report PDF</a></li></ul></dd>
+<dt>Why</dt><dd>Report exists and is dated before the vote; the article discloses the CIDRAP link. 'Demonstrating' is the report's own conclusion.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; That schedule reduced the number of recommended routine vaccines from 17 to 11, though a federal judge in March blocked the changes.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>17 to 11; district court stay March 2026<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/childhood-vaccines/hhs-announces-unprecedented-overhaul-us-childhood-vaccine-schedule">CIDRAP HHS</a></li><li><a href="https://www.cidrap.umn.edu/childhood-vaccines/federal-judge-blocks-kennedy-s-changes-childhood-vaccine-policy">CIDRAP judge</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#13 &middot; <strong>mostly true</strong> &mdash; Newborn vaccination rates were 76.4% in 2018 and 79.8% in 2022 (with a median of 80.0% from 2020 to 2022), then began to decline in mid-2023, falling to 65.6% in June 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>paper figures; Table 1 implies 77.9% 2023, 75.4% 2024, 69.0% 2025<ul class="claim-sources"><li><a href="https://www.cidrap.umn.edu/sites/default/files/page-files/PHA-Hepatitis%20B%20birth%20dose112426.pdf">NEJM Evidence PHA PDF</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The article says 'median' of 80.0%; the paper says 'mean'.</dd>
+<dt>Windows tested</dt><dd>2023: 77.9%; 2025: 69.0%</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>1991</strong> &mdash; date, graded inside claim 10</li><li><strong>90%</strong> &mdash; the authors' rounded 90.5% screening rate (graded true in claim 3), used as the input to the 360,000 estimate graded in claim 8</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 4 rows — 210 ms</summary><pre><code>select table_schema, table_name from information_schema.tables where table_name ilike '%birth%' or table_name ilike '%natality%' or table_name ilike '%vaccin%' fetch first 40 rows only</code></pre></details>
+<details class="sqltoggle"><summary>query — 9 rows — 498 ms</summary><pre><code>select &quot;year&quot;, births from health.cdc_wonder_natality order by &quot;year&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

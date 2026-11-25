@@ -2479,5 +2479,145 @@
       "everyman"
     ],
     "note": "surge 276,572 (+13.25%) from SSA CSV, article's 267,000 a transposition; $3T misattributed to trustees; filed #1477 SSA monthly applications; shape ok"
+  },
+  {
+    "topic_slug": "kcur-kansas-city-4th-warmest-fall-electric-bills",
+    "headline": "KCUR: Kansas City had its 4th-warmest fall ever, making electricity bills higher than usual",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q1/askamerica/2026-11-25",
+    "pinocchios": 1,
+    "source_url": "https://www.kcur.org/environment-agriculture/2026-11-16/kansas-city-4th-warmest-fall-ever-electricity-bills-higher-climate",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "first pass [expert, askamerica, everyman]; recipe fact-check item 8 season-to-date rank; rerun ranked askamerica first"
+  },
+  {
+    "topic_slug": "kera-texas-public-school-enrollment-record-decline",
+    "headline": "KERA (via HPPR): Texas public school districts suffer historic enrollment decline",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q2/askamerica/2026-11-25",
+    "pinocchios": 0,
+    "source_url": "https://www.hppr.org/hppr-news/2026-11-19/texas-public-school-districts-suffer-historic-enrollment-decline",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica first; CCD figures verified live"
+  },
+  {
+    "topic_slug": "newsweek-realtor-adults-living-with-parents-2025",
+    "headline": "Newsweek: Map Shows Where Most Adults Are Living With Their Parents (Realtor.com)",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q3/askamerica/2026-11-25",
+    "pinocchios": 3,
+    "source_url": "https://www.newsweek.com/map-where-most-adults-living-with-parents-12761153",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "askamerica first; co-residence gap is #1491"
+  },
+  {
+    "topic_slug": "wfmz-pa-unemployment-3-5-record-low-shapiro",
+    "headline": "WFMZ: PA unemployment rate drops to 3.5%, matching all-time record low under Gov. Shapiro",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q4/askamerica/2026-11-25",
+    "pinocchios": 0,
+    "source_url": "https://www.wfmz.com/news/area/pennsylvania/pa-unemployment-rate-drops-to-3-5-matching-all-time-record-low-under-gov-shapiro/article_4a88f95c-fc45-48d9-bf40-f0304e57c35f.html",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica first; SA state payroll gap is #1492"
+  },
+  {
+    "topic_slug": "farmpolicynews-thailand-trade-deal-2-6b-ag-purchases",
+    "headline": "Farm Policy News: Thailand trade deal will include $2.6 billion in US ag purchases, pork market access, Trump says",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q5/askamerica/2026-11-25",
+    "pinocchios": 1,
+    "source_url": "https://farmpolicynews.illinois.edu/2026/11/thailand-trade-deal-will-include-2-6-billion-in-us-ag-purchases-pork-market-access-trump-says/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica first; gaps #1493 (FAS GATS) and #1453 (2026 trade months) existing"
+  },
+  {
+    "topic_slug": "fortune-crfb-johnson-social-security-bill-190-trillion",
+    "headline": "Fortune: Ron Johnson's Social Security bill would borrow $190 trillion, CRFB says",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q6/askamerica/2026-11-25",
+    "pinocchios": 0,
+    "source_url": "https://fortune.com/2026/11/19/social-security-22-percent-cut-ron-johnson-stop-scaring-seniors-act-borrow-190-trillion-crfb/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica first; found and filed #1495 (SSA county table missing MD/MO/NV/VA counties and DC)"
+  },
+  {
+    "topic_slug": "kffhealthnews-single-payer-costs-cea-47-trillion-oregon",
+    "headline": "KFF Health News: single-payer cost claims (CEA $47T, Oregon plan) after the midterms",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q7/askamerica/2026-11-25",
+    "pinocchios": 1,
+    "source_url": "https://kffhealthnews.org/health-industry/universal-healthcare-single-payer-medicare-for-all-costs-oregon-midterm-election/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica first; CEA open item checked against the CEA PDF"
+  },
+  {
+    "topic_slug": "breitbart-vance-snap-fraud-6-billion-task-force",
+    "headline": "Breitbart: JD Vance task force has stopped over $6 billion in food stamp fraud",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q8/askamerica/2026-11-25",
+    "pinocchios": 0,
+    "source_url": "https://www.breitbart.com/crime/2026/11/20/jd-vance-task-force-has-stopped-over-6-billion-in-food-stamp-fraud/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica first; shape fixed by resume (Vance subject_claims); SNAP totals verified live"
+  },
+  {
+    "topic_slug": "trump-doj-speech-nov-23-2026-dc-crime-84-percent",
+    "headline": "Trump speech at the Justice Department, Nov. 23, 2026 (transcript): D.C. crime down 84%, 3,000 fewer murders",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q9/askamerica/2026-11-25",
+    "pinocchios": 3,
+    "source_url": "https://tommyxtopher.substack.com/p/trump-doj-speech-11-23-2026-full",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "transcript; engine has no piece rating (all subject_claims), 3 = agent grade of speaker claims; 17,152->14,008 murders verified live"
+  },
+  {
+    "topic_slug": "cidrap-truveta-hepatitis-b-birth-dose-falling",
+    "headline": "CIDRAP: Hepatitis B vaccination rates in US newborns falling (Truveta report)",
+    "checked_date": "2026-11-25",
+    "run_subpath": "q10/askamerica/2026-11-25",
+    "pinocchios": 1,
+    "source_url": "https://www.cidrap.umn.edu/public-health-alerts/hepatitis-b-vaccination-rates-us-newborns-falling-public-health-alerts-report",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica first; filed #1499 NIS-Child coverage gap"
   }
 ]
