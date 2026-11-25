@@ -3291,7 +3291,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 50519854
-      checkedAt: "2026-11-24T04:43:39Z"
+      checkedAt: "2026-11-25T05:11:02Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -4302,7 +4302,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 5326586
-      checkedAt: "2026-11-24T04:43:46Z"
+      checkedAt: "2026-11-25T05:11:10Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -8872,7 +8872,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 49344
-      checkedAt: "2026-11-24T04:43:48Z"
+      checkedAt: "2026-11-25T05:11:12Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9386,7 +9386,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 13445
-      checkedAt: "2026-11-24T04:43:49Z"
+      checkedAt: "2026-11-25T05:11:15Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9540,7 +9540,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 7412
-      checkedAt: "2026-11-24T04:43:50Z"
+      checkedAt: "2026-11-25T05:11:16Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9688,7 +9688,7 @@ partitionedTables:
       distinctYears: 5
       contiguous: true
       rowCount: 11421
-      checkedAt: "2026-11-24T04:43:51Z"
+      checkedAt: "2026-11-25T05:11:18Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9932,7 +9932,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 73216
-      checkedAt: "2026-11-24T04:43:55Z"
+      checkedAt: "2026-11-25T05:11:22Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -10070,7 +10070,7 @@ partitionedTables:
       distinctYears: 2
       contiguous: true
       rowCount: 100
-      checkedAt: "2026-11-24T04:43:56Z"
+      checkedAt: "2026-11-25T05:11:24Z"
     comment: >
       CMS Rural Health Transformation Program (RHTP) awards by state and fiscal year: one row
       per state per year, the dollar amount CMS announced for that state. The program is the
