@@ -147,25 +147,28 @@ dimension_values:
     dataMonthLag: 2
 
   # EIA-861 utility annual year range (2008+; pre-2008 XLSX format differs).
-  # dataLag: 3 — the f861{effective_year}.zip archive only publishes through current-3
-  # (in 2026 the newest real archive is f8612023.zip; 2024+ 301-redirect to an HTML
-  # landing page). The URL templates {effective_year} to hit the available file.
+  # dataLag: 1, releaseMonth: 10 — the final f861{effective_year}.zip is posted about 10 months
+  # after year end (the 2025 final on 2026-10-07), so year N is requested from October of N+1.
+  # A year not yet posted redirects to an HTML page. The URL templates {effective_year} to hit
+  # the available file.
   eia_utility_years: &eia_utility_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2015  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 3
+    dataLag: 1
+    releaseMonth: 10
 
   # EIA-861 Reliability workbook year range. The Reliability_YYYY file first appears in the
-  # 2013 archive (f8612012.zip has none), so the range starts at 2013. Same dataLag as the rest
-  # of the EIA-861 archive (see eia_utility_years).
+  # 2013 archive (f8612012.zip has none), so the range starts at 2013. Same publication timing
+  # as the rest of the EIA-861 archive (see eia_utility_years).
   eia_reliability_years: &eia_reliability_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2016  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 3
+    dataLag: 1
+    releaseMonth: 10
 
   # EIA-860 power plant annual year range.
   # dataLag: 3 — the eia860{effective_year}.zip archive only publishes through

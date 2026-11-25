@@ -144,6 +144,11 @@ dimension_values:
     minYear: 2005
     dataLag: 1
     releaseMonth: 9
+    # excludeYears holds publish years (the dimension value), not vintages: with dataLag 1,
+    # publish year 2021 is vintage 2020, for which the Census Bureau released no standard
+    # 1-year ACS (api.census.gov/data/2020/acs/acs1 is 404 for every geography; only the
+    # experimental 2020 release exists, at a different path and with different estimates).
+    excludeYears: [2021]
 
   # --- Year Range for Decennial Census (every 10 years from 2000) ---
   # Stepped cadence anchored at 2000: emits census (vintage) years 2000, 2010, 2020, ...
@@ -2178,7 +2183,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage with this table's variables is 2010; minYear is a publish year (vintage + dataLag 2)
       geography: *all_geographies
 
     columns:
@@ -3040,7 +3047,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage with this table's variables is 2010; minYear is a publish year (vintage + dataLag 2)
       geography: *all_geographies
 
     columns:
@@ -3665,11 +3674,11 @@ partitionedTables:
         - acs
       # B25081_009 (units without a mortgage) exists only from the 2020 5-year vintage; 2017-2019
       # return 400 "unknown variable 'B25081_009E'" and 2011-2016 carry the old layout where the
-      # same count is B25081_008. minYear floors at 2020.
+      # same count is B25081_008. minYear is a publish year: vintage 2020 + dataLag 2 = 2022.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        minYear: 2020
+        minYear: 2022
         dataLag: 2
       geography: *all_geographies
 
@@ -4456,11 +4465,11 @@ partitionedTables:
       # B25034_011E (built_1939_or_earlier) undefined in ACS 5-year before 2015 — the group
       # only goes up to _010E for 2011-2014 (verified live: 2011/2013/2014 all 400 "unknown
       # variable B25034_011E"; 2015 is the first vintage with 11 variables). minYear floors
-      # at 2015 accordingly, same dataLag (and no releaseMonth) as the shared anchor.
+      # at publish year 2017 (vintage 2015), same dataLag (and no releaseMonth) as the shared anchor.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        minYear: 2015          # B25034 built_1939_or_earlier (var _011E) undefined in ACS 5-year before 2015
+        minYear: 2017          # B25034 built_1939_or_earlier (var _011E) first exists in vintage 2015; minYear is a publish year (vintage + dataLag 2)
         dataLag: 2
       geography: *all_geographies
 
@@ -7124,7 +7133,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage with this table's variables is 2010; minYear is a publish year (vintage + dataLag 2)
       geography:
         - state
 
@@ -7369,7 +7380,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage with this table's variables is 2010; minYear is a publish year (vintage + dataLag 2)
       geography:
         - state
 
@@ -7523,7 +7536,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage of the S0501 subject table on this path is 2010; minYear is a publish year (vintage + dataLag 2)
       geography:
         - state
 
@@ -7648,7 +7663,9 @@ partitionedTables:
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        <<: *acs_year_range
+        minYear: 2012  # first vintage of the S0501 subject table on this path is 2010; minYear is a publish year (vintage + dataLag 2)
       geography:
         - state
 
