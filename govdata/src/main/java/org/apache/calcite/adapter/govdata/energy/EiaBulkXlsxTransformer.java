@@ -16,9 +16,6 @@ import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import org.slf4j.Logger;
@@ -32,7 +29,8 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 
-public abstract class EiaBulkXlsxTransformer implements ResponseTransformer {
+public abstract class EiaBulkXlsxTransformer extends XlsxCellReader
+    implements ResponseTransformer {
 
   protected static final ObjectMapper MAPPER = new ObjectMapper();
   protected static final Logger LOGGER = LoggerFactory.getLogger(EiaBulkXlsxTransformer.class);
@@ -79,81 +77,5 @@ public abstract class EiaBulkXlsxTransformer implements ResponseTransformer {
       is.close();
     }
     return baos.toByteArray();
-  }
-
-  protected String cellString(Cell cell) {
-    if (cell == null) {
-      return null;
-    }
-    CellType cellType = cell.getCellType();
-    if (cellType == CellType.STRING) {
-      return cell.getStringCellValue();
-    }
-    if (cellType == CellType.NUMERIC) {
-      if (DateUtil.isCellDateFormatted(cell)) {
-        return cell.getLocalDateTimeCellValue().toString();
-      }
-      double d = cell.getNumericCellValue();
-      if (d == Math.floor(d) && !Double.isInfinite(d)) {
-        return String.valueOf((long) d);
-      }
-      return String.valueOf(d);
-    }
-    if (cellType == CellType.BOOLEAN) {
-      return String.valueOf(cell.getBooleanCellValue());
-    }
-    if (cellType == CellType.FORMULA) {
-      try {
-        return String.valueOf(cell.getStringCellValue());
-      // fallback-guard: allow standard POI formula-cell fallback to the cached numeric value when cached string type doesn't match
-      } catch (Exception e) {
-        try {
-          return String.valueOf(cell.getNumericCellValue());
-        // fallback-guard: allow inner formula-cell fallback; null means neither cached string nor numeric was readable for one display string
-        } catch (Exception ex) {
-          return null;
-        }
-      }
-    }
-    return null;
-  }
-
-  protected Double cellDouble(Cell cell) {
-    if (cell == null) {
-      return null;
-    }
-    CellType cellType = cell.getCellType();
-    if (cellType == CellType.NUMERIC) {
-      return cell.getNumericCellValue();
-    }
-    if (cellType == CellType.STRING) {
-      String s = cell.getStringCellValue().trim();
-      if (s.isEmpty()) {
-        return null;
-      }
-      try {
-        return Double.parseDouble(s.replace(",", ""));
-      // fallback-guard: allow per-cell numeric parser; null marks one cell unparseable
-      } catch (NumberFormatException e) {
-        return null;
-      }
-    }
-    if (cellType == CellType.FORMULA) {
-      try {
-        return cell.getNumericCellValue();
-      // fallback-guard: allow formula-cell fallback; a formula cell without a cached numeric value yields null for that one cell
-      } catch (Exception e) {
-        return null;
-      }
-    }
-    return null;
-  }
-
-  protected Integer cellInt(Cell cell) {
-    Double d = cellDouble(cell);
-    if (d == null) {
-      return null;
-    }
-    return d.intValue();
   }
 }

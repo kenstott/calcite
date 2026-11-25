@@ -10,8 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.energy;
 
-import org.apache.calcite.adapter.file.etl.RequestContext;
-
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -23,6 +21,7 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,38 +29,9 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
+public class Eia861UtilityProvider extends Eia861ArchiveProvider {
 
-  @Override
-  public String transform(String response, RequestContext context) {
-    String url = context.getUrl();
-    Map<String, String> dims = context.getDimensionValues();
-    // Use the effective (data) year, not the publish/iteration year: dataLag maps the
-    // current iteration year to the latest available EIA-861 archive (e.g. 2023). The
-    // schema URL is templated with {effective_year} to match.
-    String yearStr = dims != null ? dims.get("effective_year") : null;
-    int year = 0;
-    if (yearStr != null && !yearStr.isEmpty()) {
-      try {
-        year = Integer.parseInt(yearStr);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("EIA-861: invalid year dimension value: {}", yearStr);
-      }
-    }
-
-    // EIA moved 2024+ data out of /archive/zip/ to /zip/
-    if (year >= 2024) {
-      url = url.replace("/archive/zip/", "/zip/");
-    }
-    try {
-      byte[] zipBytes = downloadBytes(url);
-      return parseEia861Zip(zipBytes, year);
-    } catch (Exception e) {
-      throw new RuntimeException("EIA-861: failed to parse ZIP from " + url, e);
-    }
-  }
-
-  private String parseEia861Zip(byte[] zipBytes, int year) throws Exception {
+  @Override protected String parseArchive(InputStream archive, int year) throws Exception {
     // Collect bytes and track whether each file is .xls or .xlsx
     byte[] salesBytes = null;
     boolean salesIsXls = false;
@@ -70,7 +40,7 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
     byte[] operationalBytes = null;
     boolean operationalIsXls = false;
 
-    ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes));
+    ZipInputStream zis = new ZipInputStream(archive);
     try {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
@@ -675,11 +645,5 @@ public class Eia861UtilityTransformer extends EiaBulkXlsxTransformer {
 
   private long cellKey(int row, int col) {
     return ((long) row << 16) | (col & 0xFFFF);
-  }
-
-  @Override
-  protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
-    return parseSalesSheet(workbook, new HashMap<String, Map<String, String>>(),
-        new HashMap<String, Map<String, Double>>(), 0);
   }
 }

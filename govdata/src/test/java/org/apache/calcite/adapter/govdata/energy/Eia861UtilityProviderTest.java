@@ -30,12 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Validates {@link Eia861UtilityTransformer#parseOperationalData}: the real EIA-861
+ * Validates {@link Eia861UtilityProvider#parseOperationalData}: the real EIA-861
  * Operational_Data_&lt;year&gt;.xlsx workbook (confirmed live for 2013-2023) carries its data on
  * a sheet literally named "States" -- never a sheet named "Operational_Data" -- so the lookup
  * must fall back to that name the same way the sales-sheet lookup already does.
  */
-class Eia861UtilityTransformerTest {
+class Eia861UtilityProviderTest {
 
   @Test @Tag("unit") void findsOperationalDataOnStatesSheet() throws Exception {
     XSSFWorkbook wb = new XSSFWorkbook();
@@ -73,12 +73,12 @@ class Eia861UtilityTransformerTest {
 
       // parseOperationalData is an internal step of the zip-parsing path, so reach it
       // reflectively rather than widening production visibility for the test's benefit.
-      Method m = Eia861UtilityTransformer.class.getDeclaredMethod(
+      Method m = Eia861UtilityProvider.class.getDeclaredMethod(
           "parseOperationalData", org.apache.poi.ss.usermodel.Workbook.class, int.class);
       m.setAccessible(true);
       @SuppressWarnings("unchecked")
       Map<String, Map<String, Double>> result =
-          (Map<String, Map<String, Double>>) m.invoke(new Eia861UtilityTransformer(), wb, 2022);
+          (Map<String, Map<String, Double>>) m.invoke(new Eia861UtilityProvider(), wb, 2022);
 
       assertTrue(result.containsKey("12341"), "expected utility 12341 in operational lookup");
       Map<String, Double> row = result.get("12341");

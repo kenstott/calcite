@@ -10,8 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.energy;
 
-import org.apache.calcite.adapter.file.etl.RequestContext;
-
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -22,6 +20,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -29,49 +28,20 @@ import java.util.zip.ZipInputStream;
 
 /**
  * Parses the EIA-861 "Service_Territory" file (bundled in the same annual ZIP archive
- * that {@link Eia861UtilityTransformer} already downloads for {@code eia_utility_annual})
+ * that {@link Eia861UtilityProvider} already downloads for {@code eia_utility_annual})
  * into a utility-to-county crosswalk: one row per (report_year, utility_id, state_abbr,
  * county_name). This is the piece EIA-861 carries that eia_utility_annual's Sales_Ult_Cust
  * sheet does not — a per-utility list of the counties it serves, sourced from the
  * "Counties_States" sheet (50 states + DC; the sibling "Counties_Territories" sheet is out
  * of scope, matching this schema's existing 50-states+DC convention).
  */
-public class Eia861ServiceTerritoryTransformer extends EiaBulkXlsxTransformer {
+public class Eia861ServiceTerritoryProvider extends Eia861ArchiveProvider {
 
-  @Override
-  public String transform(String response, RequestContext context) {
-    String url = context.getUrl();
-    Map<String, String> dims = context.getDimensionValues();
-    // Use the effective (data) year, not the publish/iteration year — see
-    // Eia861UtilityTransformer for why: dataLag maps the iteration year to the latest
-    // available EIA-861 archive and the URL is templated with {effective_year}.
-    String yearStr = dims != null ? dims.get("effective_year") : null;
-    int year = 0;
-    if (yearStr != null && !yearStr.isEmpty()) {
-      try {
-        year = Integer.parseInt(yearStr);
-      } catch (NumberFormatException e) {
-        LOGGER.warn("EIA-861 Service_Territory: invalid year dimension value: {}", yearStr);
-      }
-    }
-
-    // EIA moved 2024+ data out of /archive/zip/ to /zip/ (same move eia_utility_annual handles).
-    if (year >= 2024) {
-      url = url.replace("/archive/zip/", "/zip/");
-    }
-    try {
-      byte[] zipBytes = downloadBytes(url);
-      return parseServiceTerritoryZip(zipBytes, year);
-    } catch (Exception e) {
-      throw new RuntimeException("EIA-861 Service_Territory: failed to parse ZIP from " + url, e);
-    }
-  }
-
-  private String parseServiceTerritoryZip(byte[] zipBytes, int year) throws Exception {
+  @Override protected String parseArchive(InputStream archive, int year) throws Exception {
     byte[] stBytes = null;
     boolean stIsXls = false;
 
-    ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes));
+    ZipInputStream zis = new ZipInputStream(archive);
     try {
       ZipEntry entry;
       while ((entry = zis.getNextEntry()) != null) {
@@ -197,13 +167,5 @@ public class Eia861ServiceTerritoryTransformer extends EiaBulkXlsxTransformer {
     LOGGER.debug("EIA-861 Service_Territory: parsed {} utility-county rows for year {}",
         result.size(), year);
     return result.toString();
-  }
-
-  @Override
-  protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
-    // Never invoked: transform() above is fully overridden because the source is a ZIP
-    // archive, not a bare workbook. Implemented only to satisfy the abstract contract,
-    // matching Eia861UtilityTransformer's convention.
-    return parseServiceTerritorySheet(workbook, 0);
   }
 }
