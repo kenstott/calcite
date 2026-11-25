@@ -37,6 +37,62 @@ CREATE TEMP TABLE dq_results (
 -- T1: EXISTENCE — each table must have at least 1 readable row
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'acs_population'         AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_population',         allow_moved_paths := true) LIMIT 1) t) AS n;
+INSERT INTO dq_existence_counts SELECT 'acs_income',              (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income',              allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_housing',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing',             allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_education',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_education',           allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_employment',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_employment',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_poverty',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_poverty',             allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'decennial_population',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_population',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_race_ethnicity',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_race_ethnicity',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_age',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_age',                 allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_commuting',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_commuting',           allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_health_insurance',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_health_insurance_by_type',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance_by_type',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_language',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_language',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_disability',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_disability',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_veterans',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_veterans_by_period',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_by_period',  allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_veterans_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_employment',  allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_migration',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_migration',           allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_occupation',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_occupation',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_industry',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_internet',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_internet',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_vehicle_access',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_vehicle_access',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_earnings_by_education', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_earnings_by_education', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_nativity_by_education', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_income_by_nativity',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_industry_by_nativity',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry_by_nativity',    allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'cps_voting_supplement',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement',     allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'poverty_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'household_income_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_nativity',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_household_type',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_mortgage_status',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_real_estate_taxes',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'decennial_housing',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',       allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'pep_population',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'cbp_establishments',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments',      allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs1_population',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',         allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs1_income',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',             allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'acs1_nativity',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity',             allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'economic_census',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',         allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'sahie_insurance',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance',         allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'bds_dynamics',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/bds_dynamics',            allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'abs_characteristics',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics',     allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'nonemployer_statistics',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics',  allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'building_permits',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',        allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'qwi_employment',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'lodes_workplace',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',         allow_moved_paths := true) LIMIT 1) t);
+
 INSERT INTO dq_results
 SELECT
   'census'  AS schema,
@@ -46,62 +102,7 @@ SELECT
   CAST(n AS VARCHAR)  AS value,
   '1'                 AS threshold,
   CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END AS detail
-FROM (
-  SELECT 'acs_population'         AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_population',         allow_moved_paths := true) LIMIT 1) t) AS n
-  UNION ALL SELECT 'acs_income',              (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income',              allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_housing',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing',             allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_education',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_education',           allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_employment',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_employment',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_poverty',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_poverty',             allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'decennial_population',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_population',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_race_ethnicity',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_race_ethnicity',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_age',                 (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_age',                 allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_commuting',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_commuting',           allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_health_insurance',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_health_insurance_by_type',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance_by_type',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_language',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_language',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_disability',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_disability',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_veterans',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_veterans_by_period',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_by_period',  allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_veterans_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_employment',  allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_migration',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_migration',           allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_occupation',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_occupation',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_industry',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_internet',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_internet',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_vehicle_access',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_vehicle_access',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_earnings_by_education', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_earnings_by_education', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_nativity_by_education', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_income_by_nativity',    (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_industry_by_nativity',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry_by_nativity',    allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'cps_voting_supplement',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement',     allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'poverty_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'household_income_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_nativity',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_mortgage_status',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_real_estate_taxes',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'decennial_housing',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',       allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'pep_population',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'cbp_establishments',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments',      allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs1_population',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs1_income',             (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',             allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'acs1_nativity',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity',             allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'economic_census',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'sahie_insurance',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance',         allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'bds_dynamics',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/bds_dynamics',            allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'abs_characteristics',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics',     allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'nonemployer_statistics',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics',  allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'building_permits',        (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',        allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'qwi_employment',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',          allow_moved_paths := true) LIMIT 1) t)
-  UNION ALL SELECT 'lodes_workplace',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',         allow_moved_paths := true) LIMIT 1) t)
-) src;
+FROM dq_existence_counts;
 
 -- ============================================================================
 -- T2: ROW COUNT — conservative minimums
@@ -111,6 +112,68 @@ FROM (
 -- State-level (ACS1): 51 jurisdictions * 5+ years = 250+ rows.
 -- Decennial: 2 censuses (2010, 2020) * state+county = 5000+ rows.
 -- ============================================================================
+
+CREATE TEMP TABLE dq_row_count_counts (tbl VARCHAR, n BIGINT, threshold BIGINT);
+INSERT INTO dq_row_count_counts SELECT 'acs_population'         AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_population',         allow_moved_paths := true)) AS n, 10000 AS threshold;
+INSERT INTO dq_row_count_counts SELECT 'acs_income',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income',              allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_housing',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing',             allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_education',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_education',           allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_employment',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_employment',          allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_poverty',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_poverty',             allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'decennial_population',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_population',    allow_moved_paths := true)), 5000;
+INSERT INTO dq_row_count_counts SELECT 'acs_race_ethnicity',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_race_ethnicity',      allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_age',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_age',                 allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_commuting',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_commuting',           allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_health_insurance',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance',    allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_health_insurance_by_type',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance_by_type',    allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_language',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_language',            allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_disability',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_disability',          allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_veterans',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans',            allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_veterans_by_period',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_by_period',  allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_veterans_employment',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_employment',  allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_migration',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_migration',           allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_occupation',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_occupation',          allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_industry',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry',            allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_internet',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_internet',            allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_vehicle_access',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_vehicle_access',      allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_earnings_by_education', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_earnings_by_education', allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_nativity_by_education', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_income_by_nativity',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity',    allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_industry_by_nativity',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry_by_nativity',    allow_moved_paths := true)), 150;
+INSERT INTO dq_row_count_counts SELECT 'cps_voting_supplement',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement',     allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true)), 500;
+INSERT INTO dq_row_count_counts SELECT 'poverty_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true)), 60;
+INSERT INTO dq_row_count_counts SELECT 'household_income_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true)), 55;
+INSERT INTO dq_row_count_counts SELECT 'acs_nativity',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_household_type',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_mortgage_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',      allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_real_estate_taxes',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes',      allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'acs_rent_burden_by_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_rent_burden_by_income', allow_moved_paths := true)), 3000;
+INSERT INTO dq_row_count_counts SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)), 9000;
+INSERT INTO dq_row_count_counts SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'decennial_housing',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',       allow_moved_paths := true)), 5000;
+INSERT INTO dq_row_count_counts SELECT 'pep_population',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population',          allow_moved_paths := true)), 2000;
+  -- cbp: 3 yrs × (51 states + ~3143 counties) = ~9582 max; threshold 80% of max
+INSERT INTO dq_row_count_counts SELECT 'cbp_establishments',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments',      allow_moved_paths := true)), 8500;
+INSERT INTO dq_row_count_counts SELECT 'acs1_population',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',         allow_moved_paths := true)), 250;
+INSERT INTO dq_row_count_counts SELECT 'acs1_income',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',             allow_moved_paths := true)), 250;
+INSERT INTO dq_row_count_counts SELECT 'acs1_nativity',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity',             allow_moved_paths := true)), 250;
+INSERT INTO dq_row_count_counts SELECT 'economic_census',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',         allow_moved_paths := true)), 5000;
+INSERT INTO dq_row_count_counts SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true)), 9000;
+  -- sahie: 3 yrs × (51 states + ~3143 counties) = ~9582 max; threshold 80% of max
+INSERT INTO dq_row_count_counts SELECT 'sahie_insurance',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance',         allow_moved_paths := true)), 8500;
+  -- bds: 3 yrs × 51 states = 153 max (state-level only); threshold 80% of max
+INSERT INTO dq_row_count_counts SELECT 'bds_dynamics',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/bds_dynamics',            allow_moved_paths := true)), 120;
+  -- abs: 2 yrs × 51 states = 102 max (state-level only); threshold 80% of max
+INSERT INTO dq_row_count_counts SELECT 'abs_characteristics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics',     allow_moved_paths := true)), 80;
+INSERT INTO dq_row_count_counts SELECT 'nonemployer_statistics',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics',  allow_moved_paths := true)), 10000;
+INSERT INTO dq_row_count_counts SELECT 'building_permits',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',        allow_moved_paths := true)), 250;
+  -- qwi: 12 quarters × 51 states = 612 max; threshold 80% of max
+INSERT INTO dq_row_count_counts SELECT 'qwi_employment',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',          allow_moved_paths := true)), 500;
+INSERT INTO dq_row_count_counts SELECT 'lodes_workplace',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',         allow_moved_paths := true)), 10000;
 
 INSERT INTO dq_results
 SELECT
@@ -123,68 +186,7 @@ SELECT
   CASE WHEN n >= threshold THEN 'row count meets minimum'
        ELSE 'row count below minimum — ingestion may be incomplete or failed'
   END AS detail
-FROM (
-  SELECT 'acs_population'         AS tbl, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_population',         allow_moved_paths := true)) AS n, 10000 AS threshold
-  UNION ALL SELECT 'acs_income',              (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income',              allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_housing',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing',             allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_education',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_education',           allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_employment',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_employment',          allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_poverty',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_poverty',             allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'decennial_population',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_population',    allow_moved_paths := true)), 5000
-  UNION ALL SELECT 'acs_race_ethnicity',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_race_ethnicity',      allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_age',                 (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_age',                 allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_commuting',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_commuting',           allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_health_insurance',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance',    allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_health_insurance_by_type',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_health_insurance_by_type',    allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_language',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_language',            allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_disability',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_disability',          allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_veterans',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans',            allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_veterans_by_period',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_by_period',  allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_veterans_employment',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_veterans_employment',  allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_migration',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_migration',           allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_occupation',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_occupation',          allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_industry',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry',            allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_internet',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_internet',            allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_vehicle_access',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_vehicle_access',      allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_earnings_by_education', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_earnings_by_education', allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_nativity_by_education', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity_by_education', allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_income_by_nativity',    (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_by_nativity',    allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_industry_by_nativity',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_industry_by_nativity',    allow_moved_paths := true)), 150
-  UNION ALL SELECT 'cps_voting_supplement',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cps_voting_supplement',     allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true)), 500
-  UNION ALL SELECT 'poverty_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true)), 60
-  UNION ALL SELECT 'household_income_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true)), 55
-  UNION ALL SELECT 'acs_nativity',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_household_type',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_housing_tenure',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure',      allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_mortgage_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status',      allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_real_estate_taxes',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes',      allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_housing_tenure_by_age', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_tenure_by_age', allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'acs_rent_burden_by_income', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_rent_burden_by_income', allow_moved_paths := true)), 3000
-  UNION ALL SELECT 'acs_housing_year_built_detail', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_housing_year_built_detail', allow_moved_paths := true)), 9000
-  UNION ALL SELECT 'acs_income_distribution', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_income_distribution', allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'decennial_housing',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/decennial_housing',       allow_moved_paths := true)), 5000
-  UNION ALL SELECT 'pep_population',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_population',          allow_moved_paths := true)), 2000
-  -- cbp: 3 yrs × (51 states + ~3143 counties) = ~9582 max; threshold 80% of max
-  UNION ALL SELECT 'cbp_establishments',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/cbp_establishments',      allow_moved_paths := true)), 8500
-  UNION ALL SELECT 'acs1_population',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_population',         allow_moved_paths := true)), 250
-  UNION ALL SELECT 'acs1_income',             (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_income',             allow_moved_paths := true)), 250
-  UNION ALL SELECT 'acs1_nativity',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs1_nativity',             allow_moved_paths := true)), 250
-  UNION ALL SELECT 'economic_census',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/economic_census',         allow_moved_paths := true)), 5000
-  UNION ALL SELECT 'saipe_poverty',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/saipe_poverty',           allow_moved_paths := true)), 9000
-  -- sahie: 3 yrs × (51 states + ~3143 counties) = ~9582 max; threshold 80% of max
-  UNION ALL SELECT 'sahie_insurance',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/sahie_insurance',         allow_moved_paths := true)), 8500
-  -- bds: 3 yrs × 51 states = 153 max (state-level only); threshold 80% of max
-  UNION ALL SELECT 'bds_dynamics',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/bds_dynamics',            allow_moved_paths := true)), 120
-  -- abs: 2 yrs × 51 states = 102 max (state-level only); threshold 80% of max
-  UNION ALL SELECT 'abs_characteristics',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics',     allow_moved_paths := true)), 80
-  UNION ALL SELECT 'nonemployer_statistics',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics',  allow_moved_paths := true)), 10000
-  UNION ALL SELECT 'building_permits',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits',        allow_moved_paths := true)), 250
-  -- qwi: 12 quarters × 51 states = 612 max; threshold 80% of max
-  UNION ALL SELECT 'qwi_employment',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment',          allow_moved_paths := true)), 500
-  UNION ALL SELECT 'lodes_workplace',         (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace',         allow_moved_paths := true)), 10000
-) src;
+FROM dq_row_count_counts;
 
 -- ============================================================================
 -- T3: SAMPLE — print 1 row per table to console (informational only)
@@ -1095,10 +1097,6 @@ FROM (
      OR median_real_estate_taxes <= 0 OR median_real_estate_taxes >= 100000
 );
 
--- ============================================================================
--- RESULTS SUMMARY
--- ============================================================================
-
 -- acs_mortgage_status: B25081 identity — with + without mortgage = total owner-occupied (exact
 -- ACS additivity; sentinel-normalized nulls skip the check via IS NOT NULL)
 INSERT INTO dq_results
@@ -1110,10 +1108,13 @@ SELECT
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_mortgage_status', allow_moved_paths := true)
-  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_real_estate_taxes', allow_moved_paths := true)
   WHERE owner_occupied_units IS NOT NULL AND units_with_mortgage IS NOT NULL AND units_without_mortgage IS NOT NULL
     AND units_with_mortgage + units_without_mortgage != owner_occupied_units
 );
+
+-- ============================================================================
+-- RESULTS SUMMARY
+-- ============================================================================
 
 SELECT * FROM dq_results ORDER BY tbl, test;
 

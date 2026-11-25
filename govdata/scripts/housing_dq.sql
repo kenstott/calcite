@@ -701,23 +701,19 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/
 -- row_count only — deliberately minimal, to be deepened per table.
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'hmda_applicant_demographics' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_applicant_demographics', allow_moved_paths := true) LIMIT 1)) AS n;
+INSERT INTO dq_existence_counts SELECT 'hmda_loans'                 , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_loans', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'hud_subsidized_county'      , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_subsidized_county', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'hud_subsidized_housing'     , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_subsidized_housing', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'opportunity_zones'          , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/opportunity_zones', allow_moved_paths := true) LIMIT 1));
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'hmda_applicant_demographics' AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_applicant_demographics', allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'hmda_loans'                 , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hmda_loans', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'hud_subsidized_county'      , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_subsidized_county', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'hud_subsidized_housing'     , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_subsidized_housing', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'opportunity_zones'          , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/opportunity_zones', allow_moved_paths := true) LIMIT 1))
-)
 SELECT 'housing', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
-FROM counts;
+FROM dq_existence_counts;
 
 
 SELECT schema, tbl, test, status, value, threshold, detail

@@ -26,29 +26,31 @@ CREATE TEMP TABLE dq_results (
 -- ============================================================
 -- T1: EXISTENCE
 -- COUNT of a LIMIT 1 subquery: 1 = readable, 0 = empty table.
--- If the Iceberg metadata is missing, DuckDB aborts here — that IS the signal.
+-- One INSERT per table: a table with no Iceberg metadata loses only its own row, and the
+-- runner records the failed statement as a sql_error result.
 -- ============================================================
 SELECT '=== T1: EXISTENCE ===' AS section;
+
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'nws_stations'              AS tbl, COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_stations',              allow_moved_paths=true) LIMIT 1);
+  -- nws_alerts excluded: snapshot table legitimately empty when no active alerts (T2 threshold=0 handles this)
+INSERT INTO dq_existence_counts SELECT 'cdo_stations',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'cdo_monthly_summaries',  COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'cdo_annual_summaries',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ghcnd_stations_with_county', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ghcnd_daily',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'drought_monitor_weekly', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'asos_observations',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'hms_smoke_daily',        COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'hms_smoke_polygons',     COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'climate_normals_monthly',COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly',allow_moved_paths=true) LIMIT 1);
 
 INSERT INTO dq_results
 SELECT 'weather', tbl, 'existence',
   CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END,
   CAST(n AS VARCHAR), '1',
   CASE WHEN n > 0 THEN 'readable and non-empty' ELSE 'accessible but empty' END
-FROM (
-  SELECT 'nws_stations'              AS tbl, COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_stations',              allow_moved_paths=true) LIMIT 1)
-  -- nws_alerts excluded: snapshot table legitimately empty when no active alerts (T2 threshold=0 handles this)
-  UNION ALL SELECT 'cdo_stations',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'cdo_monthly_summaries',  COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'cdo_annual_summaries',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ghcnd_stations_with_county', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'ghcnd_daily',            COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'drought_monitor_weekly', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'asos_observations',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'hms_smoke_daily',        COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'hms_smoke_polygons',     COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true) LIMIT 1)
-  UNION ALL SELECT 'climate_normals_monthly',COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly',allow_moved_paths=true) LIMIT 1)
-);
+FROM dq_existence_counts;
 
 -- ============================================================
 -- T2: ROW COUNTS
@@ -62,24 +64,25 @@ FROM (
 -- ============================================================
 SELECT '=== T2: ROW COUNTS ===' AS section;
 
+CREATE TEMP TABLE dq_row_count_counts (tbl VARCHAR, n BIGINT, thresh BIGINT);
+INSERT INTO dq_row_count_counts SELECT 'nws_stations'              AS tbl, COUNT(*) AS n,   500 AS thresh FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_stations',              allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'nws_alerts',             COUNT(*),          0            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_alerts',             allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'cdo_stations',           COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'cdo_monthly_summaries',  COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'cdo_annual_summaries',   COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ghcnd_stations_with_county', COUNT(*),   5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ghcnd_daily',            COUNT(*),      20000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'drought_monitor_weekly', COUNT(*),      50000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'asos_observations',      COUNT(*),       5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'hms_smoke_daily',        COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'hms_smoke_polygons',     COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'climate_normals_monthly',COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly',allow_moved_paths=true);
+
 INSERT INTO dq_results
 SELECT 'weather', tbl, 'row_count',
   CASE WHEN n >= thresh THEN 'pass' ELSE 'fail' END,
   CAST(n AS VARCHAR), CAST(thresh AS VARCHAR), NULL
-FROM (
-  SELECT 'nws_stations'              AS tbl, COUNT(*) AS n,   500 AS thresh FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_stations',              allow_moved_paths=true)
-  UNION ALL SELECT 'nws_alerts',             COUNT(*),          0            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/nws_alerts',             allow_moved_paths=true)
-  UNION ALL SELECT 'cdo_stations',           COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_stations',           allow_moved_paths=true)
-  UNION ALL SELECT 'cdo_monthly_summaries',  COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_monthly_summaries',  allow_moved_paths=true)
-  UNION ALL SELECT 'cdo_annual_summaries',   COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/cdo_annual_summaries',   allow_moved_paths=true)
-  UNION ALL SELECT 'ghcnd_stations_with_county', COUNT(*),   5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_stations_with_county', allow_moved_paths=true)
-  UNION ALL SELECT 'ghcnd_daily',            COUNT(*),      20000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/ghcnd_daily',            allow_moved_paths=true)
-  UNION ALL SELECT 'drought_monitor_weekly', COUNT(*),      50000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/drought_monitor_weekly', allow_moved_paths=true)
-  UNION ALL SELECT 'asos_observations',      COUNT(*),       5000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/asos_observations', allow_moved_paths=true)
-  UNION ALL SELECT 'hms_smoke_daily',        COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_daily',        allow_moved_paths=true)
-  UNION ALL SELECT 'hms_smoke_polygons',     COUNT(*),       1000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/hms_smoke_polygons',     allow_moved_paths=true)
-  UNION ALL SELECT 'climate_normals_monthly',COUNT(*),      10000            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/climate_normals_monthly',allow_moved_paths=true)
-);
+FROM dq_row_count_counts;
 
 -- ============================================================
 -- T3: SAMPLE ROW — one row per table for visual inspection (not stored in dq_results)

@@ -507,31 +507,23 @@ FROM (
 -- prevent.
 -- ============================================================================
 
+CREATE TEMP TABLE dq_existence_counts (tbl VARCHAR, n BIGINT);
+INSERT INTO dq_existence_counts SELECT 'calendar'          AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/calendar', allow_moved_paths := true) LIMIT 1)) AS n;
+INSERT INTO dq_existence_counts SELECT 'countries'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/countries', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'currencies'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/currencies', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'fiscal_year'      , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/fiscal_year', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'holidays'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/holidays', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'naics'            , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'naics_vintage'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics_vintage', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'naics_vintage_map', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics_vintage_map', allow_moved_paths := true) LIMIT 1));
+INSERT INTO dq_existence_counts SELECT 'sic'              , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sic', allow_moved_paths := true) LIMIT 1));
+
 INSERT INTO dq_results
-WITH counts AS (
-  SELECT 'calendar'          AS tbl, (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/calendar', allow_moved_paths := true) LIMIT 1)) AS n
-  UNION ALL
-  SELECT 'countries'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/countries', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'currencies'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/currencies', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'fiscal_year'      , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/fiscal_year', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'holidays'         , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/holidays', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'naics'            , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'naics_vintage'    , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics_vintage', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'naics_vintage_map', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/naics_vintage_map', allow_moved_paths := true) LIMIT 1))
-  UNION ALL
-  SELECT 'sic'              , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sic', allow_moved_paths := true) LIMIT 1))
-)
 SELECT 'ref', tbl, 'existence',
        CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
        n, 1,
        CASE WHEN n > 0 THEN 'readable' ELSE 'NO ROWS — table unreadable or never written' END
-FROM counts;
+FROM dq_existence_counts;
 
 
 -- ─────────────────────────────────────────────────────────────
