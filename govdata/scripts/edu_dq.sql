@@ -1143,9 +1143,10 @@ SELECT 'edu', 'ipeds_tuition', 'negative_tuition',
   CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
   CAST(n AS VARCHAR), '0', NULL
 FROM (
-  SELECT SUM(CASE WHEN tuition_fees_ft < 0 THEN 1 ELSE 0 END) AS n
+  SELECT COUNT(*) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition', allow_moved_paths=true)
-  WHERE tuition_fees_ft IS NOT NULL
+  WHERE tuition_fees_ft < 0 OR tuition_ft < 0 OR fees_ft < 0 OR credit_hour_charge_pt < 0
+    OR tuition_published < 0 OR fees_published < 0 OR tuition_fees_published < 0
 );
 
 -- ipeds_financial_aid: all-null / all-same-value / PK nulls / PK duplicates / percent range
