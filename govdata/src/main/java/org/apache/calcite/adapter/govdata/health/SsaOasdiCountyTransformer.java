@@ -17,8 +17,10 @@ import org.apache.calcite.adapter.govdata.energy.EiaBulkXlsxTransformer;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.ByteArrayInputStream;
@@ -27,22 +29,28 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
- * Transforms one SSA "OASDI Beneficiaries by State and County" per-state XLSX (Table 4 = counts,
- * Table 5 = dollar amounts) into {@code health.ssa_oasdi_county} rows — one row per county (plus
- * one state-total row) per state per year, wide across the 8 beneficiary-type breakdowns both
- * tables publish.
+ * Transforms the SSA "OASDI Beneficiaries by State and County" XLSX files into
+ * {@code health.ssa_oasdi_county} rows — one row per county or independent city (plus one
+ * state-total row) per state per year, wide across the 8 beneficiary-type breakdowns the tables
+ * publish. The {@code area_file} dimension names the workbook being read.
  *
- * <p>Both tables share an identical row layout per state file (confirmed live across AL and CA):
+ * <p>A state workbook carries Table 4 (counts) and Table 5 (amounts) with an identical row layout:
  * column A = county name (blank on the state-total row), column B = "Total, &lt;State&gt;" label
- * (populated only on the state-total row), column C = SSA's own numeric ANSI/FIPS-style code (the
- * state's own 1-2 digit FIPS number on the total row, e.g. 6 for California; a 4-5 digit
- * state+county FIPS-without-leading-zero on every real county row, e.g. 6001), then the 8
- * beneficiary-type count/amount columns. Rows are joined between the two sheets by that ANSI code
- * rather than assumed row-position alignment.
+ * (state-total row only), column C = SSA's ANSI/FIPS code (the state's own FIPS number, or that
+ * number times 1000, on the total row; the 5-digit state+county FIPS without a leading zero on a
+ * county row), then the 8 beneficiary-type columns. States with independent cities put
+ * "Counties" and "Independent city" sub-header rows between the data rows. Rows are joined between
+ * the two sheets by the ANSI code.
+ *
+ * <p>SSA publishes no District of Columbia workbook. DC is read from its row in the national
+ * state-level files, Table 2 (counts, {@code table02.xlsx}) and Table 3 (amounts,
+ * {@code table03.xlsx}), and emitted as its state-total row plus its single county equivalent
+ * (FIPS 11001).
  *
  * <p>Deliberately excludes the "Aged 65 or older, by sex" (Men/Women) columns the same tables
  * publish — a different demographic cross-tab of the same totals, not part of the
@@ -51,6 +59,11 @@ import java.util.Map;
 public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
 
   private static final int DATA_START_ROW = 4; // 0-indexed; row 5 in the spreadsheet
+
+  /** {@code area_file} value of the national workbook DC is read from. */
+  private static final String DC_AREA_FILE = "table02";
+  private static final String DC_NAME = "District of Columbia";
+  private static final String DC_COUNTY_FIPS = "11001";
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -95,46 +108,88 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
 
   @Override
   protected String parseWorkbook(XSSFWorkbook workbook, RequestContext context) throws Exception {
-    String state = context.getDimensionValues().get("state");
-    String year = context.getDimensionValues().get("effective_year");
-    String stateAbbr = state == null ? null : state.toUpperCase(java.util.Locale.ROOT);
+    String areaFile = context.getDimensionValues().get("area_file");
+    int year = Integer.parseInt(context.getDimensionValues().get("effective_year").trim());
 
-    Sheet countsSheet = workbook.getSheetAt(3);   // Table 4
-    Sheet amountsSheet = workbook.getSheetAt(4);  // Table 5
-    Map<Long, CountyRow> counts = parseSheet(countsSheet);
-    Map<Long, CountyRow> amounts = parseSheet(amountsSheet);
-
-    ArrayNode result = MAPPER.createArrayNode();
-    for (Map.Entry<Long, CountyRow> e : counts.entrySet()) {
-      CountyRow c = e.getValue();
-      CountyRow a = amounts.get(e.getKey());
-      ObjectNode out = MAPPER.createObjectNode();
-      out.put("state_abbr", stateAbbr);
-      if (c.countyFips != null) {
-        out.put("county_fips", c.countyFips);
-      } else {
-        out.putNull("county_fips");
+    ArrayNode result;
+    if (DC_AREA_FILE.equals(areaFile)) {
+      String amountsUrl = context.getUrl().replace("table02.xlsx", "table03.xlsx");
+      XSSFWorkbook amounts =
+          new XSSFWorkbook(new ByteArrayInputStream(downloadWithWgetUa(amountsUrl)));
+      try {
+        result = dcRows(workbook, amounts, year);
+      } finally {
+        amounts.close();
       }
-      out.put("county_name", c.name);
-      out.put("data_year", year == null ? null : Integer.parseInt(year.trim()));
-      putMeasures(out, "count", c);
-      putMeasures(out, "amount", a);
-      result.add(out);
+    } else {
+      result = stateRows(workbook, areaFile.toUpperCase(Locale.ROOT), year);
     }
-    LOGGER.debug("SSA OASDI county: emitted {} rows for state={} year={}", result.size(), state, year);
+    LOGGER.debug("SSA OASDI county: emitted {} rows for area_file={} year={}",
+        result.size(), areaFile, year);
     return result.toString();
   }
 
+  /** Rows of one state workbook. */
+  ArrayNode stateRows(Workbook workbook, String stateAbbr, int year) {
+    Map<Long, CountyRow> counts = parseSheet(workbook.getSheetAt(3));   // Table 4
+    Map<Long, CountyRow> amounts = parseSheet(workbook.getSheetAt(4));  // Table 5
+    if (!counts.keySet().equals(amounts.keySet())) {
+      throw new IllegalStateException("SSA OASDI county: Tables 4 and 5 list different areas for "
+          + stateAbbr + " " + year);
+    }
+    ArrayNode result = MAPPER.createArrayNode();
+    for (Map.Entry<Long, CountyRow> e : counts.entrySet()) {
+      CountyRow c = e.getValue();
+      addRow(result, stateAbbr, c.countyFips, c.name, year, c, amounts.get(e.getKey()));
+    }
+    return result;
+  }
+
+  /** DC's state-total and county rows, from the Table 2 and Table 3 workbooks. */
+  ArrayNode dcRows(Workbook countsWorkbook, Workbook amountsWorkbook, int year) {
+    CountyRow counts = findDc(countsWorkbook.getSheetAt(0));
+    CountyRow amounts = findDc(amountsWorkbook.getSheetAt(0));
+    ArrayNode result = MAPPER.createArrayNode();
+    addRow(result, "DC", null, "Total, " + DC_NAME, year, counts, amounts);
+    addRow(result, "DC", DC_COUNTY_FIPS, DC_NAME, year, counts, amounts);
+    return result;
+  }
+
+  private CountyRow findDc(Sheet sheet) {
+    for (Row row : sheet) {
+      if (DC_NAME.equals(trimmed(row.getCell(0)))) {
+        return readMeasures(row);
+      }
+    }
+    throw new IllegalStateException("SSA OASDI county: no " + DC_NAME + " row in sheet "
+        + sheet.getSheetName());
+  }
+
+  private void addRow(ArrayNode result, String stateAbbr, String countyFips, String name,
+      int year, CountyRow counts, CountyRow amounts) {
+    ObjectNode out = result.addObject();
+    out.put("state_abbr", stateAbbr);
+    if (countyFips != null) {
+      out.put("county_fips", countyFips);
+    } else {
+      out.putNull("county_fips");
+    }
+    out.put("county_name", name);
+    out.put("data_year", year);
+    putMeasures(out, "count", counts);
+    putMeasures(out, "amount", amounts);
+  }
+
   private void putMeasures(ObjectNode out, String suffix, CountyRow row) {
-    putNum(out, "total_" + suffix, row == null ? null : row.total);
-    putNum(out, "retired_workers_" + suffix, row == null ? null : row.retiredWorkers);
-    putNum(out, "spouses_retirement_" + suffix, row == null ? null : row.spousesRetirement);
-    putNum(out, "children_retirement_" + suffix, row == null ? null : row.childrenRetirement);
-    putNum(out, "widowers_parents_" + suffix, row == null ? null : row.widowersParents);
-    putNum(out, "children_survivors_" + suffix, row == null ? null : row.childrenSurvivors);
-    putNum(out, "disabled_workers_" + suffix, row == null ? null : row.disabledWorkers);
-    putNum(out, "spouses_disability_" + suffix, row == null ? null : row.spousesDisability);
-    putNum(out, "children_disability_" + suffix, row == null ? null : row.childrenDisability);
+    putNum(out, "total_" + suffix, row.total);
+    putNum(out, "retired_workers_" + suffix, row.retiredWorkers);
+    putNum(out, "spouses_retirement_" + suffix, row.spousesRetirement);
+    putNum(out, "children_retirement_" + suffix, row.childrenRetirement);
+    putNum(out, "widowers_parents_" + suffix, row.widowersParents);
+    putNum(out, "children_survivors_" + suffix, row.childrenSurvivors);
+    putNum(out, "disabled_workers_" + suffix, row.disabledWorkers);
+    putNum(out, "spouses_disability_" + suffix, row.spousesDisability);
+    putNum(out, "children_disability_" + suffix, row.childrenDisability);
   }
 
   private void putNum(ObjectNode out, String field, Double v) {
@@ -146,40 +201,86 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
   }
 
   /**
-   * Parses one sheet (Table 4 or Table 5) into a map keyed by SSA's own ANSI/FIPS-style numeric
-   * code — the state's own FIPS number for the state-total row, a state+county FIPS-without-
-   * leading-zero value for every real county row. Stops at the first row with no numeric code in
-   * column C (the blank separator rows immediately before the footnote block).
+   * Parses one sheet (Table 4 or Table 5) into a map keyed by the ANSI code in column C. A row
+   * without a numeric code is a sub-header, spacer or footnote and carries no figures; the sheet
+   * must yield exactly one state-total row and at least one county row, all in that state.
    */
   private Map<Long, CountyRow> parseSheet(Sheet sheet) {
-    Map<Long, CountyRow> out = new HashMap<Long, CountyRow>();
+    Map<Long, CountyRow> out = new LinkedHashMap<Long, CountyRow>();
+    Long stateCode = null;
     for (int r = DATA_START_ROW; r <= sheet.getLastRowNum(); r++) {
       Row row = sheet.getRow(r);
       if (row == null) {
-        break;
+        continue;
       }
       Double ansi = cellDouble(row.getCell(2));
+      String nameA = trimmed(row.getCell(0));
       if (ansi == null) {
-        break;
+        if (nameA != null && cellDouble(row.getCell(3)) != null) {
+          throw new IllegalStateException("SSA OASDI county: area '" + nameA
+              + "' has figures but no ANSI code, sheet " + sheet.getSheetName() + " row " + (r + 1));
+        }
+        continue;
       }
-      String nameA = cellString(row.getCell(0));
-      String nameB = cellString(row.getCell(1));
+      String nameB = trimmed(row.getCell(1));
       boolean isTotal = nameA == null && nameB != null;
-      CountyRow cr = new CountyRow();
-      cr.name = isTotal ? nameB : nameA;
-      cr.countyFips = isTotal ? null : leftPad(String.valueOf(ansi.longValue()), 5, '0');
-      cr.total = cellDouble(row.getCell(3));
-      cr.retiredWorkers = cellDouble(row.getCell(4));
-      cr.spousesRetirement = cellDouble(row.getCell(5));
-      cr.childrenRetirement = cellDouble(row.getCell(6));
-      cr.widowersParents = cellDouble(row.getCell(7));
-      cr.childrenSurvivors = cellDouble(row.getCell(8));
-      cr.disabledWorkers = cellDouble(row.getCell(9));
-      cr.spousesDisability = cellDouble(row.getCell(10));
-      cr.childrenDisability = cellDouble(row.getCell(11));
-      out.put(ansi.longValue(), cr);
+      if (!isTotal && nameA == null) {
+        throw new IllegalStateException("SSA OASDI county: unnamed area, sheet "
+            + sheet.getSheetName() + " row " + (r + 1));
+      }
+      CountyRow cr = readMeasures(row);
+      long code = ansi.longValue();
+      if (isTotal) {
+        if (stateCode != null) {
+          throw new IllegalStateException("SSA OASDI county: second state-total row, sheet "
+              + sheet.getSheetName() + " row " + (r + 1));
+        }
+        stateCode = code >= 1000 ? code / 1000 : code;
+        // Some years suffix the total label with a footnote letter ("Total, Maryland b").
+        cr.name = nameB.replaceFirst(" [a-z]$", "");
+      } else {
+        cr.name = nameA;
+        cr.countyFips = leftPad(String.valueOf(code), 5, '0');
+      }
+      if (out.put(code, cr) != null) {
+        throw new IllegalStateException("SSA OASDI county: duplicate ANSI code " + code
+            + ", sheet " + sheet.getSheetName());
+      }
+    }
+    if (stateCode == null || out.size() < 2) {
+      throw new IllegalStateException("SSA OASDI county: sheet " + sheet.getSheetName()
+          + " lacks a state-total row or county rows");
+    }
+    for (CountyRow cr : out.values()) {
+      if (cr.countyFips != null && Long.parseLong(cr.countyFips) / 1000 != stateCode) {
+        throw new IllegalStateException("SSA OASDI county: code " + cr.countyFips + " (" + cr.name
+            + ") is outside state " + stateCode + ", sheet " + sheet.getSheetName());
+      }
     }
     return out;
+  }
+
+  /** The 8 beneficiary-type figures and their total, columns D to L in every source table. */
+  private CountyRow readMeasures(Row row) {
+    CountyRow cr = new CountyRow();
+    cr.total = cellDouble(row.getCell(3));
+    cr.retiredWorkers = cellDouble(row.getCell(4));
+    cr.spousesRetirement = cellDouble(row.getCell(5));
+    cr.childrenRetirement = cellDouble(row.getCell(6));
+    cr.widowersParents = cellDouble(row.getCell(7));
+    cr.childrenSurvivors = cellDouble(row.getCell(8));
+    cr.disabledWorkers = cellDouble(row.getCell(9));
+    cr.spousesDisability = cellDouble(row.getCell(10));
+    cr.childrenDisability = cellDouble(row.getCell(11));
+    return cr;
+  }
+
+  private String trimmed(Cell cell) {
+    String s = cellString(cell);
+    if (s == null || s.trim().isEmpty()) {
+      return null;
+    }
+    return s.trim();
   }
 
   private static String leftPad(String s, int len, char pad) {

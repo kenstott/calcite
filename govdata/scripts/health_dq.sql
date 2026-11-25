@@ -2929,6 +2929,43 @@ FROM (
   WHERE ABS(x.total_count - x.component_sum) / x.total_count > 0.01
 );
 
+-- T7: every year carries one state-total row for each of the 50 states plus DC
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T7_state_total_coverage',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Years without exactly 51 state-total rows over 51 distinct states'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT data_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true)
+  GROUP BY data_year
+  HAVING COUNT(*) FILTER (WHERE county_fips IS NULL) <> 51
+      OR COUNT(DISTINCT state_abbr) FILTER (WHERE county_fips IS NULL) <> 51
+));
+
+-- T7: county rows exist for every state total, and add up to it (SSA rounds county counts)
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T7_county_sum_matches_state_total',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'State-years with no county rows, or county total_count sum off the state total by >1%'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT state_abbr, data_year,
+    SUM(total_count) FILTER (WHERE county_fips IS NULL) AS state_total,
+    SUM(total_count) FILTER (WHERE county_fips IS NOT NULL) AS county_sum
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true)
+  GROUP BY state_abbr, data_year
+) x
+WHERE state_total IS NULL OR county_sum IS NULL
+   OR ABS(county_sum - state_total) / state_total > 0.01);
+
+-- T7: county_fips is a real county code (a total row carries NULL, never a state code)
+INSERT INTO dq_results
+SELECT 'health', 'ssa_oasdi_county', 'T7_county_fips_format',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'county_fips not a 5-digit state+county code, or county_name starting "Total" on a county row'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/ssa_oasdi_county', allow_moved_paths := true)
+      WHERE county_fips IS NOT NULL
+        AND (NOT regexp_full_match(county_fips, '(0[1-9]|[1-5][0-9])[0-9]{3}')
+             OR county_fips LIKE '%000' OR county_name LIKE 'Total%'));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: medicare_geographic_variation (new 13 Sep 2026)
 -- ─────────────────────────────────────────────────────────────

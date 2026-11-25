@@ -8897,14 +8897,14 @@ partitionedTables:
       columns — a different demographic cross-tab of the same totals, not part of the
       beneficiary-type breakdown this table carries.
 
-      **Coverage**: 50 states, no DC (SSA's per-state directory listing has no dc.xlsx —
-      confirmed live 13 Sep 2026; DC's OASDI figures exist only in the national/state-level
-      Table 2/3 files, out of scope for this county-grain table) and no territories (PR/VI
-      are published but excluded — no matching geo.counties FK). county_fips is NULL for
-      each state's own total row (SSA labels it "Total, <State>" with its own state FIPS in
-      the ANSI-code column rather than a real county code) — kept, not dropped, matching
-      this schema's kept-total-row convention elsewhere; filter WHERE county_fips IS NOT
-      NULL for a clean county-only sum.
+      **Coverage**: 50 states plus DC; territories (PR/VI are published but have no matching
+      geo.counties FK) are excluded. Counties include independent cities (Baltimore city,
+      St. Louis city, Carson City, Virginia's cities). DC has no SSA county file, so its rows
+      come from the national state-level Table 2/3 figures: a state-total row and the single
+      county equivalent 11001, with identical values. county_fips is NULL on each state's own
+      total row (SSA labels it "Total, <State>") — kept, matching this schema's kept-total-row
+      convention elsewhere; filter WHERE county_fips IS NOT NULL for a county-only sum.
+      County counts are rounded by SSA, so a county sum differs slightly from the state total.
 
       **Akamai UA gate**: www.ssa.gov 403s a blank UA and a plain "GovData/1.0" identifier
       alike (confirmed live) but passes "Wget/1.21.3" — the opposite of CDC WONDER/BLS's own
@@ -8912,13 +8912,14 @@ partitionedTables:
       gate applies to the FIRST request, not just a re-download — both the source: block's
       headers and SsaOasdiCountyTransformer's own re-download need this UA set explicitly.
 
-      minYear 2005 (raw, pre-dataLag) reaches back to the oldest XLSX-format county file,
-      FY2004 (2003 and earlier are PDF-only scans, not worth backfilling).
+      Years start at 2008, the first December snapshot whose county files carry ANSI codes.
 
     dimensions:
       type:
         - ssa_oasdi_county
-      state:
+      # Workbook name in the SSA year directory: one per state, plus table02, the national
+      # state-level workbook DC's rows are read from (SSA publishes no dc.xlsx).
+      area_file:
         - al
         - ak
         - az
@@ -8969,15 +8970,16 @@ partitionedTables:
         - wv
         - wi
         - wy
+        - table02
       year:
         type: yearRange
         # yearRange is the RAW (pre-dataLag) dimension value; {effective_year} in the URL and
         # this table's data_year column both resolve from effective_year = year - dataLag, so
-        # minYear 2005 reaches FY2004 (the oldest XLSX-format file) — same raw/effective
+        # minYear 2009 reaches the 2008 snapshot — same raw/effective
         # convention as fiscal.irs_gross_collections_by_state_year (see its comment for the
         # live-confirmed mismatch this avoids).
-        start: "${GOVDATA_START_YEAR:2005}"
-        minYear: 2005
+        start: "${GOVDATA_START_YEAR:2009}"
+        minYear: 2009
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1
 
@@ -8985,11 +8987,11 @@ partitionedTables:
       - name: state_abbr
         type: string
         nullable: false
-        comment: 2-letter USPS state code (FK to geo.state_ref) — from which per-state file this row came, not a published column
+        comment: 2-letter USPS state code (FK to geo.state_ref) of the area, derived from the source file, not a published column
       - name: county_fips
         type: string
         nullable: true
-        comment: 5-digit county FIPS (FK to geo.counties); NULL on each state's own total row
+        comment: 5-digit county or independent-city FIPS (FK to geo.counties); NULL on each state's own total row
       - name: county_name
         type: string
         nullable: false
@@ -9072,7 +9074,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/{effective_year}/{state}.xlsx"
+      url: "https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/{effective_year}/{area_file}.xlsx"
       method: GET
       # HttpSource's own initial fetch needs this UA too, not just the transformer's re-download
       # below — confirmed live: without it, HttpSource's own GET 403s before the transformer ever
