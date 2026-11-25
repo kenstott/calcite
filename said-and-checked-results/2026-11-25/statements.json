@@ -751,10 +751,25 @@
       "kind": "factual",
       "test": "True if federal award records show Hadrian Automation received Navy and Army contracts in March 2026 totaling close to but under $1 billion, with no federal contract awards to it before then, and 1789 Capital invested in it in 2025. False if award records show earlier federal contracts or a March total far from $1 billion. Cannot be determined if award records for Hadrian cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "AskAmerica's federal contract records show one Hadrian award, from the Army in March 2026 ($39.2 million obligated on March 17, about $79.4 million in total by July), and no earlier federal contracts, which fits \"first-ever.\" A Navy contract of about $900 million is reported only in trade press and no award record for it was found, and 1789 Capital's 2025 investment rests on secondary investor lists.",
+      "evidence": [
+        {
+          "label": "fiscal.usaspending_contracts (Hadrian awards, 2010-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/fiscal/#usaspending_contracts-table",
+          "askamerica": true,
+          "sql": "SELECT year, action_date, awarding_sub_agency_name, recipient_name, award_id_piid, federal_action_obligation FROM fiscal.usaspending_contracts WHERE year >= 2010 AND recipient_name ILIKE '%HADRIAN%' ORDER BY action_date"
+        },
+        {
+          "label": "Army.mil on the Red River award to Hadrian",
+          "url": "https://www.army.mil/article/291165"
+        },
+        {
+          "label": "Washington Technology on the Navy award (trade press, March 2026)",
+          "url": "https://www.washingtontechnology.com/contracts/2026/03/navy-bets-900m-automated-factories-boost-submarine-production/412310/"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -783,10 +798,19 @@
       "kind": "factual",
       "test": "True if FDA records show Juul received marketing authorization for its e-cigarette products in July 2025, about four months after 1789 Capital took a stake in Juul. False if FDA records show the authorization in a different month or year. Cannot be determined if the FDA authorization date or the investment date cannot be found in a primary record.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "FDA's marketing granted orders for Juul's products are dated July 17, 2025, which confirms the July 2025 authorization. The March 2025 date of 1789 Capital's stake appears only in Raskin's own Aug. 26, 2026 letter, which cites Reuters; no primary record of the investment date was found.",
+      "evidence": [
+        {
+          "label": "FDA marketing granted orders letter to Juul Labs (July 17, 2025)",
+          "url": "https://www.accessdata.fda.gov/static/searchtobacco/juul/MRKT_ORDR_LTR_Multiple_STNs_JUL2025_Redacted.pdf"
+        },
+        {
+          "label": "Raskin letter to 1789 Capital (Aug. 26, 2026)",
+          "url": "https://democrats-judiciary.house.gov/sites/evo-subsites/democrats-judiciary.house.gov/files/evo-media-document/2026-08-26-raskin-to-malik-buskirk-trump-jr-1789-capital-re-insider-access.pdf"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -815,10 +839,29 @@
       "kind": "factual",
       "test": "True if SEC filings show 1789 Capital helped GrabAGun go public and Donald Trump Jr. joined its board, both before ATF published a proposed rule easing the shipping of guns to people's homes. False if that ATF proposed rule was published before those events, or no such proposed rule exists. Cannot be determined if the dates cannot be read from primary records.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "supported",
+      "finding": "GrabAGun went public through a merger with Colombier Acquisition Corp. II that closed July 15, 2025; the SEC proxy says the SPAC's sponsor and management are affiliated with 1789 Capital and lists Donald Trump Jr. as a director from closing. AskAmerica's Federal Register records show ATF's firearms proposed rules, including the May 8, 2026 rule revising non-over-the-counter firearms transactions, came after that. 1789 Capital has disputed that it took the company public; that response was not read directly.",
+      "evidence": [
+        {
+          "label": "fedregister.fr_documents (firearms proposed rules, June 2025 onward)",
+          "url": "https://askamerica.ai/catalog/schemas/fedregister/#fr_documents-table",
+          "askamerica": true,
+          "sql": "SELECT document_number, doc_type, publication_date, title FROM fedregister.fr_documents WHERE doc_type='PRORULE' AND publication_date >= '2025-06-01' AND (title ILIKE '%firearm%' OR title ILIKE '%Bureau of Alcohol%' OR title ILIKE '%explosive%' OR title ILIKE '%ammunition%') ORDER BY publication_date"
+        },
+        {
+          "label": "Colombier Acquisition Corp. II merger proxy (SEC DEFM14A)",
+          "url": "https://www.sec.gov/Archives/edgar/data/1995413/000121390025056297/ea0233554-09.htm"
+        },
+        {
+          "label": "GrabAGun 8-K on closing (July 15, 2025)",
+          "url": "https://www.sec.gov/Archives/edgar/data/0002051380/000121390025065768/ea0249488-8k_graba.htm"
+        },
+        {
+          "label": "Federal Register 2026-09157, ATF proposed rule (May 8, 2026)",
+          "url": "https://www.federalregister.gov/documents/2026/05/08/2026-09157/revising-non-over-the-counter-firearms-transaction-requirements"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
