@@ -29,6 +29,10 @@ import java.io.InputStream;
  * full control of <em>what</em> to fetch and how to parse it, and stops paying for that control
  * with a re-download on every run.
  *
+ * <p>An entry is validated by existence alone. When the pipeline needs a unit re-read (a hash
+ * gate, a changed freshness token, a lookback reopen) it hands the provider a bypassing handle,
+ * unless the provider declares {@link CachingDataProvider#isCacheKeyedByRevision()}.
+ *
  * <p>Byte-oriented throughout, so a zip or other binary caches exactly as a CSV does.
  *
  * <p>Entries live under the directory {@link HttpSource} would compute for the same batch, so a
