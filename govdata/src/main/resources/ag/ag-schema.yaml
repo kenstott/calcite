@@ -39,26 +39,6 @@ comment: >
   econ.fred_indicators for commodity-price context.
 
 # ============================================================================
-# USDA FAS GATS COMMODITY CATALOG
-# ============================================================================
-# FasAgriculturalTradeTransformer reads this to decide which Census HS-10 rows are
-# agricultural products (agricultural_exports / agricultural_imports). The catalog flags
-# each HS-10 code; the chapter lists below are the HS chapters those tables request and
-# must cover every chapter in which the catalog marks a current code agricultural (the
-# transformer fails the fetch when it does not).
-fasGatsCatalog:
-  url: "https://api.fas.usda.gov/api/gats/commodities"
-  apiKey: "${API_DATA_GOV}"
-  exportChapters: &ag_export_chapters
-    ['01', '02', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15',
-     '16', '17', '18', '19', '20', '21', '22', '23', '24', '29', '33', '35', '38', '41',
-     '43', '50', '51', '52', '53']
-  importChapters: &ag_import_chapters
-    ['01', '02', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15',
-     '16', '17', '18', '19', '20', '21', '22', '23', '24', '29', '33', '35', '38', '41',
-     '43', '50', '51', '52', '53', '98']
-
-# ============================================================================
 # COLUMN TEMPLATES
 # ============================================================================
 
@@ -316,6 +296,21 @@ dimension_values:
     dataLag: 1
     releaseMonth: 3
     descending: true
+
+  # HS chapters holding at least one code the USDA FAS commodity catalog marks
+  # agricultural. FasAgriculturalTradeTransformer carries the same lists and fails the
+  # fetch when the catalog marks a code in a chapter outside them.
+  ag_export_chapters: &ag_export_chapters
+    type: list
+    values: ['01', '02', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15',
+             '16', '17', '18', '19', '20', '21', '22', '23', '24', '29', '33', '35', '38', '41',
+             '43', '50', '51', '52', '53']
+
+  ag_import_chapters: &ag_import_chapters
+    type: list
+    values: ['01', '02', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15',
+             '16', '17', '18', '19', '20', '21', '22', '23', '24', '29', '33', '35', '38', '41',
+             '43', '50', '51', '52', '53', '98']
 
   ag_trade_months: &ag_trade_months
     type: list
@@ -2833,9 +2828,7 @@ partitionedTables:
     dimensions:
       type:
         - agricultural_exports
-      chapter:
-        type: list
-        values: *ag_export_chapters
+      chapter: *ag_export_chapters
       year: *ag_trade_year_range
       month: *ag_trade_months
 
@@ -2910,13 +2903,15 @@ partitionedTables:
       url: "https://api.census.gov/data/timeseries/intltrade/exports/hs?get=CTY_CODE,CTY_NAME,E_COMMODITY,ALL_VAL_MO,QTY_1_MO,UNIT_QY1&COMM_LVL=HS10&DF=1&YEAR={effective_year}&MONTH={month}&E_COMMODITY={chapter}*&key={env:CENSUS_API_KEY}"
       method: GET
       parallel: 1
+      # Not sent to Census: FasAgriculturalTradeTransformer uses this api.data.gov key for the
+      # USDA FAS GATS commodity catalog that classifies the rows.
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
       response:
         format: json
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
-      rawCache:
-        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.ag.FasAgriculturalTradeTransformer"
@@ -2979,9 +2974,7 @@ partitionedTables:
     dimensions:
       type:
         - agricultural_imports
-      chapter:
-        type: list
-        values: *ag_import_chapters
+      chapter: *ag_import_chapters
       year: *ag_trade_year_range
       month: *ag_trade_months
 
@@ -3056,13 +3049,15 @@ partitionedTables:
       url: "https://api.census.gov/data/timeseries/intltrade/imports/hs?get=CTY_CODE,CTY_NAME,I_COMMODITY,CON_VAL_MO,CON_QY1_MO,UNIT_QY1&COMM_LVL=HS10&YEAR={effective_year}&MONTH={month}&I_COMMODITY={chapter}*&key={env:CENSUS_API_KEY}"
       method: GET
       parallel: 1
+      # Not sent to Census: FasAgriculturalTradeTransformer uses this api.data.gov key for the
+      # USDA FAS GATS commodity catalog that classifies the rows.
+      headers:
+        X-Api-Key: "${API_DATA_GOV}"
       response:
         format: json
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
-      rawCache:
-        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.ag.FasAgriculturalTradeTransformer"

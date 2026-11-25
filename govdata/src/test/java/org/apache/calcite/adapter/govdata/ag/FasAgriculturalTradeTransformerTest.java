@@ -16,6 +16,11 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -107,6 +112,21 @@ class FasAgriculturalTradeTransformerTest {
     assertEquals("1001992015", row.get("E_COMMODITY"));
     assertEquals("WHEAT", row.get("COMMODITY_DESCRIPTION"));
     assertEquals(false, kept.hasNext());
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test void chapterListsMatchTheSchemaDimensions() throws IOException {
+    try (InputStream in = getClass().getResourceAsStream("/ag/ag-schema.yaml")) {
+      LoaderOptions options = new LoaderOptions();
+      options.setMaxAliasesForCollections(1000);
+      options.setCodePointLimit(10 * 1024 * 1024);
+      Map<String, Object> schema = new Yaml(options).load(in);
+      Map<String, Object> dimensions = (Map<String, Object>) schema.get("dimension_values");
+      assertEquals(FasAgriculturalTradeTransformer.EXPORT_CHAPTERS,
+          ((Map<String, Object>) dimensions.get("ag_export_chapters")).get("values"));
+      assertEquals(FasAgriculturalTradeTransformer.IMPORT_CHAPTERS,
+          ((Map<String, Object>) dimensions.get("ag_import_chapters")).get("values"));
+    }
   }
 
   @Test void directionComesFromTheCensusUrl() {

@@ -10,7 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.ag;
 
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
@@ -26,6 +25,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -58,7 +59,20 @@ public class FasAgriculturalTradeTransformer implements StreamingResponseTransfo
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   static final String DESCRIPTION_FIELD = "COMMODITY_DESCRIPTION";
-  private static final String CONFIG_ROOT = "ag.fasGatsCatalog.";
+  static final String API_KEY_HEADER = "X-Api-Key";
+  private static final String CATALOG_URL = "https://api.fas.usda.gov/api/gats/commodities";
+
+  /** HS chapters {@code agricultural_exports} requests; mirrors the schema YAML dimension. */
+  static final List<String> EXPORT_CHAPTERS = Collections.unmodifiableList(Arrays.asList(
+      "01", "02", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13",
+      "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "29",
+      "33", "35", "38", "41", "43", "50", "51", "52", "53"));
+  /** HS chapters {@code agricultural_imports} requests; mirrors the schema YAML dimension. */
+  static final List<String> IMPORT_CHAPTERS = Collections.unmodifiableList(Arrays.asList(
+      "01", "02", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13",
+      "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "29",
+      "33", "35", "38", "41", "43", "50", "51", "52", "53", "98"));
+
   private static final String GRAIN_CHAPTER = "10";
   private static final String FUEL_CHAPTER = "27";
   private static final int HS10_LENGTH = 10;
@@ -76,7 +90,12 @@ public class FasAgriculturalTradeTransformer implements StreamingResponseTransfo
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
     boolean exports = isExports(context.getUrl());
-    Map<String, String> agricultural = catalog(exports);
+    String apiKey = context.getHeaders().get(API_KEY_HEADER);
+    if (apiKey == null || apiKey.isEmpty()) {
+      throw new IllegalStateException("Missing source header " + API_KEY_HEADER
+          + " (api.data.gov key for the FAS GATS catalog)");
+    }
+    Map<String, String> agricultural = catalog(exports, apiKey);
     return filter(census.fetchAndTransform(context), exports ? "E_COMMODITY" : "I_COMMODITY",
         agricultural);
   }
@@ -123,37 +142,17 @@ public class FasAgriculturalTradeTransformer implements StreamingResponseTransfo
     };
   }
 
-  private static synchronized Map<String, String> catalog(boolean exports) throws IOException {
+  private static synchronized Map<String, String> catalog(boolean exports, String apiKey)
+      throws IOException {
     Map<String, String> loaded = CATALOGS.get(exports);
     if (loaded == null) {
-      String url = required("url");
-      String chaptersKey = exports ? "exportChapters" : "importChapters";
-      loaded = agriculturalCodes(download(url, required("apiKey")), exports,
-          requestedChapters(chaptersKey));
+      loaded = agriculturalCodes(download(CATALOG_URL, apiKey), exports,
+          new HashSet<String>(exports ? EXPORT_CHAPTERS : IMPORT_CHAPTERS));
       LOGGER.info("FAS GATS catalog: {} agricultural HS-10 {} codes", loaded.size(),
           exports ? "export" : "import");
       CATALOGS.put(exports, loaded);
     }
     return loaded;
-  }
-
-  private static String required(String key) {
-    String value = ModelOperand.getString(CONFIG_ROOT + key);
-    if (value == null || value.isEmpty()) {
-      throw new IllegalStateException("Missing model operand " + CONFIG_ROOT + key);
-    }
-    return value;
-  }
-
-  private static Set<String> requestedChapters(String key) {
-    Set<String> chapters = new HashSet<String>();
-    for (int i = 0; ModelOperand.has(CONFIG_ROOT + key + "." + i); i++) {
-      chapters.add(ModelOperand.getString(CONFIG_ROOT + key + "." + i));
-    }
-    if (chapters.isEmpty()) {
-      throw new IllegalStateException("Missing model operand " + CONFIG_ROOT + key);
-    }
-    return chapters;
   }
 
   /**
@@ -224,8 +223,8 @@ public class FasAgriculturalTradeTransformer implements StreamingResponseTransfo
     }
     if (!unrequested.isEmpty()) {
       throw new IllegalStateException("FAS GATS catalog marks agricultural codes in HS chapters "
-          + unrequested + " that the table does not request; add them to " + CONFIG_ROOT
-          + (exports ? "exportChapters" : "importChapters"));
+          + unrequested + " that the table does not request; add them to the schema YAML and "
+          + (exports ? "EXPORT_CHAPTERS" : "IMPORT_CHAPTERS"));
     }
     return result;
   }
