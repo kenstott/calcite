@@ -944,5 +944,50 @@ SELECT 'environment', 'npdes_permit_components', 'T9_cafo_count',
   CASE WHEN n BETWEEN 3000 AND 15000 THEN 'pass' ELSE 'fail' END, n, 6700, 'CAF component rows expected ~6,700'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true) WHERE component_type_code = 'CAF');
 
+-- ===== npdes_cafo_status =====
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T1_exists',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T2_row_count',
+  CASE WHEN n >= 750 THEN 'pass' ELSE 'fail' END, n, 750, 'Expected >=750 rows (14+ reports of 54+ areas)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows (report_year, area_name)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true) WHERE report_year IS NULL OR area_name IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Region outside 1-10, count out of range, or state row without state_abbr'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true) WHERE epa_region NOT BETWEEN 1 AND 10 OR total_cafos NOT BETWEEN 0 AND 10000 OR permitted_cafos NOT BETWEEN 0 AND 10000 OR (state_abbr IS NULL AND area_name NOT LIKE 'Indian Country%'));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (report_year, area_name)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT report_year, area_name FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T9_year_coverage',
+  CASE WHEN n >= 14 AND lo = 2011 AND hi - lo + 1 = n THEN 'pass' ELSE 'fail' END, n, 14, 'One report per year from 2011 with no gap'
+FROM (SELECT COUNT(DISTINCT report_year) AS n, MIN(report_year) AS lo, MAX(report_year) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_cafo_status', 'T10_michigan_2024',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1, 'Michigan end-2024 published as 292 total, 278 permitted'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_cafo_status', allow_moved_paths := true) WHERE report_year = 2024 AND state_abbr = 'MI' AND total_cafos = 292 AND permitted_cafos = 278);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results ORDER BY schema, tbl, test;

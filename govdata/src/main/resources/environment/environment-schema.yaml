@@ -3365,6 +3365,90 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # EPA NPDES CAFO Permitting Status Reports — annual state counts (end of year)
+  # ---------------------------------------------------------------------------
+  - name: npdes_cafo_status
+    # The EPA page gains one report a year; year is a cache-buster only.
+    freshness:
+      type: last_modified
+    pattern: "type=npdes_cafo_status/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Annual state counts of concentrated animal feeding operations (CAFOs) from EPA's
+      "NPDES CAFO Permitting Status Report" national summaries: one row per report_year
+      (end of calendar year, 2011 onward) and area, with total_cafos (all Medium and Large
+      CAFOs, permitted or not) and permitted_cafos (those with an NPDES permit), as reported
+      by EPA Regions. Areas are states, territories and 'Indian Country (Rn)' tribal rows
+      (state_abbr null); which areas appear varies by year. Use this table for CAFO counts
+      and their change over time. It has no county or facility detail: see view
+      npdes_cafo_permits for permit records, whose counts are not the same measure. Values
+      are as published, including areas where permitted_cafos exceeds total_cafos (Oregon in
+      several years). Source: one PDF per year linked from the EPA implementation status
+      reports page; each year's rows are checked against the report's printed totals.
+    dimensions:
+      type:
+        - npdes_cafo_status
+      year: ["${GOVDATA_CURRENT_YEAR}"]
+    columns:
+      - name: report_year
+        type: integer
+        nullable: false
+        comment: Calendar year at whose end the counts were taken (report 'Endyear')
+      - name: area_name
+        type: string
+        nullable: false
+        comment: State or territory name, or 'Indian Country (Rn)' for tribal lands in EPA region n
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: USPS state or territory code; null for the Indian Country rows
+      - name: epa_region
+        type: integer
+        nullable: false
+        comment: EPA region number (1-10)
+      - name: total_cafos
+        type: bigint
+        nullable: false
+        comment: Number of CAFOs (Medium plus Large), with or without an NPDES permit
+      - name: permitted_cafos
+        type: bigint
+        nullable: false
+        comment: Number of CAFOs with an NPDES permit
+      - name: report_url
+        type: string
+        nullable: false
+        comment: URL of the report PDF the row was read from
+      - name: type
+        type: string
+        overwritePartitions: true
+
+    source:
+      type: http
+      url: "https://www.epa.gov/npdes/npdes-cafo-regulations-implementation-status-reports"
+      method: GET
+      response:
+        format: TEXT   # NpdesCafoStatusTransformer reads the report links and each PDF
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.environment.NpdesCafoStatusTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=npdes_cafo_status/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: npdes_cafo_status
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # EPA ECHO ICIS-NPDES — Clean Water Act discharge permits (snapshot, weekly refresh)
   # Three tables from one bulk zip (npdes_downloads.zip): permits, facilities, components.
   # CAFOs are the permits carrying component CAF (npdes_permit_components) or covered by a
@@ -3924,7 +4008,8 @@ views:
       permit_status_code, issue/expiration dates, facility name, county_code, county_fips3,
       latitude/longitude. Active CAFOs are permit_status_code IN ('EFF','ADC'); count by
       state_abbr or county_code. Michigan counts include coverages whose county is not
-      recorded (county_code null).
+      recorded (county_code null). For EPA's published annual state CAFO counts and their
+      change over time, use npdes_cafo_status.
     sql: >
       SELECT
         p.permit_number,
