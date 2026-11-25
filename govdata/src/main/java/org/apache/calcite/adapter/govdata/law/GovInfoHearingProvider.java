@@ -22,6 +22,8 @@ import org.xml.sax.SAXException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -196,7 +198,9 @@ public class GovInfoHearingProvider extends AbstractCongressDocumentProvider {
         committees.isEmpty() ? null : String.join(",", committees.keySet()));
     row.put("witness_count", Integer.valueOf(witnesses.size()));
     row.put("details_url", "https://www.govinfo.gov/app/details/" + packageId);
-    row.put("last_modified", lastModified);
+    // A date, not the full stamp: the writer's type inference reformats timestamp strings.
+    row.put("last_modified_date",
+        Instant.parse(lastModified).atZone(ZoneOffset.UTC).toLocalDate().toString());
     rows.add(row);
     return rows;
   }

@@ -20,9 +20,11 @@ import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Committee meetings, hearings and markups of both chambers, from the Congress.gov API.
@@ -117,11 +119,16 @@ public class CongressCommitteeMeetingProvider extends AbstractCongressDocumentPr
     key.put("event_id", requiredText(m, "eventId", m));
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     if (COMMITTEES.equals(table)) {
+      // The source lists a committee twice on some meetings; it is one row here.
+      Set<String> codes = new HashSet<String>();
       for (JsonNode committee : m.path("committees")) {
-        Map<String, Object> row = new LinkedHashMap<String, Object>(key);
-        row.put("committee_system_code", requiredText(committee, "systemCode", m));
-        row.put("committee_name", text(committee, "name"));
-        rows.add(row);
+        String code = requiredText(committee, "systemCode", m);
+        if (codes.add(code)) {
+          Map<String, Object> row = new LinkedHashMap<String, Object>(key);
+          row.put("committee_system_code", code);
+          row.put("committee_name", text(committee, "name"));
+          rows.add(row);
+        }
       }
     } else if (WITNESSES.equals(table)) {
       int seq = 0;

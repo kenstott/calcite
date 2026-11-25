@@ -56,6 +56,7 @@ class GovInfoHearingProviderTest {
     assertEquals("Committee on the Judiciary", row.get("committee_name"));
     assertEquals("Subcommittee on Privacy", row.get("subcommittee_name"));
     assertEquals(2, row.get("witness_count"));
+    assertEquals("2026-11-24", row.get("last_modified_date"));
   }
 
   @Test void witnessesOfThePackageAndItsPartsCountOnce() throws Exception {
@@ -71,7 +72,7 @@ class GovInfoHearingProviderTest {
         + "<accessId>CHRG-111jhrg1</accessId><chamber>JOINT</chamber><congress>111</congress>"
         + "</extension></mods>").getBytes(StandardCharsets.UTF_8);
     Map<String, Object> row =
-        GovInfoHearingProvider.rowsOf("committee_hearings", "x", bare).get(0);
+        GovInfoHearingProvider.rowsOf("committee_hearings", "2026-11-24T00:00:00Z", bare).get(0);
     assertNull(row.get("first_held_date"));
     assertNull(row.get("committee_system_code"));
     assertNull(row.get("jacket_number"));

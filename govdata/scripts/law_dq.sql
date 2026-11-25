@@ -5351,7 +5351,8 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/committee_meeting_witnesses', allow_moved_paths := true))
     WHERE approx_unique <= 1 AND null_percentage < 100.0
-      AND column_name NOT IN ('type', 'congress')
+      -- the source lists witnesses for House meetings only, so chamber is constant
+      AND column_name NOT IN ('type', 'congress', 'chamber')
   )
 );
 

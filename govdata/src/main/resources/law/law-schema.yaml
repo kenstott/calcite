@@ -7158,10 +7158,10 @@ partitionedTables:
         type: string
         nullable: false
         comment: "GovInfo page of the transcript"
-      - name: last_modified
+      - name: last_modified_date
         type: string
         nullable: false
-        comment: "When GovInfo last changed the package (ISO 8601, UTC)"
+        comment: "Date GovInfo last changed the package (YYYY-MM-DD, UTC)"
 
     source:
       type: http

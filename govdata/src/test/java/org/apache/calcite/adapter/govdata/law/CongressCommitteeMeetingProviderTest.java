@@ -75,6 +75,13 @@ class CongressCommitteeMeetingProviderTest {
     assertNull(witnesses.get(1).get("organization"));
   }
 
+  @Test void committeeListedTwiceIsOneRow() throws Exception {
+    assertEquals(1, rows("committee_meeting_committees",
+        "{\"committeeMeeting\":{\"chamber\":\"House\",\"congress\":119,\"eventId\":\"1\","
+        + "\"committees\":[{\"systemCode\":\"hsed02\"},{\"systemCode\":\"hsed02\"}]}}")
+        .size());
+  }
+
   @Test void meetingWithoutWitnessesHasNoWitnessRows() throws Exception {
     assertTrue(rows("committee_meeting_witnesses",
         "{\"committeeMeeting\":{\"chamber\":\"Senate\",\"congress\":119,\"eventId\":\"1\"}}")
