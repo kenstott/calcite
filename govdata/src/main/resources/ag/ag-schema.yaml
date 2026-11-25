@@ -2846,8 +2846,11 @@ partitionedTables:
       - name: country_code
         type: string
         nullable: false
-        expression: 'src."CTY_CODE"'
-        comment: Census destination country code
+        expression: >
+          CASE WHEN src."CTY_CODE" = '-' THEN 'WORLD' ELSE src."CTY_CODE" END
+        comment: >
+          Census destination country or country-group code; 'WORLD' on the total-for-all-countries
+          rows (Census publishes '-')
       - name: country_name
         type: string
         nullable: true
@@ -2896,7 +2899,7 @@ partitionedTables:
         type: string
         nullable: true
         expression: 'src."UNIT_QY1"'
-        comment: Unit of quantity (T, KG, NO, L, ...), '-' where the commodity has none
+        comment: Unit of quantity (T, KG, NO, L, ...), NULL where the commodity has none
 
     source:
       type: http
@@ -2992,8 +2995,11 @@ partitionedTables:
       - name: country_code
         type: string
         nullable: false
-        expression: 'src."CTY_CODE"'
-        comment: Census origin country code
+        expression: >
+          CASE WHEN src."CTY_CODE" = '-' THEN 'WORLD' ELSE src."CTY_CODE" END
+        comment: >
+          Census origin country or country-group code; 'WORLD' on the total-for-all-countries
+          rows (Census publishes '-')
       - name: country_name
         type: string
         nullable: true
@@ -3042,7 +3048,7 @@ partitionedTables:
         type: string
         nullable: true
         expression: 'src."UNIT_QY1"'
-        comment: Unit of quantity (T, KG, NO, L, ...), '-' where the commodity has none
+        comment: Unit of quantity (T, KG, NO, L, ...), NULL where the commodity has none
 
     source:
       type: http
