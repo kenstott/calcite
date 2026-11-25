@@ -168,40 +168,20 @@ Both the R2 data and the tracker must be cleared. Clearing the tracker alone is 
 
 ---
 
-## 4. Data quality (dq.sh)
+## 4. Data quality (worker-dq-run.sh)
 
-`dq.sh` runs DQ checks for one schema. It:
+`worker-dq-run.sh` runs `{schema}_dq.sql` through DuckDB against `GOVDATA_DQ_BUCKET`, which it reads from `govdata/.env.dq` and which defaults to the production bucket when unset. Check the resolved bucket before a run.
 
-1. Re-ingests the DQ year window via `data-fix.sh` (current year + lookback prior years).
-2. Runs `{schema}_dq.sql` through DuckDB with credential and year-bound variables expanded via `envsubst`.
-3. Writes a results parquet to `s3://govdata-tracker-v1/dq-results/schema={schema}/run_date={date}/type=daily/results.parquet`.
-
-DQ SQL files live in `govdata/scripts/` and are named `{schema}_dq.sql`. A file may declare its default lookback in a header comment:
-
-```sql
--- dq-lookback: 2
-```
-
-If the comment is absent the lookback defaults to 1 (current year + 1 prior year).
+DQ SQL files live in `govdata/scripts/` and are named `{schema}_dq.sql`.
 
 ### Usage
 
 ```bash
-dq.sh --schema fec
-dq.sh --schema crime --lookback 2
-dq.sh --schema edu --no-reingest    # skip data-fix, re-run SQL only
-dq.sh --schema econ --dry-run
+worker-dq-run.sh edu                # run DQ SQL, upload results, update the DQ issue
+worker-dq-run.sh edu --dry-run      # run DQ SQL only: no upload, no DQ issue update
+worker-dq-run.sh edu --etl-resume   # run unfinished ETL partitions, then DQ
+worker-dq-run.sh edu --rebuild      # purge the schema in the DQ bucket, re-run ETL, then DQ
 ```
-
-### Lookback values by schema
-
-| Schema | Lookback | Reason |
-|--------|----------|--------|
-| `census` | 5 | ACS 5-year estimates; data lags |
-| `edu` | 4 | IPEDS publication lag |
-| `crime` | 2 | FBI UCR reporting lag |
-| `fec` | 2 | Election cycle data |
-| all others | 1 | Current + 1 prior year |
 
 ### Viewing results
 
@@ -213,4 +193,4 @@ dq-report.sh --schemas fec --run-date 2026-05-22
 run-all-dq.sh
 ```
 
-`dq-report.sh` reads from `s3://govdata-tracker-v1/dq-results/` and prints a schema-level verdict summary followed by failing test details. Add `--show-warns` or `--show-pass` to include lower-severity rows.
+`dq-report.sh` reads from `s3://govdata-tracker-v1-dq/dq-results/` (`GOVDATA_DQ_TRACKER_BUCKET`) and prints a schema-level verdict summary followed by failing test details. Add `--show-warns` or `--show-pass` to include lower-severity rows.

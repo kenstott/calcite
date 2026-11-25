@@ -358,16 +358,14 @@ Use `data-fix.sh` when a schema or table has corrupt, missing, or stale data tha
 
 Both R2 data and the tracker must be cleared — clearing the tracker alone is insufficient because the ETL detects existing parquet and marks it complete without re-downloading.
 
-### Running data quality checks (dq.sh)
+### Running data quality checks (worker-dq-run.sh)
 
-`dq.sh` re-ingests the DQ year window for a schema, then runs `{schema}_dq.sql` through DuckDB and writes results to `s3://govdata-tracker-v1/dq-results/`.
+`worker-dq-run.sh` runs `{schema}_dq.sql` through DuckDB against `GOVDATA_DQ_BUCKET`, which it reads from `govdata/.env.dq` and which defaults to the production bucket when unset. Check the resolved bucket before a run.
 
-    dq.sh --schema fec                        # current year + 1 prior year
-    dq.sh --schema crime --lookback 2         # override year window
-    dq.sh --schema edu --no-reingest          # re-run SQL only, skip data-fix
-    dq.sh --schema econ --dry-run
-
-Default lookback by schema: `census`=5, `edu`=4, `crime`=2, `fec`=2, all others=1. The lookback can also be set in the SQL file header with `-- dq-lookback: N`.
+    worker-dq-run.sh edu                      # run DQ SQL, upload results, update the DQ issue
+    worker-dq-run.sh edu --dry-run            # run DQ SQL only: no upload, no DQ issue update
+    worker-dq-run.sh edu --etl-resume         # run unfinished ETL partitions, then DQ
+    worker-dq-run.sh edu --rebuild            # purge the schema in the DQ bucket, re-run ETL, then DQ
 
 View results:
     dq-report.sh --schemas fec --run-date 2026-05-22
