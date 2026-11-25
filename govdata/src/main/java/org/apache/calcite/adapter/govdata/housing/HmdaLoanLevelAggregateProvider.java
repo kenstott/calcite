@@ -206,9 +206,9 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestMethod(method);
     conn.setInstanceFollowRedirects(false);
-    conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-    conn.setReadTimeout(IDLE_TIMEOUT_MS);
-    conn.setRequestProperty("User-Agent", HMDA_USER_AGENT);
+    conn.setConnectTimeout(ResumableHttpStream.CONNECT_TIMEOUT_MS);
+    conn.setReadTimeout(ResumableHttpStream.IDLE_TIMEOUT_MS);
+    conn.setRequestProperty("User-Agent", ResumableHttpStream.HMDA_USER_AGENT);
     NetworkOutageWait.connect(conn);
     return conn;
   }
