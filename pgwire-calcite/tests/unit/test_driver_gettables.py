@@ -62,3 +62,17 @@ def test_driver_gettables_returns_the_table(state, schema, table):
     assert catalog.classify(sql) == "INTERCEPT"
     rows = catalog.answer(sql, "", state).rows
     assert [(r[1], r[2]) for r in rows] == [(schema, table)]
+
+
+def test_one_catalog_name_across_current_catalog_current_database_and_table_cat(state):
+    catalog.set_database_name("govdata")
+    try:
+        names = {
+            catalog.answer("select current_catalog", "", state).rows[0][0],
+            catalog.answer("select current_database()", "", state).rows[0][0],
+        }
+        sql = _GET_TABLES.format(schema="econ", table="inflation\\_metrics")
+        names.add(catalog.answer(sql, "", state).rows[0][0])
+        assert names == {"govdata"}
+    finally:
+        catalog.set_database_name("postgres")
