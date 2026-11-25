@@ -1,0 +1,1106 @@
+{
+  "date": "2026-11-25",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 24 or 25, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 25 at 10:04 a.m. ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (one was: a White House statement of Nov. 25, which quoted no officeholder in scope). PBS NewsHour carries Associated Press reporting. Transcripts from Nov. 18 to 23 were searched only to confirm quotes; none held any of the day's quotes. Seven of the eighteen stories quoted no officeholder in scope. Greetings, quotes under five words, commentators' and reporters' accounts of what officials said or wrote, reporters' paraphrases of opinions, and statements by people outside the offices in scope (including state attorneys general, a governor-elect, a congressman-elect, a White House spokesperson and the first lady) were left out. Statements are worded as the outlet reported them.",
+  "lede": [
+    "Coverage on Nov. 24 again centered on Nvidia's reinstatement of chief executive Jensen Huang. President Trump said in a CNBC interview that he had spoken to the company's board and convinced it, and Democratic senators, governors and a House member criticized the decision. Sen. Tim Scott announced that Huang will testify before the Senate Banking Committee on Dec. 3.",
+    "Other stories covered Rep. Jamie Raskin's letters to companies in which Donald Trump Jr.'s firm 1789 Capital invested, a HUD rule ending housing aid for families with ineligible noncitizen members, which HUD Secretary Scott Turner defended, records of the search of Rep. Ilhan Omar's home, a Defense Department directive on contacts with Canada described by Sen. Mike Rounds, the president's Medal of Freedom for Rudy Giuliani, and the White House turkey pardon.",
+    "The page lists 26 statements by 12 officeholders. Thirteen are factual claims, and every one was checked: 4 were supported, 8 unsettled and 1 contradicted. The contradicted claim, HUD Secretary Turner's statement that the rule guarantees only citizens and eligible noncitizens will live in HUD-funded housing, rests on the rule's own text, which keeps a temporary deferral of termination of up to 18 months. One check cites AskAmerica's federal contract records and one its Federal Register records. The other 13 statements are opinions, promises or personal attacks and are listed without a check."
+  ],
+  "stories": [
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/24/nx-s1-6051045/trump-takes-credit-for-jensen-huang-returns-to-nvidia-says-its-good-for-the-economy",
+      "headline": "Trump takes credit for Jensen Huang returns to Nvidia, says its good for the economy",
+      "published": "2026-11-24T06:42-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-live-trump-holds-2026-white-house-turkey-pardon-with-freedom-and-feathers",
+      "headline": "WATCH: Trump holds 2026 White House turkey pardon with Freedom and Feathers",
+      "published": "2026-11-24T09:56-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia",
+      "headline": "Why Trump believed he needed to get Jensen Huang back on top at Nvidia",
+      "published": "2026-11-24T10:18-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/records-show-how-doj-judge-debated-constitutional-implications-of-searching-rep-ilhan-omars-home",
+      "headline": "Records show how DOJ, judge debated constitutional implications of searching Rep. Ilhan Omar's home",
+      "published": "2026-11-24T10:56-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel",
+      "headline": "Trump's intervention on behalf of Jensen Huang gives Democrats more 2028 campaign fuel",
+      "published": "2026-11-24T11:12-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/podcasts/settle-in-with-pbs-news/ben-shapiro-on-trump-israel-and-the-future-of-the-republican-party",
+      "headline": "Ben Shapiro on Trump, Israel and the future of the Republican party",
+      "published": "2026-11-24T12:01-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/rep-raskin-expands-investigation-into-donald-trump-jr-s-investment-firm",
+      "headline": "Rep. Raskin expands investigation into Donald Trump Jr.'s investment firm",
+      "published": "2026-11-24T12:13-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-will-give-medal-of-freedom-to-giuliani-a-fierce-political-ally-who-led-new-york-through-9-11",
+      "headline": "Trump will give Medal of Freedom to Giuliani, a fierce political ally who led New York through 9/11",
+      "published": "2026-11-24T12:53-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/democrats-supporting-abortion-rights-won-big-in-midterms-but-vast-changes-unlikely-soon",
+      "headline": "Democrats supporting abortion rights won big in midterms, but vast changes unlikely soon",
+      "published": "2026-11-24T14:53-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/world/pentagon-sharply-criticizes-canada-over-modernizing-military",
+      "headline": "Pentagon sharply criticizes Canada over modernizing military",
+      "published": "2026-11-24T15:42-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/24/nx-s1-6052994/hack-commercial-vessels-iran",
+      "headline": "The U.S. government is investigating Iranian ties to as many as 50 hacked commercial vessels",
+      "published": "2026-11-24T16:04-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/nation/paxton-drops-texas-lawsuits-that-accused-doctors-of-illegally-providing-transgender-youth-care",
+      "headline": "Paxton drops Texas lawsuits that accused doctors of illegally providing transgender youth care",
+      "published": "2026-11-24T16:33-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/nation/states-sue-hud-over-a-rule-that-would-end-housing-aid-for-mixed-status-families",
+      "headline": "States sue HUD over a rule that would end housing aid for mixed-status families",
+      "published": "2026-11-24T17:16-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/24/nx-s1-6050930/moving-to-florida-may-become-a-choice-of-some-republicans-after-midterms",
+      "headline": "Moving to Florida may become a choice of some Republicans after midterms",
+      "published": "2026-11-24T17:54-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/bob-woodward-reveals-why-hes-naming-sources-in-new-book-secrets",
+      "headline": "Bob Woodward reveals why he's naming sources in new book 'Secrets'",
+      "published": "2026-11-24T18:25-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/n-c-democrat-reflects-on-flipping-longtime-gop-seat-its-a-new-day-in-the-south",
+      "headline": "N.C. Democrat reflects on flipping longtime GOP seat: 'It's a new day in the South'",
+      "published": "2026-11-24T18:35-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/how-trump-may-have-profited-from-huangs-return-to-nvidia",
+      "headline": "How Trump may have profited from Huang's return to Nvidia",
+      "published": "2026-11-24T18:55-05:00"
+    },
+    {
+      "outlet": "White House briefings and statements",
+      "url": "https://www.whitehouse.gov/briefings-statements/2026/11/first-lady-melania-trump-secures-reunification-of-nine-additional-children-with-their-families/",
+      "headline": "First Lady Melania Trump Secures Reunification of Nine Additional Children with their Families",
+      "published": "2026-11-25"
+    }
+  ],
+  "statements": [
+    {
+      "id": 1,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump described the effect on the stock market of Jensen Huang's return as Nvidia CEO.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Now it's a rocket ship going in the right direction, and it's taken the whole market with it.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/24/nx-s1-6051045/trump-takes-credit-for-jensen-huang-returns-to-nvidia-says-its-good-for-the-economy"
+      },
+      "source": {
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "CNBC's transcript reads \"it's taking the whole market\"."
+      },
+      "kind": "factual",
+      "test": "True if Nvidia's share price and a broad market index (S&P 500 or Nasdaq Composite) both rose on Nov. 23, 2026, the trading day of the morning interview, from the Nov. 20 close. False if either was down that day. Cannot be determined if price data for those days cannot be read.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "As reported by AP, Nvidia shares opened 33% higher on Nov. 23, the morning of the interview, and the S&P 500 rose 4.7% that day, which fits the claim; no exchange price record for that day could be read directly.",
+      "evidence": [
+        {
+          "label": "AP via PBS NewsHour, Nvidia board reinstates Huang",
+          "url": "https://www.pbs.org/newshour/nation/nvidia-board-unanimously-reinstates-jensen-huang-as-ceo-and-chairman"
+        },
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 2,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump said he spoke to Nvidia's board and persuaded it to reinstate Jensen Huang as CEO.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I spoke to them, let me just put it that way. And I convinced them.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
+      },
+      "source": {
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "CNBC's transcript reads \"I spoke to 'em. Let me just put it that way, and I convinced 'em.\""
+      },
+      "kind": "factual",
+      "test": "True if Nvidia, a board member or another primary record confirms Trump spoke with Nvidia's board members before the reinstatement and the board acknowledged his urging. False if Nvidia or a board member states on record that the president had no contact with the board on the matter. Cannot be determined if no primary account of the board's contacts is available.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "In the same interview Trump declined to say whom he spoke to (\"I was represented at the board\"). Nvidia's Nov. 23 release credits \"input from senior levels of the United States government\" without naming him, and no board member has confirmed or denied contact.",
+      "evidence": [
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        },
+        {
+          "label": "Nvidia release on Huang's reinstatement, SEC 8-K exhibit (Nov. 23, 2026)",
+          "url": "https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000090/nov23pressrelease.htm"
+        },
+        {
+          "label": "CNBC on Trump and the Nvidia board (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/trump-nvidia-jensen-huang.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "Let me just put it that way. And I convinced them.",
+          "outlet": "PBS NewsHour",
+          "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "President Trump said in a CNBC phone interview on Nov. 23, 2026 that U.S. officials assured Nvidia that CEO Jensen Huang, who had an affair with a suspected Chinese spy, posed no national security risk.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: As part of his campaign for Huang's reinstatement, Trump said U.S. officials assured the company that Huang — who acknowledged his relationship with Megaspeed executive Alice Huang — did not present a national security risk.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
+      },
+      "source": {
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "In CNBC's transcript Trump says Nvidia's board \"did ask for assurance on the national security threat and we gave them assurance at least with everything we know.\""
+      },
+      "kind": "factual",
+      "test": "True if a primary record (an Nvidia statement or filing, or an official government statement) shows U.S. officials told Nvidia that Huang did not present a national security risk. False if officials stated on record that they gave no such assurance or assessed Huang as a risk. Cannot be determined if no primary account of the officials' communications with Nvidia is available.",
+      "premise": null,
+      "result": "supported",
+      "finding": "Nvidia's Nov. 23 release says the board \"received input from senior levels of the United States government, and based on that input\" is confident Huang's reinstatement \"poses no national security risk.\" The board's own investigation and the Justice and Commerce Department inquiry into Megaspeed remain open.",
+      "evidence": [
+        {
+          "label": "Nvidia release on Huang's reinstatement, SEC 8-K exhibit (Nov. 23, 2026)",
+          "url": "https://www.sec.gov/Archives/edgar/data/0001045810/000104581026000090/nov23pressrelease.htm"
+        },
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "Trump said on CNBC that the White House investigated this, and he's not concerned about Huang from a security perspective.",
+          "outlet": "NPR",
+          "url": "https://www.npr.org/2026/11/24/nx-s1-6051045/trump-takes-credit-for-jensen-huang-returns-to-nvidia-says-its-good-for-the-economy"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump said Nvidia CEO Jensen Huang had apologized over the extramarital affairs that led to his resignation.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "He's apologized for that to the company, to the country and to his family and his wife, who's a fantastic person",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Huang's own public statements or Nvidia's published statements show he apologized to the company, publicly, and to his family. False if Huang's public statements contain no apology. Cannot be determined if no primary statement by Huang can be read.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "Huang's Nov. 17 statement says he \"deeply regret[s]\" the problems he created for the board, owns his mistakes and tells his family \"I love you\"; it does not use the words apologize or sorry, and any private apology cannot be checked.",
+      "evidence": [
+        {
+          "label": "Huang's statement on his resignation (Nov. 17, 2026), CNBC",
+          "url": "https://www.cnbc.com/2026/11/17/nvidia-jensen-huang-statement.html"
+        },
+        {
+          "label": "CNBC transcript of the Trump interview (Nov. 23, 2026)",
+          "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 5,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump explained why Nvidia CEO Jensen Huang's situation differs from other executives' scandals.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "This is different because the vast amount of knowledge in his brain",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 6,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump characterized the Nvidia scandal over CEO Jensen Huang's affairs.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "But in another way, it's showed how advanced this company is. How incredibly advanced it is with respect to him.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
+      },
+      "source": {
+        "status": "paraphrased",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": "CNBC's transcript reads \"it showed how advanced this company is, how incredibly advanced it is with respect to chips\"; the story has \"with respect to him\"."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 7,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In a CNBC phone interview on Nov. 23, 2026, President Trump gave his reason for pushing Nvidia to reinstate CEO Jensen Huang.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I'm doing it for the country",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cnbc.com/2026/11/23/cnbc-transcript-president-donald-trump-speaks-with-cnbcs-eamon-javers-and-squawk-on-the-street-today.html",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [
+        13
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 8,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "At the 2025 White House turkey pardon, President Trump said the birds should be named after Democratic leaders Chuck Schumer and Nancy Pelosi, and said he would never pardon them.",
+      "topic": "Thanksgiving turkey pardon",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I would never pardon those people",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-trump-holds-2026-white-house-turkey-pardon-with-freedom-and-feathers"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 9,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "President Trump has described former New York Mayor Rudy Giuliani, whom he will award the Presidential Medal of Freedom on Nov. 25, 2026.",
+      "topic": "Medal of Freedom for Giuliani",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": null,
+      "about_states": [
+        "NY"
+      ],
+      "quote": "greatest Mayor in the history of New York City, and an equally great American Patriot.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-will-give-medal-of-freedom-to-giuliani-a-fierce-political-ally-who-led-new-york-through-9-11"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 10,
+      "speaker": "Ruben Gallego",
+      "office": "U.S. Senator",
+      "party": "D",
+      "context": "In an interview with The Associated Press, Sen. Gallego said Nvidia's reinstatement of CEO Jensen Huang, who had an affair with a suspected Chinese spy, sends a message about national security.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "AZ",
+      "about_states": [],
+      "quote": "that the national security of this country is not as important as your relationship with President Trump",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 11,
+      "speaker": "Ro Khanna",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "In a social media post, Rep. Khanna commented on Nvidia's reinstatement of CEO Jensen Huang amid scrutiny of Nvidia's compliance with chip export restrictions.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "CA",
+      "about_states": [],
+      "quote": "the rich & powerful, like Jensen, do not get to evade export controls or accountability just because it props up the stock price.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 12,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "context": "Pennsylvania Gov. Shapiro commented on Nvidia's reinstatement of CEO Jensen Huang after pressure from President Trump.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "another example of the dangerous combination governing this country: a rigged system that protects those at the very top no matter what, and a corrupt White House that cannot be trusted to put the economic well-being and safety of American families first.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 13,
+      "speaker": "Elissa Slotkin",
+      "office": "U.S. Senator",
+      "party": "D",
+      "context": "Sen. Slotkin commented on President Trump's pressure on Nvidia to reinstate CEO Jensen Huang, who had an affair with a suspected Chinese spy.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "MI",
+      "about_states": [],
+      "quote": "making money is more important than America's national security or the rule of law.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [
+        7
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 14,
+      "speaker": "JB Pritzker",
+      "office": "Governor of Illinois",
+      "party": "D",
+      "context": "Illinois Gov. Pritzker compared Nvidia's reinstatement of CEO Jensen Huang with Democrats' wins in the November 2026 midterm elections.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "IL",
+      "about_states": [],
+      "quote": "the greed and lack of accountability that the country just rejected.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-intervention-on-behalf-of-jensen-huang-gives-democrats-more-2028-campaign-fuel"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 15,
+      "speaker": "Tim Scott",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "Sen. Scott, who chairs the Senate Banking Committee, announced on Nov. 23, 2026 that Nvidia CEO Jensen Huang will testify before the committee.",
+      "topic": "Nvidia CEO reinstatement",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "SC",
+      "about_states": [],
+      "quote": "Reported as: Meanwhile, Sen. Tim Scott, R-S.C., announced Monday that Huang will testify before the Senate Banking Committee on Dec. 3.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/why-trump-believed-he-needed-to-get-jensen-huang-back-on-top-at-nvidia"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Senate Banking Committee's published schedule or a statement from Sen. Scott lists a hearing with Jensen Huang testifying on Dec. 3, 2026. False if the committee's schedule lists that hearing on a different date or without Huang. Cannot be determined if no committee schedule or statement can be read.",
+      "premise": null,
+      "result": "supported",
+      "finding": "The Senate Banking Committee's hearing page lists a full committee hearing on Thursday, Dec. 3, 2026, \"Protecting America's AI Advantage: Oversight of U.S. Export Controls,\" with Jensen Huang of Nvidia as the witness. No dated announcement was found to confirm it was made on Monday.",
+      "evidence": [
+        {
+          "label": "Senate Banking Committee hearing page (Dec. 3, 2026)",
+          "url": "https://www.banking.senate.gov/hearings/protecting-americas-ai-advantage-oversight-of-us-export-controls"
+        },
+        {
+          "label": "Senate Banking Committee hearings list",
+          "url": "https://www.banking.senate.gov/hearings"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 17,
+      "speaker": "Jamie Raskin",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "Rep. Raskin, incoming House Judiciary chair, criticized President Trump's executive order on federal contractors responding to congressional inquiries, in his probe of Donald Trump Jr.'s firm 1789 Capital.",
+      "topic": "Trump Jr. investment firm probe",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "MD",
+      "about_states": [],
+      "quote": "duty and a right to speak truthfully when Congress calls.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/rep-raskin-expands-investigation-into-donald-trump-jr-s-investment-firm"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 18,
+      "speaker": "Jamie Raskin",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "Rep. Raskin, incoming House Judiciary chair, has said what his priorities will be when Democrats take control of the House in January 2027.",
+      "topic": "Trump Jr. investment firm probe",
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "MD",
+      "about_states": [],
+      "quote": "Reported as: As one of the lawmakers who will be spearheading Democrats' oversight of the Trump administration when they take control of Congress in January, Raskin has said that uncovering information about bribery and financial corruption will be among his top priorities.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/rep-raskin-expands-investigation-into-donald-trump-jr-s-investment-firm"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 19,
+      "speaker": "Jamie Raskin",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "In a letter to defense contractor Hadrian Automation, Rep. Raskin described its federal contracts and its 2025 investment by Donald Trump Jr.'s firm 1789 Capital.",
+      "topic": "Trump Jr. investment firm probe",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "MD",
+      "about_states": [],
+      "quote": "Reported as: Hadrian Automation, he wrote, received nearly $1 billion in U.S. Navy and Army contracts in March — its first-ever federal contracts — after bringing 1789 Capital on as an investor in 2025.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/rep-raskin-expands-investigation-into-donald-trump-jr-s-investment-firm"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if federal award records show Hadrian Automation received Navy and Army contracts in March 2026 totaling close to but under $1 billion, with no federal contract awards to it before then, and 1789 Capital invested in it in 2025. False if award records show earlier federal contracts or a March total far from $1 billion. Cannot be determined if award records for Hadrian cannot be read.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "AskAmerica's federal contract records show one Hadrian award, from the Army in March 2026 ($39.2 million obligated on March 17, about $79.4 million in total by July), and no earlier federal contracts, which fits \"first-ever.\" A Navy contract of about $900 million is reported only in trade press and no award record for it was found, and 1789 Capital's 2025 investment rests on secondary investor lists.",
+      "evidence": [
+        {
+          "label": "fiscal.usaspending_contracts (Hadrian awards, 2010-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/fiscal/#usaspending_contracts-table",
+          "askamerica": true,
+          "sql": "SELECT year, action_date, awarding_sub_agency_name, recipient_name, award_id_piid, federal_action_obligation FROM fiscal.usaspending_contracts WHERE year >= 2010 AND recipient_name ILIKE '%HADRIAN%' ORDER BY action_date"
+        },
+        {
+          "label": "Army.mil on the Red River award to Hadrian",
+          "url": "https://www.army.mil/article/291165"
+        },
+        {
+          "label": "Washington Technology on the Navy award (trade press, March 2026)",
+          "url": "https://www.washingtontechnology.com/contracts/2026/03/navy-bets-900m-automated-factories-boost-submarine-production/412310/"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 20,
+      "speaker": "Jamie Raskin",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "In a letter to vape maker Juul Labs, Rep. Raskin described its 2025 FDA clearance and its investment by Donald Trump Jr.'s firm 1789 Capital.",
+      "topic": "Trump Jr. investment firm probe",
+      "broad_topic": "Health",
+      "speaker_state": "MD",
+      "about_states": [],
+      "quote": "Reported as: Juul, Raskin wrote, received Food and Drug Administration clearance to keep its electronic cigarette products on the market in July 2025, four months after 1789 Capital had taken a stake in the company.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/rep-raskin-expands-investigation-into-donald-trump-jr-s-investment-firm"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if FDA records show Juul received marketing authorization for its e-cigarette products in July 2025, about four months after 1789 Capital took a stake in Juul. False if FDA records show the authorization in a different month or year. Cannot be determined if the FDA authorization date or the investment date cannot be found in a primary record.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "FDA's marketing granted orders for Juul's products are dated July 17, 2025, which confirms the July 2025 authorization. The March 2025 date of 1789 Capital's stake appears only in Raskin's own Aug. 26, 2026 letter, which cites Reuters; no primary record of the investment date was found.",
+      "evidence": [
+        {
+          "label": "FDA marketing granted orders letter to Juul Labs (July 17, 2025)",
+          "url": "https://www.accessdata.fda.gov/static/searchtobacco/juul/MRKT_ORDR_LTR_Multiple_STNs_JUL2025_Redacted.pdf"
+        },
+        {
+          "label": "Raskin letter to 1789 Capital (Aug. 26, 2026)",
+          "url": "https://democrats-judiciary.house.gov/sites/evo-subsites/democrats-judiciary.house.gov/files/evo-media-document/2026-08-26-raskin-to-malik-buskirk-trump-jr-1789-capital-re-insider-access.pdf"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 21,
+      "speaker": "Jamie Raskin",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "In a letter to online firearms seller GrabAGun, Rep. Raskin described the firm's public listing, its board and a proposed ATF rule on shipping guns to homes.",
+      "topic": "Trump Jr. investment firm probe",
+      "broad_topic": "Civil Rights and Social Issues",
+      "speaker_state": "MD",
+      "about_states": [],
+      "quote": "Reported as: The congressman wrote that GrabAGun got help from 1789 to go public and put Trump Jr. on its board before the Bureau of Alcohol, Tobacco, Firearms and Explosives issued a proposed rule to ease the process of shipping guns to people's homes.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/rep-raskin-expands-investigation-into-donald-trump-jr-s-investment-firm"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if SEC filings show 1789 Capital helped GrabAGun go public and Donald Trump Jr. joined its board, both before ATF published a proposed rule easing the shipping of guns to people's homes. False if that ATF proposed rule was published before those events, or no such proposed rule exists. Cannot be determined if the dates cannot be read from primary records.",
+      "premise": null,
+      "result": "supported",
+      "finding": "GrabAGun went public through a merger with Colombier Acquisition Corp. II that closed July 15, 2025; the SEC proxy says the SPAC's sponsor and management are affiliated with 1789 Capital and lists Donald Trump Jr. as a director from closing. AskAmerica's Federal Register records show ATF's firearms proposed rules, including the May 8, 2026 rule revising non-over-the-counter firearms transactions, came after that. 1789 Capital has disputed that it took the company public; that response was not read directly.",
+      "evidence": [
+        {
+          "label": "fedregister.fr_documents (firearms proposed rules, June 2025 onward)",
+          "url": "https://askamerica.ai/catalog/schemas/fedregister/#fr_documents-table",
+          "askamerica": true,
+          "sql": "SELECT document_number, doc_type, publication_date, title FROM fedregister.fr_documents WHERE doc_type='PRORULE' AND publication_date >= '2025-06-01' AND (title ILIKE '%firearm%' OR title ILIKE '%Bureau of Alcohol%' OR title ILIKE '%explosive%' OR title ILIKE '%ammunition%') ORDER BY publication_date"
+        },
+        {
+          "label": "Colombier Acquisition Corp. II merger proxy (SEC DEFM14A)",
+          "url": "https://www.sec.gov/Archives/edgar/data/1995413/000121390025056297/ea0233554-09.htm"
+        },
+        {
+          "label": "GrabAGun 8-K on closing (July 15, 2025)",
+          "url": "https://www.sec.gov/Archives/edgar/data/0002051380/000121390025065768/ea0249488-8k_graba.htm"
+        },
+        {
+          "label": "Federal Register 2026-09157, ATF proposed rule (May 8, 2026)",
+          "url": "https://www.federalregister.gov/documents/2026/05/08/2026-09157/revising-non-over-the-counter-firearms-transaction-requirements"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 22,
+      "speaker": "Ilhan Omar",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "Rep. Omar, a Minnesota Democrat, has said what federal agents seized when they searched her Washington, D.C., home on Oct. 12, 2026.",
+      "topic": "Search of Rep. Omar's home",
+      "broad_topic": "Crime and Policing",
+      "speaker_state": "MN",
+      "about_states": [
+        "DC"
+      ],
+      "quote": "Reported as: Omar has said DHS agents seized 17 items, including phones, notebooks, a Somali-language children's book and a vintage camera that her husband had received as a gift.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/records-show-how-doj-judge-debated-constitutional-implications-of-searching-rep-ilhan-omars-home"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the released search-warrant records (inventory or return) list 17 items seized from Rep. Omar's home, including phones, notebooks, a Somali-language children's book and a camera. False if the inventory lists a different number of items or none of those items. Cannot be determined if the inventory was not released or is redacted on the point.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "The court filings unsealed on Nov. 23 are heavily redacted and, as AP describes them, include no inventory of what was seized; the 67-page search warrant affidavit remains sealed. The 17-item count rests on Omar's own account and is neither confirmed nor contradicted by a released record.",
+      "evidence": [
+        {
+          "label": "AP via PBS NewsHour on the unsealed records (Nov. 24, 2026)",
+          "url": "https://www.pbs.org/newshour/politics/records-show-how-doj-judge-debated-constitutional-implications-of-searching-rep-ilhan-omars-home"
+        },
+        {
+          "label": "AP via PBS NewsHour, Omar's account of the search",
+          "url": "https://www.pbs.org/newshour/politics/rep-ilhan-omar-says-she-will-move-out-of-her-washington-dc-home-after-federal-search"
+        }
+      ],
+      "check_run": "q204/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 24,
+      "speaker": "Mike Rounds",
+      "office": "U.S. Senator",
+      "party": "R",
+      "context": "Sen. Rounds described a classified directive from Defense Secretary Pete Hegseth concerning U.S. military officials' contact with Canadian think tanks and social events.",
+      "topic": "Pentagon criticism of Canada",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "SD",
+      "about_states": [],
+      "quote": "Reported as: The criticism follows a classified directive from Hegseth that Republican U.S. Sen. Mike Rounds said largely restricts U.S. military officials' participation in Canadian think tank and social events.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/pentagon-sharply-criticizes-canada-over-modernizing-military"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a primary record (the directive, a Defense Department statement, or Sen. Rounds's own published remarks) shows the directive largely restricts U.S. military officials' participation in Canadian think tank and social events. False if the Defense Department's published directive or statement describes a different scope. Cannot be determined if the directive is classified and no primary account of its scope can be read.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "As reported by Breaking Defense, Rounds said the memo requires permission for Canadian think tank events and social engagements and limits general and flag officer meetings to those that advance Defense Department objectives. The directive is classified and no Defense Department or Rounds-published account of its scope could be read, so whether it \"largely restricts\" participation is not settled.",
+      "evidence": [
+        {
+          "label": "Breaking Defense on Rounds and the Pentagon at Halifax (Nov. 2026)",
+          "url": "https://breakingdefense.com/2026/11/canada-hasnt-seen-changes-to-defense-relationship-with-us-says-mcguinty/"
+        },
+        {
+          "label": "Newsweek on the Hegseth memo",
+          "url": "https://www.newsweek.com/hegseths-pentagon-blasts-canada-secret-memo-12760983"
+        }
+      ],
+      "check_run": "q205/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 26,
+      "speaker": "Scott Turner",
+      "office": "Secretary of Housing and Urban Development",
+      "party": "R",
+      "context": "In an emailed statement on Nov. 24, 2026, HUD Secretary Turner described HUD's final rule ending housing aid for mixed-status families, which 21 states and Pennsylvania's governor sued over.",
+      "topic": "HUD mixed-status housing rule",
+      "broad_topic": "Housing and Communities",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "HUD's final rule fully implements the 1980 Housing and Community Development Act",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/nation/states-sue-hud-over-a-rule-that-would-end-housing-aid-for-mixed-status-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the final rule's text states it implements the noncitizen eligibility provision (Section 214) of the Housing and Community Development Act of 1980 and leaves none of that section's requirements unimplemented. False if the rule cites a different authority. Cannot be determined if whether it implements the Act 'fully' turns on a legal reading of the statute.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "The final rule revises HUD's Section 214 regulations under the 1980 Act, but describes its changes as bringing them \"into greater alignment\" with Section 214 and keeps proration and deferral where the statute requires them. Whether that is full implementation turns on a legal reading of the statute.",
+      "evidence": [
+        {
+          "label": "HUD final rule, Verification of Eligible Status (Federal Register 2026-23003)",
+          "url": "https://public-inspection.federalregister.gov/2026-23003.pdf"
+        },
+        {
+          "label": "42 U.S.C. 1436a (Section 214), Cornell LII",
+          "url": "https://www.law.cornell.edu/uscode/text/42/1436a"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 27,
+      "speaker": "Scott Turner",
+      "office": "Secretary of Housing and Urban Development",
+      "party": "R",
+      "context": "In an emailed statement on Nov. 24, 2026, HUD Secretary Turner described who would live in HUD-funded housing under the department's final rule on mixed-status families.",
+      "topic": "HUD mixed-status housing rule",
+      "broad_topic": "Housing and Communities",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "This rule guarantees ONLY AMERICAN citizens and certain eligible noncitizens will reside in HUD-funded housing.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/nation/states-sue-hud-over-a-rule-that-would-end-housing-aid-for-mixed-status-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the final rule's text ends assistance for any household that includes a member who is neither a citizen nor an eligible noncitizen, so that only citizens and eligible noncitizens reside in HUD-assisted units. False if the rule lets ineligible noncitizens keep residing in HUD-funded housing (for example under deferral or prorated assistance). Cannot be determined if the rule text cannot be read.",
+      "premise": null,
+      "result": "contradicted",
+      "finding": "The rule makes prorated assistance temporary pending verification but \"preserves the temporary deferral of termination of assistance, available in HUD's discretion for up to 18 months\"; HUD's analysis counts 19,810 mixed families eligible for it, so ineligible members can keep living in assisted units for a period. What remains open is the end state after deferral, which limits assistance to fully eligible households, and the states' lawsuit against the rule.",
+      "evidence": [
+        {
+          "label": "HUD final rule, Verification of Eligible Status (Federal Register 2026-23003)",
+          "url": "https://public-inspection.federalregister.gov/2026-23003.pdf"
+        },
+        {
+          "label": "42 U.S.C. 1436a (Section 214), Cornell LII",
+          "url": "https://www.law.cornell.edu/uscode/text/42/1436a"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 28,
+      "speaker": "Scott Turner",
+      "office": "Secretary of Housing and Urban Development",
+      "party": "R",
+      "context": "In an emailed statement on Nov. 24, 2026, HUD Secretary Turner said how much federal housing funding the department's final rule on mixed-status families would redirect.",
+      "topic": "HUD mixed-status housing rule",
+      "broad_topic": "Housing and Communities",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "This change represents a reallocation of up to $218 million which will now go to eligible Americans that are currently on a waitlist",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/nation/states-sue-hud-over-a-rule-that-would-end-housing-aid-for-mixed-status-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if HUD's final rule or its regulatory impact analysis estimates a reallocation of up to $218 million to eligible households on waiting lists. False if HUD's published estimate is a different amount. Cannot be determined if HUD's published analysis cannot be read.",
+      "premise": null,
+      "result": "supported",
+      "finding": "The rule's analysis estimates a redistribution of \"approximately $167 million to $218 million annually in rental assistance from mixed-status families to fully eligible households currently awaiting assistance,\" so $218 million is the top of HUD's range. The rule says fully eligible households, not Americans.",
+      "evidence": [
+        {
+          "label": "HUD final rule, Verification of Eligible Status (Federal Register 2026-23003)",
+          "url": "https://public-inspection.federalregister.gov/2026-23003.pdf"
+        }
+      ],
+      "check_run": "q206/askamerica/2026-11-25",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 30,
+      "speaker": "Joe Biden",
+      "office": "Former President of the United States",
+      "party": "D",
+      "context": "At the 2024 White House turkey pardon, then-President Biden joked about the motto of the turkey Peach.",
+      "topic": "Thanksgiving turkey pardon",
+      "broad_topic": "Agriculture",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "lives by the motto, 'Keep calm and gobble on.'",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-live-trump-holds-2026-white-house-turkey-pardon-with-freedom-and-feathers"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    }
+  ]
+}
