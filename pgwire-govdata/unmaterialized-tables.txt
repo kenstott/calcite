@@ -17,6 +17,7 @@ econ.osha_inspections
 econ.osha_violations
 econ.retail_sales_revision_vintages
 econ.treasury_foreign_holdings
+edu.college_scorecard_latest
 edu.edfacts_chronic_absenteeism
 energy.eia_petroleum_spot_prices
 energy.eia_plant_generation
