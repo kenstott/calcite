@@ -8,6 +8,8 @@
 census.acs_health_insurance_by_type
 census.acs_real_estate_taxes
 census.acs_rent_burden_by_income
+census.adult_living_arrangements_history_national
+census.young_adults_at_home_history_national
 disasters.fema_firm_panels
 disasters.fema_nfhl_lomrs
 econ.business_formation_statistics
