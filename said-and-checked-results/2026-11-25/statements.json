@@ -933,10 +933,19 @@
       "kind": "factual",
       "test": "True if a primary record (the directive, a Defense Department statement, or Sen. Rounds's own published remarks) shows the directive largely restricts U.S. military officials' participation in Canadian think tank and social events. False if the Defense Department's published directive or statement describes a different scope. Cannot be determined if the directive is classified and no primary account of its scope can be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "As reported by Breaking Defense, Rounds said the memo requires permission for Canadian think tank events and social engagements and limits general and flag officer meetings to those that advance Defense Department objectives. The directive is classified and no Defense Department or Rounds-published account of its scope could be read, so whether it \"largely restricts\" participation is not settled.",
+      "evidence": [
+        {
+          "label": "Breaking Defense on Rounds and the Pentagon at Halifax (Nov. 2026)",
+          "url": "https://breakingdefense.com/2026/11/canada-hasnt-seen-changes-to-defense-relationship-with-us-says-mcguinty/"
+        },
+        {
+          "label": "Newsweek on the Hegseth memo",
+          "url": "https://www.newsweek.com/hegseths-pentagon-blasts-canada-secret-memo-12760983"
+        }
+      ],
+      "check_run": "q205/askamerica/2026-11-25",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
