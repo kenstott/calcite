@@ -1715,7 +1715,7 @@ get_dq_start_year() {
   case "$schema" in
     sec_secondary) echo $(( $(date +%Y) - 2 )) ;;  # current-2: 13F-HR extends to current year, but SC 13D/G (beneficial_ownership) collapsed after the SEC Schedule 13G rule change (eff. 2024-09-30) and now concentrate in <=2024. current-2 pulls 2024 into scope so BlackRock/Berkshire SC 13D/G filings land and beneficial_ownership is non-empty.
     energy)   echo $(( $(date +%Y) - 4 )) ;;  # dataLag=2 tables map year=effective+dataLag, so a current-2 start emits only the current year. Need current-2-dataLag = current-4 to land historical generation years (T8 wants MIN<=current-2).
-    edu)      echo 2020 ;;  # fixed floor, not a lookback: district_assessments ends at maxYear 2020 (Urban EDFacts endpoint), so a window starting later never creates it. Every other edu table's latest published cycle is later (ipeds_tuition 2021, crdc_schools 2022, naep 2024); per-table maxYear/dataLag caps trim the rest.
+    edu)      echo 2020 ;;  # fixed floor, not a lookback: district_assessments ends at maxYear 2020 (Urban EDFacts endpoint), so a window starting later never creates it. Every other edu table's latest published cycle is later (ipeds_tuition 2023, crdc_schools 2022, naep 2024); per-table maxYear/dataLag caps trim the rest.
     lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle
     census)   echo $(( $(date +%Y) - 3 )) ;;  # ACS 5-year: dataLag=2 + releaseMonth=12 → effective end current−3 before December
     patents)  echo $(( $(date +%Y) - 4 )) ;;  # USPTO TRCFECO2 trademark snapshot {year+1} settles slowly; window must reach the last published filing year
