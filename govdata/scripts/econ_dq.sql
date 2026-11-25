@@ -1275,6 +1275,38 @@ FROM (
   WHERE avg_interest_rate_amt IS NOT NULL AND avg_interest_rate_amt < 0
 );
 
+-- Bulk BLS tables: one row per series and period across all year partitions
+INSERT INTO dq_results
+SELECT 'econ', 'state_industry', 'pk_duplicates', 'fail', 'series,year,period', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, year, period FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'metro_industry', 'pk_duplicates', 'fail', 'series,year,period', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, year, period FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_industry', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'national_industry_employment', 'pk_duplicates', 'fail', 'series,year,period', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, year, period FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/national_industry_employment', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'jolts_regional', 'pk_duplicates', 'fail', 'series,date', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'jolts_industry', 'pk_duplicates', 'fail', 'series,year,date', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, year, date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_industry', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'jolts_state', 'pk_duplicates', 'fail', 'series,year,date', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, year, date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
 -- state_industry: employment value in thousands must be >= 0
 INSERT INTO dq_results
 SELECT
