@@ -353,6 +353,13 @@ if $DRY_RUN && { $REBUILD || $ETL_RESUME; }; then
   exit 0
 fi
 
+# Every path below addresses the DQ object store through this rclone remote.
+if [ -z "${GOVDATA_DQ_RCLONE_REMOTE:-}" ]; then
+  echo "ERROR: GOVDATA_DQ_RCLONE_REMOTE is not set (see .env.dq.sample)" >&2
+  _SCRIPT_COMPLETE=true  # configuration error: nothing to file an issue about
+  exit 1
+fi
+
 # ── rebuild/resume: optional teardown + ETL before DQ ────────────────────────
 # --rebuild       → teardown + ETL + DQ (full clean reproduction)
 # --etl-resume    → ETL + DQ (uses tracker to skip completed partitions)
@@ -366,8 +373,6 @@ if $REBUILD; then
   # Delete only Iceberg metadata directories per table — avoids Class A per-object
   # delete charges on parquet data files. Tables become invisible to Iceberg so the
   # ETL re-creates them. Orphaned data files are cleaned up by Iceberg maintenance.
-  # DQ-specific remote (from .env.dq) takes precedence; falls back to prod remote, then r2
-  _DQ_REMOTE="${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-r2}}"
   # Ensure DQ buckets exist using the same S3 endpoint/credentials as the Java ETL.
   # Falls back through aws CLI → python3 SigV4 → rclone, in order of reliability.
   _ensure_bucket() {
@@ -403,7 +408,7 @@ except urllib.error.HTTPError as e:
   if 'AlreadyOwned' not in body and 'AlreadyExists' not in body: print(f'bucket create error: {e.code} {body[:100]}', file=sys.stderr)
 PYEOF
     else
-      rclone mkdir "${_DQ_REMOTE}:$bucket" 2>/dev/null || true
+      rclone mkdir "${GOVDATA_DQ_RCLONE_REMOTE}:$bucket"
     fi
   }
   _ensure_bucket "$GOVDATA_DQ_BUCKET"
@@ -426,9 +431,10 @@ PYEOF
         "${GOVDATA_DQ_BUCKET}" "${SCHEMA}" "${DQ_S3_TIMEOUT_SECONDS:-30}" "${DQ_S3_ATTEMPTS:-3}"
   else
     # R2: metadata-only teardown avoids Class A charges on data files.
-    for table in $(rclone lsd "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" 2>/dev/null | awk '{print $NF}' | grep -v "^$" || true); do
+    _dq_tables=$(rclone lsd "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}" | awk '{print $NF}')
+    for table in $_dq_tables; do
       log_info "$WORKER_ID: --rebuild: clearing metadata for table ${table}"
-      rclone purge "${_DQ_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata" 2>/dev/null || true
+      rclone purge "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_BUCKET}/${SCHEMA}/${table}/metadata"
     done
   fi
 fi  # end iceberg/data teardown (only when --rebuild)
@@ -467,7 +473,7 @@ fi  # end iceberg/data teardown (only when --rebuild)
   # the (already torn-down) data fresh.
   if $REBUILD; then
     log_info "$WORKER_ID: --rebuild: purging dq-results + Postgres tracker rows for schema=$SCHEMA"
-    rclone purge "${_DQ_REMOTE:-r2}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA" 2>/dev/null || true
+    rclone purge "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA"
     # The standard workers resume from the Postgres tracker (namespace derived from the DQ
     # bucket), so every table of the schema must lose its rows or the rebuild skips marked units.
     _pg_ns="$(pg_ns_for_schema "s3://${GOVDATA_DQ_BUCKET}" "$SCHEMA")"
@@ -511,8 +517,8 @@ if [ -n "${GOVDATA_PARQUET_DIR:-}" ]; then
 fi
 
 # Check for deprecated source= partition on S3
-deprecated_path="${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-r2}}:${GOVDATA_DQ_BUCKET}/source=${SCHEMA}/"
-deprecated_check=$(rclone ls "$deprecated_path" 2>/dev/null | head -1 || true)
+deprecated_path="${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_BUCKET}/source=${SCHEMA}/"
+deprecated_check=$(rclone ls "$deprecated_path")
 if [ -n "$deprecated_check" ]; then
   log_info "WARNING: deprecated path exists: $deprecated_path — this should be removed"
 fi
@@ -689,7 +695,7 @@ for h,v in [('Host',host),('x-amz-date',ts),('x-amz-content-sha256',ph),('Author
 urllib.request.urlopen(req, timeout=60)
 PYEOF
     else
-      rclone copyto "$RESULT_LOCAL" "${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-r2}}:${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}" 2>/dev/null && { _upload_ok=true; break; }
+      rclone copyto "$RESULT_LOCAL" "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}" && { _upload_ok=true; break; }
     fi
     [ "$_attempt" -lt 3 ] && sleep 5
   done

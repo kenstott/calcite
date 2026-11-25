@@ -24,7 +24,7 @@ run() { # bucket args... -> output in $out, rc in $rc, external calls in $CALLS
   local bucket="$1"; shift
   : > "$CALLS"
   out=$(env -i HOME="$T" PATH="$T/bin:/usr/bin:/bin" GOVDATA_TMPDIR="$T/tmp" GOVDATA_CLAIM_DIR="$T/claims" \
-    GOVDATA_DQ_BUCKET="$bucket" AWS_ENDPOINT_OVERRIDE="http://127.0.0.1:1" \
+    GOVDATA_DQ_BUCKET="$bucket" GOVDATA_DQ_RCLONE_REMOTE=zzremote AWS_ENDPOINT_OVERRIDE="http://127.0.0.1:1" \
     AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=y GOVDATA_CACHE_DIR="s3://zz-raw" \
     timeout 60 bash "$P/worker-dq-run.sh" zzdry "$@" 2>&1); rc=$?
 }
