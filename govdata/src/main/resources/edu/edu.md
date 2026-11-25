@@ -701,57 +701,57 @@ Discrepancies from original plan:
 - `cip_code`/`cip_title` in program-level are `programs.cip_4_digit.code` and `.title`
 - `PrivacySuppressed` values are returned as null
 
-**Institution-level table:**
+**Institution-level table:** (`{year}.` is the API year prefix; unprefixed `school.*` fields are current directory values)
 
 | Column | Type | API Field | Description |
 |---|---|---|---|
 | id | INTEGER | `id` | IPEDS unit ID (joins to ipeds_institutions.unitid) |
 | ope8_id | VARCHAR | `ope8_id` | OPE ID 8-digit (joins to ipeds_institutions.opeid) |
 | ope6_id | VARCHAR | `ope6_id` | OPE ID 6-digit |
-| year | INTEGER | — | Cohort entry year (derived from API vintage) |
-| name | VARCHAR | `school.name` | Institution name |
-| city | VARCHAR | `school.city` | City |
-| state | VARCHAR | `school.state` | State abbreviation |
-| ownership | INTEGER | `school.ownership` | 1=public, 2=private nonprofit, 3=private for-profit |
+| year | INTEGER | — | Scorecard data file year (2018 = 2018-19 file) |
+| name | VARCHAR | `{year}.school.name` | Institution name |
+| city | VARCHAR | `{year}.school.city` | City |
+| state | VARCHAR | `{year}.school.state` | State abbreviation |
+| ownership | INTEGER | `{year}.school.ownership` | 1=public, 2=private nonprofit, 3=private for-profit |
 | carnegie_basic | INTEGER | `school.carnegie_basic` | Carnegie basic classification code |
 | hbcu | INTEGER | `school.minority_serving.historically_black` | HBCU flag |
 | tribal | INTEGER | `school.minority_serving.tribal` | Tribal college flag |
 | hispanic_serving | INTEGER | `school.minority_serving.hispanic` | Hispanic-serving institution |
-| online_only | INTEGER | `school.online_only` | Online-only institution |
+| online_only | INTEGER | `{year}.school.online_only` | Online-only institution |
 | locale | INTEGER | `school.locale` | NCES locale code |
-| size | INTEGER | `latest.student.size` | Total enrollment |
-| pell_grant_rate | DOUBLE | `latest.student.aid.pell_grant_rate` | Share of students receiving Pell grants |
-| completion_rate_4yr | DOUBLE | `latest.completion.completion_rate_4yr_150nt` | 6-year completion rate (150% time) for 4yr institutions |
-| completion_rate_2yr | DOUBLE | `latest.completion.completion_rate_less_than_4yr_150nt` | Completion rate for <4yr institutions |
-| retention_rate_fulltime | DOUBLE | `latest.student.retention_rate.four_year.full_time` | Full-time retention rate (4yr) |
-| median_debt_completers | DOUBLE | `latest.aid.median_debt.completers.overall` | Median debt at completion |
-| median_debt_noncompleters | DOUBLE | `latest.aid.median_debt.noncompleters` | Median debt for non-completers |
-| mean_earnings_10yr | INTEGER | `latest.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings` | Mean earnings 10yr after entry |
-| median_earnings_8yr | DOUBLE | `latest.earnings.8_yrs_after_entry.median_earnings` | Median earnings 8yr after entry |
-| median_family_income | INTEGER | `latest.student.demographics.median_family_income` | Median family income of entering students |
-| default_rate_3yr | DOUBLE | `latest.repayment.3_yr_default_rate` | 3-year student loan default rate |
-| avg_net_price_public | INTEGER | `latest.cost.avg_net_price.public` | Average net price for public institutions |
-| avg_net_price_private | INTEGER | `latest.cost.avg_net_price.private` | Average net price for private institutions |
-| tuition_in_state | INTEGER | `latest.cost.tuition.in_state` | In-state tuition |
-| tuition_out_state | INTEGER | `latest.cost.tuition.out_of_state` | Out-of-state tuition |
+| size | INTEGER | `{year}.student.size` | Total enrollment |
+| pell_grant_rate | DOUBLE | `{year}.aid.pell_grant_rate` | Share of students receiving Pell grants |
+| completion_rate_4yr | DOUBLE | `{year}.completion.completion_rate_4yr_150nt` | 6-year completion rate (150% time) for 4yr institutions |
+| completion_rate_2yr | DOUBLE | `{year}.completion.completion_rate_less_than_4yr_150nt` | Completion rate for <4yr institutions |
+| retention_rate_fulltime | DOUBLE | `{year}.student.retention_rate.four_year.full_time` | Full-time retention rate (4yr) |
+| median_debt_completers | DOUBLE | `{year}.aid.median_debt.completers.overall` | Median debt at completion |
+| median_debt_noncompleters | DOUBLE | `{year}.aid.median_debt.noncompleters` | Median debt for non-completers |
+| mean_earnings_10yr | INTEGER | `{year}.earnings.10_yrs_after_entry.working_not_enrolled.mean_earnings` | Mean earnings 10yr after entry |
+| median_earnings_8yr | DOUBLE | `{year}.earnings.8_yrs_after_entry.median_earnings` | Median earnings 8yr after entry |
+| median_family_income | INTEGER | `{year}.student.demographics.median_family_income` | Median family income of entering students |
+| default_rate_3yr | DOUBLE | `{year}.repayment.3_yr_default_rate` | 3-year student loan default rate |
+| avg_net_price_public | INTEGER | `{year}.cost.avg_net_price.public` | Average net price for public institutions |
+| avg_net_price_private | INTEGER | `{year}.cost.avg_net_price.private` | Average net price for private institutions |
+| tuition_in_state | INTEGER | `{year}.cost.tuition.in_state` | In-state tuition |
+| tuition_out_state | INTEGER | `{year}.cost.tuition.out_of_state` | Out-of-state tuition |
 
 **Program-level table (`college_scorecard_programs`):**
 
 | Column | Type | API Field | Description |
 |---|---|---|---|
-| unit_id | INTEGER | `programs.cip_4_digit.unit_id` | IPEDS unit ID |
-| ope6_id | VARCHAR | `programs.cip_4_digit.ope6_id` | OPE ID 6-digit |
-| year | INTEGER | — | Data vintage year |
-| cip_code | VARCHAR | `programs.cip_4_digit.code` | 4-digit CIP code |
-| cip_title | VARCHAR | `programs.cip_4_digit.title` | CIP title |
-| credential_level | INTEGER | `programs.cip_4_digit.credential.level` | Credential level code |
-| credential_title | VARCHAR | `programs.cip_4_digit.credential.title` | Credential description |
-| ipeds_awards | INTEGER | `programs.cip_4_digit.counts.ipeds_awards1` | IPEDS awards count (completions) |
-| median_earnings_1yr | INTEGER | `programs.cip_4_digit.earnings.1_yr.overall_median_earnings` | Median earnings 1yr after completion |
-| median_earnings_4yr | INTEGER | `programs.cip_4_digit.earnings.4_yr.overall_median_earnings` | Median earnings 4yr after completion |
-| median_earnings_5yr | INTEGER | `programs.cip_4_digit.earnings.5_yr.overall_median_earnings` | Median earnings 5yr after completion |
-| pell_median_earnings_1yr | INTEGER | `programs.cip_4_digit.earnings.1_yr.pell_median_earnings` | Pell grant recipient median earnings 1yr |
-| nonpell_median_earnings_1yr | INTEGER | `programs.cip_4_digit.earnings.1_yr.nonpell_median_earnings` | Non-Pell median earnings 1yr |
+| unit_id | INTEGER | `{year}.programs.cip_4_digit.unit_id` | IPEDS unit ID |
+| ope6_id | VARCHAR | `{year}.programs.cip_4_digit.ope6_id` | OPE ID 6-digit |
+| year | INTEGER | — | Scorecard data file year (2018 = 2018-19 file) |
+| cip_code | VARCHAR | `{year}.programs.cip_4_digit.code` | 4-digit CIP code |
+| cip_title | VARCHAR | `{year}.programs.cip_4_digit.title` | CIP title |
+| credential_level | INTEGER | `{year}.programs.cip_4_digit.credential.level` | Credential level code |
+| credential_title | VARCHAR | `{year}.programs.cip_4_digit.credential.title` | Credential description |
+| ipeds_awards | INTEGER | `{year}.programs.cip_4_digit.counts.ipeds_awards1` | IPEDS awards count (completions) |
+| median_earnings_1yr | INTEGER | `{year}.programs.cip_4_digit.earnings.1_yr.overall_median_earnings` | Median earnings 1yr after completion |
+| median_earnings_4yr | INTEGER | `{year}.programs.cip_4_digit.earnings.4_yr.overall_median_earnings` | Median earnings 4yr after completion |
+| median_earnings_5yr | INTEGER | `{year}.programs.cip_4_digit.earnings.5_yr.overall_median_earnings` | Median earnings 5yr after completion |
+| pell_median_earnings_1yr | INTEGER | `{year}.programs.cip_4_digit.earnings.1_yr.pell_median_earnings` | Pell grant recipient median earnings 1yr |
+| nonpell_median_earnings_1yr | INTEGER | `{year}.programs.cip_4_digit.earnings.1_yr.nonpell_median_earnings` | Non-Pell median earnings 1yr |
 
 ---
 

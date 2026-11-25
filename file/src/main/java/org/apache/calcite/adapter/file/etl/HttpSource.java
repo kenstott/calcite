@@ -648,8 +648,13 @@ public class HttpSource implements DataSource {
         return false;
       }
 
-      // Try to fetch next page
-      return fetchNextPage();
+      // Fetch until a page with records: a transform may drop every record of a page
+      while (hasMore && fetchNextPage()) {
+        if (currentPageIterator.hasNext()) {
+          return true;
+        }
+      }
+      return false;
     }
 
     @Override public Map<String, Object> next() {
@@ -787,7 +792,14 @@ public class HttpSource implements DataSource {
         response = transformResponse(response, url, pageParams, variables);
         List<Map<String, Object>> pageData = parseResponse(response);
 
-        if (pageData.isEmpty()) {
+        // An empty transformed page ends the crawl unless the source page held records and
+        // the reported total says more pages follow.
+        boolean transformDroppedPage = pageData.isEmpty()
+            && pagination.getType() != HttpSourceConfig.PaginationType.CURSOR
+            && totalCount >= 0
+            && offset + pageSize - pagination.getStartOffset() < totalCount
+            && hasRawRecords(rawResponse);
+        if (pageData.isEmpty() && !transformDroppedPage) {
           hasMore = false;
           writeMergedCache();
           return false;
@@ -1013,6 +1025,21 @@ public class HttpSource implements DataSource {
       }
     }
 
+    /** Whether the untransformed page carries at least one record at the data path. */
+    private boolean hasRawRecords(String rawResponse) throws IOException {
+      JsonNode node = rawRecords(OBJECT_MAPPER.readTree(rawResponse));
+      return node != null && node.isArray() && node.size() > 0;
+    }
+
+    private JsonNode rawRecords(JsonNode root) {
+      String configuredDataPath = config.getResponse() == null
+          ? null : config.getResponse().getDataPath();
+      if (configuredDataPath != null && !configuredDataPath.isEmpty()) {
+        return navigateToPath(root, configuredDataPath);
+      }
+      return root.has("results") ? root.get("results") : root;
+    }
+
     private void accumulateRawPage(String rawResponse) {
       if (rawCacheFilePath == null) {
         return;
@@ -1028,16 +1055,7 @@ public class HttpSource implements DataSource {
           cacheGenerator.writeArrayFieldStart("results");
         }
         com.fasterxml.jackson.databind.JsonNode root = OBJECT_MAPPER.readTree(rawResponse);
-        com.fasterxml.jackson.databind.JsonNode resultsNode;
-        String configuredDataPath = config.getResponse() == null
-            ? null : config.getResponse().getDataPath();
-        if (configuredDataPath != null && !configuredDataPath.isEmpty()) {
-          resultsNode = navigateToPath(root, configuredDataPath);
-        } else if (root.has("results")) {
-          resultsNode = root.get("results");
-        } else {
-          resultsNode = root;
-        }
+        com.fasterxml.jackson.databind.JsonNode resultsNode = rawRecords(root);
         if (resultsNode != null && resultsNode.isArray()) {
           for (com.fasterxml.jackson.databind.JsonNode record : resultsNode) {
             OBJECT_MAPPER.writeTree(cacheGenerator, record);
