@@ -109,7 +109,15 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
     if (commodityParam != null) {
       return new PrefixSplitIterator(url, commodityParam, context);
     }
-    return fetchOne(url, context, false, false);
+    try {
+      return fetchOne(url, context, false, false);
+    } catch (CensusHttpException e) {
+      // A month Census has not published yet answers 204; it contributes no rows.
+      if (e.status() == NO_CONTENT) {
+        return Collections.<Map<String, Object>>emptyList().iterator();
+      }
+      throw e;
+    }
   }
 
   /**
@@ -246,8 +254,8 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
         return spool;
       } catch (IOException e) {
         deleteQuietly(spool);
-        if (prefixed && (isStatus(e, NO_CONTENT)
-            || failFastOnGatewayTimeout && isStatus(e, GATEWAY_TIMEOUT))) {
+        if (isStatus(e, NO_CONTENT)
+            || (prefixed && failFastOnGatewayTimeout && isStatus(e, GATEWAY_TIMEOUT))) {
           throw e;
         }
         last = e;
