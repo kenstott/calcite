@@ -1688,8 +1688,8 @@ partitionedTables:
         comment: True for an 8-K/A amending an earlier report, false for an original 8-K
       - name: ransomware_mentioned
         type: boolean
-        nullable: false
-        comment: True when the Item 1.05 text contains "ransom"; false when it does not or no text was extracted
+        nullable: true
+        comment: True when the Item 1.05 text contains "ransom", false when it does not; null when no text was extracted
       - name: incident_text
         type: string
         nullable: true
