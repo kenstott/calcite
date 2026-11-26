@@ -867,11 +867,21 @@ INSERT INTO dq_results
 SELECT 'environment', 'npdes_permits', 'T8_pk_duplicates',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (permit_number, version_number) rows'
 FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) GROUP BY permit_number, version_number HAVING COUNT(*) > 1));
--- Acceptance: Michigan active CAFO general-permit coverages near 270 (EPA data shows ~231 EFF+ADC)
+-- Michigan active CAFO general-permit coverages, current permit versions (226 EFF+ADC at 2026-11-23)
 INSERT INTO dq_results
 SELECT 'environment', 'npdes_permits', 'T9_michigan_cafo',
   CASE WHEN n BETWEEN 150 AND 400 THEN 'pass' ELSE 'fail' END, n, 270, 'Active Michigan MIG010000 coverages (EFF+ADC) expected 150-400'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) WHERE master_permit_number = 'MIG010000' AND permit_status_code IN ('EFF','ADC'));
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) WHERE version_number = 0 AND master_permit_number = 'MIG010000' AND permit_status_code IN ('EFF','ADC'));
+-- View npdes_cafo_permits promises one row per permit: same selection and joins as the view
+INSERT INTO dq_results
+SELECT 'environment', 'npdes_permits', 'T10_cafo_view_one_row_per_permit',
+  CASE WHEN n > 0 AND n = d THEN 'pass' ELSE 'fail' END, n - d, 0, 'Rows beyond one per permit in the view selection (fails also when empty)'
+FROM (SELECT COUNT(*) AS n, COUNT(DISTINCT p.permit_number) AS d
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permits', allow_moved_paths := true) p
+  LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_facilities', allow_moved_paths := true) f ON f.permit_number = p.permit_number
+  WHERE p.version_number = 0
+    AND (p.permit_number IN (SELECT permit_number FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/npdes_permit_components', allow_moved_paths := true) WHERE component_type_code = 'CAF')
+         OR p.master_permit_number = 'MIG010000'));
 
 -- ===== npdes_facilities =====
 INSERT INTO dq_results

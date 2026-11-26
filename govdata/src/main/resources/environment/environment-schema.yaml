@@ -3468,7 +3468,8 @@ partitionedTables:
       effective and expiration dates, issuing agency and the master general permit a
       coverage belongs to (master_permit_number, e.g. MIG010000 Michigan CAFO general
       permit). state_abbr is the first two characters of the permit number. Count active
-      permits with permit_status IN ('EFF','ADC'). Keyless bulk file ICIS_PERMITS.csv in
+      permits with version_number = 0 (the current version) and permit_status_code IN
+      ('EFF','ADC'). Keyless bulk file ICIS_PERMITS.csv in
       the ECHO NPDES download zip, refreshed weekly. Join npdes_facilities on
       permit_number for county and location, npdes_permit_components for the CAFO flag.
     dimensions:
@@ -3484,7 +3485,9 @@ partitionedTables:
         type: integer
         nullable: true
         expression: 'TRY_CAST(src."VERSION_NMBR" AS INTEGER)'
-        comment: Permit version number
+        comment: >
+          Permit version number; 0 is the current version, other values are earlier
+          versions. Filter version_number = 0 to count permits.
       - name: state_abbr
         type: string
         nullable: false
@@ -4003,7 +4006,8 @@ views:
   - name: npdes_cafo_permits
     comment: >
       CAFO (concentrated animal feeding operation) NPDES permits with location — one row
-      per permit that either carries the CAF component flag or is a coverage under a state
+      per permit, taken from its current version (npdes_permits.version_number = 0), that
+      either carries the CAF component flag or is a coverage under a state
       CAFO general permit (Michigan MIG010000). Columns: permit_number, state_abbr,
       permit_status_code, issue/expiration dates, facility name, county_code, county_fips3,
       latitude/longitude. Active CAFOs are permit_status_code IN ('EFF','ADC'); count by
@@ -4028,9 +4032,10 @@ views:
         f.longitude
       FROM npdes_permits p
       LEFT JOIN npdes_facilities f ON f.permit_number = p.permit_number
-      WHERE p.permit_number IN (SELECT permit_number FROM npdes_permit_components
-                                WHERE component_type_code = 'CAF')
-         OR p.master_permit_number = 'MIG010000'
+      WHERE p.version_number = 0
+        AND (p.permit_number IN (SELECT permit_number FROM npdes_permit_components
+                                 WHERE component_type_code = 'CAF')
+             OR p.master_permit_number = 'MIG010000')
 
   - name: facility_compliance
     comment: >
