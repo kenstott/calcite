@@ -36,6 +36,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -249,6 +250,12 @@ public class HttpSource implements DataSource {
         : null;
     // Rate limiting uses a CAS-based slot per origin (see ORIGIN_SLOTS, no init needed)
     this.responseTransformer = loadResponseTransformer(hooksConfig);
+    // The record check runs while rows are read; a whole-body transformer replaces the body first.
+    if (config.getResponse().isStrictRecords() && responseTransformer != null
+        && !(responseTransformer instanceof PerRecordResponseTransformer)) {
+      throw new IllegalArgumentException("response.strictRecords cannot be combined with the "
+          + "whole-body transformer " + responseTransformer.getClass().getName());
+    }
     this.variableNormalizer = loadVariableNormalizer(hooksConfig);
     // A raw cache path names a location only storageProvider knows how to write. EtlPipeline
     // sets the two together -- it derives rawCachePath inside the branch that already resolved a
@@ -2517,7 +2524,6 @@ public class HttpSource implements DataSource {
     private final List<HttpSourceConfig.FixedWidthConfig.Column> columns;
     private Map<String, Object> nextRow;
     private boolean exhausted;
-    @SuppressWarnings("UnusedVariable")
     private int lineNumber;
 
     LazyFixedWidthIterator(InputStream inputStream, String cachePath,
@@ -2569,6 +2575,8 @@ public class HttpSource implements DataSource {
         exhausted = true;
       } catch (IOException e) {
         exhausted = true;
+        throw new UncheckedIOException("Error reading fixed-width source after line "
+            + lineNumber + ": " + SecretRedaction.redact(e.getMessage()), e);
       }
     }
 
@@ -2611,6 +2619,8 @@ public class HttpSource implements DataSource {
     private final BufferedReader reader;
     private final char delimiter;
     private final boolean quoted;
+    private final boolean strictRecords;
+    private final String cachePath;
     private final String[] headers;
     private final int filterColumnIndex;
     private final java.util.regex.Pattern filterRegex;
@@ -2636,6 +2646,8 @@ public class HttpSource implements DataSource {
         boolean hasHeader, String columnNames, boolean quoted) throws IOException {
       this.delimiter = delimiter;
       this.quoted = quoted;
+      this.strictRecords = config.getResponse().isStrictRecords();
+      this.cachePath = cachePath;
       this.wideToNarrow = wideToNarrow;
       this.reader =
           new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
@@ -2772,12 +2784,18 @@ public class HttpSource implements DataSource {
         String line;
         while ((line = CsvRecordReader.readRecord(reader, quoted)) != null) {
           lineNumber++;
+          String record = line;
           line = line.trim();
           if (line.isEmpty()) {
             continue;
           }
 
           String[] values = parseDelimitedLine(line, delimiter, quoted);
+          if (strictRecords) {
+            // Trimming removes trailing empty fields when the delimiter is itself whitespace.
+            requireCompleteRecord(record, Character.isWhitespace(delimiter)
+                ? parseDelimitedLine(record, delimiter, quoted).length : values.length);
+          }
 
           // Apply filter if configured
           if (filterColumnIndex >= 0 && filterRegex != null) {
@@ -2893,15 +2911,38 @@ public class HttpSource implements DataSource {
         close();
 
       } catch (IOException e) {
-        LOGGER.error("Error reading CSV: {}", SecretRedaction.redact(e.getMessage()));
         exhausted = true;
         nextRow = null;
+        UncheckedIOException failure =
+            new UncheckedIOException("Error reading CSV " + cachePath + " after line "
+                + lineNumber + ": " + SecretRedaction.redact(e.getMessage()), e);
         try {
           close();
-        } catch (IOException ignored) {
-          // Already logging the original error
+        } catch (IOException closeFailure) {
+          failure.addSuppressed(closeFailure);
         }
+        throw failure;
       }
+    }
+
+    /**
+     * Rejects a record that does not carry every column or leaves a quote open, removing the
+     * cached body it came from so the next run downloads the source again.
+     */
+    private void requireCompleteRecord(String record, int fieldCount) throws IOException {
+      boolean openQuote = quoted && CsvRecordReader.hasOddQuotes(record);
+      if (fieldCount == headers.length && !openQuote) {
+        return;
+      }
+      exhausted = true;
+      nextRow = null;
+      close();
+      boolean removed = storageProvider.delete(cachePath);
+      throw new IllegalStateException("Incomplete CSV body " + cachePath + ": record at line "
+          + lineNumber + " has " + fieldCount + " of " + headers.length + " fields"
+          + (openQuote ? " and an unterminated quote" : "")
+          + (removed ? "; the cached body was removed" : "; no cached body was removed")
+          + ". Record starts: " + record.substring(0, Math.min(record.length(), 200)));
     }
 
     @Override public boolean hasNext() {

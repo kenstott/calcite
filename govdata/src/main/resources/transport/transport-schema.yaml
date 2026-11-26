@@ -2359,6 +2359,8 @@ partitionedTables:
         format: csv
         hasHeader: true
         compressed: gzip
+        # A body cut short, or ended by the server's error JSON after HTTP 200, fails the load.
+        strictRecords: true
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
@@ -3283,6 +3285,8 @@ partitionedTables:
         format: csv
         hasHeader: true
         compressed: gzip
+        # A body cut short, or ended by the server's error JSON after HTTP 200, fails the load.
+        strictRecords: true
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
