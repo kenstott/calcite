@@ -249,3 +249,36 @@ def test_walk_with_a_table_that_reports_no_columns_is_not_cached(tmp_path):
         _Connection(_DatabaseMetaData(_TABLES, empty_tables=[("econ", "cpi")])), model_path)
     assert column_types[ctx.tables["econ.cpi"].table_id] == []
     assert not os.path.exists(catalog_populate.catalog_cache_path(model_path))
+
+
+def _listing(tmp_path, *names):
+    listing = tmp_path / "unmaterialized"
+    listing.mkdir()
+    for name in ("README.md", *names):
+        (listing / name).touch()
+    return listing
+
+
+def test_a_complete_walk_removes_the_entries_of_the_tables_it_found(tmp_path):
+    model_path = _model(tmp_path)
+    listing = _listing(tmp_path, "econ.gdp", "law.bills", "econ.not_built")
+    catalog_populate.build_and_cache_context(
+        _Connection(_DatabaseMetaData(_TABLES)), model_path)
+    assert sorted(os.listdir(listing)) == ["README.md", "econ.not_built"]
+
+
+def test_an_incomplete_walk_leaves_the_entries(tmp_path):
+    model_path = _model(tmp_path)
+    listing = _listing(tmp_path, "econ.gdp")
+    catalog_populate.build_and_cache_context(
+        _Connection(_DatabaseMetaData(_TABLES, broken_schemas=["law"])), model_path)
+    assert sorted(os.listdir(listing)) == ["README.md", "econ.gdp"]
+
+
+def test_a_cache_written_to_a_state_directory_leaves_the_models_entries(tmp_path, monkeypatch):
+    model_path = _model(tmp_path)
+    listing = _listing(tmp_path, "econ.gdp")
+    monkeypatch.setenv(catalog_populate.STATE_DIR_ENV, str(tmp_path / "state"))
+    catalog_populate.build_and_cache_context(
+        _Connection(_DatabaseMetaData(_TABLES)), model_path)
+    assert sorted(os.listdir(listing)) == ["README.md", "econ.gdp"]

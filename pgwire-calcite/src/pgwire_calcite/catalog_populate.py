@@ -30,7 +30,7 @@ import pickle
 import re
 from typing import Dict, List
 
-from pgwire_calcite import catalog, normalize
+from pgwire_calcite import catalog, normalize, unmaterialized
 from pgwire_calcite.compiler.sql_gen import (
     ColumnMeta,
     CompilationContext,
@@ -565,7 +565,11 @@ def build_and_cache_context(conn, model_path: str):
     model.json change, so a walk that had to leave a schema or table out (a
     server still warming up, a schema whose listing threw) would otherwise be
     served as the whole catalog on every later launch. A partial result is still
-    returned for this launch, and the next launch walks live again."""
+    returned for this launch, and the next launch walks live again.
+
+    Where the cache is written beside an unmaterialized-table directory (see
+    :mod:`pgwire_calcite.unmaterialized`), the entries of the tables it now holds
+    are deleted."""
     ctx, column_types, gaps = build_context_reporting_gaps(conn)
     cache_path = catalog_cache_write_path(model_path)
     if gaps:
@@ -586,6 +590,11 @@ def build_and_cache_context(conn, model_path: str):
                     "the catalog live until it is", os.path.dirname(cache_path), exc.strerror)
         return ctx, column_types
     log.info("Wrote catalog cache to %s (%d tables)", cache_path, len(ctx.tables))
+    listing = os.path.join(os.path.dirname(cache_path), unmaterialized.DIR_NAME)
+    if os.path.isdir(listing):
+        for name in unmaterialized.prune(
+                listing, {(t.schema_name, t.table_name) for t in ctx.tables.values()}):
+            log.info("%s is materialized; removed it from %s", name, listing)
     return ctx, column_types
 
 
