@@ -5784,9 +5784,12 @@ public class XbrlToParquetConverter implements FileConverter {
     }
   }
 
-  /** Matches an 8-K item header such as "Item 1.05". */
+  /**
+   * Matches an 8-K item header such as "Item 1.05". Filers separate the word and the number with
+   * Unicode space characters (thin space, em space), which {@code \\s} alone does not match.
+   */
   private static final Pattern CYBER_ITEM_HEADER =
-      Pattern.compile("Item\\s+(\\d+\\.\\d+)", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("Item[\\s\\p{Z}]+(\\d+\\.\\d+)", Pattern.CASE_INSENSITIVE);
 
   /** Upper bound on stored Item 1.05 text; longer disclosures are cut at this length. */
   private static final int CYBER_TEXT_MAX_CHARS = 20000;
@@ -5835,8 +5838,8 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("sic_code", info.get("sic_code"));
     data.put("items", items);
     data.put("is_amendment", filingType != null && filingType.toUpperCase(Locale.ROOT).contains("/A"));
-    data.put("ransomware_mentioned",
-        incidentText != null && incidentText.toLowerCase(Locale.ROOT).contains("ransom"));
+    data.put("ransomware_mentioned", incidentText == null
+        ? null : incidentText.toLowerCase(Locale.ROOT).contains("ransom"));
     data.put("incident_text", incidentText);
 
     List<Map<String, Object>> rows = new ArrayList<>();
@@ -5854,7 +5857,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Returns the text under an "Item N.NN" header up to the next item header or SIGNATURES, or
    * null when the document has no such section with text.
    */
-  private String extractItemText(String html, String itemNumber) {
+  static String extractItemText(String html, String itemNumber) {
     org.jsoup.nodes.Document doc = Jsoup.parse(html);
     doc.select("script, style").remove();
     String body = doc.body() != null ? doc.body().text() : doc.text();
