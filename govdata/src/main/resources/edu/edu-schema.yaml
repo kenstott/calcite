@@ -2211,9 +2211,10 @@ partitionedTables:
     comment: >
       NCES IPEDS 12-Month Enrollment, high-school students taking college courses for credit (dual
       or concurrent enrollment; EFFY_HS): unduplicated 12-month headcount by institution,
-      race/ethnicity and gender. One row per (unitid, year); only institutions reporting such
-      students appear. A subset of the non-degree-seeking undergraduates in
-      ipeds_12month_enrollment (effyalev=11); for the dual-enrolled share of all students divide
+      race/ethnicity and gender. One row per (unitid, year) for institutions in the NCES
+      high-school file (filter efytotlt > 0 for those with such students). NCES defines them as
+      part of the non-degree-seeking undergraduates in ipeds_12month_enrollment (effyalev=11),
+      though a few institutions have no effyalev=11 row; for the dual-enrolled share of all students divide
       efytotlt by ipeds_12month_enrollment.efytotlt at effyalev=1 for the same unitid and year.
       year is the ending year of the period (2024 = 2023-24). First published for 2023. Source:
       nces.ed.gov/ipeds/datacenter/data/EFFY{year}_HS.zip. Joins to ipeds_institutions via unitid.
@@ -2436,15 +2437,15 @@ partitionedTables:
       - name: efydeexc
         type: int
         nullable: true
-        comment: "Students enrolled exclusively in distance education courses"
+        comment: "Students enrolled exclusively in distance education courses (null = not applicable)"
       - name: efydesom
         type: int
         nullable: true
-        comment: "Students enrolled in some but not only distance education courses"
+        comment: "Students enrolled in some but not only distance education courses (null = not applicable)"
       - name: efydenon
         type: int
         nullable: true
-        comment: "Students not enrolled in any distance education course"
+        comment: "Students not enrolled in any distance education course (null = not applicable)"
 
     source:
       type: http

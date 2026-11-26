@@ -858,18 +858,24 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/iped
          OR level_of_study NOT IN ('all', 'undergraduate', 'graduate')
          OR effyalev_label IS NULL);
 
+-- High-school students never exceed the undergraduate total, nor the non-degree-seeking total
+-- where that row exists (some institutions report them with no non-degree row).
 INSERT INTO dq_results
-SELECT 'edu', 'ipeds_12month_dual_enrollment', 'within_non_degree_total',
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'within_enrollment_totals',
   CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true) h
+      LEFT JOIN (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) WHERE effyalev = 2) u USING (unitid, year)
       LEFT JOIN (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) WHERE effyalev = 11) n USING (unitid, year)
-      WHERE n.efytotlt IS NULL OR h.efytotlt > n.efytotlt);
+      WHERE u.efytotlt IS NULL OR h.efytotlt > u.efytotlt OR h.efytotlt > n.efytotlt);
 
+-- A null status count is NCES 'not applicable' (imputation flag A): the institution has no such
+-- students to report, so the published statuses still add up to the total.
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_12month_distance_enrollment', 'status_identity',
   CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true)
-      WHERE efydetot IS DISTINCT FROM efydeexc + efydesom + efydenon);
+      WHERE efydetot IS DISTINCT FROM
+        COALESCE(efydeexc, 0) + COALESCE(efydesom, 0) + COALESCE(efydenon, 0));
 
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_12month_distance_enrollment', 'matches_headcount',
