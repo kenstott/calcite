@@ -765,7 +765,7 @@ partitionedTables:
     dimensions:
       type:
         - sec_company_tickers
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     materialize:
       enabled: true

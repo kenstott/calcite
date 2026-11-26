@@ -6460,7 +6460,7 @@ partitionedTables:
         descending: true
       # Cache buster (see lookbackPeriods above). Deliberately a single value: a multi-value
       # dimension with no partition column would multiply rows.
-      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: assistance_transaction_unique_key
@@ -6776,7 +6776,7 @@ partitionedTables:
         descending: true
       # Cache buster (see lookbackPeriods above). Deliberately a single value: a multi-value
       # dimension with no partition column would multiply rows.
-      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: contract_transaction_unique_key
@@ -7176,7 +7176,7 @@ partitionedTables:
         - fac_audits
       # Cache buster: the FAC file keeps one URL and is regenerated daily, so the month keys the
       # raw cache and the run tracker. Deliberately a single value (no partition column).
-      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: report_id
@@ -7408,7 +7408,7 @@ partitionedTables:
         - fac_federal_awards
       # Cache buster: the FAC file keeps one URL and is regenerated daily, so the month keys the
       # raw cache and the run tracker. Deliberately a single value (no partition column).
-      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: report_id

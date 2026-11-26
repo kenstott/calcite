@@ -1763,11 +1763,11 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
-        # keyVars:[month] keys the cache only on the monthly cache-buster (not the per-table
+        # keyVars:[refresh_month] keys the cache only on the monthly cache-buster (not the per-table
         # `type`), so the 3 clinical_trials tables — which issue the identical filtered request —
-        # share one cached response per month. The two derived tables carry the same `month`
+        # share one cached response per month. The two derived tables carry the same `refresh_month`
         # dimension (below) so all three resolve to the same key.
-        keyVars: [month]
+        keyVars: [refresh_month]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialsResponseTransformer"
@@ -1775,8 +1775,8 @@ partitionedTables:
     dimensions:
       type:
         - clinical_trials
-      # The month dimension busts rawCache so the full registry is re-fetched each month;
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      # The refresh_month dimension busts rawCache so the full registry is re-fetched each month;
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     materialize:
       enabled: true
@@ -1854,11 +1854,11 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
-        # keyVars:[month] keys the cache only on the monthly cache-buster (not the per-table
+        # keyVars:[refresh_month] keys the cache only on the monthly cache-buster (not the per-table
         # `type`), so the 3 clinical_trials tables — which issue the identical filtered request —
-        # share one cached response per month. The two derived tables carry the same `month`
+        # share one cached response per month. The two derived tables carry the same `refresh_month`
         # dimension (below) so all three resolve to the same key.
-        keyVars: [month]
+        keyVars: [refresh_month]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialConditionsResponseTransformer"
@@ -1868,7 +1868,7 @@ partitionedTables:
         - clinical_trial_conditions
       # Same monthly cache-buster as the parent so all 3 clinical_trials tables share one cached
       # response per month (see rawCache.keyVars).
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     materialize:
       enabled: true
@@ -1954,11 +1954,11 @@ partitionedTables:
       rawCache:
         enabled: true
         sharedKey: clinical_trials
-        # keyVars:[month] keys the cache only on the monthly cache-buster (not the per-table
+        # keyVars:[refresh_month] keys the cache only on the monthly cache-buster (not the per-table
         # `type`), so the 3 clinical_trials tables — which issue the identical filtered request —
-        # share one cached response per month. The two derived tables carry the same `month`
+        # share one cached response per month. The two derived tables carry the same `refresh_month`
         # dimension (below) so all three resolve to the same key.
-        keyVars: [month]
+        keyVars: [refresh_month]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.health.ClinicalTrialInterventionsResponseTransformer"
@@ -1968,7 +1968,7 @@ partitionedTables:
         - clinical_trial_interventions
       # Same monthly cache-buster as the parent so all 3 clinical_trials tables share one cached
       # response per month (see rawCache.keyVars).
-      month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      refresh_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     materialize:
       enabled: true
