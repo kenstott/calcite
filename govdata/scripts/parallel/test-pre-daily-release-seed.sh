@@ -80,6 +80,16 @@ grep -q "ERROR: build-seed.sh failed" "$tmp/out.log" && ok "failed rebuild: repo
 [ "$(git -C "$tmp/w" rev-parse HEAD)" = "$head0" ] && ok "failed rebuild: nothing committed" || bad "failed rebuild: commit made"
 [ "$(cat "$tmp/w/govdata/build/libs/sih-govdata.jar.commit" 2>/dev/null)" = "$head0" ] && ok "failed rebuild: jar still staged" || bad "failed rebuild: no staged jar"
 
+# a failed rebuild keeps the whole output, including lines far above the logged tail
+setup; stub_seed 0 1
+sed -i 's|^\[ 1 -eq 0 \]|echo "first line of the build"\nseq 1 100\n[ 1 -eq 0 ]|' "$tmp/w/govdata/scripts/build-seed.sh"
+(cd "$tmp/w" && git commit -qam "noisy stub")
+run
+kept=$(sed -n 's/.*full seed build output kept at //p' "$tmp/out.log")
+[ -n "$kept" ] && grep -q "first line of the build" "$kept" && ok "failed rebuild: full output kept" || bad "failed rebuild: output lost ($kept)"
+setup; stub_seed 0 0; run
+! ls "$tmp/w/govdata/scripts/parallel/runs/"pre-daily-seed-*.log >/dev/null 2>&1 && ok "successful rebuild: no output left behind" || bad "successful rebuild: output left behind"
+
 # 4. --build-only skips the seed step entirely
 setup; stub_seed 0 0; head0=$(git -C "$tmp/w" rev-parse HEAD)
 (cd "$tmp/w" && PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh --build-only) > "$tmp/out.log" 2>&1
