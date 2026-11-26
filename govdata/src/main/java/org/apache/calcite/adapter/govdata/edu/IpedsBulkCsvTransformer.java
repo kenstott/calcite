@@ -35,7 +35,7 @@ import java.util.zip.ZipFile;
  * the source-to-canonical column map and may derive extra columns per row. Revised
  * ({@code _rv}) files are preferred over the base file. Imputation-flag columns
  * (X-prefixed) are ignored. A non-empty value that is not an integer is a source
- * contract violation and fails the load.
+ * contract violation and fails the load; an empty value or {@code .} is null.
  */
 abstract class IpedsBulkCsvTransformer implements StreamingResponseTransformer {
 
@@ -106,8 +106,9 @@ abstract class IpedsBulkCsvTransformer implements StreamingResponseTransformer {
         close();
         throw new IOException("Empty IPEDS CSV for year " + year);
       }
-      if (!headerLine.isEmpty() && headerLine.charAt(0) == '\uFEFF') {
-        headerLine = headerLine.substring(1);
+      // The ZIP entries are read as ISO-8859-1, where a UTF-8 byte order mark is three chars.
+      if (headerLine.startsWith("\u00EF\u00BB\u00BF")) {
+        headerLine = headerLine.substring(3);
       }
       String[] raw = IpedsFinancialsResponseTransformer.parseCsvLine(headerLine);
       for (int i = 0; i < raw.length; i++) {
@@ -134,7 +135,9 @@ abstract class IpedsBulkCsvTransformer implements StreamingResponseTransformer {
             continue;
           }
           String v = values[c].trim();
-          row.put(canonical, v.isEmpty() ? null : Integer.valueOf(Integer.parseInt(v)));
+          // "." is the missing value NCES writes in some vintages.
+          row.put(canonical,
+              v.isEmpty() || ".".equals(v) ? null : Integer.valueOf(Integer.parseInt(v)));
         }
         if (row.get("unitid") == null) {
           throw new IllegalStateException("IPEDS row without UNITID in year " + year);

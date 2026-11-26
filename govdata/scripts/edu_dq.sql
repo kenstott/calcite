@@ -41,6 +41,10 @@ INSERT INTO dq_existence_counts SELECT 'ipeds_tuition',          COUNT(*) FROM (
 INSERT INTO dq_existence_counts SELECT 'ipeds_financials',       COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'ipeds_fall_enrollment', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'ipeds_admissions', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_12month_enrollment', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_12month_dual_enrollment', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_12month_distance_enrollment', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true) LIMIT 1);
+INSERT INTO dq_existence_counts SELECT 'ipeds_12month_instructional_activity', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'ipeds_financial_aid',    COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'college_scorecard',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1);
 INSERT INTO dq_existence_counts SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1);
@@ -92,6 +96,10 @@ INSERT INTO dq_row_count_counts SELECT 'ipeds_tuition',                        C
 INSERT INTO dq_row_count_counts SELECT 'ipeds_financials',                     COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'ipeds_fall_enrollment', COUNT(*), 10000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'ipeds_admissions', COUNT(*), 1000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_12month_enrollment', COUNT(*), 10000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_12month_dual_enrollment', COUNT(*), 1000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_12month_distance_enrollment', COUNT(*), 5000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true);
+INSERT INTO dq_row_count_counts SELECT 'ipeds_12month_instructional_activity', COUNT(*), 3000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'ipeds_financial_aid',                  COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true);
 INSERT INTO dq_row_count_counts SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true);  -- dqRowLimit=3000/year
@@ -132,6 +140,10 @@ SELECT 'ipeds_tuition'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ
 SELECT 'ipeds_financials'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1;
 SELECT 'ipeds_fall_enrollment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=True) LIMIT 1;
 SELECT 'ipeds_admissions' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=True) LIMIT 1;
+SELECT 'ipeds_12month_enrollment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) LIMIT 1;
+SELECT 'ipeds_12month_dual_enrollment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true) LIMIT 1;
+SELECT 'ipeds_12month_distance_enrollment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true) LIMIT 1;
+SELECT 'ipeds_12month_instructional_activity' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true) LIMIT 1;
 SELECT 'ipeds_financial_aid'      AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1;
@@ -686,6 +698,192 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/iped
       WHERE attendance NOT IN ('all', 'full_time', 'part_time')
          OR level_of_study NOT IN ('all', 'undergraduate', 'graduate')
          OR efalevel_label IS NULL);
+
+-- ============================================================
+-- IPEDS 12-MONTH ENROLLMENT / INSTRUCTIONAL ACTIVITY
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true)
+      WHERE unitid IS NULL OR year IS NULL OR effyalev IS NULL);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'pk_duplicates',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT unitid, year, effyalev FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true)
+        GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true)
+      WHERE unitid IS NULL OR year IS NULL);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'pk_duplicates',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT unitid, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true)
+        GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_distance_enrollment', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_distance_enrollment', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_distance_enrollment', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true)
+      WHERE unitid IS NULL OR year IS NULL OR effydlev IS NULL);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_distance_enrollment', 'pk_duplicates',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT unitid, year, effydlev FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true)
+        GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_instructional_activity', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_instructional_activity', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_instructional_activity', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true)
+      WHERE unitid IS NULL OR year IS NULL);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_instructional_activity', 'pk_duplicates',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT unitid, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true)
+        GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'gender_identity',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true)
+      WHERE efytotlt IS DISTINCT FROM efytotlm + efytotlw OR efyaiant IS DISTINCT FROM efyaianm + efyaianw OR efyasiat IS DISTINCT FROM efyasiam + efyasiaw OR efybkaat IS DISTINCT FROM efybkaam + efybkaaw OR efyhispt IS DISTINCT FROM efyhispm + efyhispw OR efynhpit IS DISTINCT FROM efynhpim + efynhpiw OR efywhitt IS DISTINCT FROM efywhitm + efywhitw OR efy2mort IS DISTINCT FROM efy2morm + efy2morw OR efyunknt IS DISTINCT FROM efyunknm + efyunknw OR efynralt IS DISTINCT FROM efynralm + efynralw);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'race_identity',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true)
+      WHERE efytotlt IS DISTINCT FROM efyaiant + efyasiat + efybkaat + efyhispt + efynhpit + efywhitt + efy2mort + efyunknt + efynralt);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'gender_identity',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true)
+      WHERE efytotlt IS DISTINCT FROM efytotlm + efytotlw OR efyaiant IS DISTINCT FROM efyaianm + efyaianw OR efyasiat IS DISTINCT FROM efyasiam + efyasiaw OR efybkaat IS DISTINCT FROM efybkaam + efybkaaw OR efyhispt IS DISTINCT FROM efyhispm + efyhispw OR efynhpit IS DISTINCT FROM efynhpim + efynhpiw OR efywhitt IS DISTINCT FROM efywhitm + efywhitw OR efy2mort IS DISTINCT FROM efy2morm + efy2morw OR efyunknt IS DISTINCT FROM efyunknm + efyunknw OR efynralt IS DISTINCT FROM efynralm + efynralw);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'race_identity',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true)
+      WHERE efytotlt IS DISTINCT FROM efyaiant + efyasiat + efybkaat + efyhispt + efynhpit + efywhitt + efy2mort + efyunknt + efynralt);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'level_identity',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) WHERE effyalev = 1) a
+      LEFT JOIN (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) WHERE effyalev = 2) u USING (unitid, year)
+      LEFT JOIN (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) WHERE effyalev = 12) g USING (unitid, year)
+      WHERE a.efytotlt IS DISTINCT FROM COALESCE(u.efytotlt, 0) + COALESCE(g.efytotlt, 0));
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_enrollment', 'level_values',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true)
+      WHERE attendance NOT IN ('all', 'full_time', 'part_time')
+         OR level_of_study NOT IN ('all', 'undergraduate', 'graduate')
+         OR effyalev_label IS NULL);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_dual_enrollment', 'within_non_degree_total',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_dual_enrollment', allow_moved_paths=true) h
+      LEFT JOIN (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) WHERE effyalev = 11) n USING (unitid, year)
+      WHERE n.efytotlt IS NULL OR h.efytotlt > n.efytotlt);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_distance_enrollment', 'status_identity',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true)
+      WHERE efydetot IS DISTINCT FROM efydeexc + efydesom + efydenon);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_distance_enrollment', 'matches_headcount',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_distance_enrollment', allow_moved_paths=true) WHERE effydlev = 1) d
+      LEFT JOIN (SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_enrollment', allow_moved_paths=true) WHERE effyalev = 1) e USING (unitid, year)
+      WHERE d.efydetot IS DISTINCT FROM e.efytotlt);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_12month_instructional_activity', 'value_ranges',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', ''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_12month_instructional_activity', allow_moved_paths=true)
+      WHERE cdactua < 0 OR cnactua < 0 OR cdactga < 0 OR efteug < 0 OR eftegd < 0
+         OR fteug < 0 OR ftegd < 0 OR ftedpp < 0 OR acttype NOT IN (-2, 1, 2, 3));
 
 -- ipeds_admissions PK: unitid, year
 INSERT INTO dq_results

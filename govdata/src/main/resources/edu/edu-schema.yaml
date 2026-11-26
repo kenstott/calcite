@@ -1962,6 +1962,645 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # IPEDS 12-MONTH ENROLLMENT — NCES EFFY, EFFY_HS, EFFY_DIST and EFIA files
+  # (keyless public CSV ZIPs). Gap: sourcing #1540.
+  # ==========================================================================
+  - name: ipeds_12month_enrollment
+    releaseWindow:
+      months: [11]
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      NCES IPEDS 12-Month Enrollment (EFFY): unduplicated headcount of every student enrolled for
+      credit at any time between 1 July and 30 June, by institution, level, attendance status,
+      race/ethnicity including U.S. nonresident (international students) and gender. One row per
+      (unitid, year, effyalev). Levels overlap, so filter to one effyalev: 1 = all students,
+      2 = undergraduate, 12 = graduate. Years before 2020 carry only those three levels. This is the
+      12-month measure usually quoted for community-college enrollment; the fall census snapshot is
+      in ipeds_fall_enrollment and the two can move in opposite directions. year is the ending year
+      of the period (2024 = 2023-24). Columns efyXXXXt are total, efyXXXXm men, efyXXXXw women;
+      grand total = efytotlt. Related: ipeds_12month_dual_enrollment (high-school students),
+      ipeds_12month_distance_enrollment and ipeds_12month_instructional_activity (FTE). Source:
+      nces.ed.gov/ipeds/datacenter/data/EFFY{year}.zip (revised _rv file preferred). 2011 onward;
+      the 2010 file mixes old and new race categories and is not loaded. Joins to
+      ipeds_institutions via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: "IPEDS unit ID — PK component; FK to ipeds_institutions.unitid"
+      - name: year
+        type: int
+        nullable: false
+        comment: "Ending year of the 12-month reporting period (2024 = 1 July 2023 to 30 June 2024) — PK component; injected from the vintage dimension"
+      - name: effyalev
+        type: int
+        nullable: false
+        comment: "NCES EFFYALEV level code — PK component; see effyalev_label. 1 all students, 2 undergraduate, 12 graduate; detail codes from 2020"
+      - name: effyalev_label
+        type: string
+        nullable: true
+        comment: "Label for effyalev, e.g. All students total, Undergraduate total, Graduate"
+      - name: attendance
+        type: string
+        nullable: true
+        comment: "all | full_time | part_time, derived from effyalev"
+      - name: level_of_study
+        type: string
+        nullable: true
+        comment: "all | undergraduate | graduate, derived from effyalev"
+      - name: efytotlt
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Grand total (all races/ethnicities, incl. nonresident) — total"
+      - name: efytotlm
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Grand total (all races/ethnicities, incl. nonresident) — men"
+      - name: efytotlw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Grand total (all races/ethnicities, incl. nonresident) — women"
+      - name: efyaiant
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, American Indian or Alaska Native — total"
+      - name: efyaianm
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, American Indian or Alaska Native — men"
+      - name: efyaianw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, American Indian or Alaska Native — women"
+      - name: efyasiat
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Asian — total"
+      - name: efyasiam
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Asian — men"
+      - name: efyasiaw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Asian — women"
+      - name: efybkaat
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Black or African American — total"
+      - name: efybkaam
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Black or African American — men"
+      - name: efybkaaw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Black or African American — women"
+      - name: efyhispt
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Hispanic or Latino — total"
+      - name: efyhispm
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Hispanic or Latino — men"
+      - name: efyhispw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Hispanic or Latino — women"
+      - name: efynhpit
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Native Hawaiian or Other Pacific Islander — total"
+      - name: efynhpim
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Native Hawaiian or Other Pacific Islander — men"
+      - name: efynhpiw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Native Hawaiian or Other Pacific Islander — women"
+      - name: efywhitt
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, White — total"
+      - name: efywhitm
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, White — men"
+      - name: efywhitw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, White — women"
+      - name: efy2mort
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Two or more races — total"
+      - name: efy2morm
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Two or more races — men"
+      - name: efy2morw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Two or more races — women"
+      - name: efyunknt
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Race/ethnicity unknown — total"
+      - name: efyunknm
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Race/ethnicity unknown — men"
+      - name: efyunknw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, Race/ethnicity unknown — women"
+      - name: efynralt
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, U.S. nonresident (international students) — total"
+      - name: efynralm
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, U.S. nonresident (international students) — men"
+      - name: efynralw
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, U.S. nonresident (international students) — women"
+      - name: efyguun
+        type: int
+        nullable: true
+        comment: "Students of unknown gender (2022 onward; all, undergraduate and graduate levels only)"
+      - name: efyguan
+        type: int
+        nullable: true
+        comment: "Students of another gender (2022 onward; suppressed counts under 5 are null)"
+      - name: efygutot
+        type: int
+        nullable: true
+        comment: "Gender unknown plus another gender (2022 onward; suppressed counts are null)"
+      - name: efygukn
+        type: int
+        nullable: true
+        comment: "Students counted as men or women (2022 onward; suppressed counts are null)"
+
+    source:
+      type: http
+      # {effective_year} (year - dataLag), NOT {year}: dataLag only shifts effective_year.
+      url: "https://nces.ed.gov/ipeds/datacenter/data/EFFY{effective_year}.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [429, 503]
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsTwelveMonthEnrollmentResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2013  # EFFY2011 (year - dataLag) is the first vintage with one race category set.
+        # EFFY2024 is the latest published vintage and EFFY2025 returns 404 (probed 2026-11-26).
+        dataLag: 2
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: ipeds_12month_dual_enrollment
+    releaseWindow:
+      months: [11]
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      NCES IPEDS 12-Month Enrollment, high-school students taking college courses for credit (dual
+      or concurrent enrollment; EFFY_HS): unduplicated 12-month headcount by institution,
+      race/ethnicity and gender. One row per (unitid, year); only institutions reporting such
+      students appear. A subset of the non-degree-seeking undergraduates in
+      ipeds_12month_enrollment (effyalev=11); for the dual-enrolled share of all students divide
+      efytotlt by ipeds_12month_enrollment.efytotlt at effyalev=1 for the same unitid and year.
+      year is the ending year of the period (2024 = 2023-24). First published for 2023. Source:
+      nces.ed.gov/ipeds/datacenter/data/EFFY{year}_HS.zip. Joins to ipeds_institutions via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: "IPEDS unit ID — PK component; FK to ipeds_institutions.unitid"
+      - name: year
+        type: int
+        nullable: false
+        comment: "Ending year of the 12-month reporting period (2024 = 1 July 2023 to 30 June 2024) — PK component; injected from the vintage dimension"
+      - name: efytotlt
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Grand total (all races/ethnicities, incl. nonresident) — total"
+      - name: efytotlm
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Grand total (all races/ethnicities, incl. nonresident) — men"
+      - name: efytotlw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Grand total (all races/ethnicities, incl. nonresident) — women"
+      - name: efyaiant
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, American Indian or Alaska Native — total"
+      - name: efyaianm
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, American Indian or Alaska Native — men"
+      - name: efyaianw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, American Indian or Alaska Native — women"
+      - name: efyasiat
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Asian — total"
+      - name: efyasiam
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Asian — men"
+      - name: efyasiaw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Asian — women"
+      - name: efybkaat
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Black or African American — total"
+      - name: efybkaam
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Black or African American — men"
+      - name: efybkaaw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Black or African American — women"
+      - name: efyhispt
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Hispanic or Latino — total"
+      - name: efyhispm
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Hispanic or Latino — men"
+      - name: efyhispw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Hispanic or Latino — women"
+      - name: efynhpit
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Native Hawaiian or Other Pacific Islander — total"
+      - name: efynhpim
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Native Hawaiian or Other Pacific Islander — men"
+      - name: efynhpiw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Native Hawaiian or Other Pacific Islander — women"
+      - name: efywhitt
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, White — total"
+      - name: efywhitm
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, White — men"
+      - name: efywhitw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, White — women"
+      - name: efy2mort
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Two or more races — total"
+      - name: efy2morm
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Two or more races — men"
+      - name: efy2morw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Two or more races — women"
+      - name: efyunknt
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Race/ethnicity unknown — total"
+      - name: efyunknm
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Race/ethnicity unknown — men"
+      - name: efyunknw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, Race/ethnicity unknown — women"
+      - name: efynralt
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, U.S. nonresident (international students) — total"
+      - name: efynralm
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, U.S. nonresident (international students) — men"
+      - name: efynralw
+        type: int
+        nullable: true
+        comment: "High-school students enrolled in college courses for credit, U.S. nonresident (international students) — women"
+
+    source:
+      type: http
+      # {effective_year} (year - dataLag), NOT {year}: dataLag only shifts effective_year.
+      url: "https://nces.ed.gov/ipeds/datacenter/data/EFFY{effective_year}_HS.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [429, 503]
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsDualEnrollmentResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2025  # EFFY2023_HS (year - dataLag) is the first dual-enrollment file.
+        # EFFY2024 is the latest published vintage and EFFY2025 returns 404 (probed 2026-11-26).
+        dataLag: 2
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: ipeds_12month_distance_enrollment
+    releaseWindow:
+      months: [11]
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      NCES IPEDS 12-Month Enrollment by distance education status (EFFY_DIST): of the unduplicated
+      12-month headcount, how many students took courses exclusively online / by distance
+      education, some distance courses, or none. One row per (unitid, year, effydlev); levels
+      overlap, so filter to one effydlev (1 = all students). year is the ending year of the period
+      (2024 = 2023-24). 2020 onward (2020 and 2021 include the pandemic shift to remote
+      instruction). Source: nces.ed.gov/ipeds/datacenter/data/EFFY{year}_DIST.zip (revised _rv
+      file preferred). Joins to ipeds_institutions via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: "IPEDS unit ID — PK component; FK to ipeds_institutions.unitid"
+      - name: year
+        type: int
+        nullable: false
+        comment: "Ending year of the 12-month reporting period (2024 = 1 July 2023 to 30 June 2024) — PK component; injected from the vintage dimension"
+      - name: effydlev
+        type: int
+        nullable: false
+        comment: "NCES EFFYDLEV level code — PK component: 1 all students, 2 undergraduate, 3 undergraduate degree-seeking, 11 undergraduate non-degree-seeking, 12 graduate"
+      - name: effydlev_label
+        type: string
+        nullable: true
+        comment: "Label for effydlev"
+      - name: efydetot
+        type: int
+        nullable: true
+        comment: "12-month unduplicated headcount, all students at this level"
+      - name: efydeexc
+        type: int
+        nullable: true
+        comment: "Students enrolled exclusively in distance education courses"
+      - name: efydesom
+        type: int
+        nullable: true
+        comment: "Students enrolled in some but not only distance education courses"
+      - name: efydenon
+        type: int
+        nullable: true
+        comment: "Students not enrolled in any distance education course"
+
+    source:
+      type: http
+      # {effective_year} (year - dataLag), NOT {year}: dataLag only shifts effective_year.
+      url: "https://nces.ed.gov/ipeds/datacenter/data/EFFY{effective_year}_DIST.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [429, 503]
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsDistanceEnrollmentResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2022  # EFFY2020_DIST (year - dataLag) is the first distance-education file.
+        # EFFY2024 is the latest published vintage and EFFY2025 returns 404 (probed 2026-11-26).
+        dataLag: 2
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: ipeds_12month_instructional_activity
+    releaseWindow:
+      months: [11]
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      NCES IPEDS 12-Month Instructional Activity (EFIA): credit hours and clock hours delivered
+      between 1 July and 30 June and the full-time-equivalent (FTE) enrollment derived from them.
+      One row per (unitid, year). Total reported FTE = fteug + ftegd + ftedpp (treat a null part as
+      not applicable). year is the ending year of the period (2024 = 2023-24). 2010 onward. For
+      headcount use ipeds_12month_enrollment. Source:
+      nces.ed.gov/ipeds/datacenter/data/EFIA{year}.zip (revised _rv file preferred). Joins to
+      ipeds_institutions via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: "IPEDS unit ID — PK component; FK to ipeds_institutions.unitid"
+      - name: year
+        type: int
+        nullable: false
+        comment: "Ending year of the 12-month reporting period (2024 = 1 July 2023 to 30 June 2024) — PK component; injected from the vintage dimension"
+      - name: cdactua
+        type: int
+        nullable: true
+        comment: "Undergraduate credit hour activity over the 12 months"
+      - name: cnactua
+        type: int
+        nullable: true
+        comment: "Undergraduate clock (contact) hour activity over the 12 months"
+      - name: cdactga
+        type: int
+        nullable: true
+        comment: "Graduate credit hour activity over the 12 months, excluding doctor-professional practice"
+      - name: efteug
+        type: int
+        nullable: true
+        comment: "Estimated undergraduate full-time-equivalent (FTE) enrollment, derived by NCES from credit and clock hours"
+      - name: eftegd
+        type: int
+        nullable: true
+        comment: "Estimated graduate FTE enrollment, derived by NCES from credit hours"
+      - name: fteug
+        type: int
+        nullable: true
+        comment: "Reported undergraduate FTE (the institution figure where it rejected the estimate, else the estimate)"
+      - name: ftegd
+        type: int
+        nullable: true
+        comment: "Reported graduate FTE"
+      - name: ftedpp
+        type: int
+        nullable: true
+        comment: "Doctor-professional practice student FTE (2012 onward)"
+      - name: acttype
+        type: int
+        nullable: true
+        comment: "Units of instructional activity: 1 clock/contact hours, 2 credit hours, 3 both, -2 not applicable"
+
+    source:
+      type: http
+      # {effective_year} (year - dataLag), NOT {year}: dataLag only shifts effective_year.
+      url: "https://nces.ed.gov/ipeds/datacenter/data/EFIA{effective_year}.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [429, 503]
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsInstructionalActivityResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2012  # EFIA2010 (year - dataLag) is the first vintage loaded.
+        # EFFY2024 is the latest published vintage and EFFY2025 returns 404 (probed 2026-11-26).
+        dataLag: 2
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # IPEDS ADMISSIONS — NCES ADM survey: applicants, admitted, enrolled and test scores.
   # Only institutions that report admissions data (selective, first-time undergraduate
   # admissions; roughly 2,000 per year).
