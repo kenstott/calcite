@@ -2351,9 +2351,14 @@ partitionedTables:
       # lowercase Socrata field names.
       url: "https://data.transportation.gov/resource/az4n-8mr2.csv?$limit=100000000"
       method: GET
+      # Socrata serves this body gzip-compressed on request, about a fifth of the plain size;
+      # a connection cut short then fails to decompress instead of passing as a shorter file.
+      headers:
+        Accept-Encoding: gzip
       response:
         format: csv
         hasHeader: true
+        compressed: gzip
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
@@ -3270,9 +3275,14 @@ partitionedTables:
       # are the lowercase Socrata field names.
       url: "https://data.bts.gov/resource/y9wr-xk52.csv?$limit=100000000"
       method: GET
+      # Socrata serves this body gzip-compressed on request, about a fifth of the plain size;
+      # a connection cut short then fails to decompress instead of passing as a shorter file.
+      headers:
+        Accept-Encoding: gzip
       response:
         format: csv
         hasHeader: true
+        compressed: gzip
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
