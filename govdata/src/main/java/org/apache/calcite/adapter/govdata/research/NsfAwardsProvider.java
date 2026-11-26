@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * DataProvider for {@code nsf_award_projects} — award-level NSF grant microdata from the NSF Award
@@ -84,32 +85,79 @@ public class NsfAwardsProvider implements CachingDataProvider {
       Map<String, String> variables, RawCache rawCache) throws IOException {
     int fiscalYear = Integer.parseInt(required(variables, "year"));
     int month = Integer.parseInt(required(variables, "award_month"));
-    int calendarYear = month >= FISCAL_YEAR_START_MONTH ? fiscalYear - 1 : fiscalYear;
-    YearMonth slice = YearMonth.of(calendarYear, month);
-    return new AwardIterator(fiscalYear, slice, rawCache);
+    return new AwardIterator(fiscalYear, awardMonth(fiscalYear, month), rawCache);
   }
 
-  private static String required(Map<String, String> variables, String name) {
+  static String required(Map<String, String> variables, String name) {
     String value = variables.get(name);
     if (value == null || value.trim().isEmpty()) {
-      throw new IllegalStateException("nsf_award_projects: dimension variable '" + name
+      throw new IllegalStateException("NSF Award Search: dimension variable '" + name
           + "' is missing from " + variables);
     }
     return value.trim();
   }
 
-  /** Fetches one slice's entire result set, recursively splitting on truncation (class javadoc). */
+  /** The calendar month of {@code award_month} within federal fiscal year {@code fiscalYear}. */
+  static YearMonth awardMonth(int fiscalYear, int month) {
+    int calendarYear = month >= FISCAL_YEAR_START_MONTH ? fiscalYear - 1 : fiscalYear;
+    return YearMonth.of(calendarYear, month);
+  }
+
+  /**
+   * Hands every award dated in {@code [start, end]} to {@code sink}, fetching the range in one
+   * request and recursing on disjoint halves only if the response is truncated (class javadoc).
+   */
+  static void fetchAwards(String table, LocalDate start, LocalDate end, RawCache rawCache,
+      Consumer<JsonNode> sink) {
+    String dateStart = start.format(API_DATE);
+    String dateEnd = end.format(API_DATE);
+    String url = ENDPOINT + "?dateStart=" + dateStart + "&dateEnd=" + dateEnd
+        + "&rpp=" + MAX_PAGE_RESULTS + "&offset=0";
+    JsonNode response;
+    try (InputStream in = rawCache.openStream(url, () -> rawGet(url))) {
+      response = MAPPER.readTree(in).path("response");
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+    int totalCount = response.path("metadata").path("totalCount").asInt(-1);
+    if (totalCount < 0) {
+      throw new IllegalStateException(table + ": no totalCount in response for "
+          + url + ": " + response);
+    }
+    JsonNode awards = response.path("award");
+    int size = awards.isArray() ? awards.size() : 0;
+    if (size < totalCount) {
+      if (start.equals(end)) {
+        throw new IllegalStateException(table + ": " + dateStart + " alone reports "
+            + totalCount + " awards, over the API's " + MAX_PAGE_RESULTS + "-result response "
+            + "cap; cannot split a single day further");
+      }
+      long days = ChronoUnit.DAYS.between(start, end);
+      LocalDate mid = start.plusDays(days / 2);
+      fetchAwards(table, start, mid, rawCache, sink);
+      fetchAwards(table, mid.plusDays(1), end, rawCache, sink);
+      return;
+    }
+    for (JsonNode award : awards) {
+      if (text(award, "id") == null) {
+        throw new IllegalStateException(table + ": award without an id in "
+            + dateStart + ".." + dateEnd);
+      }
+      sink.accept(award);
+    }
+    LOGGER.info("{}: {} awards for {}..{}", table, totalCount, dateStart, dateEnd);
+  }
+
+  /** Fetches one slice's entire result set on first use. */
   private static final class AwardIterator implements Iterator<Map<String, Object>> {
     private final int fiscalYear;
-    private final LocalDate monthStart;
-    private final LocalDate monthEnd;
+    private final YearMonth slice;
     private final RawCache rawCache;
     private Iterator<Map<String, Object>> rows;
 
     AwardIterator(int fiscalYear, YearMonth slice, RawCache rawCache) {
       this.fiscalYear = fiscalYear;
-      this.monthStart = slice.atDay(1);
-      this.monthEnd = slice.atEndOfMonth();
+      this.slice = slice;
       this.rawCache = rawCache;
     }
 
@@ -126,52 +174,10 @@ public class NsfAwardsProvider implements CachingDataProvider {
     private void ensureLoaded() {
       if (rows == null) {
         List<Map<String, Object>> collected = new ArrayList<Map<String, Object>>();
-        fetchRange(monthStart, monthEnd, collected);
+        fetchAwards("nsf_award_projects", slice.atDay(1), slice.atEndOfMonth(), rawCache,
+            award -> collected.add(toRow(award)));
         rows = collected.iterator();
       }
-    }
-
-    /** Fetches [start, end] in one request, recursing on disjoint halves only if truncated. */
-    private void fetchRange(LocalDate start, LocalDate end, List<Map<String, Object>> out) {
-      String dateStart = start.format(API_DATE);
-      String dateEnd = end.format(API_DATE);
-      String url = ENDPOINT + "?dateStart=" + dateStart + "&dateEnd=" + dateEnd
-          + "&rpp=" + MAX_PAGE_RESULTS + "&offset=0";
-      JsonNode response;
-      try (InputStream in = rawCache.openStream(url, () -> rawGet(url))) {
-        response = MAPPER.readTree(in).path("response");
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-      int totalCount = response.path("metadata").path("totalCount").asInt(-1);
-      if (totalCount < 0) {
-        throw new IllegalStateException("nsf_award_projects: no totalCount in response for "
-            + url + ": " + response);
-      }
-      JsonNode awards = response.path("award");
-      int size = awards.isArray() ? awards.size() : 0;
-      if (size < totalCount) {
-        if (start.equals(end)) {
-          throw new IllegalStateException("nsf_award_projects: " + dateStart + " alone reports "
-              + totalCount + " awards, over the API's " + MAX_PAGE_RESULTS + "-result response "
-              + "cap; cannot split a single day further");
-        }
-        long days = ChronoUnit.DAYS.between(start, end);
-        LocalDate mid = start.plusDays(days / 2);
-        fetchRange(start, mid, out);
-        fetchRange(mid.plusDays(1), end, out);
-        return;
-      }
-      for (JsonNode award : awards) {
-        String id = text(award, "id");
-        if (id == null) {
-          throw new IllegalStateException("nsf_award_projects: award without an id in "
-              + dateStart + ".." + dateEnd);
-        }
-        out.add(toRow(award));
-      }
-      LOGGER.info("nsf_award_projects: {} awards for fy={} {}..{}", totalCount, fiscalYear,
-          dateStart, dateEnd);
     }
 
     private Map<String, Object> toRow(JsonNode a) {
@@ -230,7 +236,7 @@ public class NsfAwardsProvider implements CachingDataProvider {
     return CompleteBody.of(conn);
   }
 
-  private static String text(JsonNode node, String field) {
+  static String text(JsonNode node, String field) {
     JsonNode v = node.get(field);
     if (v == null || v.isNull()) {
       return null;
