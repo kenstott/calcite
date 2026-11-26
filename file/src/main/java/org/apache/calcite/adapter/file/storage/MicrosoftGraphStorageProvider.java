@@ -310,10 +310,21 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
   }
 
   @Override public InputStream openInputStream(String path) throws IOException {
+    ensureInitialized();
+
+    // Normalize path
+    if (path.startsWith("/")) {
+      path = path.substring(1);
+    }
+
+    // Item paths are drive-relative and the persistent cache is shared by every provider in the
+    // JVM, so the drive ID is part of the key
+    String cacheKey = driveId + ":" + path;
+
     // Check persistent cache first if available
     if (persistentCache != null) {
-      byte[] cachedData = persistentCache.getCachedData(path);
-      FileMetadata cachedMetadata = persistentCache.getCachedMetadata(path);
+      byte[] cachedData = persistentCache.getCachedData(cacheKey);
+      FileMetadata cachedMetadata = persistentCache.getCachedMetadata(cacheKey);
 
       if (cachedData != null && cachedMetadata != null) {
         // Check if cached data is still fresh
@@ -327,13 +338,6 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
           return new java.io.ByteArrayInputStream(cachedData);
         }
       }
-    }
-
-    ensureInitialized();
-
-    // Normalize path
-    if (path.startsWith("/")) {
-      path = path.substring(1);
     }
 
     // For API call, we need to handle the nested structure properly
@@ -366,7 +370,7 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
 
       // Get file metadata for caching
       FileMetadata metadata = getMetadata(path);
-      persistentCache.cacheData(path, data, metadata, 0); // No TTL for SharePoint
+      persistentCache.cacheData(cacheKey, data, metadata, 0); // No TTL for SharePoint
 
       return new java.io.ByteArrayInputStream(data);
     }
