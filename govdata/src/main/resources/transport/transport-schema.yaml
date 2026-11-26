@@ -2385,6 +2385,10 @@ partitionedTables:
         compactionMinFiles: 3
         incrementalTtlDays: 7
         overwritePartitions: true
+        # Whole-file snapshot: a short download must not replace the table. The source drops
+        # a handful of records between publications, hence the tolerance.
+        failOnPartitionShrink: true
+        maxPartitionShrinkFraction: 0.001
 
   # ---------------------------------------------------------------------------
   # FAA AIRCRAFT REGISTRY — ReleasableAircraft.zip, one faithful table per file
@@ -3311,6 +3315,8 @@ partitionedTables:
         compactionMinFiles: 3
         incrementalTtlDays: 30
         overwritePartitions: true
+        # Fixed public-use file: a load with fewer rows than the table holds is incomplete.
+        failOnPartitionShrink: true
 
   # ---------------------------------------------------------------------------
   # CFS SCTG / MODE REFERENCE — code lists from the CFS PUF Data Users Guide (static)
