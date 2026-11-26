@@ -171,3 +171,5 @@ run-all-dq.sh
 ```
 
 `dq-report.sh` reads from `s3://govdata-tracker-v1-dq/dq-results/` (`GOVDATA_DQ_TRACKER_BUCKET`) and prints a schema-level verdict summary followed by failing test details. Add `--show-warns` or `--show-pass` to include lower-severity rows.
+
+A whole-schema run writes `schema=<s>/run_date=<d>/type=<mode>/results.parquet`. A `--tables` run writes `.../type=<mode>/scope=<id>/results.parquet`, where `<id>` identifies the table set, and keeps the schema's earlier results, including under `--rebuild`. `dq-report.sh` reports the whole-schema files and lists the scoped ones.
