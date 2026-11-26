@@ -80,6 +80,52 @@ INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_actions','pk_duplic
   CASE WHEN n=0 THEN 'no duplicate (release_number, file_number, respondents, release_url)' ELSE 'duplicate rows' END
 FROM (SELECT COUNT(*) n FROM (SELECT release_number,file_number,respondents,release_url FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_actions', allow_moved_paths=true) GROUP BY ALL HAVING COUNT(*)>1)) t;
 
+-- enforcement_annual_results: one row per fiscal year, FY2019-FY2024 from the FY2024 release plus FY2025 and FY2026.
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','existence',
+  CASE WHEN n>0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1',
+  CASE WHEN n>0 THEN 'iceberg table present' ELSE 'iceberg table missing' END
+FROM (SELECT (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results/metadata/*.json')) n) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','row_count',
+  CASE WHEN n=8 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'8',
+  CASE WHEN n=8 THEN 'one row per FY2019-FY2026' ELSE 'expected 8 fiscal-year rows' END
+FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true)) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','fiscal_year_range',
+  CASE WHEN lo=2019 AND hi=2026 THEN 'pass' ELSE 'fail' END, CAST(lo || '-' || hi AS VARCHAR),'2019-2026',
+  CASE WHEN lo=2019 AND hi=2026 THEN 'FY2019-FY2026 present' ELSE 'fiscal-year range wrong' END
+FROM (SELECT MIN(fiscal_year) lo, MAX(fiscal_year) hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true)) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','pk_duplicates',
+  CASE WHEN n=0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'0',
+  CASE WHEN n=0 THEN 'one row per fiscal_year' ELSE 'duplicate fiscal_year' END
+FROM (SELECT COUNT(*) n FROM (SELECT fiscal_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true) GROUP BY fiscal_year HAVING COUNT(*)>1)) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','key_nulls',
+  CASE WHEN n=0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'0',
+  CASE WHEN n=0 THEN 'no null key columns' ELSE 'null key columns' END
+FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true) WHERE fiscal_year IS NULL OR total_actions IS NULL OR release_url IS NULL OR addendum_url IS NULL) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','actions_sum_to_total',
+  CASE WHEN n=0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'0',
+  CASE WHEN n=0 THEN 'standalone + follow-on + delinquent = total where all published' ELSE 'components do not sum to total' END
+FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true) WHERE delinquent_filings IS NOT NULL AND standalone_actions+follow_on_actions+delinquent_filings <> total_actions) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','fy2026_values',
+  CASE WHEN n=1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1',
+  CASE WHEN n=1 THEN 'FY2026 matches the SEC addendum (235/47/66/348, $343M penalties, $752M disgorgement)' ELSE 'FY2026 row differs from the addendum' END
+FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true) WHERE fiscal_year=2026 AND standalone_actions=235 AND follow_on_actions=47 AND delinquent_filings=66 AND total_actions=348 AND penalties_millions=343 AND disgorgement_millions=752 AND trading_suspensions=13) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','fy2022_revised',
+  CASE WHEN n=1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1',
+  CASE WHEN n=1 THEN 'FY2022 carries the revised 463 standalone actions' ELSE 'FY2022 not the revised 463' END
+FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true) WHERE fiscal_year=2022 AND standalone_actions=463 AND total_actions=761) t;
+
+INSERT INTO dq_results SELECT 'sec_enforcement','enforcement_annual_results','money_sum_to_total',
+  CASE WHEN n=0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'0',
+  CASE WHEN n=0 THEN 'penalties + disgorgement = total money ordered (within $2M rounding) where all published' ELSE 'money components do not sum to total' END
+FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/enforcement_annual_results', allow_moved_paths=true) WHERE penalties_millions IS NOT NULL AND disgorgement_millions IS NOT NULL AND abs(penalties_millions+disgorgement_millions-total_money_ordered_millions)>2) t;
+
 SELECT '=== DQ RESULTS ===' AS section;
 SELECT * FROM dq_results ORDER BY schema, tbl, test;
 

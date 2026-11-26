@@ -395,8 +395,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 5101826
-      checkedAt: "2026-11-25T05:13:55Z"
+      rowCount: 5127225
+      checkedAt: "2026-11-26T05:33:19Z"
     partitions: *sec_partitions
 
     comment: >
@@ -532,8 +532,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 361527877
-      checkedAt: "2026-11-25T05:14:55Z"
+      rowCount: 361757617
+      checkedAt: "2026-11-26T05:34:19Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -669,8 +669,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 78145018
-      checkedAt: "2026-11-25T05:15:05Z"
+      rowCount: 78179498
+      checkedAt: "2026-11-26T05:34:28Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -789,8 +789,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 21290458
-      checkedAt: "2026-11-25T05:15:39Z"
+      rowCount: 21343069
+      checkedAt: "2026-11-26T05:35:00Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -891,7 +891,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 9334773
-      checkedAt: "2026-11-25T05:15:54Z"
+      checkedAt: "2026-11-26T05:35:15Z"
     partitions: *sec_partitions
     hooks:
       enabled: true
@@ -980,8 +980,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 374744448
-      checkedAt: "2026-11-25T05:16:13Z"
+      rowCount: 375016685
+      checkedAt: "2026-11-26T05:35:33Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1109,8 +1109,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 9838755
-      checkedAt: "2026-11-25T05:16:20Z"
+      rowCount: 9891998
+      checkedAt: "2026-11-26T05:35:39Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1253,7 +1253,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 120299404
-      checkedAt: "2026-11-25T05:16:30Z"
+      checkedAt: "2026-11-26T05:35:49Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1404,8 +1404,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 423238
-      checkedAt: "2026-11-25T05:16:39Z"
+      rowCount: 426947
+      checkedAt: "2026-11-26T05:36:00Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1546,8 +1546,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 33663684
-      checkedAt: "2026-11-25T05:17:05Z"
+      rowCount: 33848815
+      checkedAt: "2026-11-26T05:36:29Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1652,7 +1652,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 23956361
-      checkedAt: "2026-11-25T05:17:05Z"
+      checkedAt: "2026-11-26T05:36:31Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1817,6 +1817,128 @@ partitionedTables:
         snapshotRetentionDays: 7
         batchPartitionColumns: [listing]
         incrementalKeys: [listing]
+        overwritePartitions: true
+
+  # ==========================================================================
+  # ENFORCEMENT ANNUAL RESULTS (SEC annual enforcement-results press releases)
+  # ==========================================================================
+  - name: enforcement_annual_results
+    pattern: "release=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: release
+          type: VARCHAR
+    comment: >
+      The SEC Division of Enforcement's published annual totals, one row per federal fiscal year
+      (October through September): actions filed split into standalone actions (civil actions plus
+      standalone administrative proceedings), follow-on administrative proceedings and delinquent
+      filings; trading suspensions; money ordered split into penalties and disgorgement (the
+      SEC's figure includes prejudgment interest from FY2026 on); and money distributed to harmed
+      investors. Use for year-over-year enforcement volume and money-ordered trends. Covers FY2019
+      to FY2024 (from the FY2024 release's six-year table, which carries FY2022 as revised to 463
+      standalone actions), FY2025 and FY2026. FY2025's addendum table is an image, so that row has
+      only what the release text states (action counts and the headline money total, which
+      includes $14.9 billion from one case, SEC v. Stanford International Bank); its penalties,
+      disgorgement, delinquent filings and distributions are null. offsets_millions (disgorgement
+      deemed satisfied by a court order in a separate non-SEC action) is published from FY2026
+      only, and trading_suspensions only where the release text states it (FY2026). Amounts are
+      in millions of dollars, rounded as the SEC rounds them, so components may not sum to the
+      total. Counts differ from sec.enforcement_actions, which counts listing rows. The SEC's
+      release for each year is a fixed entry in this table's dimension list; add the next fiscal
+      year's release slug when the SEC publishes it. Source: sec.gov press releases and their
+      addendum PDFs (keyless).
+
+    dimensions:
+      release:
+        - "2024-186"
+        - "2026-34"
+        - "2026-113-sec-announces-enforcement-annual-results-fiscal-year-2026"
+
+    columns:
+      - name: fiscal_year
+        type: int
+        nullable: false
+        comment: Federal fiscal year (October-September) the totals cover; FY2026 ended 2026-09-30
+      - name: standalone_actions
+        type: int
+        nullable: true
+        comment: Standalone enforcement actions filed (civil actions plus standalone administrative proceedings, excluding delinquent filings)
+      - name: follow_on_actions
+        type: int
+        nullable: true
+        comment: Follow-on administrative proceedings filed (bars or suspensions based on a criminal conviction, injunction or other order)
+      - name: delinquent_filings
+        type: int
+        nullable: true
+        comment: Delinquent-filings proceedings filed; null for FY2025, whose release text does not state it
+      - name: total_actions
+        type: int
+        nullable: false
+        comment: Total enforcement actions filed (standalone plus follow-on plus delinquent filings)
+      - name: trading_suspensions
+        type: int
+        nullable: true
+        comment: Trading suspensions instituted, where the release text states it (FY2026); null otherwise
+      - name: penalties_millions
+        type: bigint
+        nullable: true
+        comment: Civil penalties ordered, in millions of dollars; null for FY2025
+      - name: disgorgement_millions
+        type: bigint
+        nullable: true
+        comment: Disgorgement ordered, in millions of dollars (includes prejudgment interest from FY2026); null for FY2025
+      - name: total_money_ordered_millions
+        type: bigint
+        nullable: true
+        comment: Total money ordered, in millions of dollars, as published (for FY2025 the release's headline figure)
+      - name: offsets_millions
+        type: bigint
+        nullable: true
+        comment: Disgorgement deemed satisfied by a court order in a separate non-SEC action, in millions; published from FY2026
+      - name: distributed_to_investors_millions
+        type: bigint
+        nullable: true
+        comment: Money distributed to harmed investors, in millions of dollars; null for FY2025
+      - name: release_url
+        type: string
+        nullable: false
+        comment: URL of the SEC press release the row was parsed from
+      - name: addendum_url
+        type: string
+        nullable: false
+        comment: URL of the release's addendum PDF
+
+    source:
+      type: http
+      url: "https://www.sec.gov/newsroom/press-releases/{release}"
+      method: GET
+      parallel: 1
+      headers:
+        User-Agent: *edgar_user_agent
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.sec.SecEnforcementResultsTransformer"
+
+    materialize:
+      <<: *materialize_defaults
+      output:
+        pattern: "release=*/"
+      partition:
+        columns: [release]
+      iceberg:
+        <<: *iceberg_defaults
+        tableName: enforcement_annual_results
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [release]
+        incrementalKeys: [release]
         overwritePartitions: true
 
 

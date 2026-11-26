@@ -5,6 +5,7 @@
 #
 # Add an entry only after confirming the warehouse has no Iceberg table for it; a table that is
 # materialized but missing from the cache means the cache is stale -- regenerate it instead.
+census.acs1_place_income_poverty
 census.acs_health_insurance_by_type
 census.acs_real_estate_taxes
 census.acs_rent_burden_by_income
@@ -18,6 +19,10 @@ econ.osha_violations
 econ.retail_sales_revision_vintages
 econ.treasury_foreign_holdings
 edu.edfacts_chronic_absenteeism
+edu.ipeds_12month_distance_enrollment
+edu.ipeds_12month_dual_enrollment
+edu.ipeds_12month_enrollment
+edu.ipeds_12month_instructional_activity
 energy.eia_petroleum_spot_prices
 energy.eia_plant_generation
 environment.attains_cause_summary
@@ -49,6 +54,7 @@ officials.presidential_results_by_district
 patents.patent_publication_applicants
 patents.patent_publication_cpc
 sec.enforcement_actions
+sec.enforcement_annual_results
 transport.barge_lock_movements_monthly
 transport.barge_rates_weekly
 transport.usace_vessel_inventory

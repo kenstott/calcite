@@ -271,6 +271,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // its own worker slot (enforcementOnly), never inside the per-year filing slots.
     final boolean enforcementOnly = getBooleanValue(operand, "enforcementOnly", false);
     builder.isEnabled("enforcement_actions", context -> enforcementOnly);
+    builder.isEnabled("enforcement_annual_results", context -> enforcementOnly);
   }
 
   // Flag to ensure download only runs once
