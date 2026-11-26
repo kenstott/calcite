@@ -60,6 +60,7 @@ INSERT INTO dq_existence_counts SELECT 'state_ui_claims',      (SELECT COUNT(*) 
 INSERT INTO dq_existence_counts SELECT 'osha_inspections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'osha_violations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'usgs_mineral_commodity_stats', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usgs_mineral_commodity_stats', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'treasury_foreign_holdings', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1) t);
@@ -126,6 +127,7 @@ INSERT INTO dq_row_count_counts SELECT 'state_ui_claims',       (SELECT COUNT(*)
 INSERT INTO dq_row_count_counts SELECT 'osha_inspections',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true)), 200000;  -- ~30-40k inspections/yr over 2019 onward; DQ run may cover fewer years
 INSERT INTO dq_row_count_counts SELECT 'osha_violations',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)), 200000;
 INSERT INTO dq_row_count_counts SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50;  -- one row per year 1975-2026
+INSERT INTO dq_row_count_counts SELECT 'usgs_mineral_commodity_stats', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usgs_mineral_commodity_stats', allow_moved_paths := true)), 8000;  -- one MCS release is ~8,900 rows
 INSERT INTO dq_row_count_counts SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)), 20000;  -- CSL carries ~26,000 listings
 INSERT INTO dq_row_count_counts SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20;  -- one row per year 2005-2026
 INSERT INTO dq_row_count_counts SELECT 'treasury_foreign_holdings',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)), 8000;  -- monthly 2012-2026, ~40-50 holders per month
@@ -423,6 +425,23 @@ SELECT 'econ', 'osha_violations', 'expected_values', 'fail', 'penalties', 'initi
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)
 WHERE initial_penalty < 0 OR current_penalty < 0
 HAVING COUNT(*) > 0;
+
+-- usgs_mineral_commodity_stats
+INSERT INTO dq_results
+SELECT 'econ', 'usgs_mineral_commodity_stats', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usgs_mineral_commodity_stats', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- MCS 2026 release: Copper net import reliance for 2024 is 45%, ~127 commodities
+INSERT INTO dq_results
+SELECT 'econ', 'usgs_mineral_commodity_stats', 'known_value', 'fail', 'copper NIR 2024 / commodities', '45 / >= 120',
+  'copper=' || COALESCE(CAST(MAX(value_num) FILTER (WHERE commodity = 'Copper' AND statistic = 'Net import reliance' AND data_year = 2024) AS VARCHAR), 'NULL')
+  || ' commodities=' || CAST(COUNT(DISTINCT commodity) AS VARCHAR)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usgs_mineral_commodity_stats', allow_moved_paths := true)
+WHERE year = 2026
+HAVING MAX(value_num) FILTER (WHERE commodity = 'Copper' AND statistic = 'Net import reliance' AND data_year = 2024) IS DISTINCT FROM 45
+    OR COUNT(DISTINCT commodity) < 120;
 
 -- social_security_cola
 INSERT INTO dq_results
