@@ -2545,6 +2545,15 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/g
      OR LENGTH(summary_text) < 100 OR published_date > as_of + 1
      OR published_date < as_of - 180);
 
+-- as_of must be the partition value, not only a column: a capture filed under a null as_of
+-- partition would be replaced by the next run, losing history the source cannot re-serve.
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T7_capture_partitioned',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Data files not under an as_of=YYYY-MM-DD partition'
+FROM (SELECT COUNT(*) AS n
+  FROM iceberg_metadata('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true)
+  WHERE status <> 'DELETED' AND NOT regexp_matches(file_path, '/as_of=[0-9]{4}-[0-9]{2}-[0-9]{2}/'));
+
 INSERT INTO dq_results
 SELECT 'fiscal', 'gao_report_feed', 'T8_pk_duplication',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (as_of, product_number) keys'

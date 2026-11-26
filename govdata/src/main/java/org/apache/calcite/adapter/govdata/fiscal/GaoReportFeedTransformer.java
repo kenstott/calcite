@@ -27,6 +27,8 @@ import org.xml.sax.SAXException;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -46,6 +48,11 @@ import javax.xml.parsers.ParserConfigurationException;
  * <p>The feed is a rolling window with no history, so a response that is not that feed (for
  * example a bot-protection page), a feed with no items, or an item missing a field fails the
  * run rather than recording a partial capture.
+ *
+ * <p>Each row carries {@code as_of}, the UTC capture date. It is a partition column, so it must
+ * be in the row itself: the Iceberg writer takes partition values from the transformed response,
+ * and a column computed by a schema {@code expression} would partition every capture as
+ * {@code as_of=null}, letting each run replace the one before.
  */
 public class GaoReportFeedTransformer implements ResponseTransformer {
 
@@ -54,6 +61,16 @@ public class GaoReportFeedTransformer implements ResponseTransformer {
 
   private static final Pattern PRODUCT_LINK =
       Pattern.compile("https://www\\.gao\\.gov/products/([A-Za-z0-9][A-Za-z0-9.-]*)");
+
+  private final Clock clock;
+
+  public GaoReportFeedTransformer() {
+    this(Clock.systemUTC());
+  }
+
+  GaoReportFeedTransformer(Clock clock) {
+    this.clock = clock;
+  }
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.trim().isEmpty()) {
@@ -69,6 +86,7 @@ public class GaoReportFeedTransformer implements ResponseTransformer {
       throw new IllegalStateException("gao_report_feed: no items in feed " + context.getUrl());
     }
     ArrayNode rows = MAPPER.createArrayNode();
+    String asOf = LocalDate.now(clock).toString();
     Set<String> seen = new HashSet<String>();
     for (int i = 0; i < items.getLength(); i++) {
       Element item = (Element) items.item(i);
@@ -89,6 +107,7 @@ public class GaoReportFeedTransformer implements ResponseTransformer {
       row.put("product_url", link);
       row.put("published_date", publishedDate(required(item, "pubDate", i)));
       row.put("summary_text", required(item, "description", i));
+      row.put("as_of", asOf);
     }
     LOGGER.info("gao_report_feed: {} items", Integer.valueOf(rows.size()));
     return rows.toString();

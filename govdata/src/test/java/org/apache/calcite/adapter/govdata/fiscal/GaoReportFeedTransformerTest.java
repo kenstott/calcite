@@ -18,6 +18,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -43,11 +47,14 @@ class GaoReportFeedTransformerTest {
       "Mon, 23 Nov 2026 07:13:29 -0500", "What GAO Found\n\nA finding.");
 
   @Test void parsesOneRowPerItem() throws Exception {
-    String json = new GaoReportFeedTransformer().transform(
+    Clock clock = Clock.fixed(Instant.parse("2026-11-26T23:30:00Z"), ZoneOffset.UTC);
+    String json = new GaoReportFeedTransformer(clock).transform(
         feed(GOOD + item("https://www.gao.gov/products/gao-27-109529",
             "Wed, 18 Nov 2026 23:45:24 -0500", "Other.")), CONTEXT);
     JsonNode rows = new ObjectMapper().readTree(json);
     assertEquals(2, rows.size());
+    assertEquals("2026-11-26", rows.get(0).get("as_of").asText());
+    assertEquals("2026-11-26", rows.get(1).get("as_of").asText());
     assertEquals("GAO-27-108423", rows.get(0).get("product_number").asText());
     assertEquals("Air Traffic Control: FAA & Aging Systems", rows.get(0).get("title").asText());
     assertEquals("https://www.gao.gov/products/gao-27-108423",

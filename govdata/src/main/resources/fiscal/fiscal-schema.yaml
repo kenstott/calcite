@@ -9312,8 +9312,7 @@ partitionedTables:
       - name: as_of
         type: date
         nullable: false
-        expression: 'CURRENT_DATE'
-        comment: Date this feed capture was materialized (UTC)
+        comment: Date the feed was captured (UTC)
 
     dimensions:
       type:
