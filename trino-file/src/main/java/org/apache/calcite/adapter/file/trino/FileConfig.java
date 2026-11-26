@@ -55,6 +55,7 @@ public class FileConfig
     private Duration catalogRefreshInterval;
     private String crawl;
     private String excelHints;
+    private String storageConfig;
 
     @NotNull
     public String getGlob()
@@ -294,6 +295,24 @@ public class FileConfig
     public FileConfig setExcelHints(String excelHints)
     {
         this.excelHints = excelHints;
+        return this;
+    }
+
+    public String getStorageConfig()
+    {
+        return storageConfig;
+    }
+
+    @Config("storage-config")
+    @ConfigSecuritySensitive
+    @ConfigDescription("The file adapter's storageConfig operand, as a JSON object, for the storage "
+            + "named by the glob's scheme. Required for onedrive:// (userPrincipalName, tenantId, "
+            + "clientId, clientSecret or refreshToken, or accessToken) and gdrive:// (folderId, "
+            + "serviceAccountKey or serviceAccountKeyPath, clientId + clientSecret + refreshToken, "
+            + "or accessToken); for s3:// and sftp:// it replaces the aws.* and sftp.* properties.")
+    public FileConfig setStorageConfig(String storageConfig)
+    {
+        this.storageConfig = storageConfig;
         return this;
     }
 }
