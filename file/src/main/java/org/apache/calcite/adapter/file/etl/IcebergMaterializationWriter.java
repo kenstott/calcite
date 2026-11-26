@@ -235,6 +235,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private final List<org.apache.iceberg.DataFile> unitFiles =
       new ArrayList<org.apache.iceberg.DataFile>();
 
+  /** Partitions the completed fetch units have written since the last drain. */
+  private final Set<String> writtenPartitionKeys = new LinkedHashSet<String>();
+  /** Partitions committed by {@link #publishPartitions}; no further rows may be written to them. */
+  private final Set<String> publishedPartitions = new HashSet<String>();
+
   /** True once commit() has completed — suppresses the SIGTERM emergency-commit hook. */
   private final AtomicBoolean committedSuccessfully = new AtomicBoolean(false);
 
@@ -1101,6 +1106,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     for (String key : keys) {
       flushPartition(key);
     }
+    writtenPartitionKeys.addAll(keys);
     synchronized (pendingDataFiles) {
       unitFiles.clear();
       unitPartitionKeys.clear();
@@ -1120,6 +1126,45 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     } else if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD) {
       intermediateCommit();
     }
+  }
+
+  /**
+   * Returns the partitions written by the fetch units completed since the previous call, and
+   * forgets them.
+   *
+   * @return partition keys, possibly empty
+   */
+  Set<String> drainWrittenPartitionKeys() {
+    Set<String> keys = new LinkedHashSet<String>(writtenPartitionKeys);
+    writtenPartitionKeys.clear();
+    return keys;
+  }
+
+  /**
+   * Commits the given partitions before the run ends. The caller guarantees that every fetch unit
+   * feeding them has delivered all its rows, so replacing each one with its files drops nothing.
+   * A later write to a published partition fails.
+   *
+   * @param partitionKeys keys obtained from {@link #drainWrittenPartitionKeys}
+   * @throws IOException if the commit fails
+   */
+  void publishPartitions(Set<String> partitionKeys) throws IOException {
+    List<org.apache.iceberg.DataFile> files = new ArrayList<org.apache.iceberg.DataFile>();
+    for (String key : partitionKeys) {
+      List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(key);
+      if (forPartition != null) {
+        files.addAll(forPartition);
+      }
+    }
+    if (files.isEmpty()) {
+      return;
+    }
+    replaceThenAppend(partitionKeys, files.size(), false);
+    synchronized (pendingDataFiles) {
+      pendingDataFiles.removeAll(files);
+    }
+    publishedPartitions.addAll(partitionKeys);
+    LOGGER.info("Published completed partition(s) {} with {} file(s)", partitionKeys, files.size());
   }
 
   /**
@@ -1461,6 +1506,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     if (rows == null || rows.isEmpty()) {
       return;
     }
+    if (publishedPartitions.contains(partitionKey)) {
+      throw new IllegalStateException("Partition [" + partitionKey + "] of '"
+          + config.getTargetTableId() + "' was already published as complete; a further write "
+          + "means the table's fetch units do not group by partition as declared");
+    }
     Map<String, String> partVars = partitionVarsMap.get(partitionKey);
     int rowCount = rows.size();
 
@@ -1794,53 +1844,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       throws IOException {
     int total = files.size();
     if (overwritePartitions) {
-      // replacePartitionsDataFiles fully replaces whatever partitions its files touch — it does
-      // not merge with a prior commit's files for the same partition. A run whose volume crosses
-      // COMMIT_FILE_THRESHOLD more than once would otherwise have each chunk's replace silently
-      // drop the previous chunk's files for any partition both chunks touched.
-      //
-      // The answer is to replace a partition ONCE — the first commit that carries a file for it,
-      // which is what displaces the previous run's data — and to APPEND every file for that
-      // partition after that. Re-committing the partition's whole cumulative file list instead
-      // would also be correct against a still-intact table, but it re-registers DataFile handles
-      // for objects this run committed earlier, and those are not guaranteed to still exist:
-      // compaction rewrites a partition's small files into one and the superseded originals are
-      // reclaimed, so a later cumulative commit can put the live snapshot back to referencing
-      // deleted objects — a dangling reference that reads as 404 rather than as a failure.
-      // Appending only what has not been committed yet never names an old file again.
-      List<org.apache.iceberg.DataFile> toReplace = new ArrayList<org.apache.iceberg.DataFile>();
-      List<org.apache.iceberg.DataFile> toAppend = new ArrayList<org.apache.iceberg.DataFile>();
-      for (Map.Entry<String, List<org.apache.iceberg.DataFile>> entry
-          : filesByPartition.entrySet()) {
-        String partitionKey = entry.getKey();
-        List<org.apache.iceberg.DataFile> forPartition = entry.getValue();
-        int alreadyCommitted = committedPerPartition.containsKey(partitionKey)
-            ? committedPerPartition.get(partitionKey).intValue() : 0;
-        if (alreadyCommitted >= forPartition.size()) {
-          continue;
-        }
-        if (replacedPartitions.add(partitionKey)) {
-          toReplace.addAll(forPartition);
-        } else {
-          toAppend.addAll(forPartition.subList(alreadyCommitted, forPartition.size()));
-        }
-        committedPerPartition.put(partitionKey, Integer.valueOf(forPartition.size()));
-      }
-      long commitStart = System.currentTimeMillis();
-      if (!toReplace.isEmpty()) {
-        tableWriter.replacePartitionsDataFiles(toReplace, runOnCallingThread,
-            failOnPartitionShrink);
-        totalRecordsCommitted += sumRecordCounts(toReplace);
-      }
-      if (!toAppend.isEmpty()) {
-        tableWriter.bulkCommitDataFiles(toAppend, runOnCallingThread);
-        totalRecordsCommitted += sumRecordCounts(toAppend);
-      }
-      totalCommittedFiles += toReplace.size() + toAppend.size();
-      long elapsed = System.currentTimeMillis() - commitStart;
-      LOGGER.info("Overwrite commit: replaced {} file(s), appended {} file(s) ({} passed to this "
-          + "call) in {}ms ({} total committed)", toReplace.size(), toAppend.size(), total,
-          elapsed, totalCommittedFiles);
+      replaceThenAppend(null, total, runOnCallingThread);
       return;
     }
     int chunkSize = COMMIT_FILE_THRESHOLD > 0 ? COMMIT_FILE_THRESHOLD : 1000;
@@ -1855,6 +1859,69 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       LOGGER.info("Committed chunk {}-{} of {} files in {}ms ({} total committed)",
           i, end, total, elapsed, totalCommittedFiles);
     }
+  }
+
+  /**
+   * The replace-partitions commit for {@code partitionKeys}, or for every partition when null.
+   *
+   * replacePartitionsDataFiles fully replaces whatever partitions its files touch — it does
+   * not merge with a prior commit's files for the same partition. A run whose volume crosses
+   * COMMIT_FILE_THRESHOLD more than once would otherwise have each chunk's replace silently
+   * drop the previous chunk's files for any partition both chunks touched.
+   *
+   * The answer is to replace a partition ONCE — the first commit that carries a file for it,
+   * which is what displaces the previous run's data — and to APPEND every file for that
+   * partition after that. Re-committing the partition's whole cumulative file list instead
+   * would also be correct against a still-intact table, but it re-registers DataFile handles
+   * for objects this run committed earlier, and those are not guaranteed to still exist:
+   * compaction rewrites a partition's small files into one and the superseded originals are
+   * reclaimed, so a later cumulative commit can put the live snapshot back to referencing
+   * deleted objects — a dangling reference that reads as 404 rather than as a failure.
+   * Appending only what has not been committed yet never names an old file again.
+   */
+  private void replaceThenAppend(Set<String> partitionKeys, int total, boolean runOnCallingThread)
+      throws IOException {
+    List<org.apache.iceberg.DataFile> toReplace = new ArrayList<org.apache.iceberg.DataFile>();
+    List<org.apache.iceberg.DataFile> toAppend = new ArrayList<org.apache.iceberg.DataFile>();
+    Set<String> replacing = new LinkedHashSet<String>();
+    Map<String, Integer> committing = new LinkedHashMap<String, Integer>();
+    for (Map.Entry<String, List<org.apache.iceberg.DataFile>> entry
+        : filesByPartition.entrySet()) {
+      String partitionKey = entry.getKey();
+      if (partitionKeys != null && !partitionKeys.contains(partitionKey)) {
+        continue;
+      }
+      List<org.apache.iceberg.DataFile> forPartition = entry.getValue();
+      int alreadyCommitted = committedPerPartition.containsKey(partitionKey)
+          ? committedPerPartition.get(partitionKey).intValue() : 0;
+      if (alreadyCommitted >= forPartition.size()) {
+        continue;
+      }
+      if (replacedPartitions.contains(partitionKey)) {
+        toAppend.addAll(forPartition.subList(alreadyCommitted, forPartition.size()));
+      } else {
+        toReplace.addAll(forPartition);
+        replacing.add(partitionKey);
+      }
+      committing.put(partitionKey, Integer.valueOf(forPartition.size()));
+    }
+    long commitStart = System.currentTimeMillis();
+    if (!toReplace.isEmpty()) {
+      tableWriter.replacePartitionsDataFiles(toReplace, runOnCallingThread,
+          failOnPartitionShrink);
+      totalRecordsCommitted += sumRecordCounts(toReplace);
+      replacedPartitions.addAll(replacing);
+    }
+    if (!toAppend.isEmpty()) {
+      tableWriter.bulkCommitDataFiles(toAppend, runOnCallingThread);
+      totalRecordsCommitted += sumRecordCounts(toAppend);
+    }
+    committedPerPartition.putAll(committing);
+    totalCommittedFiles += toReplace.size() + toAppend.size();
+    long elapsed = System.currentTimeMillis() - commitStart;
+    LOGGER.info("Overwrite commit: replaced {} file(s), appended {} file(s) ({} passed to this "
+        + "call) in {}ms ({} total committed)", toReplace.size(), toAppend.size(), total,
+        elapsed, totalCommittedFiles);
   }
 
   /** Sum of {@link org.apache.iceberg.DataFile#recordCount()} across a list of data files. */
@@ -3034,9 +3101,6 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         long commitElapsed = System.currentTimeMillis() - commitStart;
         LOGGER.info("Final commit complete: {} files in {}ms ({} total across all commits)",
             pendingDataFiles.size(), commitElapsed, totalCommittedFiles);
-
-        // Store table and column comments as Iceberg properties
-        storeTableMetadata();
       } catch (Exception e) {
         LOGGER.error("Bulk commit failed: {}", e.getMessage());
         throw new IOException("Bulk commit failed", e);
@@ -3048,6 +3112,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         pendingStagedBatches.clear();
         pendingDataFiles.clear();
       }
+    }
+
+    // Store table and column comments as Iceberg properties. Counted over every commit of the
+    // run, since published partitions can leave nothing for the final one.
+    if (totalCommittedFiles > 0) {
+      storeTableMetadata();
     }
 
     // Run compaction if configured - consolidates many small files into fewer large files.

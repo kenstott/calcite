@@ -168,6 +168,13 @@ public class EtlPipeline {
   private final Queue<PendingComboMark> pendingComboMarks =
       new ConcurrentLinkedQueue<PendingComboMark>();
 
+  /**
+   * Set while a run publishes each partition as soon as every fetch unit feeding it is written
+   * ({@code options.commitPerPartition} on a table whose partitions are fed by several units);
+   * null otherwise.
+   */
+  private PartitionCompletion partitionCompletion;
+
   /** One deferred {@link #markCombosProcessed} call, held until the pipeline's commit succeeds. */
   private static final class PendingComboMark {
     final String pipelineName;
@@ -1420,6 +1427,9 @@ public class EtlPipeline {
         LOGGER.info("Dispatch: {} fetch units from {} unprocessed combos (backfill_period={})",
             unitCount, neededCount, config.getBackfillPeriod());
 
+        partitionCompletion = PartitionCompletion.applies(config, writer, dataWriter)
+            ? new PartitionCompletion(config, fetchUnits) : null;
+
         if (threadCount > 1 && unitCount > 1) {
           // Parallel mode: fetch data concurrently, writes are serialized via writeLock
           LOGGER.info("Using {} parallel threads for {} fetch units", threadCount, unitCount);
@@ -2558,6 +2568,11 @@ public class EtlPipeline {
         boolean hasResponsePartitioning = sourceConfig != null
             && sourceConfig.hasResponsePartitioning();
 
+        if (partitionCompletion != null) {
+          // Keys left behind by a unit that failed after writing belong to no later unit.
+          ((IcebergMaterializationWriter) writer).drainWrittenPartitionKeys();
+        }
+
         long batchRows;
         if (hasResponsePartitioning) {
           batchRows =
@@ -2619,6 +2634,10 @@ public class EtlPipeline {
                   finalHashFreshnessToken, pipelineName);
             }
           }
+        }
+
+        if (partitionCompletion != null) {
+          publishIfComplete(fetchUnit, (IcebergMaterializationWriter) writer, pipelineName);
         }
 
         // The write for this unit succeeded. Record its freshness token so the post-commit
@@ -2917,6 +2936,35 @@ public class EtlPipeline {
       sb.append(key).append('=').append(variables.get(key));
     }
     return sb.toString();
+  }
+
+  /**
+   * Records a written unit and, when it was the last one feeding its partition, commits that
+   * partition and applies its deferred completion marks, so an interrupted run keeps it. Must be
+   * called under {@code writeLock}.
+   */
+  private void publishIfComplete(FetchUnit fetchUnit, IcebergMaterializationWriter writer,
+      String pipelineName) throws IOException {
+    Map<String, String> group = partitionCompletion.groupOf(fetchUnit.getFetchVariables());
+    Set<String> partitionKeys =
+        partitionCompletion.unitWritten(group, writer.drainWrittenPartitionKeys());
+    if (partitionKeys == null) {
+      return;
+    }
+    writer.publishPartitions(partitionKeys);
+    List<Map<String, String>> published = new ArrayList<Map<String, String>>();
+    for (Iterator<PendingComboMark> it = pendingComboMarks.iterator(); it.hasNext();) {
+      PendingComboMark mark = it.next();
+      if (group.equals(partitionCompletion.groupOf(mark.markKey))) {
+        incrementalTracker.markProcessedWithRowCount(
+            mark.pipelineName, mark.pipelineName, mark.markKey, null, mark.rowCount);
+        published.add(mark.markKey);
+        it.remove();
+      }
+    }
+    incrementalTracker.flushPending();
+    LOGGER.info("Pipeline '{}': partition {} complete — committed and marked {} combo(s)",
+        pipelineName, group, published.size());
   }
 
   private void markCombosProcessed(FetchUnit fetchUnit, EtlPipelineConfig config,

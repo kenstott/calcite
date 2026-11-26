@@ -55,9 +55,17 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String API_MARKER = "/hudapi/public/";
+  private static final int HTTP_TOO_MANY_REQUESTS = 429;
   private static final int CONNECT_TIMEOUT_MS = 30_000;
   private static final int READ_TIMEOUT_MS = 60_000;
   private static final int MAX_RETRIES = 5;
+
+  /**
+   * Rate-limit waits allowed for one request on top of {@link #MAX_RETRIES}. HUD allows 60
+   * requests per minute per token, shared by every thread and process using it, so a 429 that
+   * names its {@code Retry-After} is a turn to wait for rather than a failed attempt.
+   */
+  private static final int MAX_RATE_LIMIT_WAITS = 30;
 
   /** First backoff step; doubles per attempt (1s, 2s, 4s, 8s, 16s) up to {@link #MAX_BACKOFF_MS}. */
   private static final long BASE_BACKOFF_MS = 1_000L;
@@ -118,6 +126,7 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
 
   private String getOnce(String url, String auth) throws IOException {
     IOException last = null;
+    int rateLimitWaits = 0;
     for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
@@ -148,6 +157,11 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
         // Read Retry-After before disconnect: when HUD states how long its rate-limit window
         // has left, obey it. Guessing shorter just burns an attempt and returns another 429.
         waitMs = retryAfterMs(conn, attempt);
+        if (status == HTTP_TOO_MANY_REQUESTS && conn.getHeaderField("Retry-After") != null
+            && rateLimitWaits < MAX_RATE_LIMIT_WAITS) {
+          rateLimitWaits++;
+          attempt--;
+        }
       } catch (java.net.SocketException | java.net.SocketTimeoutException
           | java.net.UnknownHostException e) {
         // "Network is unreachable", a reset or a timeout: the link dropped, not HUD's answer
