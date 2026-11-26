@@ -2729,6 +2729,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           return Double.parseDouble(value);
         case BOOLEAN:
           return Boolean.parseBoolean(value);
+        case DATE:
+          // Iceberg holds a date partition value as days since the epoch. An unreadable date
+          // throws rather than filing the rows under a null partition.
+          return Integer.valueOf(
+              (int) java.time.LocalDate.parse(value).toEpochDay());
         default:
           return value;
       }

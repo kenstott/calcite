@@ -203,7 +203,7 @@ def iso_to_millis(iso_ts):
 # stock_prices: worker.sh's `sec` case hardcodes fetchStockPrices:false, so stock_prices is only
 # ever populated by the dedicated `sec_prices` slot.
 SEC_PRICE_ONLY_TABLES = {"stock_prices"}
-SEC_ENFORCEMENT_TABLES = {"enforcement_actions"}
+SEC_ENFORCEMENT_TABLES = {"enforcement_actions", "enforcement_annual_results"}
 
 # Schemas with no point-in-time history to backfill at all (current-snapshot reference data with
 # no year axis) — run-pool.sh's `historical` and `all` aliases deliberately never queue a

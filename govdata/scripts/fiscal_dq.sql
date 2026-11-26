@@ -2497,6 +2497,70 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/t
     AND ABS(bid_to_cover_ratio - 3.02) < 0.001 AND offering_amt = 60000000000);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: gao_report_feed (GAO reports RSS captures; partition cols: type, as_of)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T2_row_count',
+  CASE WHEN n >= 10 THEN 'pass' ELSE 'fail' END, n, 10, 'Expected >=10 items (the feed holds about 25)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'as_of')));
+
+-- as_of has one value until a second day is captured, so T5 excludes it.
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Null as_of/product_number/title/published_date/summary_text'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true)
+  WHERE as_of IS NULL OR product_number IS NULL OR title IS NULL OR published_date IS NULL
+     OR summary_text IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T7_value_shape',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Bad product URL, empty summary, or publication date after the capture'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true)
+  WHERE product_url <> 'https://www.gao.gov/products/' || LOWER(product_number)
+     OR LENGTH(summary_text) < 100 OR published_date > as_of + 1
+     OR published_date < as_of - 180);
+
+-- as_of must be the partition value, not only a column: a capture filed under a null as_of
+-- partition would be replaced by the next run, losing history the source cannot re-serve.
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T7_capture_partitioned',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Data files not under an as_of=YYYY-MM-DD partition'
+FROM (SELECT COUNT(*) AS n
+  FROM iceberg_metadata('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true)
+  WHERE status <> 'DELETED' AND NOT regexp_matches(file_path, '/as_of=[0-9]{4}-[0-9]{2}-[0-9]{2}/'));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'gao_report_feed', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (as_of, product_number) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT as_of, product_number FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/gao_report_feed', allow_moved_paths := true)
+  GROUP BY as_of, product_number HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail
