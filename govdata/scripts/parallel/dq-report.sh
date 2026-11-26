@@ -20,6 +20,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
+_env_dq="$SCRIPT_DIR/../../.env.dq"
+if [ -f "$_env_dq" ]; then source_env_file "$_env_dq"; fi
 
 # ── argument parsing ──────────────────────────────────────────────────────────
 RUN_DATE=$(date +%Y-%m-%d)
@@ -80,7 +82,7 @@ S3_REGION="${AWS_REGION:-us-east-1}"
 # handles '=' correctly, so copy the matching run_date partitions to a temp dir
 # and read with a plain filesystem path. No S3 read, no '=' glob.
 DQ_REMOTE="${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-minio}}"
-RESULT_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"
+RESULT_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:?GOVDATA_DQ_TRACKER_BUCKET is not set; define it in govdata/.env.dq or export it}"
 LOCAL_RESULTS="$(mktemp -d)"
 trap 'rm -rf "$LOCAL_RESULTS"' EXIT
 rclone copy "${DQ_REMOTE}:${RESULT_BUCKET}/dq-results/" "$LOCAL_RESULTS" \

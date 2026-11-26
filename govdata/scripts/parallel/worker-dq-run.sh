@@ -93,11 +93,21 @@ if [[ "$MODE" != "daily" && "$MODE" != "historical" ]]; then
 fi
 
 # ── DQ bucket config ──────────────────────────────────────────────────────────
-# Defaults to production. Set GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq (and
-# GOVDATA_DQ_TRACKER_BUCKET=govdata-tracker-v1-dq) plus CF_ACCOUNT_ID /
-# CF_API_TOKEN to use an isolated test bucket instead of purging production.
-export GOVDATA_DQ_BUCKET="${GOVDATA_DQ_BUCKET:-govdata-parquet-v1}"
-export GOVDATA_DQ_TRACKER_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"
+# Both buckets are named by govdata/.env.dq or the caller's environment; there is no default.
+# --rebuild and --etl-resume purge and write, so both names must end in -dq for them. A run without
+# those flags only reads the data bucket, so it accepts any named bucket.
+for _var in GOVDATA_DQ_BUCKET GOVDATA_DQ_TRACKER_BUCKET; do
+  if [ -z "${!_var:-}" ]; then
+    echo "ERROR: $_var is not set; define it in govdata/.env.dq or export it. Nothing was changed." >&2
+    exit 1
+  fi
+  if { $REBUILD || $ETL_RESUME; } && [[ "${!_var}" != *-dq ]]; then
+    echo "ERROR: --rebuild and --etl-resume write to $_var, which must end in -dq; got '${!_var}'." \
+         "Nothing was changed." >&2
+    exit 1
+  fi
+done
+export GOVDATA_DQ_BUCKET GOVDATA_DQ_TRACKER_BUCKET
 
 # ── One DQ run per (DQ bucket, schema) ──
 # --rebuild purges the WHOLE schema in the DQ bucket before re-running the ETL, so two DQ runs of the same
@@ -126,11 +136,9 @@ DQ_SQL="$GOVDATA_ROOT/scripts/${SCHEMA}_dq.sql"
 RUN_DIR="$SCRIPT_DIR/runs/$WORKER_ID"
 mkdir -p "$RUN_DIR"
 
-# Never run concurrently with another writer against the same schema (any year) when this
-# invocation actually targets the production bucket — misconfigured/defaulted GOVDATA_DQ_BUCKET
-# is exactly the 2026-08-26 econ.trade_imports incident's risk surface (see
-# check_schema_year_conflict's comment in common.sh). Skipped entirely for a real isolated DQ
-# bucket run: it can't collide with a production writer, so there's nothing to guard against.
+# A run that targets the production bucket never starts alongside a writer of the same schema (any
+# year; see check_schema_year_conflict in common.sh). Skipped for an isolated DQ bucket run: it
+# can't collide with a production writer, so there's nothing to guard against.
 # Registered as a single wide-open (0-9999) range for this whole invocation's lifetime, since
 # it runs a full daily+historical sweep, not one bounded year -- matches how run-pool.sh already
 # treats keyword modes it can't bound from the id string alone. Uses the ".foreground" opt-in

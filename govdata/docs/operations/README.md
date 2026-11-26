@@ -362,7 +362,7 @@ To rebuild a table from empty, `data_purge.sh` deletes the whole Iceberg table, 
 
 ### Running data quality checks (worker-dq-run.sh)
 
-`worker-dq-run.sh` runs `{schema}_dq.sql` through DuckDB against `GOVDATA_DQ_BUCKET`, which it reads from `govdata/.env.dq` and which defaults to the production bucket when unset. Check the resolved bucket before a run.
+`worker-dq-run.sh` runs `{schema}_dq.sql` through DuckDB against `GOVDATA_DQ_BUCKET`. It reads that and `GOVDATA_DQ_TRACKER_BUCKET` from `govdata/.env.dq` or the environment and stops when either is unset. `--rebuild` and `--etl-resume` also stop unless both bucket names end in `-dq`.
 
     worker-dq-run.sh edu                      # run DQ SQL, upload results, update the DQ issue
     worker-dq-run.sh edu --dry-run            # run DQ SQL only: no upload, no DQ issue update
