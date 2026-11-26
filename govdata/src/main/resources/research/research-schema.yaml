@@ -932,6 +932,146 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: nsf_publications
+    # Publications are reported against an award for years after it is made: annual and final
+    # reports during the award, repository deposits afterwards. Measured on award months of
+    # FY2010, FY2014 and FY2019, entries keep arriving with publication years up to about seven
+    # years after the award, so the ten most recent years are reopened.
+    lookbackPeriods: 10
+    pattern: "type=nsf_publications/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    freshness:
+      type: hash
+    comment: >
+      NSF award-to-publication links — one row per (award, publication), from the publications
+      each award record carries on the NSF Award Search API (api.nsf.gov/services/v1/awards.json,
+      the jrnl list: report citations and NSF Public Access Repository deposits). Carries award_id
+      (joins to nsf_award_projects for amounts, recipient and program), the award's directorate and
+      division, doi, par_id, title, authors, journal, volume, pages and pub_year. This is the
+      output measure for NSF funding; nih_publications is the NIH counterpart (there the key is
+      appl_id and pmid).
+
+      fiscal_year and the year partition are the AWARD's fiscal year. For a publication-output
+      series count DISTINCT doi (or publication_key) grouped by pub_year; for output per funding
+      cohort group by fiscal_year, bearing in mind that recent cohorts are still publishing and so
+      are understated against older ones. One paper acknowledging several awards has one row per
+      award.
+
+      Coverage is what awardees reported or deposited, so it is a lower bound that differs by era:
+      an award with no row may have produced publications that were never reported. Entries that
+      repeat a publication within an award (successive annual reports) are collapsed to one row;
+      source_record_count keeps how many. Journal articles and conference papers are not marked
+      apart. NSF only; awards from FY2010 on.
+
+    dimensions:
+      type:
+        - nsf_publications
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        # Matches the nsf_award_projects floor, so every link resolves to a loaded award.
+        minYear: 2010
+        dataLag: 0
+      # Calendar month of the AWARD date, as in nsf_award_projects.
+      award_month: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+      # Cache buster: the raw cache is immutable per dimension combination, so a reopened year
+      # re-reads the API once a month. Deliberately a single value.
+      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+
+    columns:
+      - name: award_id
+        type: string
+        nullable: false
+        comment: "NSF award number — FK to nsf_award_projects.award_id"
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: "Federal fiscal year (October-September) of the AWARD (its initial award date) — NOT the publication year (see pub_year)"
+      - name: directorate
+        type: string
+        nullable: true
+        comment: "NSF directorate abbreviation of the award (e.g. ENG, MPS, BIO, GEO, CSE)"
+      - name: division
+        type: string
+        nullable: true
+        comment: "NSF division abbreviation of the award within the directorate"
+      - name: publication_key
+        type: string
+        nullable: false
+        comment: "Identity of the publication within the award — PK with award_id. doi:<doi>, else title:<normalized title>, else record:<reported fields> when neither is reported"
+      - name: doi
+        type: string
+        nullable: true
+        comment: "Lower-cased DOI; null when the reported digital object id is absent or is not a well-formed DOI. COUNT(DISTINCT doi) counts a paper once across the awards that acknowledge it"
+      - name: digital_object_id
+        type: string
+        nullable: true
+        comment: "Digital object id exactly as reported (DOI, resolver URL, or occasionally an ISSN or other text)"
+      - name: par_id
+        type: string
+        nullable: true
+        comment: "NSF Public Access Repository id (https://par.nsf.gov/biblio/<par_id>); mostly null for publications reported before PAR deposits began"
+      - name: title
+        type: string
+        nullable: true
+        comment: "Publication title as reported"
+      - name: authors
+        type: string
+        nullable: true
+        comment: "Author list as reported (one free-text string)"
+      - name: journal
+        type: string
+        nullable: true
+        comment: "Journal or venue name as reported; often null for conference papers"
+      - name: journal_volume
+        type: string
+        nullable: true
+        comment: "Volume as reported"
+      - name: pages
+        type: string
+        nullable: true
+        comment: "Page or page range as reported"
+      - name: pub_year
+        type: integer
+        nullable: true
+        comment: "Publication year as reported by the awardee; includes forthcoming years and occasional data-entry errors"
+      - name: source_record_count
+        type: integer
+        nullable: false
+        comment: "Number of report/repository entries on the award collapsed into this row"
+
+    source:
+      type: http
+      url: "https://api.nsf.gov/services/v1/awards.json"
+      method: GET
+      rawCache:
+        enabled: true
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.research.NsfPublicationsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nsf_publications/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *iceberg_common
+        tableName: nsf_publications
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   - name: nih_publications
     # Publications keep accruing against a project's appl_id well after the fiscal year closes
     # (a grant's papers get indexed in PubMed over following years), so like nih_award_projects
@@ -1298,6 +1438,13 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_abbr]
+
+  nsf_publications:
+    primaryKey: [type, award_id, publication_key]
+    foreignKeys:
+      - columns: [award_id]
+        targetTable: nsf_award_projects
+        targetColumns: [award_id]
 
   nsf_herd_by_institution:
     primaryKey: [year, inst_id, rd_field, funding_source, federal_agency]

@@ -448,6 +448,74 @@ FROM (SELECT COUNT(DISTINCT p.appl_id) AS n
       WHERE a.appl_id IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: nsf_publications (NSF Award Search jrnl entries; one row per award x publication)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T2_row_count',
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END, n, 20000,
+  'Expected >=20000 publication links for fiscal year 2019'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true) WHERE fiscal_year = 2019);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL award_id or publication_key'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true) WHERE award_id IS NULL OR publication_key IS NULL);
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate (award_id, publication_key) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT award_id, publication_key FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true)
+  GROUP BY award_id, publication_key HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T7_doi_well_formed',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'doi values that are not lower-cased 10.x/y DOIs'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true)
+      WHERE doi IS NOT NULL AND (NOT regexp_full_match(doi, '10\.[0-9]{4,9}/\S+') OR doi <> lower(doi)));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T7_doi_share',
+  CASE WHEN n >= 0.5 THEN 'pass' ELSE 'fail' END, n, 0.5,
+  'Fraction of fiscal-year-2019 rows carrying a DOI'
+FROM (SELECT COALESCE(AVG(CASE WHEN doi IS NOT NULL THEN 1.0 ELSE 0.0 END), 0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true) WHERE fiscal_year = 2019);
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T7_pub_year_plausible',
+  CASE WHEN n <= 0.001 THEN 'pass' ELSE 'fail' END, n, 0.001,
+  'Fraction of rows with pub_year outside 1950..(current year + 2); the source carries a few typos'
+FROM (SELECT COALESCE(AVG(CASE WHEN pub_year NOT BETWEEN 1950 AND year(current_date) + 2 THEN 1.0 ELSE 0.0 END), 0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_publications', 'T7_award_id_in_awards',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
+  'Publication award_ids with no row in nsf_award_projects'
+FROM (SELECT COUNT(DISTINCT p.award_id) AS n
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_publications', allow_moved_paths := true) p
+      LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_award_projects', allow_moved_paths := true) a ON p.award_id = a.award_id
+      WHERE a.award_id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: nsf_herd_by_institution
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

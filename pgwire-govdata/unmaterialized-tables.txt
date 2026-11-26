@@ -49,6 +49,7 @@ officials.member_ideology
 officials.presidential_results_by_district
 patents.patent_publication_applicants
 patents.patent_publication_cpc
+research.nsf_publications
 sec.enforcement_actions
 sec.enforcement_annual_results
 transport.barge_lock_movements_monthly
