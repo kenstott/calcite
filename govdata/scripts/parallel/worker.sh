@@ -466,12 +466,12 @@ case "$SCHEMA" in
           export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
         fi
         export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
-        # For schemas with month cache-busters (crime, ref, health, research), use month=12
+        # For schemas with month cache-busters (crime, ref, health), use month=12
         # for historical runs. The month dimension serves as a pure cache-buster for
         # current/recent year refreshes; historical years should use month=12 (the default
         # FBI snapshot month) rather than today's month.
         case "$SCHEMA" in
-          crime|weather|energy|research) EXTRA="\"currentMonth\":\"12\"" ;;
+          crime|weather|energy) EXTRA="\"currentMonth\":\"12\"" ;;
           *) EXTRA="" ;;
         esac
         ;;
