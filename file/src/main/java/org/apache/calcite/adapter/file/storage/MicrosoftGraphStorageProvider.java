@@ -17,6 +17,8 @@ import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +45,7 @@ import java.util.Set;
  */
 public class MicrosoftGraphStorageProvider implements StorageProvider {
 
-  private static final String GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
+  static final String GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 
   // Common document library names in different languages
   private static final Set<String> DOCUMENT_LIBRARY_NAMES =
@@ -60,6 +62,11 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
   private final String siteUrl;
   private final SharePointTokenManager tokenManager;
   private final ObjectMapper mapper = new ObjectMapper();
+  /** Graph endpoint root; a constructor parameter so tests can point it at a local server. */
+  private final String graphApiBase;
+  /** When set, the provider reads this user's OneDrive ({@code /users/{upn}/drive}) instead of
+   * the site's default document library. */
+  private final @Nullable String userPrincipalName;
   private String siteId;
   private String driveId;
 
@@ -70,6 +77,23 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
    * Creates a Microsoft Graph storage provider with automatic token refresh.
    */
   public MicrosoftGraphStorageProvider(SharePointTokenManager tokenManager) {
+    this(tokenManager, null, GRAPH_API_BASE);
+  }
+
+  /**
+   * Creates a provider over a user's OneDrive for Business, resolved through
+   * {@code /users/{userPrincipalName}/drive}. App-only sign-in needs the
+   * {@code Files.Read.All} (or {@code Sites.Read.All}) application permission.
+   */
+  public static MicrosoftGraphStorageProvider forUserDrive(SharePointTokenManager tokenManager,
+      String userPrincipalName) {
+    return new MicrosoftGraphStorageProvider(tokenManager, userPrincipalName, GRAPH_API_BASE);
+  }
+
+  MicrosoftGraphStorageProvider(SharePointTokenManager tokenManager,
+      @Nullable String userPrincipalName, String graphApiBase) {
+    this.userPrincipalName = userPrincipalName;
+    this.graphApiBase = graphApiBase;
     this.siteUrl = tokenManager.getSiteUrl().endsWith("/") ?
         tokenManager.getSiteUrl().substring(0, tokenManager.getSiteUrl().length() - 1)
         : tokenManager.getSiteUrl();
@@ -103,9 +127,23 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
    * Ensures site and drive IDs are initialized.
    */
   private void ensureInitialized() throws IOException {
-    if (siteId == null || driveId == null) {
-      initializeSiteAndDrive();
+    if (driveId == null) {
+      if (userPrincipalName != null) {
+        initializeUserDrive(userPrincipalName);
+      } else {
+        initializeSiteAndDrive();
+      }
     }
+  }
+
+  /**
+   * Initializes the drive ID of a user's OneDrive.
+   */
+  private void initializeUserDrive(String upn) throws IOException {
+    String encodedUpn = URLEncoder.encode(upn, StandardCharsets.UTF_8).replace("+", "%20");
+    JsonNode driveResponse =
+        executeGraphCall(String.format(Locale.ROOT, "%s/users/%s/drive", graphApiBase, encodedUpn));
+    this.driveId = driveResponse.get("id").asText();
   }
 
   /**
@@ -121,17 +159,17 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
     String siteApiUrl;
     if (sitePath == null || sitePath.isEmpty() || sitePath.equals("/")) {
       // Root site
-      siteApiUrl = String.format(Locale.ROOT, "%s/sites/%s", GRAPH_API_BASE, hostname);
+      siteApiUrl = String.format(Locale.ROOT, "%s/sites/%s", graphApiBase, hostname);
     } else {
       // Subsite
-      siteApiUrl = String.format(Locale.ROOT, "%s/sites/%s:%s", GRAPH_API_BASE, hostname, sitePath);
+      siteApiUrl = String.format(Locale.ROOT, "%s/sites/%s:%s", graphApiBase, hostname, sitePath);
     }
 
     JsonNode siteResponse = executeGraphCall(siteApiUrl);
     this.siteId = siteResponse.get("id").asText();
 
     // Get default document library (drive)
-    String driveApiUrl = String.format(Locale.ROOT, "%s/sites/%s/drive", GRAPH_API_BASE, siteId);
+    String driveApiUrl = String.format(Locale.ROOT, "%s/sites/%s/drive", graphApiBase, siteId);
     JsonNode driveResponse = executeGraphCall(driveApiUrl);
     this.driveId = driveResponse.get("id").asText();
   }
@@ -150,7 +188,7 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
 
     if (path.isEmpty() || isDocumentLibraryRoot(path) || path.equals("/")) {
       // Root of document library
-      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root/children", GRAPH_API_BASE, driveId);
+      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root/children", graphApiBase, driveId);
     } else {
       // Remove common document library prefixes if present for API call
       apiPath = removeDocumentLibraryPrefix(apiPath);
@@ -158,7 +196,7 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
       String encodedPath = URLEncoder.encode(apiPath, StandardCharsets.UTF_8)
           .replace("+", "%20");
       apiUrl =
-          String.format(Locale.ROOT, "%s/drives/%s/root:/%s:/children", GRAPH_API_BASE, driveId, encodedPath);
+          String.format(Locale.ROOT, "%s/drives/%s/root:/%s:/children", graphApiBase, driveId, encodedPath);
     }
 
     // Get items
@@ -252,11 +290,11 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
     // Build Graph API URL
     String apiUrl;
     if (apiPath.isEmpty()) {
-      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root", GRAPH_API_BASE, driveId);
+      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root", graphApiBase, driveId);
     } else {
       String encodedPath = URLEncoder.encode(apiPath, StandardCharsets.UTF_8)
           .replace("+", "%20");
-      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root:/%s", GRAPH_API_BASE, driveId, encodedPath);
+      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root:/%s", graphApiBase, driveId, encodedPath);
     }
 
     JsonNode response = executeGraphCall(apiUrl);
@@ -306,7 +344,7 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
     String encodedPath = URLEncoder.encode(apiPath, StandardCharsets.UTF_8)
         .replace("+", "%20");
     String downloadUrl =
-        String.format(Locale.ROOT, "%s/drives/%s/root:/%s:/content", GRAPH_API_BASE, driveId, encodedPath);
+        String.format(Locale.ROOT, "%s/drives/%s/root:/%s:/content", graphApiBase, driveId, encodedPath);
 
     URL url = URI.create(downloadUrl).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -373,11 +411,11 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
     // Build Graph API URL
     String apiUrl;
     if (path.isEmpty()) {
-      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root", GRAPH_API_BASE, driveId);
+      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root", graphApiBase, driveId);
     } else {
       String encodedPath = URLEncoder.encode(path, StandardCharsets.UTF_8)
           .replace("+", "%20");
-      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root:/%s", GRAPH_API_BASE, driveId, encodedPath);
+      apiUrl = String.format(Locale.ROOT, "%s/drives/%s/root:/%s", graphApiBase, driveId, encodedPath);
     }
 
     try {
@@ -392,7 +430,7 @@ public class MicrosoftGraphStorageProvider implements StorageProvider {
   }
 
   @Override public String getStorageType() {
-    return "microsoft-graph";
+    return userPrincipalName != null ? "onedrive" : "microsoft-graph";
   }
 
   @Override public String resolvePath(String basePath, String relativePath) {

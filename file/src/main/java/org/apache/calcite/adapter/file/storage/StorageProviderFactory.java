@@ -89,7 +89,8 @@ public class StorageProviderFactory {
   /**
    * Creates a storage provider based on explicit storage type.
    *
-   * @param storageType The storage type (local, s3, http, ftp, sharepoint)
+   * @param storageType The storage type (local, s3, http, ftp, sftp, hdfs, sharepoint, onedrive,
+   *     gdrive, iceberg)
    * @param config Configuration parameters for the provider
    * @return Appropriate storage provider
    */
@@ -298,6 +299,13 @@ public class StorageProviderFactory {
           return new SharePointRestStorageProvider(restTokenManager);
         }
 
+      case "onedrive":
+        return createOneDrive(config);
+
+      case "gdrive":
+      case "googledrive":
+        return GoogleDriveStorageProvider.fromConfig(config);
+
       case "iceberg":
         // Create Iceberg storage provider with configuration
         return new IcebergStorageProvider(config != null ? config : new java.util.HashMap<>());
@@ -305,6 +313,49 @@ public class StorageProviderFactory {
       default:
         throw new IllegalArgumentException("Unsupported storage type: " + storageType);
     }
+  }
+
+  /**
+   * Builds a OneDrive for Business provider over Microsoft Graph's {@code /users/{upn}/drive}.
+   *
+   * <p>Required: {@code userPrincipalName} plus one sign-in: {@code tenantId + clientId +
+   * clientSecret} (app-only), {@code tenantId + clientId + refreshToken} (delegated), or
+   * {@code accessToken}.
+   */
+  private static StorageProvider createOneDrive(Map<String, Object> config) {
+    if (config == null) {
+      throw new IllegalArgumentException("OneDrive storage requires storageConfig with "
+          + "'userPrincipalName' and credentials");
+    }
+    String upn = (String) config.get("userPrincipalName");
+    if (upn == null || upn.isEmpty()) {
+      throw new IllegalArgumentException("OneDrive storage requires 'userPrincipalName' in config");
+    }
+    // Graph tokens are scoped to graph.microsoft.com; the token manager's site URL names that
+    // resource, not a SharePoint site.
+    String resource = "https://graph.microsoft.com";
+    MicrosoftGraphTokenManager tokenManager;
+    if (config.containsKey("accessToken")) {
+      tokenManager = new MicrosoftGraphTokenManager((String) config.get("accessToken"), resource);
+    } else {
+      String tenantId = (String) config.get("tenantId");
+      String clientId = (String) config.get("clientId");
+      if (tenantId == null || clientId == null) {
+        throw new IllegalArgumentException(
+            "OneDrive storage requires 'tenantId' and 'clientId' (or 'accessToken')");
+      }
+      if (config.containsKey("clientSecret")) {
+        tokenManager = new MicrosoftGraphTokenManager(tenantId, clientId,
+            (String) config.get("clientSecret"), resource);
+      } else if (config.containsKey("refreshToken")) {
+        tokenManager = new MicrosoftGraphTokenManager(tenantId, clientId,
+            (String) config.get("refreshToken"), resource, true);
+      } else {
+        throw new IllegalArgumentException(
+            "OneDrive storage requires 'clientSecret' or 'refreshToken' with 'tenantId'/'clientId'");
+      }
+    }
+    return MicrosoftGraphStorageProvider.forUserDrive(tokenManager, upn);
   }
 
   /**
