@@ -569,6 +569,7 @@ public class MaterializeConfig {
     private final int metadataPreviousVersionsMax;
     private final boolean overwritePartitions;
     private final boolean failOnPartitionShrink;
+    private final double maxPartitionShrinkFraction;
     private final String appendWhenOperand;
     private final String appendWhenValue;
     private final int incrementalTtlDays;
@@ -602,6 +603,13 @@ public class MaterializeConfig {
       this.metadataPreviousVersionsMax = builder.metadataPreviousVersionsMax;
       this.overwritePartitions = builder.overwritePartitions;
       this.failOnPartitionShrink = builder.failOnPartitionShrink;
+      this.maxPartitionShrinkFraction = builder.maxPartitionShrinkFraction;
+      if (maxPartitionShrinkFraction != 0
+          && !(failOnPartitionShrink
+              && maxPartitionShrinkFraction > 0 && maxPartitionShrinkFraction < 1)) {
+        throw new IllegalArgumentException("maxPartitionShrinkFraction must be between 0 and 1 "
+            + "(exclusive) and requires failOnPartitionShrink: " + maxPartitionShrinkFraction);
+      }
       this.appendWhenOperand = builder.appendWhenOperand;
       this.appendWhenValue = builder.appendWhenValue;
       this.incrementalTtlDays = builder.incrementalTtlDays;
@@ -704,6 +712,14 @@ public class MaterializeConfig {
      */
     public boolean isFailOnPartitionShrink() {
       return failOnPartitionShrink;
+    }
+
+    /**
+     * The share of a partition's current rows an overwrite may drop before
+     * {@link #isFailOnPartitionShrink()} rejects it; 0 rejects any drop.
+     */
+    public double getMaxPartitionShrinkFraction() {
+      return maxPartitionShrinkFraction;
     }
 
     /**
@@ -873,6 +889,15 @@ public class MaterializeConfig {
         builder.failOnPartitionShrink((Boolean) failOnShrinkObj);
       }
 
+      Object maxShrinkObj = map.get("maxPartitionShrinkFraction");
+      if (maxShrinkObj != null) {
+        if (!(maxShrinkObj instanceof Number)) {
+          throw new IllegalArgumentException(
+              "maxPartitionShrinkFraction must be a number: " + maxShrinkObj);
+        }
+        builder.maxPartitionShrinkFraction(((Number) maxShrinkObj).doubleValue());
+      }
+
       Object appendWhenOperandObj = map.get("appendWhenOperand");
       if (appendWhenOperandObj instanceof String) {
         builder.appendWhenOperand((String) appendWhenOperandObj);
@@ -927,6 +952,7 @@ public class MaterializeConfig {
       private int metadataPreviousVersionsMax;
       private boolean overwritePartitions = true;
       private boolean failOnPartitionShrink = false;
+      private double maxPartitionShrinkFraction;
       private String appendWhenOperand;
       private String appendWhenValue;
       private int incrementalTtlDays;
@@ -1013,6 +1039,11 @@ public class MaterializeConfig {
 
       public IcebergConfigBuilder failOnPartitionShrink(boolean failOnPartitionShrink) {
         this.failOnPartitionShrink = failOnPartitionShrink;
+        return this;
+      }
+
+      public IcebergConfigBuilder maxPartitionShrinkFraction(double maxPartitionShrinkFraction) {
+        this.maxPartitionShrinkFraction = maxPartitionShrinkFraction;
         return this;
       }
 

@@ -83,7 +83,8 @@ public final class CsvRecordReader {
     }
   }
 
-  private static boolean hasOddQuotes(CharSequence s) {
+  /** Whether the double quotes in {@code s} are unbalanced. */
+  static boolean hasOddQuotes(CharSequence s) {
     int count = 0;
     for (int i = 0; i < s.length(); i++) {
       if (s.charAt(i) == '"') {

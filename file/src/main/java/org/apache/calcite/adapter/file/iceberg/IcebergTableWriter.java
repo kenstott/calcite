@@ -354,7 +354,7 @@ public class IcebergTableWriter {
     replacePartitionsDataFiles(allDataFiles, false);
   }
 
-  private void assertNoPartitionShrinks(List<DataFile> newFiles) {
+  private void assertNoPartitionShrinks(List<DataFile> newFiles, double maxShrinkFraction) {
     Map<String, Long> incoming = new java.util.LinkedHashMap<>();
     for (DataFile f : newFiles) {
       incoming.merge(f.partition().toString(), f.recordCount(), Long::sum);
@@ -376,10 +376,11 @@ public class IcebergTableWriter {
     }
     for (Map.Entry<String, Long> e : incoming.entrySet()) {
       long before = existing.getOrDefault(e.getKey(), 0L);
-      if (e.getValue() < before) {
+      if (before - e.getValue() > before * maxShrinkFraction) {
         throw new IllegalStateException("Refusing to replace partition " + e.getKey() + " of "
             + table.name() + ": it would shrink from " + before + " to " + e.getValue()
-            + " rows (failOnPartitionShrink)");
+            + " rows (failOnPartitionShrink, maxPartitionShrinkFraction=" + maxShrinkFraction
+            + ")");
       }
     }
   }
@@ -393,22 +394,22 @@ public class IcebergTableWriter {
    *     being alive — see {@link #directExecutorIfRequested}
    */
   public void replacePartitionsDataFiles(List<DataFile> allDataFiles, boolean runOnCallingThread) {
-    replacePartitionsDataFiles(allDataFiles, runOnCallingThread, false);
+    replacePartitionsDataFiles(allDataFiles, runOnCallingThread, false, 0);
   }
 
   /**
    * Same as {@link #replacePartitionsDataFiles(List, boolean)}; when {@code failOnShrink} is set,
-   * throws before committing if any partition the files touch would end up with fewer rows than
-   * the table currently holds for it.
+   * throws before committing if any partition the files touch would lose more than
+   * {@code maxShrinkFraction} of the rows the table currently holds for it.
    */
   public void replacePartitionsDataFiles(List<DataFile> allDataFiles, boolean runOnCallingThread,
-      boolean failOnShrink) {
+      boolean failOnShrink, double maxShrinkFraction) {
     if (allDataFiles.isEmpty()) {
       LOGGER.debug("No data files to replace partitions");
       return;
     }
     if (failOnShrink) {
-      assertNoPartitionShrinks(allDataFiles);
+      assertNoPartitionShrinks(allDataFiles, maxShrinkFraction);
     }
     if (table.properties().containsKey(SORTED_BY_PROPERTY)) {
       underCommitLock(() -> table.updateProperties().remove(SORTED_BY_PROPERTY).commit());
