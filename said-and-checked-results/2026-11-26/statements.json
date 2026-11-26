@@ -2,8 +2,9 @@
   "date": "2026-11-26",
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 25 or 26, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 26 at 8:17 a.m. ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (one was: a White House statement of Nov. 25, which quoted no officeholder in scope). PBS NewsHour carries Associated Press reporting. Three NPR stories (on the Puerto Rico power grid, the proposed tariffs and Sen. Tim Kaine's view of them) returned no readable text and could not be used. Transcripts from Nov. 19 to 24 were searched only to confirm quotes; none held any of the day's quotes. Four of the thirteen readable stories quoted no officeholder in scope. Greetings, quotes under five words, questions, a multi-signer letter, commentators' and reporters' accounts of what officials said, reporters' paraphrases of opinions, and statements by people outside the offices in scope (including the first lady, a lieutenant governor, a state senator, the FCC chair and the trade representative) were left out. Statements are worded as the outlet reported them.",
   "lede": [
-    "Coverage on Nov. 25 and 26 included the reaction in Congress to Jensen Huang's return as Nvidia's chief executive, a push by some Senate Democrats to add a freshman senator to the party's leadership, Kilmar Ábrego García's departure from the U.S. for Spain, a State Department asylum report, a Georgia court order on Fulton County's 2020 election records, and Vice President JD Vance's Thanksgiving visit to Wright-Patterson Air Force Base in Ohio.",
-    "The page lists 17 statements by 8 officeholders. Six are factual claims; their checks are listed below as they return. The other 11 are opinions, predictions or promises and are listed without a check."
+    "Coverage on Nov. 25 and 26 included the reaction in Congress to Jensen Huang's return as Nvidia's chief executive, a push by some Senate Democrats to add a freshman senator to the party's leadership, Kilmar Ábrego García's departure from the U.S. for Spain, an AP report on State Department asylum reports, a Georgia court order on Fulton County's 2020 election records, and Vice President JD Vance's Thanksgiving visit to Wright-Patterson Air Force Base in Ohio, where Ohio's delegation wants the U.S. Space Academy located.",
+    "The page lists 17 statements by 8 officeholders. Six are factual claims, and every one was checked: 1 was contradicted and 5 were unsettled. The contradicted claim, the president's statement as reported by the AP that voter fraud in Fulton County cost him Georgia in 2020, rests on Georgia's investigation reports, which found no fraud that would have affected the result; the FBI's inquiry into the county's seized records remains open.",
+    "The unsettled claims are the president's account of his role in Huang's reinstatement, his first-term statements on what asylum covers and why most asylum seekers came, the homeland security secretary's statement that Ábrego García was a gang member, and the vice president's statement that his visit had nothing to do with the Space Academy plans. Two checks cite AskAmerica's U.S. Code and presidential election records. The other 11 statements are opinions, predictions or promises and are listed without a check."
   ],
   "stories": [
     {
@@ -642,10 +643,15 @@
       "kind": "factual",
       "test": "True if an official account of the Nov. 25, 2026 visit (the vice president's schedule, a White House or Air Force statement) describes it as a Thanksgiving visit with troops with no Space Academy site review or briefing. False if an official record shows the visit included a Space Academy site review or a briefing on the base's bid. Cannot be determined if no official account of the visit's agenda can be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "No official account of the visit's agenda (a vice presidential schedule or a White House or Air Force statement) could be read. The AP press-pool report of Nov. 25 lists a Thanksgiving meal and lunch with troops and no Space Academy site review or briefing, which fits the statement but does not show the visit's purpose.",
+      "evidence": [
+        {
+          "label": "Vice presidential pool reports of Nov. 25, 2026 (American Presidency Project)",
+          "url": "https://www.presidency.ucsb.edu/documents/vice-presidential-pool-reports-november-25-2026"
+        }
+      ],
+      "check_run": "q205/askamerica/2026-11-26",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
