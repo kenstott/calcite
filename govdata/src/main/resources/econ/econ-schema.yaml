@@ -12803,10 +12803,18 @@ partitionedTables:
       # filters titles to "Mineral Commodity Summaries <year> Data Release" (the parent
       # also holds unrelated geospatial-compilation items) and resolves each match's own
       # Commodities_Data.csv file — see the provider class comment.
+      # www.sciencebase.gov answers a Cloudflare challenge (HTTP 403) to non-browser clients, so
+      # the provider reads every URL through a headed browser session configured by the parameters
+      # below. Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY); when the browser cannot
+      # start the table fails, naming the cause.
       url: "https://www.sciencebase.gov/catalog/items?parentId=5c8c03e4e4b0938824529f7d&format=json&max=100&fields=title"
       method: GET
-      headers:
-        User-Agent: "Apache-Calcite-GovData/1.0"
+      parameters:
+        browserScript: "${SSA_BROWSER_SCRIPT:}"
+        browserNodeCommand: "${SSA_NODE_COMMAND:node}"
+        browserChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        browserRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        browserEntryPageUrl: "https://www.sciencebase.gov/catalog/items?parentId=5c8c03e4e4b0938824529f7d&format=json&max=100&fields=title"
       response:
         format: json  # ignored: UsgsMineralCommodityStatsProvider discovers and streams the files itself
       rawCache:
