@@ -229,6 +229,7 @@ SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_
 SELECT 'state_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1;
 SELECT 'industry_occupation_employment_history' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment_history', allow_moved_paths := true) LIMIT 1;
 SELECT 'household_debt_credit' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true) LIMIT 1;
+SELECT 'card_delinquency_by_score' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true) LIMIT 1;
 SELECT 'business_formation_statistics' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/business_formation_statistics', allow_moved_paths := true) LIMIT 1;
 SELECT 'industry_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true) LIMIT 1;
 SELECT 'apparel_cpi'             AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi',             allow_moved_paths := true) LIMIT 1;
@@ -1606,6 +1607,87 @@ SELECT 'econ', 'industry_occupation_employment_history', 'per_year_row_count',
 FROM (SELECT COUNT(*) AS bad FROM (
         SELECT year, COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment_history', allow_moved_paths := true)
         GROUP BY year HAVING COUNT(*) < 5000));
+
+-- ============================================================================
+-- card_delinquency_by_score (Federal Reserve FEDS Note Figure 5a, fixed vintage 2000Q1-2025Q3)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true) LIMIT 1));
+
+-- 103 quarters (2000Q1-2025Q3) x 3 bands
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'row_count',
+  CASE WHEN n >= 309 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '309',
+  CASE WHEN n >= 309 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'source_release');  -- one publication
+
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'pk_null',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'null key or value'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true)
+      WHERE score_band IS NULL OR year IS NULL OR quarter IS NULL OR period IS NULL OR pct_balance_30plus_delinquent IS NULL);
+
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'pk_duplicates',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (score_band, year, quarter) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT score_band, year, quarter FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true)
+        GROUP BY score_band, year, quarter HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'unknown band, quarter outside 1-4, or rate outside 0-100'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true)
+      WHERE score_band NOT IN ('subprime', 'near_prime', 'prime') OR quarter NOT BETWEEN 1 AND 4
+         OR pct_balance_30plus_delinquent NOT BETWEEN 0 AND 100);
+
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'quarters missing a band or not ordered subprime > near_prime > prime'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT year, quarter,
+               MAX(CASE WHEN score_band = 'subprime' THEN pct_balance_30plus_delinquent END) AS s,
+               MAX(CASE WHEN score_band = 'near_prime' THEN pct_balance_30plus_delinquent END) AS n,
+               MAX(CASE WHEN score_band = 'prime' THEN pct_balance_30plus_delinquent END) AS p
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true) GROUP BY year, quarter)
+      WHERE s IS NULL OR n IS NULL OR p IS NULL OR NOT (s > n AND n > p));
+
+-- published values: subprime 16.28 in 2025Q3, 2019 average 13.39
+INSERT INTO dq_results
+SELECT 'econ', 'card_delinquency_by_score', 'expected_values',
+  CASE WHEN ABS(latest - 16.28) < 0.001 AND ABS(base - 13.39) < 0.001 THEN 'pass' ELSE 'fail' END,
+  CONCAT(CAST(latest AS VARCHAR), ' / ', CAST(ROUND(base, 3) AS VARCHAR)), '16.28 / 13.39',
+  'subprime 2025Q3 and 2019 average match the published table'
+FROM (SELECT MAX(CASE WHEN period = '2025Q3' THEN pct_balance_30plus_delinquent END) AS latest,
+             AVG(CASE WHEN year = 2019 THEN pct_balance_30plus_delinquent END) AS base
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/card_delinquency_by_score', allow_moved_paths := true) WHERE score_band = 'subprime');
 
 -- ============================================================================
 -- household_debt_credit (NY Fed Household Debt and Credit Report, quarterly national series)

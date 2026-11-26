@@ -2590,6 +2590,108 @@ partitionedTables:
         compactionMinFiles: 5
         overwritePartitions: true
 
+  # --- CREDIT CARD DELINQUENCY BY CREDIT SCORE BAND (Federal Reserve FEDS Note, fixed vintage) ---
+  - name: card_delinquency_by_score
+    # Source: the accessible-data page of one FEDS Note (24 Nov 2025), keyless HTML, confirmed
+    # live 26 Nov 2026. It is a research publication, not a recurring release: the series ends at
+    # 2025Q3 and the last_modified probe skips the table unless the Board edits the page.
+    dataset_type: snapshot
+    freshness:
+      type: last_modified
+    pattern: "type=card_delinquency_by_score/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Credit card delinquency rate by borrower credit score band (subprime, near prime, prime),
+      United States, quarterly 2000Q1 to 2025Q3, seasonally adjusted. The rate is the percent of
+      credit card balances at least 30 days past due, excluding severely derogatory balances.
+      Bands: subprime below 620, near_prime 620 to 719, prime 720 and above (Equifax Risk Score),
+      with the score lagged one year. Subprime was 16.28 in 2025Q3 against a 2019 average of
+      13.39. Source: Figure 5a of the Federal Reserve Board FEDS Note "A Note on Recent Dynamics
+      of Consumer Delinquency Rates" (24 November 2025), from the New York Fed Consumer Credit
+      Panel / Equifax. A fixed snapshot: the note is not a recurring release, so there are no
+      quarters after 2025Q3. For newer quarters use the all-borrower series, which are defined
+      differently and must not be spliced onto this one: household_debt_credit (all lenders) and
+      fred_indicators DRCCLACBS (commercial banks).
+
+    dimensions:
+      type:
+        - card_delinquency_by_score
+
+    columns:
+      - name: score_band
+        type: string
+        nullable: false
+        comment: subprime, near_prime or prime (PK part)
+      - name: score_min
+        type: integer
+        nullable: true
+        comment: Lowest credit score in the band; null for subprime (no lower bound)
+      - name: score_max
+        type: integer
+        nullable: true
+        comment: Highest credit score in the band; null for prime (no upper bound)
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of the quarter (PK part)
+      - name: quarter
+        type: integer
+        nullable: false
+        comment: Calendar quarter 1-4 (PK part)
+      - name: period
+        type: string
+        nullable: false
+        comment: Year and quarter label, for example 2025Q3
+      - name: pct_balance_30plus_delinquent
+        type: double
+        nullable: false
+        comment: >
+          Percent of the band's credit card balances 30 or more days past due, excluding severely
+          derogatory balances, seasonally adjusted
+      - name: source_release
+        type: string
+        nullable: false
+        comment: Publication date of the FEDS Note the row was read from
+
+    source:
+      type: http
+      url: "https://www.federalreserve.gov/econres/notes/feds-notes/a-note-on-recent-dynamics-of-consumer-delinquency-rates-accessible-20251124.htm"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      response:
+        format: text
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.CardDelinquencyByScoreTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=card_delinquency_by_score/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
   # --- HOUSEHOLD DEBT AND CREDIT (NY Fed, quarterly) ---
   - name: household_debt_credit
     # The New York Fed publishes one data workbook per quarterly report at
@@ -2629,6 +2731,8 @@ partitionedTables:
       (student loan flow early in the history) has no row. period 2026Q3 = end of September
       2026. Complements the commercial-bank card delinquency and charge-off rates in
       fred_indicators (DRCCLACBS, CORCCACBS), which do not cover all lenders.
+      Card delinquency split by credit score band (to 2025Q3 only) is in
+      card_delinquency_by_score.
       Not included: number of accounts, originations by credit score, age and state
       breakdowns (other sheets of the same workbook).
 
