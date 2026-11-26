@@ -191,10 +191,23 @@
       "kind": "factual",
       "test": "True if Nvidia, a board member or another primary record confirms the president took part in arranging Jensen Huang's reinstatement as CEO, for example by speaking with the board before it acted. False if Nvidia or a board member states on record that the president had no role. Cannot be determined if no primary account of the board's contacts is available.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "As reported by CBS News, the president told CNBC he spoke to the board and \"convinced them.\" Nvidia's Nov. 23 release says only that the board received \"input from senior levels of the United States government\"; no Nvidia or board statement on record confirms or denies his role.",
+      "evidence": [
+        {
+          "label": "Nvidia release on Huang's reinstatement (Nov. 23, 2026)",
+          "url": "https://nvidianews.nvidia.com/news/nvidia-board-reinstates-jensen-huang-as-president-ceo-and-board-director"
+        },
+        {
+          "label": "CBS News, Trump says he spoke to Nvidia board",
+          "url": "https://www.cbsnews.com/news/nvidia-jensen-huang-trump-comment-national-security-risk/"
+        },
+        {
+          "label": "NPR transcript, lawmakers seek answers as Nvidia CEO returns (Nov. 25, 2026)",
+          "url": "https://www.npr.org/2026/11/25/nx-s1-6052467/lawmakers-seek-answers-on-the-national-security-as-nvidia-ceo-returns"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-26",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -357,10 +370,19 @@
       "kind": "factual",
       "test": "True if a court record or official adjudication (a conviction or a judicial finding) establishes that Kilmar Ábrego García was a member of MS-13 or another gang. False if a court found on the record that he was not a gang member. Cannot be determined if the record holds only allegations, such as a 2019 police gang field interview sheet, with no court deciding the point.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "No conviction or court finding read in this check establishes that Ábrego García was a gang member: the May 22, 2026 order dismissing his Tennessee criminal case makes no finding either way, and prosecutors' appeal is pending. The D. Md. docket and the June 2025 detention ruling could not be read directly.",
+      "evidence": [
+        {
+          "label": "M.D. Tenn. 3:25-cr-00115, dismissal order, Doc. 312 (May 22, 2026)",
+          "url": "https://storage.courtlistener.com/recap/gov.uscourts.tnmd.104622/gov.uscourts.tnmd.104622.312.0.pdf"
+        },
+        {
+          "label": "NPR, judge dismisses criminal charges against Ábrego García (May 22, 2026)",
+          "url": "https://www.npr.org/2026/05/22/nx-s1-5831958/federal-judge-dismisses-criminal-charges-against-kilmar-abrego-garcia"
+        }
+      ],
+      "check_run": "q202/askamerica/2026-11-26",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
