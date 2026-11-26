@@ -1,0 +1,668 @@
+{
+  "date": "2026-11-26",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 25 or 26, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 26 at 8:17 a.m. ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (one was: a White House statement of Nov. 25, which quoted no officeholder in scope). PBS NewsHour carries Associated Press reporting. Three NPR stories (on the Puerto Rico power grid, the proposed tariffs and Sen. Tim Kaine's view of them) returned no readable text and could not be used. Transcripts from Nov. 19 to 24 were searched only to confirm quotes; none held any of the day's quotes. Four of the thirteen readable stories quoted no officeholder in scope. Greetings, quotes under five words, questions, a multi-signer letter, commentators' and reporters' accounts of what officials said, reporters' paraphrases of opinions, and statements by people outside the offices in scope (including the first lady, a lieutenant governor, a state senator, the FCC chair and the trade representative) were left out. Statements are worded as the outlet reported them.",
+  "lede": [
+    "Coverage on Nov. 25 and 26 included the reaction in Congress to Jensen Huang's return as Nvidia's chief executive, a push by some Senate Democrats to add a freshman senator to the party's leadership, Kilmar Ábrego García's departure from the U.S. for Spain, a State Department asylum report, a Georgia court order on Fulton County's 2020 election records, and Vice President JD Vance's Thanksgiving visit to Wright-Patterson Air Force Base in Ohio.",
+    "The page lists 17 statements by 8 officeholders. Six are factual claims; their checks are listed below as they return. The other 11 are opinions, predictions or promises and are listed without a check."
+  ],
+  "stories": [
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/25/nx-s1-6052417/nvidia-jensen-huang-reaction-republicans-congress-investigation",
+      "headline": "Republican wants FBI and CIA answers before questioning Nvidia chief",
+      "published": "2026-11-25T06:50-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-administration-to-raise-tariffs-on-china-eu-brazil-and-others",
+      "headline": "Trump administration to raise tariffs on China, EU, Brazil and others",
+      "published": "2026-11-25T11:37-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/25/g-s1-155518/senate-democrats-freshman-leadership-schumer-van-hollen",
+      "headline": "Group of Senate Democrats push to add freshman to leadership",
+      "published": "2026-11-25T12:30-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/nation/state-department-reports-downplay-violence-and-corruption-in-countries-that-asylum-seekers-are-fleeing",
+      "headline": "State Department reports downplay violence and corruption in countries that asylum seekers are fleeing",
+      "published": "2026-11-25T13:07-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/world/melania-trump-reunites-her-seventh-group-of-ukrainian-and-russian-children-with-their-families",
+      "headline": "Melania Trump reunites her seventh group of Ukrainian and Russian children with their families",
+      "published": "2026-11-25T16:08-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/these-young-republicans-have-a-message-for-their-party-its-time-to-grow-up",
+      "headline": "These young Republicans have a message for their party: It's time to 'grow up'",
+      "published": "2026-11-25T17:00-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/abrego-garcia-a-salvadoran-mistakenly-deported-by-u-s-goes-to-spain-but-hopes-to-return-after-trump",
+      "headline": "&Aacute;brego Garc&iacute;a, a Salvadoran mistakenly deported by U.S., goes to Spain but hopes to return after Trump",
+      "published": "2026-11-25T17:30-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/georgias-fulton-county-ordered-to-give-copy-of-2020-election-records-seized-by-fbi-to-state-board",
+      "headline": "Georgia's Fulton County ordered to give copy of 2020 election records seized by FBI to state board",
+      "published": "2026-11-25T17:48-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/alaska-ends-voter-data-agreement-with-justice-department-which-had-been-searching-for-noncitizens",
+      "headline": "Alaska ends voter data agreement with Justice Department, which had been searching for noncitizens",
+      "published": "2026-11-25T17:53-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/ben-shapiro-and-amna-nawaz-discuss-gops-future-on-settle-in",
+      "headline": "Ben Shapiro and Amna Nawaz discuss GOP's future on 'Settle In'",
+      "published": "2026-11-25T18:35-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-vance-defends-iowa-lead-azide-detonation-as-he-visits-air-force-troops-in-ohio",
+      "headline": "WATCH: Vance defends Iowa lead azide detonation as he visits Air Force troops in Ohio",
+      "published": "2026-11-25T18:51-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/26/nx-s1-6000576/fcc-disney-abc-first-amendment-trump-brendan-carr",
+      "headline": "U.S. Judge rules FCC violated ABC's free speech rights to please Trump",
+      "published": "2026-11-26T00:23-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/26/nx-s1-6054139/court-rules-puerto-ricos-governor-can-fire-company-that-runs-troubled-power-grid",
+      "headline": "Court lets Puerto Rico governor fire firm that runs the island's troubled power grid",
+      "published": "2026-11-26T04:44-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/26/nx-s1-6054103/trump-administration-proposes-new-tariffs-on-goods-from-major-u-s-trading-partners",
+      "headline": "Trump administration proposes new tariffs on goods from major U.S. trading partners",
+      "published": "2026-11-26T06:43-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/26/nx-s1-6053944/sen-tim-kaine-d-va-shares-why-he-opposes-trumps-proposed-tariffs",
+      "headline": "Sen. Tim Kaine, D-Va., shares why he opposes Trump's proposed tariffs",
+      "published": "2026-11-26T06:43-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/26/g-s1-155950/up-first-newsletter-thanksgiving-weather-travel-trump-tariffs-iowa-detonation-fcc-free-speech",
+      "headline": "Storms disrupt Thanksgiving travel. And, FCC violated ABC's free speech, judge says",
+      "published": "2026-11-26T07:24-05:00"
+    }
+  ],
+  "statements": [
+    {
+      "id": 1,
+      "speaker": "Brian Fitzpatrick",
+      "office": "U.S. Representative from Pennsylvania",
+      "party": "R",
+      "context": "Speaking on NPR's Morning Edition about Nvidia chief Jensen Huang's return as CEO and his coming appearance before House lawmakers, Fitzpatrick, a House Intelligence Committee member, described public concern.",
+      "topic": "Nvidia and China",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "The public is rightly concerned, and they deserve answers",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/25/nx-s1-6052417/nvidia-jensen-huang-reaction-republicans-congress-investigation"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 2,
+      "speaker": "Brian Fitzpatrick",
+      "office": "U.S. Representative from Pennsylvania",
+      "party": "R",
+      "context": "On NPR's Morning Edition, Fitzpatrick described how an investigation of Nvidia chief Jensen Huang's ties to China should proceed ahead of Huang's House appearance.",
+      "topic": "Nvidia and China",
+      "broad_topic": "AI and Technology",
+      "speaker_state": "PA",
+      "about_states": [],
+      "quote": "Anytime you do an investigation, you follow the facts wherever they lead, and you report those facts with unimpeachable integrity",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/25/nx-s1-6052417/nvidia-jensen-huang-reaction-republicans-congress-investigation"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 3,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "As reported by NPR on Nvidia chief Jensen Huang's return as CEO, Trump said he helped arrange it.",
+      "topic": "Nvidia and China",
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Trump has said he helped arrange Huang's return as CEO, and Nvidia's board maintains that his reinstatement presents no national security risk.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/25/nx-s1-6052417/nvidia-jensen-huang-reaction-republicans-congress-investigation"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Nvidia, a board member or another primary record confirms the president took part in arranging Jensen Huang's reinstatement as CEO, for example by speaking with the board before it acted. False if Nvidia or a board member states on record that the president had no role. Cannot be determined if no primary account of the board's contacts is available.",
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 4,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "In a social media post on Tuesday, Van Hollen, who is challenging Chuck Schumer for Senate Democratic leader, backed adding a freshman senator to the party's leadership team.",
+      "topic": "Senate Democratic leadership",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "MD",
+      "about_states": [],
+      "quote": "There should be a freshman senator on the Senate leadership team. As I've said, we need a new way to organize so we can deliver for the American people.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/25/g-s1-155518/senate-democrats-freshman-leadership-schumer-van-hollen"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 5,
+      "speaker": "Elissa Slotkin",
+      "office": "U.S. Senator from Michigan",
+      "party": "D",
+      "context": "Speaking at a conference of Democrats after the midterm elections, Slotkin described what voters wanted from party leadership.",
+      "topic": "Senate Democratic leadership",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "MI",
+      "about_states": [],
+      "quote": "On election night, people voted very clearly for a new generation of leadership. That was very, very clear",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/25/g-s1-155518/senate-democrats-freshman-leadership-schumer-van-hollen"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 6,
+      "speaker": "Cory Booker",
+      "office": "U.S. Senator from New Jersey",
+      "party": "D",
+      "context": "Booker told MS NOW that Senate Democratic leadership extends beyond the top post, and that he wants incoming senators Annie Andrews and James Talarico to play prominent roles.",
+      "topic": "Senate Democratic leadership",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "NJ",
+      "about_states": [],
+      "quote": "This is a time for new leadership",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/25/g-s1-155518/senate-democrats-freshman-leadership-schumer-van-hollen"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "I want to see them out front, I want to see them taking issues, I want to see them running on the field.",
+          "outlet": "NPR",
+          "url": "https://www.npr.org/2026/11/25/g-s1-155518/senate-democrats-freshman-leadership-schumer-van-hollen"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "Responding to Kilmar Abrego Garcia leaving the U.S. for Spain, Van Hollen, who met him in El Salvador last year, described the Trump administration's decision to send him to the CECOT prison.",
+      "topic": "Abrego Garcia case",
+      "broad_topic": "Immigration",
+      "speaker_state": "MD",
+      "about_states": [],
+      "quote": "They wanted to leave him to rot there, to rot there for the rest of his life",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/abrego-garcia-a-salvadoran-mistakenly-deported-by-u-s-goes-to-spain-but-hopes-to-return-after-trump"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 8,
+      "speaker": "Markwayne Mullin",
+      "office": "U.S. Secretary of Homeland Security",
+      "party": "R",
+      "context": "In a post on X after Kilmar Abrego Garcia left the U.S. for Spain, Mullin said he was delighted and listed allegations against him, including gang membership, which Abrego Garcia denies.",
+      "topic": "Abrego Garcia case",
+      "broad_topic": "Immigration",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: U.S. Homeland Security Secretary Markwayne Mullin said in a post on X that he was \"delighted\" about Ábrego García's departure, listing a familiar litany of allegations for why he should be deported, including that he was a gang member, an accusation that Ábrego García has repeatedly denied.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/abrego-garcia-a-salvadoran-mistakenly-deported-by-u-s-goes-to-spain-but-hopes-to-return-after-trump"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a court record or official adjudication (a conviction or a judicial finding) establishes that Kilmar Ábrego García was a member of MS-13 or another gang. False if a court found on the record that he was not a gang member. Cannot be determined if the record holds only allegations, such as a 2019 police gang field interview sheet, with no court deciding the point.",
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 9,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking at a 2018 White House appearance during his first term, as recounted by the AP, Trump described the purpose of asylum.",
+      "topic": "Immigration enforcement and asylum",
+      "broad_topic": "Immigration",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Asylum is a very special protection intended only for those fleeing government persecution based on race, religion and other protected status",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/nation/state-department-reports-downplay-violence-and-corruption-in-countries-that-asylum-seekers-are-fleeing"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if U.S. asylum law (8 U.S.C. 1101(a)(42) and 1158) limits asylum to people persecuted, or with a well-founded fear of persecution, on account of race, religion, nationality, membership in a particular social group or political opinion. False if the law grants asylum on other grounds, such as poverty or general violence. Cannot be determined if the point turns on whether 'government persecution' covers the law's protection against persecutors the government cannot or will not control, a legal reading.",
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 10,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "In his first term, as recounted by the AP, Trump said most migrants seeking asylum were fleeing poverty.",
+      "topic": "Immigration enforcement and asylum",
+      "broad_topic": "Immigration",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Most asylum seekers, the Republican president said, were fleeing poverty.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/nation/state-department-reports-downplay-violence-and-corruption-in-countries-that-asylum-seekers-are-fleeing"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official asylum data or a primary survey from 2017 to 2019 shows a majority of asylum seekers left their countries chiefly for economic reasons. False if such data show most cited persecution or violence as the main reason. Cannot be determined if no primary source measures the motives of asylum seekers as a whole; grant or denial rates alone do not decide it.",
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 11,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "As reported by the AP, Trump promised in early 2025, as his immigration crackdown ramped up, to deport 1 million people annually.",
+      "topic": "Immigration enforcement and asylum",
+      "broad_topic": "Immigration",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Ábrego García's deportation in early 2025 came as Trump, a Republican, was ramping up his immigration crackdown, promising to deport 1 million people annually.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/abrego-garcia-a-salvadoran-mistakenly-deported-by-u-s-goes-to-spain-but-hopes-to-return-after-trump"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 13,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "As reported by the AP on Melania Trump's reunification of children in the Russia-Ukraine war, the president had vowed to broker a quick end to the conflict.",
+      "topic": "Russia-Ukraine war",
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "Reported as: Her husband, President Donald Trump, had vowed to broker a quick end to the conflict but has said it's been harder than he expected.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/melania-trump-reunites-her-seventh-group-of-ukrainian-and-russian-children-with-their-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 14,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "As reported by the AP on a Georgia court order over Fulton County's 2020 election records, Trump has insisted voter fraud in the county cost him the state.",
+      "topic": "Fulton County 2020 election records",
+      "broad_topic": "Elections and Parties",
+      "speaker_state": null,
+      "about_states": [
+        "GA"
+      ],
+      "quote": "Reported as: Trump has consistently insisted without evidence that widespread voter fraud in the county cost him victory in the state.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/georgias-fulton-county-ordered-to-give-copy-of-2020-election-records-seized-by-fbi-to-state-board"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Georgia's certified 2020 results, its statewide hand-count audit and recount, or an official investigation found fraud in Fulton County large enough to exceed Joe Biden's statewide margin of about 11,779 votes. False if those official records found no fraud near that size and nothing pending could change them. Cannot be determined if the official records cannot be read, or if an open inquiry could still change the record.",
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 15,
+      "speaker": "JD Vance",
+      "office": "Vice President of the United States",
+      "party": "R",
+      "context": "While serving Thanksgiving meals at Wright-Patterson Air Force Base in Ohio, Vance told a service member from Georgia which college football team he preferred this year.",
+      "topic": "Vance visit to Ohio air base",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [
+        "OH"
+      ],
+      "quote": "Better a Bulldogs fan than the Buckeyes this year",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-vance-defends-iowa-lead-azide-detonation-as-he-visits-air-force-troops-in-ohio"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 16,
+      "speaker": "JD Vance",
+      "office": "Vice President of the United States",
+      "party": "R",
+      "context": "Asked by reporters at Wright-Patterson Air Force Base in Ohio about locating the U.S. Space Academy in Ohio, Vance said his visit was unrelated to the plans.",
+      "topic": "Space Academy location",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [
+        "OH"
+      ],
+      "quote": "has had nothing to do with those plans",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-vance-defends-iowa-lead-azide-detonation-as-he-visits-air-force-troops-in-ohio"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official account of the Nov. 25, 2026 visit (the vice president's schedule, a White House or Air Force statement) describes it as a Thanksgiving visit with troops with no Space Academy site review or briefing. False if an official record shows the visit included a Space Academy site review or a briefing on the base's bid. Cannot be determined if no official account of the visit's agenda can be read.",
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 17,
+      "speaker": "JD Vance",
+      "office": "Vice President of the United States",
+      "party": "R",
+      "context": "At Wright-Patterson Air Force Base in Ohio, Vance told reporters what his family would do during the next few days of the Thanksgiving holiday.",
+      "topic": "Vance visit to Ohio air base",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": [
+        "OH"
+      ],
+      "quote": "what most Americans are going to do, which is hang out with people, eat a lot and hopefully not drink too much",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-vance-defends-iowa-lead-azide-detonation-as-he-visits-air-force-troops-in-ohio"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 18,
+      "speaker": "Bernie Moreno",
+      "office": "U.S. Senator from Ohio",
+      "party": "R",
+      "context": "In a letter co-signed by Sen. Jon Husted and Ohio's House members, Moreno urged the administration to locate the U.S. Space Academy near Wright-Patterson Air Force Base.",
+      "topic": "Space Academy location",
+      "broad_topic": "Defense and National Security",
+      "speaker_state": "OH",
+      "about_states": [
+        "OH"
+      ],
+      "quote": "What West Point is to the Army and Annapolis is to the Navy, Wright Field should be to the United States Space Force",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-vance-defends-iowa-lead-azide-detonation-as-he-visits-air-force-troops-in-ohio"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    }
+  ]
+}
