@@ -1043,10 +1043,11 @@ public class HttpSourceConfig {
     private final String compressed;
     private final boolean quoted;
     private final Set<String> rawFields;
+    private final boolean strictRecords;
 
     private ResponseConfig(ResponseFormat format, String dataPath, String errorPath,
         PaginationConfig pagination, boolean hasHeader, String columnNames, String delimiter,
-        String compressed, boolean quoted, Set<String> rawFields) {
+        String compressed, boolean quoted, Set<String> rawFields, boolean strictRecords) {
       this.format = format;
       this.dataPath = dataPath;
       this.errorPath = errorPath;
@@ -1057,11 +1058,12 @@ public class HttpSourceConfig {
       this.compressed = compressed;
       this.quoted = quoted;
       this.rawFields = rawFields;
+      this.strictRecords = strictRecords;
     }
 
     public static ResponseConfig defaults() {
       return new ResponseConfig(ResponseFormat.JSON, null, null, PaginationConfig.none(),
-          true, null, null, null, true, Collections.<String>emptySet());
+          true, null, null, null, true, Collections.<String>emptySet(), false);
     }
 
     public ResponseFormat getFormat() {
@@ -1146,6 +1148,19 @@ public class HttpSourceConfig {
       return rawFields;
     }
 
+    /**
+     * Whether every record of this CSV/TSV source must be complete: as many fields as there are
+     * columns, with balanced quotes. A body holding any other record (cut short, or ended by an
+     * error payload the server wrote after a success status) fails the fetch and is removed from
+     * the raw cache, so the next run downloads it again. Defaults to false, since some sources
+     * legitimately deliver ragged rows or footer lines.
+     *
+     * <p>Supported for unpaginated CSV/TSV sources with no whole-body response transformer.
+     */
+    public boolean isStrictRecords() {
+      return strictRecords;
+    }
+
     @SuppressWarnings("unchecked")
     public static ResponseConfig fromMap(Map<String, Object> map) {
       if (map == null) {
@@ -1186,8 +1201,17 @@ public class HttpSourceConfig {
         rawFields = Collections.emptySet();
       }
 
+      boolean strictRecords = Boolean.TRUE.equals(map.get("strictRecords"));
+      if (strictRecords
+          && (format != ResponseFormat.CSV && format != ResponseFormat.TSV
+              || pagination.getType() != PaginationType.NONE)) {
+        throw new IllegalArgumentException(
+            "response.strictRecords applies only to unpaginated csv/tsv sources; format="
+                + format + ", pagination=" + pagination.getType());
+      }
+
       return new ResponseConfig(format, dataPath, errorPath, pagination,
-          hasHeader, columnNames, delimiter, compressed, quoted, rawFields);
+          hasHeader, columnNames, delimiter, compressed, quoted, rawFields, strictRecords);
     }
   }
 
