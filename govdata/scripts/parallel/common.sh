@@ -607,7 +607,9 @@ verify_closure_on_r2() {
 #   - the candidate total is lower than the published total by more than GOVDATA_R2_ROWDROP_PCT
 #     percent (default 5), or
 #   - a replace/overwrite/delete snapshot between the two removed more records than it added by
-#     more than that percent of the published total.
+#     more than that percent of the published total, and the candidate total has not regained the
+#     pre-rewrite total (within that percent): a rewrite whose rows are back does not hold.
+# A candidate that is the published version changes nothing a reader sees: no guard.
 # The lead overrides one table with a file <state>/force-publish/<schema>__<table>, consumed by
 # the publish that uses it. A table with no pointer on R2 yet is a first publish: no guard. A
 # total that cannot be read is a hold too, never a pass.
@@ -619,7 +621,7 @@ r2_pointer_guard() {
   mkdir -p "$state/held" "$state/force-publish"
 
   cur=$(r2_rclone 300 cat "${r2_remote}:${base}/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
-  if [ -z "$cur" ]; then
+  if [ -z "$cur" ] || [ "$cur" = "$version" ]; then
     rm -f "$state/held/$key.json"
     return 0
   fi
@@ -640,7 +642,9 @@ r2_pointer_guard() {
           (cur($pm) | .["timestamp-ms"] // 0) as $pts
           | [ ($cm.snapshots // [])[] | select(."timestamp-ms" > $pts)
               | select(.summary.operation == "replace" or .summary.operation == "overwrite" or .summary.operation == "delete")
-              | select(((.summary["deleted-records"] // "0" | tonumber) - (.summary["added-records"] // "0" | tonumber)) > $pt * $pct / 100)
+              | ((.summary["deleted-records"] // "0" | tonumber) - (.summary["added-records"] // "0" | tonumber)) as $lost
+              | select($lost > $pt * $pct / 100)
+              | select($ct < (.summary["total-records"] | tonumber) + $lost - $pt * $pct / 100)
               | "snapshot \(."snapshot-id") \(.summary.operation) deleted \(.summary["deleted-records"]) added \(.summary["added-records"])" ] | .[0] // ""
         end' 2>&1) || reason="guard could not evaluate metadata: $reason"
   fi
@@ -658,12 +662,34 @@ r2_pointer_guard() {
   ct=$(jq -r '. as $m | ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0].summary["total-records"] // "n/a"' "$cand_json" 2>/dev/null || echo n/a)
   pt=$(jq -r '. as $m | ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0].summary["total-records"] // "n/a"' "$pub_json" 2>/dev/null || echo n/a)
   rm -f "$cand_json" "$pub_json"
+  local at first=""
+  at=$(date -u +%FT%TZ)
+  if [ -e "$state/held/$key.json" ]; then
+    first=$(jq -r '.first_held_at // empty' "$state/held/$key.json") || first=""
+  fi
   jq -n --arg t "$schema/$table" --arg r "$reason" --arg cv "$version" --arg pv "$cur" \
-        --arg ct "$ct" --arg pt "$pt" --arg at "$(date -u +%FT%TZ)" \
-        '{table:$t, reason:$r, candidate_version:$cv, published_version:$pv, candidate_total_records:$ct, published_total_records:$pt, held_at:$at}' \
+        --arg ct "$ct" --arg pt "$pt" --arg at "$at" --arg first "${first:-$at}" \
+        '{table:$t, reason:$r, candidate_version:$cv, published_version:$pv, candidate_total_records:$ct, published_total_records:$pt, held_at:$at, first_held_at:$first}' \
         > "$state/held/$key.json"
   log_error "sync-to-r2: [$schema/$table] row-drop guard HELD pointer: $reason (candidate v${version} total ${ct}, published v${cur} total ${pt}); marker $state/held/$key.json"
   return 1
+}
+
+# r2_report_holds
+# Logs every standing row-drop hold at error level: table, how long it has been held, reason.
+# A marker that cannot be read is itself logged.
+r2_report_holds() {
+  local state="${GOVDATA_R2_SYNC_STATE_DIR:-$HOME/.r2-sync-state}" f line n=0
+  for f in "$state"/held/*.json; do
+    [ -e "$f" ] || continue
+    n=$((n + 1))
+    if line=$(jq -er '"\(.table) held since \(.first_held_at // .held_at) (published v\(.published_version)): \(.reason)"' "$f"); then
+      log_error "sync-to-r2: HELD $line"
+    else
+      log_error "sync-to-r2: HELD marker unreadable: $f"
+    fi
+  done
+  [ "$n" -eq 0 ] || log_error "sync-to-r2: $n table pointer(s) held; R2 serves the older version of each until published"
 }
 
 # publish_r2_pointer <minio_remote> <r2_remote> <bucket> <schema> <table> <version>
