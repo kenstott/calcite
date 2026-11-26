@@ -1563,6 +1563,25 @@
         "utility reliability"
       ],
       "body": "1. energy.eia_utility_reliability carries each utility's indices in two sets of columns: ieee_* (IEEE 1366) and other_* (the utility's own standard). A utility fills one set or the other. Filtering on ieee_saidi_without_med IS NOT NULL MUST NOT be the whole method: in 2023, 195 utilities with about 25 million customers report only under other_*, including Virginia Electric & Power (Dominion, 2.6 million customers). 2. Build each utility-year as COALESCE(ieee_saidi_without_med, other_saidi_without_med) with the matching customer count (ieee_customers when the IEEE value is used, else other_customers), the same for SAIFI and for the with-MED pair, and weight by customers. Report the customer coverage of the result against the state's total customers (energy.eia_utility_annual) and say what share used each standard. 3. Use the without-major-event-days (without_med) indices for a trend in normal operation, and show the with-MED series beside it, because storms dominate the with-MED level. 4. For a 'has it gone up' question, compare the same utilities in both windows and show the year-by-year series, not only two endpoints: single storm years (Virginia 2018, 2022) swing a two-year average. 5. A 'region straining the grid' question has no load table to select the regions; state which states or utilities were chosen and why, and test whether the result holds when the largest contributor is dropped. 6. The table ends at the latest EIA-861 year loaded; check MAX(report_year) and name the window. Measured 2026-11-25 (bank q179, data-center grid strain): askamerica kept IEEE rows only, dropped Dominion, and reported Virginia SAIDI excluding major events rising from 214 to 259 minutes; with both standards, Virginia ran 143-148 minutes in 2013-15 and 159-188 in 2021-23 (2018 187.8, 2023 159.3), the figures the unaided expert computed from the EIA-861 files."
+    },
+    {
+      "id": "farm-debt-stress-by-region-and-crop",
+      "title": "Farm debt stress by region or crop: the balance sheet is national, so measure debt burden from state income rows",
+      "triggers": [
+        "farm debt",
+        "farm debt to asset",
+        "debt-to-asset ratio farm",
+        "farm financial stress",
+        "farm stress by state",
+        "farm stress by region",
+        "farm leverage",
+        "farm loan stress",
+        "farm interest expense",
+        "agricultural debt",
+        "farmland debt",
+        "which farms are under stress"
+      ],
+      "body": "Asked how farm debt relative to assets has changed and whether the stress is concentrated in particular crops or regions, the plausible-but-wrong shortcut is to report the national debt-to-asset ratio from ag.ers_farm_income (state='US'), then switch to crop profitability alone and drop the state rows because they carry no balance-sheet items. Profitability is not debt stress, and the state rows do carry the debt-service side. Method: (1) National leverage: ag.ers_farm_income WHERE state='US' for farm debt, farm assets and the debt-to-asset ratio, over several years, with the forecast years labelled. (2) Regional debt burden: from the SAME table's state rows, take interest expense (production-expense rows whose subcategory names interest) and net cash farm income for each state and year. Compute interest as a share of net cash farm income, then its change over the window. Inspect DISTINCT category/subcategory first, filter to one level, and never sum rollup rows. Rank states and group them into regions with geo.state_ref. (3) Crop exposure: relate each state's change in burden to its crop share of cash receipts (crop vs livestock receipts rows in the same table), and report r with n. (4) Crop margins: ag.ers_commodity_costs_returns net returns per acre by commodity and ERS resource region as the crop-level complement, not the substitute. Caveats to state: the burden ratio is a proxy (ERS publishes no state balance sheets), government payments inflate net cash income, and these are state aggregates, not farms. Evidence: in the 2026-11-26 rerun of q158, the unaided expert computed interest/net cash income by state (Lake States 26.4% in 2025, up from 14.4%; r=0.50 with crop share, n=49) and ranked first. The connector run reported only national leverage plus crop returns and dropped the state rows."
     }
   ]
 }

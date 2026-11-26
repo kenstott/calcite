@@ -2619,5 +2619,145 @@
       "everyman"
     ],
     "note": "askamerica first; filed #1499 NIS-Child coverage gap"
+  },
+  {
+    "topic_slug": "staradvertiser-hawaii-jobless-2-8-two-year-high",
+    "headline": "Hawaii jobless rate holds at 2-year high of 2.8%",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q1/askamerica/2026-11-26",
+    "pinocchios": 1,
+    "source_url": "https://www.staradvertiser.com/2026/11/23/hawaii-news/state-jobless-rate-holds-at-2-year-high-of-2-8/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica found 2 numeric relay errors (Sep LF 694,350 vs BLS 694,853; Sep-2025 rate 2.4 vs 2.1); county LAUS gap filed #1539"
+  },
+  {
+    "topic_slug": "granitestatereport-nhfpi-nh-community-college-enrollment-up-6",
+    "headline": "NH community college enrollment up 6%, a third are high-schoolers (NHFPI)",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q2/askamerica/2026-11-26",
+    "pinocchios": 0,
+    "source_url": "https://granitestatereport.com/2026/11/26/nh-community-college-enrollment-dual-enrolled-high-school-students-nhfpi",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "IPEDS 12-month enrollment (EFFY) gap filed #1540"
+  },
+  {
+    "topic_slug": "peters-whitesides-crank-66000-fires-9-million-acres-ndaa",
+    "headline": "Reps. Peters, Whitesides, Crank: 66,000 fires burned 9M+ acres in 2026, urge Fix Our Forests in NDAA",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q3/askamerica/2026-11-26",
+    "pinocchios": 0,
+    "source_url": "https://scottpeters.house.gov/press-releases/peters-whitesides-crank-urge-inclusion-of-forestry-bill-in-annual-ndaa-package",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "release dated 2026-10-23 (outside 7-day window); askamerica graded sequoia claim true on circular self-corroboration"
+  },
+  {
+    "topic_slug": "shattered-cisa-kev-298-additions-up-35-percent",
+    "headline": "CISA KEV additions hit 298 in 2026, up 35%; ransomware 20% of catalog",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q4/askamerica/2026-11-26",
+    "pinocchios": 0,
+    "source_url": "https://shattered.io/cisa-kev-additions-298-up-35-percent-from-221-ransomware-20-percent-of-catalog/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "warehouse KEV counts match CISA JSON exactly; added 2022-2026 same-window base context"
+  },
+  {
+    "topic_slug": "whitehouse-overdose-deaths-18th-consecutive-month",
+    "headline": "White House: overdose deaths decrease for 18th consecutive month",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q5/askamerica/2026-11-26",
+    "pinocchios": 0,
+    "source_url": "https://www.whitehouse.gov/releases/2026/11/u-s-drug-overdose-deaths-decrease-for-18th-consecutive-month-under-trump-administration/",
+    "ranks": [
+      "expert",
+      "everyman",
+      "askamerica"
+    ],
+    "note": "SEVERITY: askamerica rated 0 'balanced and accurate' vs unaided 2; McpServer press-release/thesis instruction added; rerun partial (still 0); rubric issue for maintainer"
+  },
+  {
+    "topic_slug": "tbf-greater-boston-housing-report-card-2026",
+    "headline": "Boston Foundation 2026 Housing Report Card: construction slowdown, market uncertainty",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q6/askamerica/2026-11-26",
+    "pinocchios": 0,
+    "source_url": "https://www.tbf.org/news-and-insights/press-releases/2026/november/greater-boston-housing-report-card-release-20261110",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "warehouse permits 7,746 (2025 low) and ACS rent burden 51.2% vs release 48%"
+  },
+  {
+    "topic_slug": "profarmer-profit-over-peak-yield-crop-budgets",
+    "headline": "Pro Farmer: record yields, sub-breakeven prices, fertilizer up 17%",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q7/askamerica/2026-11-26",
+    "pinocchios": 1,
+    "source_url": "https://www.profarmer.com/news/agriculture-news/profit-over-peak-yield-what-crop-budgets-are-telling-growers",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica missed ag.nass_crop_estimates_current for WASDE yields; regrouping moved rating 0->1"
+  },
+  {
+    "topic_slug": "ap-ustr-section-301-tariffs-14-partners-trade-deficit",
+    "headline": "AP: US plans 20% tariff on China, new duties on EU and 12 others citing trade deficit",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q8/askamerica/2026-11-26",
+    "pinocchios": 1,
+    "source_url": "https://www.news4jax.com/news/politics/2026/11/25/trump-plans-a-20-tariff-on-chinese-goods-and-new-import-taxes-for-the-eu-and-a-dozen-other-major-trading-partners/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica verified 'three-fifths of imports' from econ.usitc_tariffs (60.3%)"
+  },
+  {
+    "topic_slug": "axios-congress-historic-overhaul-freshman-class",
+    "headline": "Axios: Congress gets historic overhaul, largest freshman classes in decades",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q9/askamerica/2026-11-26",
+    "pinocchios": 1,
+    "source_url": "https://www.axios.com/2026/11/20/house-senate-freshmen-class-largest-decades",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "Axios 403 for all arms incl. connector; officials.members ends at 119th (expected)"
+  },
+  {
+    "topic_slug": "whitehouse-gas-prices-plunge-before-thanksgiving",
+    "headline": "White House: gas prices plunge ahead of Thanksgiving, as Trump predicted",
+    "checked_date": "2026-11-26",
+    "run_subpath": "q10/askamerica/2026-11-26",
+    "pinocchios": 1,
+    "source_url": "https://www.whitehouse.gov/releases/2026/11/gas-prices-plunge-ahead-of-thanksgiving-just-as-president-trump-predicted/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "causal credit extracted as author claim mostly false (post-fix); engine 1 vs unaided 2 (rubric cap, same as q5)"
   }
 ]
