@@ -7897,6 +7897,249 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # --- QUARTERLY GDP FIRST / SECOND / THIRD RELEASE ESTIMATES, Philadelphia Fed ---
+  - name: gdp_release_estimates
+    # The Philadelphia Fed Real-Time Data Set publishes one workbook per variable at
+    # .../data-files/xlsx/<variable_id>_first_second_third.xlsx (keyless, confirmed live
+    # 26 Nov 2026). Each holds the whole history and is refreshed about once a month.
+    timeColumn: date  # observation time (reference quarter, first day)
+    pattern: "type=gdp_release_estimates/variable_id=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: variable_id
+          type: VARCHAR
+    # One workbook per variable; the hash check skips the write on days it has not changed.
+    freshness:
+      type: hash
+    comment: >
+      How U.S. quarterly GDP growth was revised: the ADVANCE (first), SECOND and THIRD release
+      estimate of each quarter beside the latest value, from the Philadelphia Fed Real-Time Data
+      Set (source data BEA), reference quarters from 1965Q3. One row per (variable_id, date), all
+      values quarter-over-quarter percent change at an annual rate. variable_id routput real
+      GNP/GDP growth (the headline GDP number), noutput nominal GNP/GDP, p GNP/GDP price index,
+      rcon real personal consumption (PCE), pconx core PCE price index (from 1995Q4), rinvbf real
+      nonresidential (business) fixed investment, rinvresid real residential investment, rg real
+      government consumption and investment, rex real exports, rimp real imports. The
+      advance-to-second revision in percentage points is second_release - first_release, which
+      ranks revisions across history directly; earlier decades report GNP where BEA's headline
+      measure was GNP. A release the source does not give is NULL, never zero: 2025Q3 and 2025Q4
+      have NULL first, second and third (the federal shutdown replaced the usual release
+      sequence; use gdp_revision_vintages for their dated estimates). The source is refreshed
+      about monthly and can trail BEA's newest release by up to a month (see source_updated);
+      gdp_revision_vintages picks up each BEA release by its date. Does not carry gross private
+      domestic investment in total or gross domestic income (both are in gdp_revision_vintages),
+      or releases after the third. Current, most revised levels are in gdp_statistics and
+      fred_indicators.
+    dimensions:
+      type:
+        - gdp_release_estimates
+      variable_id:
+        - routput
+        - noutput
+        - rcon
+        - rinvbf
+        - rinvresid
+        - rg
+        - rex
+        - rimp
+        - p
+        - pconx
+
+    columns:
+      - name: variable_id
+        type: string
+        nullable: false
+        comment: >
+          Philadelphia Fed variable code (partition column): routput, noutput, p, rcon, pconx,
+          rinvbf, rinvresid, rg, rex, rimp. Always filter on variable_id.
+      - name: measure
+        type: string
+        nullable: false
+        comment: The source workbook's title for the variable, for example Real GNP/GDP (ROUTPUT)
+      - *date_column
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of the reference quarter
+      - name: quarter
+        type: integer
+        nullable: false
+        comment: Reference calendar quarter 1-4
+      - name: period
+        type: string
+        nullable: false
+        comment: Reference quarter label, for example 2026Q3
+      - name: first_release
+        type: double
+        nullable: true
+        comment: Advance estimate - percent change at annual rate as first published
+      - name: second_release
+        type: double
+        nullable: true
+        comment: Second estimate - percent change at annual rate as of the second release
+      - name: third_release
+        type: double
+        nullable: true
+        comment: Third estimate - percent change at annual rate as of the third release
+      - name: most_recent
+        type: double
+        nullable: true
+        comment: Percent change at annual rate in the latest data as of source_updated, including all annual and comprehensive revisions
+      - name: source_updated
+        type: date
+        nullable: false
+        comment: The workbook's "Last updated on" date
+
+    source:
+      type: http
+      url: "https://www.philadelphiafed.org/-/media/FRBP/Assets/Surveys-And-Data/real-time-data/data-files/xlsx/{variable_id}_first_second_third.xlsx"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      # No rawCache: block - a StreamingResponseTransformer opens its own connection.
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.GdpReleaseEstimatesTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=gdp_release_estimates/variable_id=*/"
+      partition:
+        columns: [type, variable_id]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: gdp_release_estimates
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # --- QUARTERLY GDP VINTAGES, ALFRED (every BEA release, by date) ---
+  - name: gdp_revision_vintages
+    timeColumn: date  # observation time (reference quarter, first day); this table has no column named 'year'
+    pattern: "type=gdp_revision_vintages/series=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: series
+          type: VARCHAR
+    # Each series' whole real-time history is one request and changes with every BEA release, so
+    # the hash check skips the write on days nothing new was published.
+    freshness:
+      type: hash
+    comment: >
+      Quarterly GDP vintages from ALFRED (the St. Louis Fed's archive of FRED real-time periods),
+      data from BEA's GDP releases: what each dated release published for each reference quarter.
+      Growth series (percent change from preceding quarter, annual rate): A191RL1Q225SBEA real GDP
+      (the headline number), A191RP1Q027SBEA nominal GDP, DPCERL1Q225SBEA real PCE,
+      A006RL1Q225SBEA real gross private domestic investment, A261RL1Q225SBEA real gross domestic
+      income, A191RI1Q225SBEA GDP implicit price deflator. Level series: GDPC1 real GDP (billions
+      of chained dollars, base year changes between vintages), GDP nominal GDP (billions of
+      dollars), A261RX1Q020SBEA real gross domestic income (billions of chained dollars). One row
+      per (series, date, realtime_start): value is what ALFRED shows for the quarter starting
+      `date` from the release dated realtime_start until the day before realtime_end
+      (realtime_end 9999-12-31 means still current). Only releases that changed the value get a
+      row, so the ADVANCE (first) print is the row with the smallest realtime_start for that date
+      and the next row is the first release that CHANGED it (not necessarily the second
+      estimate); the value as of any release date D is the row with realtime_start <= D <=
+      realtime_end. Vintage depth differs: the growth series have vintages only from 2014-09-26,
+      so quarters before 2014Q3 appear with that first vintage as their earliest row and are not
+      advance prints - for advance / second / third history back to 1965 use
+      gdp_release_estimates. GDPC1 and GDP vintages start 1991-12-04; A261RX1Q020SBEA starts
+      2013. Level values must not be compared across a base-year or comprehensive revision;
+      compute growth from two quarters taken at the same realtime date. 2025Q3 and 2025Q4 had no
+      standard advance / second / third sequence (federal shutdown); the rows carry the actual
+      release dates. value is NULL where ALFRED publishes no value for that vintage (level
+      series only).
+    dimensions:
+      type:
+        - gdp_revision_vintages
+      series:
+        - A191RL1Q225SBEA
+        - A191RP1Q027SBEA
+        - DPCERL1Q225SBEA
+        - A006RL1Q225SBEA
+        - A261RL1Q225SBEA
+        - A191RI1Q225SBEA
+        - GDPC1
+        - GDP
+        - A261RX1Q020SBEA
+
+    columns:
+      - name: series
+        type: string
+        nullable: false
+        comment: >
+          FRED series id (partition column). Growth at annual rate: A191RL1Q225SBEA real GDP,
+          A191RP1Q027SBEA nominal GDP, DPCERL1Q225SBEA real PCE, A006RL1Q225SBEA real gross private
+          domestic investment, A261RL1Q225SBEA real GDI, A191RI1Q225SBEA GDP price deflator.
+          Levels: GDPC1 real GDP, GDP nominal GDP, A261RX1Q020SBEA real GDI. Always filter on series.
+      - name: realtime_start
+        type: date
+        nullable: false
+        comment: First day this value was the published value for `date` (the BEA release date, or the day ALFRED first recorded it)
+      - name: realtime_end
+        type: date
+        nullable: false
+        comment: Last day this value was the published value; 9999-12-31 means it is still the current value
+      - *date_column
+      - name: value
+        type: double
+        nullable: true
+        comment: Percent change at annual rate for growth series, billions of dollars (chained or current) for level series, as published from realtime_start to realtime_end
+
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/series/observations"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        series_id: "{series}"
+        # output_type=1 = observations by real-time period: one row per (date, value interval);
+        # the whole vintage history of a series (<= 9k rows here) fits one page.
+        output_type: "1"
+        realtime_start: "1776-07-04"
+        realtime_end: "9999-12-31"
+        limit: "100000"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 502, 503, 504]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=gdp_revision_vintages/series=*/"
+      partition:
+        columns: [type, series]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: gdp_revision_vintages
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   # --- MONTHLY RETAIL SALES VINTAGES, ALFRED (advance print and every later revision) ---
   - name: retail_sales_revision_vintages
     timeColumn: date  # observation time (reference month, first day); this table has no column named 'year'
@@ -10610,7 +10853,9 @@ partitionedTables:
       National GDP growth rates, nominal and real GDP levels, and other line items from BEA NIPA
       table T10101, annual and quarterly. Sources the same T10101 table that's also included in
       the broader national_accounts table (which covers 8 additional NIPA sections); for
-      industry-level GDP breakdowns see industry_gdp.
+      industry-level GDP breakdowns see industry_gdp. Each row is the CURRENT (most revised)
+      value; for the advance / second / third release estimates and revision history use
+      gdp_release_estimates and gdp_revision_vintages.
     columns:
       # Map BEA API field names to our column names
       - name: year
@@ -12901,6 +13146,18 @@ constraints:
       - release_month
       - reference_year
       - reference_month
+
+  # GDP release estimates and vintages; source codes, no cross-table FK.
+  gdp_release_estimates:
+    primaryKey:
+      - variable_id
+      - date
+
+  gdp_revision_vintages:
+    primaryKey:
+      - series
+      - date
+      - realtime_start
 
   # ALFRED payroll vintages; FRED ids, no cross-table FK.
   ces_revision_vintages_alfred:
