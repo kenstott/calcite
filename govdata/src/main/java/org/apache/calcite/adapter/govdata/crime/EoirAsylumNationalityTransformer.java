@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.crime;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.ImmutableList;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -52,21 +53,26 @@ public class EoirAsylumNationalityTransformer extends EoirPdfTransformer {
       Pattern.compile("^(.*?)\\s*((?:(?<=^|\\s)" + VALUE + "(?=\\s|$)\\s*){6,})$");
   private static final Pattern FOOTNOTE_START = Pattern.compile("^1 Asylum rates");
 
+  /** Marks a printed rate, which is not loaded. */
+  private static final String RATE = "rate";
+
   /** The three printed column layouts; each constant lists the column of each printed value. */
   private enum Layout {
     /** FY2018: counts and rates, with administrative closures. */
-    RATES_WITH_CLOSURE(false, "grants", null, "denials", null, "other_outcomes", null,
-        "admin_closure", null, "total_decisions"),
+    RATES_WITH_CLOSURE(false, ImmutableList.of("grants", RATE, "denials", RATE, "other_outcomes",
+        RATE, "admin_closure", RATE, "total_decisions")),
     /** FY2019 to FY2023: counts and rates. */
-    RATES(true, "grants", null, "denials", null, "other_outcomes", null, "total_decisions"),
+    RATES(true, ImmutableList.of("grants", RATE, "denials", RATE, "other_outcomes", RATE,
+        "total_decisions")),
     /** FY2024: counts of each outcome. */
-    OUTCOMES(true, "grants", "denials", "abandonment", "not_adjudicated", "other", "withdrawn");
+    OUTCOMES(true, ImmutableList.of("grants", "denials", "abandonment", "not_adjudicated",
+        "other", "withdrawn"));
 
     /** Whether a wrapped nationality is vertically centred on its row (name above and below). */
     private final boolean centredNames;
-    private final String[] columns;
+    private final ImmutableList<String> columns;
 
-    Layout(boolean centredNames, String... columns) {
+    Layout(boolean centredNames, ImmutableList<String> columns) {
       this.centredNames = centredNames;
       this.columns = columns;
     }
@@ -163,9 +169,9 @@ public class EoirAsylumNationalityTransformer extends EoirPdfTransformer {
       Matcher data = DATA_LINE.matcher(line);
       if (data.matches()) {
         String[] values = data.group(2).trim().split("\\s+");
-        if (values.length != layout.columns.length) {
+        if (values.length != layout.columns.size()) {
           throw new IllegalStateException("EOIR nationality FY" + fiscalYear + ": expected "
-              + layout.columns.length + " values: " + line);
+              + layout.columns.size() + " values: " + line);
         }
         if (openName != null) {
           throw new IllegalStateException("EOIR nationality FY" + fiscalYear
@@ -222,8 +228,9 @@ public class EoirAsylumNationalityTransformer extends EoirPdfTransformer {
     }
     for (int i = 0; i < values.length; i++) {
       // "*" is EOIR's suppression marker: the count exists but is withheld, so it stays NULL.
-      if (layout.columns[i] != null && !"*".equals(values[i])) {
-        row.put(layout.columns[i], Long.parseLong(values[i].replace(",", "")));
+      String column = layout.columns.get(i);
+      if (!RATE.equals(column) && !"*".equals(values[i])) {
+        row.put(column, Long.parseLong(values[i].replace(",", "")));
       }
     }
     row.put("data_generated", generated.toString());
