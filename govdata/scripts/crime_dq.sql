@@ -1432,3 +1432,224 @@ FROM (
   HAVING ABS(SUM(CASE WHEN geo_level = 'region' THEN removals_total END)
              - SUM(CASE WHEN geo_level = 'total' THEN removals_total END)) > 100
 );
+
+-- eoir_asylum_applications_by_year (EOIR Adjudication Statistics; partitioned by type only)
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true);
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 10 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 10, NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true))
+  WHERE null_percentage = 100
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- type is the single-value partition column; one edition shares one data_generated date
+    AND column_name NOT IN ('type', 'data_generated')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'fiscal_year IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true)
+WHERE fiscal_year IS NULL;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T6_pk_dupes',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (fiscal_year) rows'
+FROM (
+  SELECT fiscal_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true)
+  GROUP BY fiscal_year HAVING COUNT(*) > 1
+);
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T7_expected_values',
+  CASE WHEN COUNT(*) = 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'FY2019 total filed near 217,505 (EOIR restates each edition)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true)
+WHERE fiscal_year = 2019 AND total_filed BETWEEN 200000 AND 235000;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_applications_by_year', 'T7_total_is_sum',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'total_filed = affirmative + defensive'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_applications_by_year', allow_moved_paths := true)
+WHERE total_filed <> affirmative_filed + defensive_filed;
+
+-- eoir_asylum_decisions_by_year (EOIR Adjudication Statistics; partitioned by type only)
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true);
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 10 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 10, NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true))
+  WHERE null_percentage = 100
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- type is the single-value partition column; one edition shares one data_generated date
+    AND column_name NOT IN ('type', 'data_generated')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'fiscal_year IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true)
+WHERE fiscal_year IS NULL;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T6_pk_dupes',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (fiscal_year) rows'
+FROM (
+  SELECT fiscal_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true)
+  GROUP BY fiscal_year HAVING COUNT(*) > 1
+);
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T7_expected_values',
+  CASE WHEN COUNT(*) = 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'FY2019 grants near 18,865 and denials near 45,294'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true)
+WHERE fiscal_year = 2019 AND grants BETWEEN 18000 AND 20000 AND denials BETWEEN 43000 AND 48000;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_year', 'T7_total_is_sum',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'total_decisions = sum of outcomes'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_year', allow_moved_paths := true)
+WHERE total_decisions <> grants + denials + abandonment + not_adjudicated + withdrawn + admin_closure;
+
+-- eoir_asylum_decisions_by_nationality (EOIR Adjudication Statistics; partitioned by type only)
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true);
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 1000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1000, NULL
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true))
+  WHERE null_percentage = 100
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- type is the single-value partition column
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'fiscal_year IS NULL OR nationality IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true)
+WHERE fiscal_year IS NULL OR nationality IS NULL;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T6_pk_dupes',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (fiscal_year, nationality) rows'
+FROM (
+  SELECT fiscal_year, nationality
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true)
+  GROUP BY fiscal_year, nationality HAVING COUNT(*) > 1
+);
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T7_expected_values',
+  CASE WHEN COUNT(*) = 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'FY2023 China grants=3481 denials=765 other=2127 total=6373'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true)
+WHERE fiscal_year = 2023 AND nationality = 'CHINA' AND grants = 3481 AND denials = 765 AND other_outcomes = 2127 AND total_decisions = 6373;
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T7_total_is_sum',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'published total matches the published parts where all are present'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true)
+WHERE total_decisions <> grants + denials + other_outcomes + COALESCE(admin_closure, 0);
+
+INSERT INTO dq_results
+SELECT 'crime', 'eoir_asylum_decisions_by_nationality', 'T7_completed_years',
+  CASE WHEN COUNT(*) = 6 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 6, 'FY2018, 2019, 2021-2024 each with at least 150 nationalities'
+FROM (
+  SELECT fiscal_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/eoir_asylum_decisions_by_nationality', allow_moved_paths := true)
+  WHERE fiscal_year IN (2018, 2019, 2021, 2022, 2023, 2024)
+  GROUP BY fiscal_year HAVING COUNT(*) >= 150
+);
