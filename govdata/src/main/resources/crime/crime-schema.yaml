@@ -28,7 +28,8 @@ comment: >
   employment, hate crimes, use of force, LEOKA (officers killed/assaulted), cargo theft,
   human trafficking, agency participation rates, and estimated crime counts. BJS tables cover
   NIBRS national crime estimates, NCVS personal and household victimization, and NCVS
-  population data. All state-level tables join with geo.state_ref via state_abbr.
+  population data. EOIR tables cover immigration-court asylum applications, decisions and
+  decisions by nationality (civil proceedings). All state-level tables join with geo.state_ref via state_abbr.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -2166,6 +2167,318 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # IMMIGRATION COURT ASYLUM STATISTICS - EOIR Adjudication Statistics PDFs
+  # ---------------------------------------------------------------------------
+  - name: eoir_asylum_applications_by_year
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
+    # Snapshot table: the PDF holds every published fiscal year, so each fetch replaces the table.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=eoir_asylum_applications/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      U.S. immigration-court asylum applications filed and pending by fiscal year, from the Executive
+      Office for Immigration Review (EOIR, Department of Justice) Adjudication Statistics "Total Asylum
+      Applications": affirmative, defensive and total asylum applications filed, and applications still
+      pending, in removal, deportation, exclusion and asylum-only proceedings. Covers FY2016 onward (the
+      years in EOIR's current edition). The newest fiscal year may be partial: check quarters_reported.
+      pending is the number pending for that year as of the date the figures were generated. These are
+      immigration-court cases only: affirmative applications decided by USCIS asylum officers, credible
+      fear screenings and refugee admissions are not included. Grants and denials are in
+      eoir_asylum_decisions_by_year; by-nationality decisions are in
+      eoir_asylum_decisions_by_nationality. One row per fiscal year.
+
+    dimensions:
+      type:
+        - eoir_asylum_applications
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September)
+      - name: quarters_reported
+        type: integer
+        nullable: false
+        comment: "Quarters of the fiscal year covered: 4 for a completed year; 1-3 for the unfinished year, whose counts are year-to-date"
+      - name: affirmative_filed
+        type: long
+        nullable: false
+        comment: Affirmative asylum applications filed (first filed with USCIS, then in immigration court)
+      - name: defensive_filed
+        type: long
+        nullable: false
+        comment: Defensive asylum applications filed as a defense against removal
+      - name: total_filed
+        type: long
+        nullable: false
+        comment: Affirmative plus defensive applications filed
+      - name: pending
+        type: long
+        nullable: false
+        comment: Asylum applications remaining pending for the fiscal year, as of data_generated
+      - name: data_generated
+        type: date
+        nullable: false
+        comment: Date EOIR generated the figures; EOIR restates earlier years in each new edition
+
+    source:
+      type: http
+      url: "https://www.justice.gov/eoir/workload-and-adjudication-statistics"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.EoirAsylumApplicationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eoir_asylum_applications/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: eoir_asylum_applications_by_year
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: eoir_asylum_decisions_by_year
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
+    # Snapshot table, same source page and refresh behaviour as eoir_asylum_applications_by_year.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=eoir_asylum_decisions/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      U.S. immigration-court asylum decisions by outcome and fiscal year, from the Executive Office for
+      Immigration Review (EOIR, Department of Justice) Adjudication Statistics "Asylum Decisions":
+      grants, denials, abandonment, not adjudicated, withdrawn and administrative closure, with the
+      total. Covers affirmative and defensive applications in completed removal, deportation, exclusion
+      and asylum-only proceedings, or in proceedings administratively closed; initial case completions
+      only. Covers FY2016 onward (the years in EOIR's current edition). The newest fiscal year may be
+      partial: check quarters_reported. A grant rate depends on the denominator: grants / total_decisions
+      counts every outcome, grants / (grants + denials) counts merits decisions only. USCIS asylum
+      officer decisions are not included. Applications filed and pending are in
+      eoir_asylum_applications_by_year. One row per fiscal year.
+
+    dimensions:
+      type:
+        - eoir_asylum_decisions
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September)
+      - name: quarters_reported
+        type: integer
+        nullable: false
+        comment: "Quarters of the fiscal year covered: 4 for a completed year; 1-3 for the unfinished year, whose counts are year-to-date"
+      - name: grants
+        type: long
+        nullable: false
+        comment: Asylum granted
+      - name: denials
+        type: long
+        nullable: false
+        comment: Asylum denied
+      - name: abandonment
+        type: long
+        nullable: false
+        comment: Applications deemed abandoned
+      - name: not_adjudicated
+        type: long
+        nullable: false
+        comment: Applications not adjudicated in the completed case
+      - name: withdrawn
+        type: long
+        nullable: false
+        comment: Applications withdrawn
+      - name: admin_closure
+        type: long
+        nullable: false
+        comment: Administrative closures not placed back on the docket
+      - name: total_decisions
+        type: long
+        nullable: false
+        comment: Sum of the six outcomes
+      - name: data_generated
+        type: date
+        nullable: false
+        comment: Date EOIR generated the figures; EOIR restates earlier years in each new edition
+
+    source:
+      type: http
+      url: "https://www.justice.gov/eoir/workload-and-adjudication-statistics"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.EoirAsylumDecisionsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eoir_asylum_decisions/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: eoir_asylum_decisions_by_year
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: eoir_asylum_decisions_by_nationality
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
+    # Snapshot table built from two EOIR documents: the compilation of superseded statistics pages
+    # (the configured URL) and the FY2024 nationality table named in the transformer.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=eoir_asylum_nationality/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      U.S. immigration-court asylum decisions by the applicant's nationality and fiscal year, from the
+      Executive Office for Immigration Review (EOIR, Department of Justice) Adjudication Statistics
+      "Asylum Decision Rates by Nationality" and "Asylum Decisions by Nationality". Completed fiscal
+      years only: FY2018, FY2019, FY2021, FY2022, FY2023 and FY2024. FY2020 is absent (only a part-year
+      edition is available), and nationality tables for FY2025 onward are not loaded. Each year is the
+      edition generated just after it ended, so national sums differ slightly from the later restated
+      figures in eoir_asylum_decisions_by_year, and suppressed cells (NULL, published as "*": EOIR
+      withholds small counts) make sums undercount. Published columns differ by year: FY2018-FY2023 give
+      grants, denials, other_outcomes (abandonment, not adjudicated, other and withdrawn combined) and
+      total_decisions; FY2018 also gives admin_closure; FY2024 gives abandonment, not_adjudicated, other
+      and withdrawn separately, with no total and no combined column. Initial case completions in
+      removal, deportation, exclusion and asylum-only proceedings. Nationality names are as EOIR prints
+      them, including historical and variant spellings (UZEBEKISTAN and UZBEKISTAN), upper-cased. One row
+      per fiscal year and nationality.
+
+    dimensions:
+      type:
+        - eoir_asylum_nationality
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September)
+      - name: nationality
+        type: string
+        nullable: false
+        comment: Nationality as printed by EOIR, upper case
+      - name: grants
+        type: long
+        nullable: true
+        comment: Asylum granted; NULL when suppressed
+      - name: denials
+        type: long
+        nullable: true
+        comment: Asylum denied; NULL when suppressed
+      - name: other_outcomes
+        type: long
+        nullable: true
+        comment: "FY2018-FY2023 only: abandonment, not adjudicated, other and withdrawn combined; NULL when suppressed"
+      - name: abandonment
+        type: long
+        nullable: true
+        comment: "FY2024 only: applications deemed abandoned; NULL when suppressed"
+      - name: not_adjudicated
+        type: long
+        nullable: true
+        comment: "FY2024 only: applications not adjudicated; NULL when suppressed"
+      - name: other
+        type: long
+        nullable: true
+        comment: "FY2024 only: other outcome (code deactivated May 2019); NULL when suppressed"
+      - name: withdrawn
+        type: long
+        nullable: true
+        comment: "FY2024 only: applications withdrawn; NULL when suppressed"
+      - name: admin_closure
+        type: long
+        nullable: true
+        comment: "FY2018 only: administrative closures; NULL when suppressed"
+      - name: total_decisions
+        type: long
+        nullable: true
+        comment: "FY2018-FY2023 only: published total of decisions; NULL when suppressed"
+      - name: data_generated
+        type: date
+        nullable: false
+        comment: Date EOIR generated the figures; EOIR restates earlier years in each new edition
+
+    source:
+      type: http
+      url: "https://www.justice.gov/eoir/media/1345076/dl"
+      method: GET
+      response:
+        format: TEXT
+      # The responseTransformer downloads both PDFs itself.
+      skipResponseBody: true
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.EoirAsylumNationalityTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eoir_asylum_nationality/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: eoir_asylum_decisions_by_nationality
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # CDE SUPPLEMENTAL - Stolen and recovered property values
   # ---------------------------------------------------------------------------
   - name: cde_supplemental
@@ -2887,6 +3200,15 @@ partitionedTables:
 # ============================================================================
 
 constraints:
+  eoir_asylum_applications_by_year:
+    primaryKey: [fiscal_year]
+
+  eoir_asylum_decisions_by_year:
+    primaryKey: [fiscal_year]
+
+  eoir_asylum_decisions_by_nationality:
+    primaryKey: [fiscal_year, nationality]
+
   cde_agencies:
     primaryKey: [ori]
     foreignKeys:
