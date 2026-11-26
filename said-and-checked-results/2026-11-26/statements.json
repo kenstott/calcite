@@ -411,10 +411,23 @@
       "kind": "factual",
       "test": "True if U.S. asylum law (8 U.S.C. 1101(a)(42) and 1158) limits asylum to people persecuted, or with a well-founded fear of persecution, on account of race, religion, nationality, membership in a particular social group or political opinion. False if the law grants asylum on other grounds, such as poverty or general violence. Cannot be determined if the point turns on whether 'government persecution' covers the law's protection against persecutors the government cannot or will not control, a legal reading.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "8 U.S.C. 1158(b)(1) and 1101(a)(42)(A), read from AskAmerica's U.S. Code table, limit asylum to persecution or a well-founded fear of it on account of race, religion, nationality, membership in a particular social group or political opinion; poverty is not a ground. The statute does not say the persecutor must be the government, so whether \"government persecution\" fits the law turns on a legal reading.",
+      "evidence": [
+        {
+          "label": "law.usc_sections (8 U.S.C. 1101, refugee definition)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#usc_sections-table",
+          "askamerica": true,
+          "sql": "SELECT substr(section_text, position('well-founded fear of persecution on account of' IN section_text) - 200, 900) AS t FROM law.usc_sections WHERE title_number = 8 AND section_number = '1101'"
+        },
+        {
+          "label": "law.usc_sections (8 U.S.C. 1158, asylum)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#usc_sections-table",
+          "askamerica": true,
+          "sql": "SELECT * FROM law.usc_sections WHERE title_number = 8 AND section_number IN ('1158') FETCH FIRST 3 ROWS ONLY"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-26",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -443,10 +456,15 @@
       "kind": "factual",
       "test": "True if official asylum data or a primary survey from 2017 to 2019 shows a majority of asylum seekers left their countries chiefly for economic reasons. False if such data show most cited persecution or violence as the main reason. Cannot be determined if no primary source measures the motives of asylum seekers as a whole; grant or denial rates alone do not decide it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "unsettled",
+      "finding": "The immigration courts' statistics show asylum applications filed (146,165 in fiscal 2017, 165,975 in 2018, 216,745 in 2019) but do not record why applicants left their countries. No primary source read in this check measures asylum seekers' motives as a whole; DHS statistics pages could not be read.",
+      "evidence": [
+        {
+          "label": "EOIR Adjudication Statistics, total asylum applications",
+          "url": "https://www.justice.gov/eoir/page/file/1106366/download"
+        }
+      ],
+      "check_run": "q203/askamerica/2026-11-26",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
@@ -541,10 +559,25 @@
       "kind": "factual",
       "test": "True if Georgia's certified 2020 results, its statewide hand-count audit and recount, or an official investigation found fraud in Fulton County large enough to exceed Joe Biden's statewide margin of about 11,779 votes. False if those official records found no fraud near that size and nothing pending could change them. Cannot be determined if the official records cannot be read, or if an open inquiry could still change the record.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null,
+      "result": "contradicted",
+      "finding": "Biden's 2020 Georgia margin was 11,779 votes in AskAmerica's state returns. Georgia's Fulton County investigation report (SEB2023-025, April 2024) and the county's Performance Review Board found no evidence of fraud that would have affected the result, and said the hand-count audit and recount confirmed it; the FBI's inquiry into the seized Fulton records and the State Election Board's effort to reopen its case remain open.",
+      "evidence": [
+        {
+          "label": "officials.presidential_state_returns (Georgia, 2020)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#presidential_state_returns-table",
+          "askamerica": true,
+          "sql": "SELECT candidate, SUM(candidate_votes) AS votes FROM officials.presidential_state_returns WHERE \"year\" = 2020 AND state_name = 'Georgia' AND candidate IN ('BIDEN, JOSEPH R. JR','TRUMP, DONALD J.') GROUP BY candidate"
+        },
+        {
+          "label": "Georgia SOS Investigations Division, Fulton County Tabulator Results 2020 (SEB2023-025) and Fulton Performance Review Board report, filed in N.D. Ga. 1:26-cv-00809, Doc. 30-1",
+          "url": "https://storage.courtlistener.com/recap/gov.uscourts.gand.355452/gov.uscourts.gand.355452.30.1_1.pdf"
+        },
+        {
+          "label": "NPR, FBI affidavit and State Election Board findings (Feb. 10, 2026)",
+          "url": "https://www.npr.org/2026/02/10/nx-s1-5710649/fulton-county-2020-election-affidavit-fbi"
+        }
+      ],
+      "check_run": "q204/askamerica/2026-11-26",
       "counter_statements": [],
       "counter_documents": [],
       "self_contradictions": [],
