@@ -35,7 +35,7 @@ cp "$HERE"/*.sh "$HERE"/*.py "$P/"
 printf '#!/bin/sh\nexit 0\n' > "$P/worker.sh"
 # the Postgres tracker purge is not under test
 printf '\nschema_tables() { :; }\n' >> "$P/common.sh"
-printf '\npg_tracker_purge_schema() { :; }\n' >> "$S/tracker_pg.sh"
+printf '\npg_ns_for_schema() { echo zz; }\npg_tracker_purge_schema() { :; }\n' >> "$S/tracker_pg.sh"
 # the MinIO data purge is not under test
 printf 'import sys\n' > "$P/s3_purge_prefix.py"
 # the runner's S3 secret needs the DuckDB extensions installed under the real home
