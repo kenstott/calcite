@@ -450,7 +450,7 @@ partitionedTables:
       distinctYears: 93
       contiguous: true
       rowCount: 572532
-      checkedAt: "2026-11-25T04:50:00Z"
+      checkedAt: "2026-11-26T05:18:42Z"
     partitions: *standard_partitions
     comment: >
       Branch-network change events (opening / closing / acquired-in-merger, etc.) — the
@@ -591,7 +591,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019, 2020, 2023, 2024, 2025, 2026]
       rowCount: 384
-      checkedAt: "2026-11-25T04:50:02Z"
+      checkedAt: "2026-11-26T05:18:43Z"
     partitions: *standard_partitions
     comment: >
       FDIC failed bank list — every FDIC-insured bank failure, one row per failure
@@ -841,7 +841,7 @@ partitionedTables:
       distinctYears: 33
       contiguous: true
       rowCount: 2898836
-      checkedAt: "2026-11-25T04:50:06Z"
+      checkedAt: "2026-11-26T05:18:45Z"
     partitions: *standard_partitions
     comment: >
       Annual branch-level deposit totals from FDIC's Summary of Deposits survey —
@@ -956,7 +956,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 386056
-      checkedAt: "2026-11-25T04:50:09Z"
+      checkedAt: "2026-11-26T05:18:46Z"
     partitions: *standard_partitions
     # DQ sample cap (GOVDATA_DQ mode): call-report financials are millions of rows
     # nationwide across all history. Cap each year's sample so DQ stops paginating
@@ -1122,7 +1122,7 @@ partitionedTables:
       distinctYears: 92
       contiguous: true
       rowCount: 8107
-      checkedAt: "2026-11-25T04:50:13Z"
+      checkedAt: "2026-11-26T05:18:48Z"
     partitions: *standard_partitions
     comment: >
       Annual FDIC industry summary — bank count, net income, interest income,
@@ -1238,7 +1238,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 2674343
-      checkedAt: "2026-11-25T04:50:17Z"
+      checkedAt: "2026-11-26T05:18:49Z"
     partitions: *complaints_partitions
     # DQ sample cap (GOVDATA_DQ mode): the full complaint database is millions of rows
     # nationwide across all history. Cap each (year, state, product) fetch unit so DQ
