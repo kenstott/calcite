@@ -9,6 +9,9 @@ census.acs1_place_income_poverty
 census.acs_health_insurance_by_type
 census.acs_real_estate_taxes
 census.acs_rent_burden_by_income
+crime.eoir_asylum_applications_by_year
+crime.eoir_asylum_decisions_by_nationality
+crime.eoir_asylum_decisions_by_year
 disasters.fema_firm_panels
 disasters.fema_nfhl_lomrs
 econ.business_formation_statistics
