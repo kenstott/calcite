@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.130.0](https://github.com/kenstott/calcite/compare/engine-v0.129.0...engine-v0.130.0) (2026-11-26)
+
+
+### Features
+
+* **said-and-checked:** 2026-11-26, 17 statements, 0 checked ([a300feb](https://github.com/kenstott/calcite/commit/a300feb63b47e5510514eda528f8e2dc75dc6791))
+* **said-and-checked:** 2026-11-26, 17 statements, 2 checked ([4e5d705](https://github.com/kenstott/calcite/commit/4e5d7050892fc1aeefd41203b4a99b038a54c75d))
+* **said-and-checked:** 2026-11-26, 17 statements, 5 checked ([5f4d0de](https://github.com/kenstott/calcite/commit/5f4d0dec443faea42017da90d936d10184d043c3))
+* **said-and-checked:** 2026-11-26, 17 statements, 6 checked ([28d022e](https://github.com/kenstott/calcite/commit/28d022e41735b00dc789dc50bb94da289a658245))
+* **trino-file:** storage-config catalog property for onedrive:// and gdrive:// globs ([#1173](https://github.com/kenstott/calcite/issues/1173)) ([3544d60](https://github.com/kenstott/calcite/commit/3544d606e7104752ee40bd66168045fc3924b094))
+
 ## [0.129.0](https://github.com/kenstott/calcite/compare/engine-v0.128.0...engine-v0.129.0) (2026-11-26)
 
 
