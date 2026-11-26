@@ -8039,7 +8039,9 @@ partitionedTables:
       (indicator, country_id, date). Covers GDP, inflation, unemployment, government debt and
       population statistics. Areas include countries and World Bank aggregates (World, regions,
       income groups); aggregates are summaries of countries, so filter to one area level before
-      summing or ranking.
+      summing or ranking. CO2 emissions per capita is indicator 'EN.GHG.CO2.PC.CE.AR5': tonnes of
+      CO2 equivalent per person from the EDGAR database, excluding land use, land-use change and
+      forestry (LULUCF).
 
     # Dimensions for batch iteration - only indicator drives API calls
     # Country and year are derived from response data via responsePartitioning
@@ -8092,6 +8094,7 @@ partitionedTables:
         comment: Decimal precision indicator
 
     hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.WorldBankResponseTransformer"
       rowTransformers:
         - type: class
           class: "org.apache.calcite.adapter.govdata.econ.WorldBankCountryTransformer"
