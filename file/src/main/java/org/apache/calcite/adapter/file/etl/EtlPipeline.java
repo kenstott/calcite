@@ -880,6 +880,29 @@ public class EtlPipeline {
         LOGGER.info("Initialized {} writer for table {}", format, tableName);
       }
 
+      // A pending drop-and-recreate voids every tracker marker and freshness token for the table:
+      // they describe rows the recreate discards, so the run starts over as a full reprocess. This
+      // comes before the first batch, so no unit is skipped against the outgoing table, and the
+      // periods outside this run's range are left unmarked for the runs that cover them.
+      if (writer.isRebuildPending()) {
+        LOGGER.warn("Pipeline '{}': table is about to be dropped and recreated - invalidating its "
+            + "tracker state and reprocessing all {} combinations", pipelineName, totalBatches);
+        incrementalTracker.invalidatePipeline(pipelineName);
+        forceReprocessAll = true;
+        freshnessSkipAllowed = false;
+        deltaBoundVar = null;
+        deltaBoundValue = null;
+        neededCount = totalBatches;
+        skippedBatches = 0;
+        if (!usePartitionedExpansion) {
+          standardUnprocessedIndices = allIndicesSet(totalBatches);
+        }
+        if (dataSource != null) {
+          dataSource.close();
+        }
+        dataSource = createDataSource(config, true);
+      }
+
       // Wire per-row effective year/month fields from dimension config into Iceberg writer.
       if (writer instanceof IcebergMaterializationWriter) {
         IcebergMaterializationWriter icebergWriter = (IcebergMaterializationWriter) writer;
