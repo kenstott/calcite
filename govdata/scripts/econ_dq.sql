@@ -2825,6 +2825,214 @@ FROM (SELECT COUNT(*) AS dups FROM (
         GROUP BY 1,2,3 HAVING COUNT(*) > 1));
 
 -- ============================================================================
+-- gdp_release_estimates
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'row_count',
+  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '2000',
+  CASE WHEN n >= 2000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'source_updated');  -- constant by construction
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with variable_id outside the 10 scoped variables'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+      WHERE variable_id NOT IN ('routput','noutput','rcon','rinvbf','rinvresid','rg','rex','rimp','p','pconx'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with a NULL PK part or quarter label'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+      WHERE variable_id IS NULL OR date IS NULL OR period IS NULL);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows whose date does not match year/quarter'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+      WHERE year(date) <> year OR month(date) <> quarter * 3 - 2);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with no value in any release column'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+      WHERE first_release IS NULL AND second_release IS NULL AND third_release IS NULL AND most_recent IS NULL);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with an implausible annualized growth rate (beyond +/-500 percent)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+      WHERE abs(first_release) > 500 OR abs(second_release) > 500 OR abs(third_release) > 500 OR abs(most_recent) > 500);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'known value: 2008Q4 real GDP advance -3.8 and second -6.2 percent'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+      WHERE variable_id = 'routput' AND date = DATE '2008-10-01' AND (round(first_release, 1) <> -3.8 OR round(second_release, 1) <> -6.2));
+
+-- The known-value check above passes vacuously if its rows are absent.
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  'known-value anchor rows are present'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+      WHERE variable_id = 'routput' AND date = DATE '2008-10-01');
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'expected_values',
+  CASE WHEN n = 10 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '10',
+  'every scoped variable_id is loaded'
+FROM (SELECT COUNT(DISTINCT variable_id) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_release_estimates', 'pk_duplicates',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(dups AS VARCHAR), '0',
+  'duplicate (variable_id, date) keys'
+FROM (SELECT COUNT(*) AS dups FROM (
+        SELECT variable_id, date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_release_estimates', allow_moved_paths := true)
+        GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ============================================================================
+-- gdp_revision_vintages
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'row_count',
+  CASE WHEN n >= 15000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '15000',
+  CASE WHEN n >= 15000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');  -- constant by construction
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series outside the 9 scoped series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+      WHERE series NOT IN ('A191RL1Q225SBEA','A191RP1Q027SBEA','DPCERL1Q225SBEA','A006RL1Q225SBEA','A261RL1Q225SBEA','A191RI1Q225SBEA','GDPC1','GDP','A261RX1Q020SBEA'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with a NULL PK part or realtime_end'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+      WHERE series IS NULL OR date IS NULL OR realtime_start IS NULL OR realtime_end IS NULL);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where realtime_end precedes realtime_start'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+      WHERE realtime_end < realtime_start);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'growth-series rows with a NULL value'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+      WHERE series NOT IN ('GDPC1','GDP','A261RX1Q020SBEA') AND value IS NULL);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'level-series rows with a non-positive value'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+      WHERE series IN ('GDPC1','GDP','A261RX1Q020SBEA') AND value <= 0);
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'known value: 2026Q3 real GDP 3.4 from 2026-10-29 and 4.3 from 2026-11-25'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+      WHERE series = 'A191RL1Q225SBEA' AND date = DATE '2026-07-01' AND (realtime_start = DATE '2026-10-29' AND value <> 3.4 OR realtime_start = DATE '2026-11-25' AND value <> 4.3));
+
+-- The known-value check above passes vacuously if its rows are absent.
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '2',
+  'known-value anchor rows are present'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+      WHERE series = 'A191RL1Q225SBEA' AND date = DATE '2026-07-01' AND realtime_start IN (DATE '2026-10-29', DATE '2026-11-25'));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'expected_values',
+  CASE WHEN n = 9 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '9',
+  'every scoped series is loaded'
+FROM (SELECT COUNT(DISTINCT series) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'gdp_revision_vintages', 'pk_duplicates',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(dups AS VARCHAR), '0',
+  'duplicate (series, date, realtime_start) keys'
+FROM (SELECT COUNT(*) AS dups FROM (
+        SELECT series, date, realtime_start FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/gdp_revision_vintages', allow_moved_paths := true)
+        GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ============================================================================
 -- claims_revision_vintages (FRED/ALFRED real-time weekly claims vintages)
 -- ============================================================================
 
