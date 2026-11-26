@@ -6019,6 +6019,727 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # ACS LIVING ARRANGEMENTS OF ADULTS BY AGE (B09021, 5-year)
+  # ---------------------------------------------------------------------------
+  - name: acs_living_arrangements
+    pattern: "type=acs/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Living arrangements of adults by age (ACS 5-Year detailed table B09021), for the nation,
+      states, counties and metropolitan/micropolitan areas (CBSA), vintage 2015 onward. One row
+      per year x geography x area, with counts for all adults 18+ and for the 18-34, 35-64 and
+      65+ age bands, each split into: lives alone, living with spouse, living with unmarried
+      partner, child of householder, other relative, other nonrelative. Young adults living with
+      their parents = age_18_34_child_of_householder / age_18_34_total. "Child of householder" is
+      the relationship to the person who owns or rents the home; an adult who is the householder
+      while a parent lives with them is not counted in it. Pick one geography value per query
+      (us, state, county, cbsa); summing across them double counts. Puerto Rico appears in state,
+      county and cbsa rows but not in the us row. year is the last year of the 5-year window. For
+      the newest single-year figures use acs1_living_arrangements. Each count has a _moe column
+      (90% margin of error).
+
+    dimensions:
+      type:
+        - acs
+      # B09021 is undefined before the 2015 vintage; minYear is a publish year (vintage + dataLag 2)
+      year:
+        <<: *acs_year_range
+        minYear: 2017
+      geography:
+        - us
+        - state
+        - county
+        - cbsa
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: cbsa_code
+        type: string
+        nullable: true
+        expression: 'src."metropolitan statistical area/micropolitan statistical area"'
+        comment: 5-digit CBSA (metropolitan or micropolitan statistical area) code; set only on geography = 'cbsa' rows
+      - name: adults_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_001E" AS BIGINT)'
+        comment: "Total adults 18 years and over covered by B09021 (denominator for the other adults_ columns) (Census variable B09021_001E)"
+      - name: adults_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_total (Census variable B09021_001M; negative sentinels normalized to null)
+      - name: adults_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_002E" AS BIGINT)'
+        comment: "Living alone: adults 18 years and over (Census variable B09021_002E)"
+      - name: adults_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_lives_alone (Census variable B09021_002M; negative sentinels normalized to null)
+      - name: adults_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_003E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults 18 years and over (Census variable B09021_003E)"
+      - name: adults_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_with_spouse (Census variable B09021_003M; negative sentinels normalized to null)
+      - name: adults_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_004E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults 18 years and over (Census variable B09021_004E)"
+      - name: adults_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_with_unmarried_partner (Census variable B09021_004M; negative sentinels normalized to null)
+      - name: adults_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_005E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults 18 years and over (Census variable B09021_005E)"
+      - name: adults_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_005M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_005M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_child_of_householder (Census variable B09021_005M; negative sentinels normalized to null)
+      - name: adults_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_006E" AS BIGINT)'
+        comment: "Other relative of householder: adults 18 years and over (Census variable B09021_006E)"
+      - name: adults_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_other_relative (Census variable B09021_006M; negative sentinels normalized to null)
+      - name: adults_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_007E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults 18 years and over (Census variable B09021_007E)"
+      - name: adults_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_007M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_007M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_nonrelative (Census variable B09021_007M; negative sentinels normalized to null)
+      - name: age_18_34_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_008E" AS BIGINT)'
+        comment: "Total adults aged 18 to 34 covered by B09021 (denominator for the other age_18_34_ columns) (Census variable B09021_008E)"
+      - name: age_18_34_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_008M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_008M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_total (Census variable B09021_008M; negative sentinels normalized to null)
+      - name: age_18_34_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_009E" AS BIGINT)'
+        comment: "Living alone: adults aged 18 to 34 (Census variable B09021_009E)"
+      - name: age_18_34_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_009M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_009M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_lives_alone (Census variable B09021_009M; negative sentinels normalized to null)
+      - name: age_18_34_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_010E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults aged 18 to 34 (Census variable B09021_010E)"
+      - name: age_18_34_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_with_spouse (Census variable B09021_010M; negative sentinels normalized to null)
+      - name: age_18_34_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_011E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults aged 18 to 34 (Census variable B09021_011E)"
+      - name: age_18_34_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_011M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_011M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_with_unmarried_partner (Census variable B09021_011M; negative sentinels normalized to null)
+      - name: age_18_34_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_012E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults aged 18 to 34 (Census variable B09021_012E)"
+      - name: age_18_34_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_012M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_012M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_child_of_householder (Census variable B09021_012M; negative sentinels normalized to null)
+      - name: age_18_34_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_013E" AS BIGINT)'
+        comment: "Other relative of householder: adults aged 18 to 34 (Census variable B09021_013E)"
+      - name: age_18_34_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_013M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_013M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_other_relative (Census variable B09021_013M; negative sentinels normalized to null)
+      - name: age_18_34_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_014E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults aged 18 to 34 (Census variable B09021_014E)"
+      - name: age_18_34_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_014M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_014M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_nonrelative (Census variable B09021_014M; negative sentinels normalized to null)
+      - name: age_35_64_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_015E" AS BIGINT)'
+        comment: "Total adults aged 35 to 64 covered by B09021 (denominator for the other age_35_64_ columns) (Census variable B09021_015E)"
+      - name: age_35_64_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_015M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_015M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_total (Census variable B09021_015M; negative sentinels normalized to null)
+      - name: age_35_64_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_016E" AS BIGINT)'
+        comment: "Living alone: adults aged 35 to 64 (Census variable B09021_016E)"
+      - name: age_35_64_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_016M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_016M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_lives_alone (Census variable B09021_016M; negative sentinels normalized to null)
+      - name: age_35_64_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_017E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults aged 35 to 64 (Census variable B09021_017E)"
+      - name: age_35_64_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_017M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_017M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_with_spouse (Census variable B09021_017M; negative sentinels normalized to null)
+      - name: age_35_64_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_018E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults aged 35 to 64 (Census variable B09021_018E)"
+      - name: age_35_64_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_018M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_018M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_with_unmarried_partner (Census variable B09021_018M; negative sentinels normalized to null)
+      - name: age_35_64_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_019E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults aged 35 to 64 (Census variable B09021_019E)"
+      - name: age_35_64_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_019M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_019M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_child_of_householder (Census variable B09021_019M; negative sentinels normalized to null)
+      - name: age_35_64_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_020E" AS BIGINT)'
+        comment: "Other relative of householder: adults aged 35 to 64 (Census variable B09021_020E)"
+      - name: age_35_64_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_020M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_020M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_other_relative (Census variable B09021_020M; negative sentinels normalized to null)
+      - name: age_35_64_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_021E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults aged 35 to 64 (Census variable B09021_021E)"
+      - name: age_35_64_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_021M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_021M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_nonrelative (Census variable B09021_021M; negative sentinels normalized to null)
+      - name: age_65_plus_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_022E" AS BIGINT)'
+        comment: "Total adults aged 65 and over covered by B09021 (denominator for the other age_65_plus_ columns) (Census variable B09021_022E)"
+      - name: age_65_plus_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_022M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_022M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_total (Census variable B09021_022M; negative sentinels normalized to null)
+      - name: age_65_plus_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_023E" AS BIGINT)'
+        comment: "Living alone: adults aged 65 and over (Census variable B09021_023E)"
+      - name: age_65_plus_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_023M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_023M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_lives_alone (Census variable B09021_023M; negative sentinels normalized to null)
+      - name: age_65_plus_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_024E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults aged 65 and over (Census variable B09021_024E)"
+      - name: age_65_plus_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_024M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_024M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_with_spouse (Census variable B09021_024M; negative sentinels normalized to null)
+      - name: age_65_plus_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_025E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults aged 65 and over (Census variable B09021_025E)"
+      - name: age_65_plus_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_025M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_025M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_with_unmarried_partner (Census variable B09021_025M; negative sentinels normalized to null)
+      - name: age_65_plus_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_026E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults aged 65 and over (Census variable B09021_026E)"
+      - name: age_65_plus_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_026M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_026M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_child_of_householder (Census variable B09021_026M; negative sentinels normalized to null)
+      - name: age_65_plus_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_027E" AS BIGINT)'
+        comment: "Other relative of householder: adults aged 65 and over (Census variable B09021_027E)"
+      - name: age_65_plus_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_027M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_027M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_other_relative (Census variable B09021_027M; negative sentinels normalized to null)
+      - name: age_65_plus_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_028E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults aged 65 and over (Census variable B09021_028E)"
+      - name: age_65_plus_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_028M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_028M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_nonrelative (Census variable B09021_028M; negative sentinels normalized to null)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=group(B09021)&for={geography}:*&key={env:CENSUS_API_KEY}"
+      # The API spells the metro/micro area geography as a long phrase, so the cbsa partition
+      # value maps to it here; every other partition value is the API's own geography name.
+      urlRules:
+        - url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=group(B09021)&for=metropolitan%20statistical%20area/micropolitan%20statistical%20area:*&key={env:CENSUS_API_KEY}"
+          variableMatch:
+            geography: cbsa
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_living_arrangements
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # ACS 1-YEAR LIVING ARRANGEMENTS OF ADULTS BY AGE (B09021)
+  # ---------------------------------------------------------------------------
+  - name: acs1_living_arrangements
+    pattern: "type=acs1/year=*/geography=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Living arrangements of adults by age (ACS 1-Year detailed table B09021) for the nation,
+      states, and the counties and metropolitan/micropolitan areas (CBSA) large enough for 1-year
+      estimates (65,000+ population), 2015 onward with 2020 absent (no standard 1-year release).
+      One row per year x geography x area, with counts for all adults 18+ and for the 18-34, 35-64
+      and 65+ age bands, each split into: lives alone, living with spouse, living with unmarried
+      partner, child of householder, other relative, other nonrelative. Young adults living with
+      their parents = age_18_34_child_of_householder / age_18_34_total. "Child of householder" is
+      the relationship to the person who owns or rents the home. Pick one geography value per
+      query (us, state, county, cbsa); summing across them double counts. Puerto Rico appears in
+      state, county and cbsa rows but not in the us row. For every county, or smaller sampling
+      error, use acs_living_arrangements. Each count has a _moe column (90% margin of error).
+
+    dimensions:
+      type:
+        - acs1
+      # B09021 is undefined before the 2015 vintage; minYear is a publish year (vintage + dataLag 1)
+      year:
+        <<: *acs1_year_range
+        minYear: 2016
+      geography:
+        - us
+        - state
+        - county
+        - cbsa
+
+    columns:
+      - *name_column
+      - *state_column
+      - *county_column
+      - *county_fips_column
+      - name: cbsa_code
+        type: string
+        nullable: true
+        expression: 'src."metropolitan statistical area/micropolitan statistical area"'
+        comment: 5-digit CBSA (metropolitan or micropolitan statistical area) code; set only on geography = 'cbsa' rows
+      - name: adults_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_001E" AS BIGINT)'
+        comment: "Total adults 18 years and over covered by B09021 (denominator for the other adults_ columns) (Census variable B09021_001E)"
+      - name: adults_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_001M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_001M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_total (Census variable B09021_001M; negative sentinels normalized to null)
+      - name: adults_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_002E" AS BIGINT)'
+        comment: "Living alone: adults 18 years and over (Census variable B09021_002E)"
+      - name: adults_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_002M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_002M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_lives_alone (Census variable B09021_002M; negative sentinels normalized to null)
+      - name: adults_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_003E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults 18 years and over (Census variable B09021_003E)"
+      - name: adults_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_003M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_003M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_with_spouse (Census variable B09021_003M; negative sentinels normalized to null)
+      - name: adults_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_004E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults 18 years and over (Census variable B09021_004E)"
+      - name: adults_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_004M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_004M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_with_unmarried_partner (Census variable B09021_004M; negative sentinels normalized to null)
+      - name: adults_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_005E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults 18 years and over (Census variable B09021_005E)"
+      - name: adults_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_005M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_005M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_child_of_householder (Census variable B09021_005M; negative sentinels normalized to null)
+      - name: adults_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_006E" AS BIGINT)'
+        comment: "Other relative of householder: adults 18 years and over (Census variable B09021_006E)"
+      - name: adults_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_006M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_006M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_other_relative (Census variable B09021_006M; negative sentinels normalized to null)
+      - name: adults_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_007E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults 18 years and over (Census variable B09021_007E)"
+      - name: adults_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_007M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_007M" AS BIGINT) END'
+        comment: 90% CI margin of error for adults_nonrelative (Census variable B09021_007M; negative sentinels normalized to null)
+      - name: age_18_34_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_008E" AS BIGINT)'
+        comment: "Total adults aged 18 to 34 covered by B09021 (denominator for the other age_18_34_ columns) (Census variable B09021_008E)"
+      - name: age_18_34_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_008M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_008M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_total (Census variable B09021_008M; negative sentinels normalized to null)
+      - name: age_18_34_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_009E" AS BIGINT)'
+        comment: "Living alone: adults aged 18 to 34 (Census variable B09021_009E)"
+      - name: age_18_34_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_009M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_009M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_lives_alone (Census variable B09021_009M; negative sentinels normalized to null)
+      - name: age_18_34_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_010E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults aged 18 to 34 (Census variable B09021_010E)"
+      - name: age_18_34_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_010M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_010M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_with_spouse (Census variable B09021_010M; negative sentinels normalized to null)
+      - name: age_18_34_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_011E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults aged 18 to 34 (Census variable B09021_011E)"
+      - name: age_18_34_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_011M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_011M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_with_unmarried_partner (Census variable B09021_011M; negative sentinels normalized to null)
+      - name: age_18_34_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_012E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults aged 18 to 34 (Census variable B09021_012E)"
+      - name: age_18_34_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_012M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_012M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_child_of_householder (Census variable B09021_012M; negative sentinels normalized to null)
+      - name: age_18_34_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_013E" AS BIGINT)'
+        comment: "Other relative of householder: adults aged 18 to 34 (Census variable B09021_013E)"
+      - name: age_18_34_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_013M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_013M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_other_relative (Census variable B09021_013M; negative sentinels normalized to null)
+      - name: age_18_34_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_014E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults aged 18 to 34 (Census variable B09021_014E)"
+      - name: age_18_34_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_014M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_014M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_18_34_nonrelative (Census variable B09021_014M; negative sentinels normalized to null)
+      - name: age_35_64_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_015E" AS BIGINT)'
+        comment: "Total adults aged 35 to 64 covered by B09021 (denominator for the other age_35_64_ columns) (Census variable B09021_015E)"
+      - name: age_35_64_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_015M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_015M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_total (Census variable B09021_015M; negative sentinels normalized to null)
+      - name: age_35_64_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_016E" AS BIGINT)'
+        comment: "Living alone: adults aged 35 to 64 (Census variable B09021_016E)"
+      - name: age_35_64_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_016M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_016M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_lives_alone (Census variable B09021_016M; negative sentinels normalized to null)
+      - name: age_35_64_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_017E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults aged 35 to 64 (Census variable B09021_017E)"
+      - name: age_35_64_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_017M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_017M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_with_spouse (Census variable B09021_017M; negative sentinels normalized to null)
+      - name: age_35_64_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_018E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults aged 35 to 64 (Census variable B09021_018E)"
+      - name: age_35_64_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_018M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_018M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_with_unmarried_partner (Census variable B09021_018M; negative sentinels normalized to null)
+      - name: age_35_64_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_019E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults aged 35 to 64 (Census variable B09021_019E)"
+      - name: age_35_64_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_019M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_019M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_child_of_householder (Census variable B09021_019M; negative sentinels normalized to null)
+      - name: age_35_64_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_020E" AS BIGINT)'
+        comment: "Other relative of householder: adults aged 35 to 64 (Census variable B09021_020E)"
+      - name: age_35_64_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_020M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_020M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_other_relative (Census variable B09021_020M; negative sentinels normalized to null)
+      - name: age_35_64_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_021E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults aged 35 to 64 (Census variable B09021_021E)"
+      - name: age_35_64_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_021M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_021M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_35_64_nonrelative (Census variable B09021_021M; negative sentinels normalized to null)
+      - name: age_65_plus_total
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_022E" AS BIGINT)'
+        comment: "Total adults aged 65 and over covered by B09021 (denominator for the other age_65_plus_ columns) (Census variable B09021_022E)"
+      - name: age_65_plus_total_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_022M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_022M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_total (Census variable B09021_022M; negative sentinels normalized to null)
+      - name: age_65_plus_lives_alone
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_023E" AS BIGINT)'
+        comment: "Living alone: adults aged 65 and over (Census variable B09021_023E)"
+      - name: age_65_plus_lives_alone_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_023M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_023M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_lives_alone (Census variable B09021_023M; negative sentinels normalized to null)
+      - name: age_65_plus_with_spouse
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_024E" AS BIGINT)'
+        comment: "Householder living with spouse, or spouse of householder: adults aged 65 and over (Census variable B09021_024E)"
+      - name: age_65_plus_with_spouse_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_024M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_024M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_with_spouse (Census variable B09021_024M; negative sentinels normalized to null)
+      - name: age_65_plus_with_unmarried_partner
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_025E" AS BIGINT)'
+        comment: "Householder living with unmarried partner, or unmarried partner of householder: adults aged 65 and over (Census variable B09021_025E)"
+      - name: age_65_plus_with_unmarried_partner_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_025M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_025M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_with_unmarried_partner (Census variable B09021_025M; negative sentinels normalized to null)
+      - name: age_65_plus_child_of_householder
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_026E" AS BIGINT)'
+        comment: "Child of householder (living in a parent's home): adults aged 65 and over (Census variable B09021_026E)"
+      - name: age_65_plus_child_of_householder_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_026M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_026M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_child_of_householder (Census variable B09021_026M; negative sentinels normalized to null)
+      - name: age_65_plus_other_relative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_027E" AS BIGINT)'
+        comment: "Other relative of householder: adults aged 65 and over (Census variable B09021_027E)"
+      - name: age_65_plus_other_relative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_027M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_027M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_other_relative (Census variable B09021_027M; negative sentinels normalized to null)
+      - name: age_65_plus_nonrelative
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."B09021_028E" AS BIGINT)'
+        comment: "Other nonrelative of householder: adults aged 65 and over (Census variable B09021_028E)"
+      - name: age_65_plus_nonrelative_moe
+        type: bigint
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B09021_028M" AS BIGINT) < 0 THEN NULL ELSE TRY_CAST(src."B09021_028M" AS BIGINT) END'
+        comment: 90% CI margin of error for age_65_plus_nonrelative (Census variable B09021_028M; negative sentinels normalized to null)
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=group(B09021)&for={geography}:*&key={env:CENSUS_API_KEY}"
+      # The API spells the metro/micro area geography as a long phrase, so the cbsa partition
+      # value maps to it here; every other partition value is the API's own geography name.
+      urlRules:
+        - url: "https://api.census.gov/data/{effective_year}/acs/acs1?get=group(B09021)&for=metropolitan%20statistical%20area/micropolitan%20statistical%20area:*&key={env:CENSUS_API_KEY}"
+          variableMatch:
+            geography: cbsa
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs1/year=*/geography=*/"
+      partition:
+        columns: [type, year, geography]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs1_living_arrangements
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # ECONOMIC CENSUS
 # Comprehensive business statistics (every 5 years)
@@ -8937,6 +9658,38 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
         targetColumns: [county_fips]
+
+  acs_living_arrangements:
+    primaryKey: [year, geography, state, county, cbsa_code]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [cbsa_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: cbsa
+        targetColumns: [cbsa_fips]
+
+  acs1_living_arrangements:
+    primaryKey: [year, geography, state, county, cbsa_code]
+    foreignKeys:
+      - columns: [state]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [cbsa_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: cbsa
+        targetColumns: [cbsa_fips]
 
   acs_county_migration_flows:
     primaryKey: [year, county_fips, other_area_name]

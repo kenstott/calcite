@@ -5,7 +5,9 @@
 #
 # Add an entry only after confirming the warehouse has no Iceberg table for it; a table that is
 # materialized but missing from the cache means the cache is stale -- regenerate it instead.
+census.acs1_living_arrangements
 census.acs_health_insurance_by_type
+census.acs_living_arrangements
 census.acs_real_estate_taxes
 census.acs_rent_burden_by_income
 disasters.fema_firm_panels

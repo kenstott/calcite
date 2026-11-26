@@ -53,6 +53,8 @@ TABLES=(
   "acs1_population|s3a://govdata-parquet-v1/census|3"
   "acs1_income|s3a://govdata-parquet-v1/census|3"
   "acs1_nativity|s3a://govdata-parquet-v1/census|3"
+  "acs_living_arrangements|s3a://govdata-parquet-v1/census|3"
+  "acs1_living_arrangements|s3a://govdata-parquet-v1/census|3"
   # Econ
   "ita_data|s3a://govdata-parquet-v1/econ|3"
   "fred_indicators|s3a://govdata-parquet-v1/econ|3"
