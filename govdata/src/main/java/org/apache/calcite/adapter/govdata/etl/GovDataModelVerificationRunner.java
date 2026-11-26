@@ -387,17 +387,43 @@ public final class GovDataModelVerificationRunner {
       System.out.println("  globbing scans       : " + globbing.size());
       System.out.println("  elapsed ms           : " + (System.currentTimeMillis() - t0));
 
+      // Declared base tables that could not be read. Their share of the declared tables is judged
+      // by readAllDeclaredTables, so the probe of such a table is not a second, stricter verdict.
+      Set<String> unreadable = new LinkedHashSet<String>();
+      boolean readAllOk = !cfg.readAllTables
+          || readAllDeclaredTables(conn, cfg.unreadableOut, unreadable);
+
       // Inter-schema views missing because their dependency was not mounted are expected, not a
       // failure. Only errors, genuinely-missing base tables / intra-schema views, probe failures,
       // non-unique declared primary keys, and globbing scans fail the run.
-      int errs = cBase.error + cIntra.error + cInter.error + cOther.error;
-      int missingHard = cBase.missing + cIntra.missing;
-      int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()
-          || !globbing.isEmpty()) ? 1 : 0;
-
-      if (cfg.readAllTables && !readAllDeclaredTables(conn, cfg.unreadableOut)) {
-        exit = 1;
+      Map<String, String> errored = new LinkedHashMap<String, String>();
+      for (TableResult r : results) {
+        if ("ERROR".equals(statusOf(r))) {
+          errored.put(r.schema + "." + r.table, r.error);
+        }
       }
+      List<String> missing = new ArrayList<String>();
+      for (Map.Entry<String, Defined> e : defined.entrySet()) {
+        if (!INTER_VIEW.equals(e.getValue().category) && !exposed.containsKey(e.getKey())) {
+          missing.add(e.getValue().schema + "." + e.getValue().table);
+        }
+      }
+      List<String> failures = tableFailures(errored, missing, unreadable);
+      if (probeFailures > 0) {
+        failures.add("feature probes: " + probeFailures + " failed");
+      }
+      for (TableResult r : dupped) {
+        failures.add(r.schema + "." + r.table + ": declared primary key is not unique");
+      }
+      for (org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory.GlobbingView g
+          : globbing) {
+        failures.add(g.getSchema() + "." + g.getView() + ": globbing scan");
+      }
+      // Printed last so the reason for a non-zero exit is at the end of the output.
+      for (String f : failures) {
+        System.out.println("    FAILED " + f);
+      }
+      int exit = failures.isEmpty() && readAllOk ? 0 : 1;
 
       if (cfg.publishSchemaCache) {
         // Enumerating every table above is what materialized the schema cache, so publishing is
@@ -419,6 +445,7 @@ public final class GovDataModelVerificationRunner {
           // was a cache hit — expected, not a failure) and when an actual write failed. Only the
           // second is fatal: !anyLiveRead means the first case, so the run stays green.
           if (!published && anyLiveRead) {
+            System.out.println("    FAILED schema cache publish: the warehouse write did not succeed");
             exit = 1;
           }
         }
@@ -451,10 +478,11 @@ public final class GovDataModelVerificationRunner {
    * unreadable; the seed then carries the readable tables and the listed ones stay out of it.
    * A table that was read but carries no row count still fails the run.
    *
-   * @return true when the run may proceed to publish the seed
+   * @param unreadableNames receives the {@code schema.table} of every table that could not be read
+   * @return true when the unreadable and row-count rules allow the seed to be published
    */
-  private static boolean readAllDeclaredTables(Connection conn, String unreadableOut)
-      throws Exception {
+  private static boolean readAllDeclaredTables(Connection conn, String unreadableOut,
+      Set<String> unreadableNames) throws Exception {
     Map<String, Defined> declared = classifyDefined(new LinkedHashSet<String>(SCHEMA_YAML.keySet()));
     DatabaseMetaData md = conn.getMetaData();
     Map<String, String> unreadable = new LinkedHashMap<String, String>();
@@ -494,6 +522,7 @@ public final class GovDataModelVerificationRunner {
     for (Map.Entry<String, String> e : unreadable.entrySet()) {
       System.out.println("    UNREADABLE " + e.getKey() + ": " + e.getValue());
     }
+    unreadableNames.addAll(unreadable.keySet());
     if (unreadableOut != null) {
       StringBuilder sb = new StringBuilder();
       for (Map.Entry<String, String> e : unreadable.entrySet()) {
@@ -518,6 +547,32 @@ public final class GovDataModelVerificationRunner {
       System.out.println("    INCOMPLETE " + f);
     }
     return ok && incomplete.isEmpty();
+  }
+
+  /**
+   * The tables and views that fail the run: every one that errored and every declared one that is
+   * not exposed, except the base tables in {@code unreadable}. Names are {@code schema.table} and
+   * compare without case.
+   */
+  static List<String> tableFailures(Map<String, String> errored, List<String> missing,
+      Set<String> unreadable) {
+    Set<String> excused = new LinkedHashSet<String>();
+    for (String name : unreadable) {
+      excused.add(name.toLowerCase());
+    }
+    List<String> failures = new ArrayList<String>();
+    for (Map.Entry<String, String> e : errored.entrySet()) {
+      if (!excused.contains(e.getKey().toLowerCase())) {
+        failures.add(e.getKey() + ": error: "
+            + String.valueOf(e.getValue()).replaceAll("\\s+", " "));
+      }
+    }
+    for (String name : missing) {
+      if (!excused.contains(name.toLowerCase())) {
+        failures.add(name + ": declared but not exposed");
+      }
+    }
+    return failures;
   }
 
   /**

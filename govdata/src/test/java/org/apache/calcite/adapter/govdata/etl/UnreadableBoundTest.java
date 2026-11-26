@@ -13,9 +13,13 @@ package org.apache.calcite.adapter.govdata.etl;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -50,6 +54,25 @@ class UnreadableBoundTest {
         counts("a", 100, "b", 100), counts("a", 6, "b", 5));
     assertEquals(1, over.size());
     assertTrue(over.get(0).contains("exceeds the bound 10"), over.toString());
+  }
+
+  @Test void probingAnUnreadableTableDoesNotFailTheRunASecondTime() {
+    Map<String, String> errored = new LinkedHashMap<String, String>();
+    errored.put("sec.New_Table", "Object 'new_table' not found");
+    Set<String> unreadable =
+        new LinkedHashSet<String>(Arrays.asList("sec.new_table", "sec.other_new"));
+    assertTrue(GovDataModelVerificationRunner.tableFailures(errored,
+        Collections.singletonList("sec.other_new"), unreadable).isEmpty());
+  }
+
+  @Test void readableTablesThatErrorOrAreMissingAreNamed() {
+    Map<String, String> errored = new LinkedHashMap<String, String>();
+    errored.put("sec.a_view", "bad\n  column");
+    List<String> f = GovDataModelVerificationRunner.tableFailures(errored,
+        Collections.singletonList("sec.gone"),
+        Collections.<String>singleton("sec.new_table"));
+    assertEquals(
+        Arrays.asList("sec.a_view: error: bad column", "sec.gone: declared but not exposed"), f);
   }
 
   @Test void aWholeUnreadableSchemaFailsEvenUnderTheBound() {
