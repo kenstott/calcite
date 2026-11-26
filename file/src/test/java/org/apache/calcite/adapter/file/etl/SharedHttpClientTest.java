@@ -41,6 +41,13 @@ import io.netty.handler.codec.http2.Http2MultiplexHandler;
 import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
 import io.netty.util.AsciiString;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Property;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -59,9 +66,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -542,5 +551,66 @@ class SharedHttpClientTest {
     IOException e = readTruncated(
         "HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\npartial", true);
     assertTrue(httpSourceRetries(e), "not retryable: " + e);
+  }
+
+  /** Collects the progress lines of {@link SharedHttpClient}. */
+  private static final class ProgressLines extends AbstractAppender {
+    final List<String> lines = Collections.synchronizedList(new ArrayList<String>());
+
+    ProgressLines() {
+      super("progress-lines", null, null, true, Property.EMPTY_ARRAY);
+    }
+
+    @Override public void append(LogEvent event) {
+      String message = event.getMessage().getFormattedMessage();
+      if (event.getLevel() == Level.INFO && message.startsWith("Downloading ")) {
+        lines.add(message);
+      }
+    }
+  }
+
+  private List<String> progressLinesFor(final long size) throws Exception {
+    http11.createContext("/bulk-" + size, exchange -> {
+      exchange.sendResponseHeaders(200, 0);
+      byte[] chunk = new byte[1 << 16];
+      try (OutputStream out = exchange.getResponseBody()) {
+        for (long sent = 0; sent < size; sent += chunk.length) {
+          out.write(chunk, 0, (int) Math.min(chunk.length, size - sent));
+        }
+      }
+    });
+    // Resolving the context first keeps its configuration load from stopping the appender.
+    LoggerContext.getContext(false);
+    Logger logger = (Logger) LogManager.getLogger(SharedHttpClient.class);
+    Level previous = logger.getLevel();
+    ProgressLines appender = new ProgressLines();
+    appender.start();
+    logger.addAppender(appender);
+    logger.setLevel(Level.INFO);
+    try (SharedHttpClient.Response response = SharedHttpClient.execute(
+        new SharedHttpClient.Request("GET", http11Url + "/bulk-" + size))) {
+      InputStream in = response.getInputStream();
+      byte[] buf = new byte[8192];
+      long total = 0;
+      int n;
+      while ((n = in.read(buf)) != -1) {
+        total += n;
+      }
+      assertEquals(size, total);
+    } finally {
+      logger.removeAppender(appender);
+      logger.setLevel(previous);
+      appender.stop();
+    }
+    return appender.lines;
+  }
+
+  /** One test, because both cases attach to the same process-wide logger. */
+  @Test void bodyReadReportsProgressOncePerInterval() throws Exception {
+    long interval = SharedHttpClient.PROGRESS_LOG_BYTES;
+    assertEquals(Collections.<String>emptyList(), progressLinesFor(interval - 1));
+    List<String> lines = progressLinesFor(2 * interval + interval / 2);
+    assertEquals(2, lines.size(), lines.toString());
+    assertTrue(lines.get(0).contains(http11Url + "/bulk-"), lines.get(0));
   }
 }

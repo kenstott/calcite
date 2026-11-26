@@ -80,6 +80,11 @@ import java.util.concurrent.TimeoutException;
  *       {@code HttpURLConnection.setReadTimeout}, so a 30-minute bulk download that keeps
  *       making progress is never cut off.
  * </ul>
+ *
+ * <h2>Progress</h2>
+ * A body read logs one INFO line per {@link #PROGRESS_LOG_BYTES} received. The ETL pool judges
+ * a worker idle by the absence of application log lines, so a long bulk download has to report
+ * that it is advancing; a stalled one receives no bytes and so reports nothing.
  */
 public final class SharedHttpClient {
 
@@ -90,6 +95,9 @@ public final class SharedHttpClient {
 
   /** Margin on top of the response timeout for the otherwise-unbounded DNS resolution. */
   static final long DNS_DEADLINE_BUFFER_MS = 30_000L;
+
+  /** Body bytes received between two progress log lines. */
+  static final long PROGRESS_LOG_BYTES = 16L * 1024 * 1024;
 
   private static HttpClient followingClient;
   private static HttpClient nonFollowingClient;
@@ -254,7 +262,7 @@ public final class SharedHttpClient {
 
     Response(HttpResponse<InputStream> response, long readTimeoutMs) {
       this.response = response;
-      this.body = new StallGuardInputStream(response.body(), readTimeoutMs);
+      this.body = new StallGuardInputStream(response.body(), readTimeoutMs, response.uri());
     }
 
     public int getResponseCode() {
@@ -335,15 +343,31 @@ public final class SharedHttpClient {
     }
   }
 
-  /** Per-read stall guard: a read blocked longer than the timeout cancels the exchange. */
+  /**
+   * Per-read stall guard: a read blocked longer than the timeout cancels the exchange. Also
+   * reports download progress.
+   */
   private static final class StallGuardInputStream extends InputStream {
     private final InputStream delegate;
     private final long timeoutMs;
+    private final URI uri;
     private volatile boolean timedOut;
+    private long bytesRead;
+    private long nextProgressBytes = PROGRESS_LOG_BYTES;
 
-    StallGuardInputStream(InputStream delegate, long timeoutMs) {
+    StallGuardInputStream(InputStream delegate, long timeoutMs, URI uri) {
       this.delegate = delegate;
       this.timeoutMs = timeoutMs;
+      this.uri = uri;
+    }
+
+    private void received(int n) {
+      bytesRead += n;
+      if (bytesRead >= nextProgressBytes) {
+        nextProgressBytes = bytesRead + PROGRESS_LOG_BYTES;
+        LOGGER.info("Downloading {}: {} bytes received",
+            SecretRedaction.redact(uri.toString()), bytesRead);
+      }
     }
 
     private ScheduledFuture<?> arm() {
@@ -376,7 +400,11 @@ public final class SharedHttpClient {
     @Override public int read() throws IOException {
       ScheduledFuture<?> guard = arm();
       try {
-        return delegate.read();
+        int b = delegate.read();
+        if (b >= 0) {
+          received(1);
+        }
+        return b;
       } catch (IOException e) {
         throw translate(e);
       } finally {
@@ -387,7 +415,11 @@ public final class SharedHttpClient {
     @Override public int read(byte[] b, int off, int len) throws IOException {
       ScheduledFuture<?> guard = arm();
       try {
-        return delegate.read(b, off, len);
+        int n = delegate.read(b, off, len);
+        if (n > 0) {
+          received(n);
+        }
+        return n;
       } catch (IOException e) {
         throw translate(e);
       } finally {
