@@ -2201,10 +2201,10 @@ partitionedTables:
       rated); they publish as separate per-event SMS datasets (SMS Input -
       Crash 4wxs-vbns / aayw-vxb3, SMS Input - Inspection rbkj-cgst) and would
       be their own raw tables + a rollup view, per the one-source-per-table
-      rule. Bulk CSV export of DOT Socrata dataset az4n-8mr2 — the whole set is
+      rule. Bulk CSV of DOT Socrata dataset az4n-8mr2 — the whole set is
       downloaded in one unpaginated request and the partition overwritten each
       run, so this is a snapshot. Source:
-      data.transportation.gov/api/views/az4n-8mr2/rows.csv?accessType=DOWNLOAD.
+      data.transportation.gov/resource/az4n-8mr2.csv.
 
       To reach a carrier's cross-schema identity FROM another schema rather than by name,
       join ref.canonical_org_entity on fmcsa_dot_number = dot_number — that table carries
@@ -2222,100 +2222,100 @@ partitionedTables:
       - name: dot_number
         type: string
         nullable: false
-        expression: 'src."DOT_NUMBER"'
+        expression: 'src."dot_number"'
         comment: USDOT number — PK
       - name: carrier_name
         type: string
         nullable: true
-        expression: 'src."LEGAL_NAME"'
+        expression: 'src."legal_name"'
         comment: Legal carrier name — for the exact cross-schema join use ref.canonical_org_entity.fmcsa_dot_number = dot_number, not a name match
       - name: dba_name
         type: string
         nullable: true
-        expression: 'src."DBA_NAME"'
+        expression: 'src."dba_name"'
         comment: Doing-business-as name (often blank)
       - name: phy_city
         type: string
         nullable: true
-        expression: 'src."PHY_CITY"'
+        expression: 'src."phy_city"'
         comment: Principal place of business — city
       - name: state_abbr
         type: string
         nullable: true
-        expression: 'src."PHY_STATE"'
+        expression: 'src."phy_state"'
         comment: Principal office state (USPS abbr; FK component to geo.state_ref)
       - name: phy_zip
         type: string
         nullable: true
-        expression: 'src."PHY_ZIP"'
+        expression: 'src."phy_zip"'
         comment: Principal place of business — ZIP
       - name: business_org
         type: string
         nullable: true
-        expression: 'src."BUSINESS_ORG_DESC"'
+        expression: 'src."business_org_desc"'
         comment: Business organization (CORPORATION / LLC / SOLE PROPRIETOR / ...)
       - name: classdef
         type: string
         nullable: true
-        expression: 'src."CLASSDEF"'
+        expression: 'src."classdef"'
         comment: Carrier classification (semicolon multi-value, e.g. PRIVATE PROPERTY;AUTHORIZED FOR HIRE)
       - name: operation_type
         type: string
         nullable: true
-        expression: 'src."CARRIER_OPERATION"'
+        expression: 'src."carrier_operation"'
         comment: Operation classification (A=Interstate, B=Intrastate Hazmat, C=Intrastate Non-Hazmat)
       - name: safety_rating
         type: string
         nullable: true
-        expression: 'src."SAFETY_RATING"'
+        expression: 'src."safety_rating"'
         comment: Safety rating (S=Satisfactory, C=Conditional, U=Unsatisfactory; blank unless a compliance review occurred)
       - name: safety_rating_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(try_strptime(NULLIF(src."SAFETY_RATING_DATE",''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(src."safety_rating_date",''''), ''%Y%m%d'') AS DATE)'
         comment: Date of the most recent safety rating
       - name: review_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(try_strptime(NULLIF(src."REVIEW_DATE",''''), ''%Y%m%d'') AS DATE)'
+        expression: 'TRY_CAST(try_strptime(NULLIF(src."review_date",''''), ''%Y%m%d'') AS DATE)'
         comment: Date of the most recent compliance review
       - name: total_drivers
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."TOTAL_DRIVERS" AS INTEGER)'
+        expression: 'TRY_CAST(src."total_drivers" AS INTEGER)'
         comment: Number of drivers
       - name: total_cdl
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."TOTAL_CDL" AS INTEGER)'
+        expression: 'TRY_CAST(src."total_cdl" AS INTEGER)'
         comment: Number of CDL drivers
       - name: power_units
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."POWER_UNITS" AS INTEGER)'
+        expression: 'TRY_CAST(src."power_units" AS INTEGER)'
         comment: Power units (trucks and tractors)
       - name: truck_units
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."TRUCK_UNITS" AS INTEGER)'
+        expression: 'TRY_CAST(src."truck_units" AS INTEGER)'
         comment: Truck units
       - name: bus_units
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."BUS_UNITS" AS INTEGER)'
+        expression: 'TRY_CAST(src."bus_units" AS INTEGER)'
         comment: Bus units
       - name: hazmat_flag
         type: string
         nullable: true
-        expression: 'src."HM_Ind"'
+        expression: 'src."hm_ind"'
         comment: Authorized to transport hazardous materials (Y/N)
       - name: recordable_crash_rate
         type: double
         nullable: true
         expression: >-
-          CASE WHEN TRY_CAST(src."RECORDABLE_CRASH_RATE" AS DOUBLE) IN (999.0, 999.99, 999.999)
+          CASE WHEN TRY_CAST(src."recordable_crash_rate" AS DOUBLE) IN (999.0, 999.99, 999.999)
                THEN NULL
-               ELSE TRY_CAST(src."RECORDABLE_CRASH_RATE" AS DOUBLE) END
+               ELSE TRY_CAST(src."recordable_crash_rate" AS DOUBLE) END
         comment: >
           Crashes per million miles, FMCSA's own computed field — NOT populated for the whole
           carrier census. FMCSA computes it only for a carrier with a compliance review or a
@@ -2331,29 +2331,34 @@ partitionedTables:
       - name: mcs150_mileage
         type: long
         nullable: true
-        expression: 'TRY_CAST(src."MCS150_MILEAGE" AS BIGINT)'
+        expression: 'TRY_CAST(src."mcs150_mileage" AS BIGINT)'
         comment: Annual vehicle miles traveled reported on the MCS-150
       - name: mcs150_mileage_year
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."MCS150_MILEAGE_YEAR" AS INTEGER)'
+        expression: 'TRY_CAST(src."mcs150_mileage_year" AS INTEGER)'
         comment: Year of the reported MCS-150 mileage
       - name: status_code
         type: string
         nullable: true
-        expression: 'src."STATUS_CODE"'
+        expression: 'src."status_code"'
         comment: Carrier record status code (A=Active, I=Inactive, ...)
 
     source:
       type: http
-      # Socrata bulk CSV export = the whole dataset in one unpaginated request
-      # (preferred over $limit/$offset paging of 4.47M rows). Headers are the
-      # UPPERCASE source field names (note HM_Ind is mixed-case).
-      url: "https://data.transportation.gov/api/views/az4n-8mr2/rows.csv?accessType=DOWNLOAD"
+      # SODA2 CSV, no app token required. $limit is set above the dataset size so one
+      # request returns every row (no $limit means 1,000 rows). Headers are the
+      # lowercase Socrata field names.
+      url: "https://data.transportation.gov/resource/az4n-8mr2.csv?$limit=100000000"
       method: GET
+      # Socrata serves this body gzip-compressed on request, about a fifth of the plain size;
+      # a connection cut short then fails to decompress instead of passing as a shorter file.
+      headers:
+        Accept-Encoding: gzip
       response:
         format: csv
         hasHeader: true
+        compressed: gzip
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
@@ -3151,8 +3156,8 @@ partitionedTables:
       commodity x mode, by-NAICS, by-distance, ...) are SQL views over this one
       table (never Java) — e.g. the bts_freight_flows view. Aggregates are
       sample-weighted estimates and approximate the official CFS tables. Bulk CSV
-      export of BTS Socrata y9wr-xk52; snapshot, partition overwritten each run.
-      Source: data.bts.gov/api/views/y9wr-xk52/rows.csv.
+      of BTS Socrata y9wr-xk52; snapshot, partition overwritten each run.
+      Source: data.bts.gov/resource/y9wr-xk52.csv.
     dqRowLimit: 200000
 
     dimensions:
@@ -3163,7 +3168,7 @@ partitionedTables:
       - name: shipmt_id
         type: string
         nullable: false
-        expression: 'src."SHIPMT_ID"'
+        expression: 'src."shipmt_id"'
         comment: Shipment identifier — PK
       - name: survey_year
         type: integer
@@ -3173,32 +3178,32 @@ partitionedTables:
       - name: orig_state_fips
         type: string
         nullable: true
-        expression: 'CASE WHEN src."ORIG_STATE" IS NULL OR src."ORIG_STATE"='''' THEN NULL ELSE lpad(src."ORIG_STATE", 2, ''0'') END'
+        expression: 'CASE WHEN src."orig_state" IS NULL OR src."orig_state"='''' THEN NULL ELSE lpad(src."orig_state", 2, ''0'') END'
         comment: Origin state FIPS (FK to geo.state_ref)
       - name: orig_cfs_area
         type: string
         nullable: true
-        expression: 'src."ORIG_CFS_AREA"'
+        expression: 'src."orig_cfs_area"'
         comment: Origin CFS area code (state-MA)
       - name: dest_state_fips
         type: string
         nullable: true
-        expression: 'CASE WHEN src."DEST_STATE" IS NULL OR src."DEST_STATE"='''' THEN NULL ELSE lpad(src."DEST_STATE", 2, ''0'') END'
+        expression: 'CASE WHEN src."dest_state" IS NULL OR src."dest_state"='''' THEN NULL ELSE lpad(src."dest_state", 2, ''0'') END'
         comment: Destination state FIPS (FK to geo.state_ref)
       - name: dest_cfs_area
         type: string
         nullable: true
-        expression: 'src."DEST_CFS_AREA"'
+        expression: 'src."dest_cfs_area"'
         comment: Destination CFS area code (state-MA)
       - name: naics
         type: string
         nullable: true
-        expression: 'src."NAICS"'
+        expression: 'src."naics"'
         comment: Shipper NAICS code
       - name: quarter
         type: integer
         nullable: true
-        expression: 'TRY_CAST(src."QUARTER" AS INTEGER)'
+        expression: 'TRY_CAST(src."quarter" AS INTEGER)'
         comment: Quarter of shipment (1-4)
       - name: sctg_code
         type: string
@@ -3208,70 +3213,76 @@ partitionedTables:
         # pads shorter strings, so 2-digit and 5-char range values pass through unchanged. This
         # is what makes a plain code join to cfs_sctg_ref.sctg_code work for every non-suppressed
         # single value (FK comment below).
-        expression: 'CASE WHEN src."SCTG" IS NULL OR src."SCTG"='''' THEN NULL ELSE lpad(src."SCTG", 2, ''0'') END'
+        expression: 'CASE WHEN src."sctg" IS NULL OR src."sctg"='''' THEN NULL ELSE lpad(src."sctg", 2, ''0'') END'
         comment: SCTG commodity code, zero-padded to 2 digits (FK to cfs_sctg_ref.sctg_code for single non-suppressed codes; a "NN-NN" value is a confidentiality-collapsed range with no single ref row)
       - name: mode_code
         type: string
         nullable: true
         # Same lpad rationale as sctg_code — raw MODE mixes unpadded 1-digit codes with the
         # already-2/3-digit codes (e.g. "101"); lpad leaves the latter untouched.
-        expression: 'CASE WHEN src."MODE" IS NULL OR src."MODE"='''' THEN NULL ELSE lpad(src."MODE", 2, ''0'') END'
+        expression: 'CASE WHEN src."mode" IS NULL OR src."mode"='''' THEN NULL ELSE lpad(src."mode", 2, ''0'') END'
         comment: CFS transport mode code, zero-padded to 2+ digits (raw; some recoded for confidentiality; FK to cfs_mode_ref.mode_code)
       - name: shipmt_value
         type: double
         nullable: true
-        expression: 'TRY_CAST(src."SHIPMT_VALUE" AS DOUBLE)'
+        expression: 'TRY_CAST(src."shipmt_value" AS DOUBLE)'
         comment: Shipment value (USD)
       - name: shipmt_weight_lb
         type: double
         nullable: true
-        expression: 'TRY_CAST(src."SHIPMT_WGHT" AS DOUBLE)'
+        expression: 'TRY_CAST(src."shipmt_wght" AS DOUBLE)'
         comment: Shipment weight (pounds)
       - name: dist_gc_miles
         type: double
         nullable: true
-        expression: 'TRY_CAST(src."SHIPMT_DIST_GC" AS DOUBLE)'
+        expression: 'TRY_CAST(src."shipmt_dist_gc" AS DOUBLE)'
         comment: Great-circle distance origin->destination (miles)
       - name: dist_routed_miles
         type: double
         nullable: true
-        expression: 'TRY_CAST(src."SHIPMT_DIST_ROUTED" AS DOUBLE)'
+        expression: 'TRY_CAST(src."shipmt_dist_routed" AS DOUBLE)'
         comment: Routed distance origin->destination (miles)
       - name: temp_controlled
         type: string
         nullable: true
-        expression: 'src."TEMP_CNTL_YN"'
+        expression: 'src."temp_cntl_yn"'
         comment: Temperature-controlled shipment (true/false)
       - name: export_yn
         type: string
         nullable: true
-        expression: 'src."EXPORT_YN"'
+        expression: 'src."export_yn"'
         comment: Export shipment (true/false)
       - name: export_country
         type: string
         nullable: true
-        expression: 'src."EXPORT_CNTRY"'
+        expression: 'src."export_cntry"'
         comment: Export final destination country indicator
       - name: hazmat
         type: string
         nullable: true
-        expression: 'src."HAZMAT"'
+        expression: 'src."hazmat"'
         comment: Hazardous material code (N = not hazmat)
       - name: wgt_factor
         type: double
         nullable: true
-        expression: 'TRY_CAST(src."WGT_FACTOR" AS DOUBLE)'
+        expression: 'TRY_CAST(src."wgt_factor" AS DOUBLE)'
         comment: Shipment tabulation weighting factor (multiply measures by this for population estimates)
 
     source:
       type: http
-      # Socrata bulk CSV export = the whole 5.98M-row PUF in one unpaginated
-      # request (preferred over paging). Headers are UPPERCASE source names.
-      url: "https://data.bts.gov/api/views/y9wr-xk52/rows.csv?accessType=DOWNLOAD"
+      # SODA2 CSV, no app token required. $limit is set above the dataset size so one
+      # request returns the whole 5.98M-row PUF (no $limit means 1,000 rows). Headers
+      # are the lowercase Socrata field names.
+      url: "https://data.bts.gov/resource/y9wr-xk52.csv?$limit=100000000"
       method: GET
+      # Socrata serves this body gzip-compressed on request, about a fifth of the plain size;
+      # a connection cut short then fails to decompress instead of passing as a shorter file.
+      headers:
+        Accept-Encoding: gzip
       response:
         format: csv
         hasHeader: true
+        compressed: gzip
       rateLimit:
         requestsPerSecond: 1.0
         retryOn: [429, 500, 503]
