@@ -8419,6 +8419,204 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # young_adults_at_home_history_national - Census CPS historical national table
+  # ---------------------------------------------------------------------------
+  - name: young_adults_at_home_history_national
+    timeColumn: year
+    dataset_type: snapshot
+    freshness:
+      type: last_modified
+      probe_url: "https://www2.census.gov/programs-surveys/demo/tables/families/time-series/adults/ad1.xls"
+    pattern: "type=young_adults_at_home_history_national/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Young adults living at home (living with parents): the number and percent of men and women
+      aged 18-24 and 25-34 who are a child of the householder, national, annual from the Current
+      Population Survey (March / Annual Social and Economic Supplement) 1981 to the latest year,
+      plus the 1960, 1970 and 1980 decennial censuses: Census Bureau Table AD-1 (ad1.xls). One row
+      per year, vintage, age_group and sex; counts in thousands. The living-at-home counts are NULL
+      for 1981 and 1982, where the source prints N. In CPS data unmarried college students living in
+      dormitories are counted as living in the parental home, which raises the 18-24 figures. This
+      is the long annual CPS series, a different survey from the ACS estimates. All adult ages and
+      other living arrangements are in adult_living_arrangements_history_national.
+      Source: https://www.census.gov/data/tables/time-series/demo/families/adults.html
+
+    dimensions:
+      type:
+        - young_adults_at_home_history_national
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: "Survey year (March of that year for CPS rows; census year for decennial rows)"
+      - name: vintage
+        type: string
+        nullable: false
+        comment: "'primary' (first listing of the year, Census's current basis) or 'alternate' (second listing of the same year, e.g. 2011 and 2021, which Census also prints on a revised population basis). Filter vintage = 'primary' for one row per year."
+      - name: age_group
+        type: string
+        nullable: false
+        comment: "'18-24' or '25-34' (years of age)"
+      - name: sex
+        type: string
+        nullable: false
+        comment: "'male' or 'female'"
+      - name: data_source
+        type: string
+        nullable: false
+        comment: "'cps' (Current Population Survey) or 'decennial_census' (1960, 1970, 1980 rows)"
+      - name: population_thousands
+        type: long
+        nullable: true
+        comment: "All people of this age group and sex, thousands"
+      - name: child_of_householder_thousands
+        type: long
+        nullable: true
+        comment: "Of those, people who are a child of the householder (living at home), thousands. NULL 1981-1982 (source N)"
+      - name: child_of_householder_pct
+        type: double
+        nullable: true
+        comment: "Percent of the age group and sex living at home. NULL 1981-1982 (source N)"
+
+    source:
+      type: http
+      # The page is fetched as text; the transformer reads the workbook link(s) from it and
+      # downloads the xls itself.
+      url: "https://www.census.gov/data/tables/time-series/demo/families/adults.html"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.CpsYoungAdultsAtHomeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=young_adults_at_home_history_national/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: young_adults_at_home_history_national
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # adult_living_arrangements_history_national - Census CPS historical national table
+  # ---------------------------------------------------------------------------
+  - name: adult_living_arrangements_history_national
+    timeColumn: year
+    dataset_type: snapshot
+    freshness:
+      type: last_modified
+      probe_url: "https://www2.census.gov/programs-surveys/demo/tables/families/time-series/adults/ad3.xls"
+    pattern: "type=adult_living_arrangements_history_national/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Living arrangements of U.S. adults, 1967 to the latest year Census publishes for this table,
+      national, from the Current Population Survey Annual Social and Economic Supplement: Census
+      Bureau Table AD-3 (ad3.xls and its age-group workbooks). Percent of adults living alone, with
+      a spouse, as a child of the householder (living with parents), with an unmarried partner, with
+      other relatives or with nonrelatives. age_group '18+' has sex = 'total' and carries counts
+      (people_thousands) as well as percents; the age groups 18-24, 25-34, 35-64, 65-74 and 75+ are
+      split by sex and publish percents with the group's population, so people_thousands is NULL.
+      The 65-74 and 75+ groups have no child_of_householder category (Census counts those people in
+      living_with_other_relatives). Unmarried partner was measured indirectly (POSSLQ) in
+      1967-1995, as a householder relationship in 1996-2006 and by a direct question from 2007, so
+      living_with_partner is not comparable across those breaks. Always filter age_group and sex
+      ('18+' overlaps the other groups). AD-3 can end earlier than Table AD-1, which is in
+      young_adults_at_home_history_national.
+      Source: https://www.census.gov/data/tables/time-series/demo/families/adults.html
+
+    dimensions:
+      type:
+        - adult_living_arrangements_history_national
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: "Survey year (CPS Annual Social and Economic Supplement)"
+      - name: vintage
+        type: string
+        nullable: false
+        comment: "'primary' (first listing of the year, Census's current basis) or 'alternate' (second listing of the same year, e.g. 2011 and 2021, which Census also prints on a revised population basis). Filter vintage = 'primary' for one row per year."
+      - name: age_group
+        type: string
+        nullable: false
+        comment: "'18+' (all adults), '18-24', '25-34', '35-64', '65-74' or '75+'"
+      - name: sex
+        type: string
+        nullable: false
+        comment: "'total' for age_group '18+'; 'male' or 'female' for the other age groups"
+      - name: living_arrangement
+        type: string
+        nullable: false
+        comment: "'living_alone', 'living_with_spouse', 'child_of_householder', 'living_with_partner', 'living_with_other_relatives' or 'living_with_nonrelatives'"
+      - name: age_group_population_thousands
+        type: long
+        nullable: true
+        comment: "Population of the age group and sex (denominator), thousands"
+      - name: people_thousands
+        type: long
+        nullable: true
+        comment: "People in this living arrangement, thousands; published only for age_group '18+', otherwise NULL"
+      - name: percent
+        type: double
+        nullable: true
+        comment: "Percent of the age group and sex in this living arrangement; 0.0 where the source prints Z (rounds to zero)"
+
+    source:
+      type: http
+      # The page is fetched as text; the transformer reads the workbook link(s) from it and
+      # downloads the xls itself.
+      url: "https://www.census.gov/data/tables/time-series/demo/families/adults.html"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.CpsAdultLivingArrangementsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=adult_living_arrangements_history_national/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: adult_living_arrangements_history_national
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 
 # ============================================================================
 # SQL VIEWS

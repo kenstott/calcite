@@ -68,6 +68,8 @@ INSERT INTO dq_existence_counts SELECT 'cps_voting_supplement',     (SELECT COUN
 INSERT INTO dq_existence_counts SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'poverty_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'household_income_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'young_adults_at_home_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'adult_living_arrangements_history_national', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'acs_nativity',            (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'acs_household_type',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true) LIMIT 1) t);
@@ -144,6 +146,8 @@ INSERT INTO dq_row_count_counts SELECT 'cps_voting_supplement',     (SELECT COUN
 INSERT INTO dq_row_count_counts SELECT 'uscis_i765_employment_authorization',     (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization',     allow_moved_paths := true)), 500;
 INSERT INTO dq_row_count_counts SELECT 'poverty_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true)), 60;
 INSERT INTO dq_row_count_counts SELECT 'household_income_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true)), 55;
+INSERT INTO dq_row_count_counts SELECT 'young_adults_at_home_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true)), 200;
+INSERT INTO dq_row_count_counts SELECT 'adult_living_arrangements_history_national', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true)), 3500;
 INSERT INTO dq_row_count_counts SELECT 'acs_nativity',            (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',            allow_moved_paths := true)), 10000;
 INSERT INTO dq_row_count_counts SELECT 'acs_marital_status',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',      allow_moved_paths := true)), 10000;
 INSERT INTO dq_row_count_counts SELECT 'acs_household_type',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',      allow_moved_paths := true)), 10000;
@@ -222,6 +226,8 @@ SELECT 'cps_voting_supplement' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BU
 SELECT 'uscis_i765_employment_authorization' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true) LIMIT 1;
 SELECT 'poverty_history_national' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true) LIMIT 1;
 SELECT 'household_income_history_national' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true) LIMIT 1;
+SELECT 'young_adults_at_home_history_national' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true) LIMIT 1;
+SELECT 'adult_living_arrangements_history_national' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_nativity'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity',           allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_marital_status'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status',     allow_moved_paths := true) LIMIT 1;
 SELECT 'acs_household_type'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type',     allow_moved_paths := true) LIMIT 1;
@@ -281,6 +287,8 @@ INSERT INTO dq_results SELECT 'census', 'cps_voting_supplement', 'all_null_cols'
 INSERT INTO dq_results SELECT 'census', 'uscis_i765_employment_authorization', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'poverty_history_national', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'household_income_history_national', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'young_adults_at_home_history_national', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'adult_living_arrangements_history_national', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_nativity', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE null_percentage = 100.0;
@@ -353,6 +361,8 @@ INSERT INTO dq_results SELECT 'census', 'cps_voting_supplement', 'all_same_value
 INSERT INTO dq_results SELECT 'census', 'uscis_i765_employment_authorization', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/uscis_i765_employment_authorization', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'poverty_history_national', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/poverty_history_national', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'household_income_history_national', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type' AND column_name <> 'constant_dollar_year';
+INSERT INTO dq_results SELECT 'census', 'young_adults_at_home_history_national', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+INSERT INTO dq_results SELECT 'census', 'adult_living_arrangements_history_national', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_nativity', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_nativity', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_marital_status', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_marital_status', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 INSERT INTO dq_results SELECT 'census', 'acs_household_type', 'all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value — may be a constant or ingestion issue' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_household_type', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
@@ -934,6 +944,57 @@ INSERT INTO dq_results
 SELECT 'census', 'household_income_history_national', 'pk_duplication',
   CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END, CAST(dups AS VARCHAR), '0', 'duplicate (year, vintage) keys'
 FROM (SELECT COUNT(*) AS dups FROM (SELECT year, vintage FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/household_income_history_national', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- young_adults_at_home_history_national: AD-1 anchors, complete (year, vintage, age_group, sex) keys
+INSERT INTO dq_results
+SELECT 'census', 'young_adults_at_home_history_national', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'rows with a bad code, living-at-home above population, NULL counts outside 1981-1982, or an anchor mismatch'
+FROM (
+  SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true)
+          WHERE vintage NOT IN ('primary', 'alternate') OR age_group NOT IN ('18-24', '25-34')
+             OR sex NOT IN ('male', 'female') OR data_source NOT IN ('cps', 'decennial_census')
+             OR population_thousands <= 0 OR child_of_householder_thousands > population_thousands
+             OR child_of_householder_pct NOT BETWEEN 0 AND 100
+             OR ((child_of_householder_thousands IS NULL OR child_of_householder_pct IS NULL)
+                 AND year NOT IN (1981, 1982)))
+       + (SELECT 3 - COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true)
+          WHERE vintage = 'primary' AND ((year = 1960 AND age_group = '18-24' AND sex = 'male' AND child_of_householder_thousands = 3583)
+             OR (year = 2020 AND age_group = '18-24' AND sex = 'female' AND child_of_householder_pct = 56.3)
+             OR (year = 2023 AND age_group = '25-34' AND sex = 'male' AND child_of_householder_thousands = 4466))) AS bad
+);
+
+INSERT INTO dq_results
+SELECT 'census', 'young_adults_at_home_history_national', 'pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END, CAST(dups AS VARCHAR), '0', 'duplicate (year, vintage, age_group, sex) keys'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT year, vintage, age_group, sex FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/young_adults_at_home_history_national', allow_moved_paths := true) GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1));
+
+-- adult_living_arrangements_history_national: AD-3 anchors; shares of one (year, vintage, age_group, sex) add to about 100
+INSERT INTO dq_results
+SELECT 'census', 'adult_living_arrangements_history_national', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'bad codes or percents, counts outside 18+, group shares not summing to 100, or an anchor mismatch'
+FROM (
+  SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true)
+          WHERE vintage NOT IN ('primary', 'alternate')
+             OR age_group NOT IN ('18+', '18-24', '25-34', '35-64', '65-74', '75+')
+             OR sex NOT IN ('total', 'male', 'female') OR (age_group = '18+') <> (sex = 'total')
+             OR percent IS NULL OR percent NOT BETWEEN 0 AND 100
+             OR age_group_population_thousands IS NULL
+             OR (age_group = '18+') <> (people_thousands IS NOT NULL))
+       + (SELECT COUNT(*) FROM (SELECT year, vintage, age_group, sex FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true)
+            GROUP BY 1, 2, 3, 4 HAVING ABS(SUM(percent) - 100) > 0.5))
+       + (SELECT 3 - COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true)
+          WHERE vintage = 'primary' AND living_arrangement = 'child_of_householder' AND (
+                (year = 1967 AND age_group = '18-24' AND sex = 'male' AND percent = 58.0)
+             OR (year = 2023 AND age_group = '18+' AND people_thousands = 29793)
+             OR (year = 2023 AND age_group = '25-34' AND sex = 'female' AND percent = 11.4))) AS bad
+);
+
+INSERT INTO dq_results
+SELECT 'census', 'adult_living_arrangements_history_national', 'pk_duplication',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END, CAST(dups AS VARCHAR), '0', 'duplicate (year, vintage, age_group, sex, living_arrangement) keys'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT year, vintage, age_group, sex, living_arrangement FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/adult_living_arrangements_history_national', allow_moved_paths := true) GROUP BY 1, 2, 3, 4, 5 HAVING COUNT(*) > 1));
 
 -- ============================================================================
 -- VIEW: county_vulnerability_profile (acs_poverty/acs_age/acs_disability/acs_language
