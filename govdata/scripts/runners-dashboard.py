@@ -7,7 +7,8 @@
 Sources: the runner daemon (process table + its own log), the live `claude -p` agents, the
 kenstott/govdata-ops issues (gh), the fix branches and merged commits (git), the ETL pool
 and scheduled-window logs, and /proc/meminfo. A source that cannot be read is shown as an
-error in its own section, never left out.
+error in its own section, never left out, and a row that depends on it reads "unreadable"
+rather than a result; the next redraw reads it again.
 """
 import argparse
 import json
@@ -95,6 +96,17 @@ def iso_age(ts):
 def clip(text, width):
     text = text.replace("\n", " ")
     return text if len(text) <= width else text[: max(width - 1, 0)] + "…"
+
+
+def unreadable(err):
+    """Row marker for a source that failed, from a guarded() error: the request URL is dropped and a
+    command timeout is named by its command, so the cause survives the clip."""
+    m = re.match(r"TimeoutExpired: Command '\['([^\]]*)'\]' timed out after ([\d.]+) seconds", err)
+    if m:
+        reason = "%s timed out after %ss" % (" ".join(m.group(1).split("', '")[:3]), m.group(2))
+    else:
+        reason = re.sub(r'(?:Get|Post) "[^"]*": ', "", re.sub(r"^RuntimeError: ", "", err))
+    return "unreadable (%s)" % clip(reason, 90)
 
 
 # ── collectors: each returns data or raises; render() shows the error under its section ──
@@ -204,8 +216,26 @@ _DQ_PATH = re.compile(r"calcite-fixes/(?:defect|sourcing)-(\d+)")
 _DQ_JAR = re.compile(r"sih-govdata-(?:defect|sourcing)-(\d+)\.jar")
 
 
+def ci_tally(oid):
+    """(ok, pending, failed) check runs of a commit."""
+    lines = run(["gh", "api", "repos/%s/commits/%s/check-runs" % (CODE_REPO, oid),
+                 "--paginate", "--jq", '.check_runs[] | .status + " " + (.conclusion // "")'],
+                timeout=60).splitlines()
+    ok = failed = pending = 0
+    for l in lines:
+        status, _, concl = l.partition(" ")
+        if status != "completed":
+            pending += 1
+        elif concl in ("failure", "cancelled", "timed_out", "action_required"):
+            failed += 1
+        else:
+            ok += 1
+    return ok, pending, failed
+
+
 def pull_requests():
-    """PRs of the code repo by head branch, with the CI tally of each open PR's tip commit."""
+    """PRs of the code repo by head branch, with the CI tally of each open PR's tip commit.  A tally that
+    cannot be read leaves that PR with ci None and the reason in ci_error."""
     out = run(["gh", "pr", "list", "-R", CODE_REPO, "--state", "all", "--limit", "100", "--json",
                "number,headRefName,headRefOid,state,title,body"], timeout=60)
     prs = {}
@@ -217,19 +247,7 @@ def pull_requests():
         if pr["state"] == "OPEN" and not pr["head_missing"] and unmerged_commits(pr["headRefOid"]) == 0:
             pr["state"] = "MERGED"                # already on main by rebase: GitHub still says OPEN
         if pr["state"] == "OPEN":
-            lines = run(["gh", "api", "repos/%s/commits/%s/check-runs" % (CODE_REPO, pr["headRefOid"]),
-                         "--paginate", "--jq", '.check_runs[] | .status + " " + (.conclusion // "")'],
-                        timeout=60).splitlines()
-            ok = failed = pending = 0
-            for l in lines:
-                status, _, concl = l.partition(" ")
-                if status != "completed":
-                    pending += 1
-                elif concl in ("failure", "cancelled", "timed_out", "action_required"):
-                    failed += 1
-                else:
-                    ok += 1
-            pr["ci"] = (ok, pending, failed)
+            pr["ci"], pr["ci_error"] = guarded(ci_tally, pr["headRefOid"])
             # without the head object neither the rebase test nor the conflict test can run: leave it OPEN
             pr["conflicts"] = [] if pr["head_missing"] else rebase_conflict(pr["headRefOid"])
     return prs
@@ -364,8 +382,14 @@ def waits_on(issue):
     return "last comment %s ago by %s, waits on: %s" % (age(iso_age(last["createdAt"])), last["author"], who)
 
 
+def blocked_stage(issue):
+    b = blocker(issue)
+    return "blocked on #%d" % b if b else "blocked: " + waits_on(issue)
+
+
 def in_flight(ag, iss, prs, dq_runs, dq_marks):
-    """{issue number: [stage text, ...]} for every open issue with work under way."""
+    """{issue number: [stage text, ...]} for every open issue with work under way.  dq_marks is None when
+    the fix branches could not be read."""
     stages = {}
 
     def add(n, text):
@@ -382,8 +406,12 @@ def in_flight(ag, iss, prs, dq_runs, dq_marks):
         n = int(m.group(1)) if m else None
         if n is None:
             continue
-        ok, pending, failed = pr["ci"]
-        tally = "%d ok/%d pending/%d failed" % (ok, pending, failed)
+        if pr["ci"] is None:
+            ok = failed = pending = None
+            tally = unreadable(pr["ci_error"])
+        else:
+            ok, pending, failed = pr["ci"]
+            tally = "%d ok/%d pending/%d failed" % (ok, pending, failed)
         if pr.get("head_missing"):
             tally += ", head not fetched"
         issue = next((i for i in iss or [] if i["number"] == n), None)
@@ -393,18 +421,22 @@ def in_flight(ag, iss, prs, dq_runs, dq_marks):
         if pr["conflicts"]:
             add(n, "PR #%d needs rebase onto main (main changed %s)" % (pr["number"], ", ".join(
                 os.path.basename(f) for f in pr["conflicts"][:2])))
+        elif pr["ci"] is None:
+            add(n, "PR #%d CI %s" % (pr["number"], tally))
         elif failed:
             add(n, "PR #%d CI failed (%s)" % (pr["number"], tally))
         elif pending:
             add(n, "PR #%d CI pending (%s)" % (pr["number"], tally))
-        elif br[len("fix/"):] in dq_marks or "dq-passed" in labels:
+        elif "dq-passed" in labels or (dq_marks is not None and br[len("fix/"):] in dq_marks):
             add(n, "PR #%d CI green, DQ passed: waits for the lead's merge" % pr["number"])
+        elif dq_marks is None:
+            add(n, "PR #%d CI green, DQ mark unreadable" % pr["number"])
         else:
             add(n, "PR #%d CI green: waits for DQ" % pr["number"])
     for i in iss or []:
         if i["state"] == "OPEN" and "status:blocked" in i["labelset"]:
-            b = blocker(i)
-            add(i["number"], "blocked on #%d" % b if b else "blocked: " + waits_on(i))
+            text, err = guarded(blocked_stage, i)
+            add(i["number"], "blocked: " + unreadable(err) if err else text)
     return stages
 
 
@@ -636,17 +668,21 @@ def render(ttl):
     pr_map, pr_err = guarded(pull_requests)
     dq_runs, dq_err = guarded(rehearsals)
     br, br_err = guarded(branches)
-    for err in (pr_err, dq_err):
-        if err:
-            out.append(red("  " + err))
+    failed_inputs = [(name, err) for name, err in
+                     (("agents", ag_err), ("pull requests", pr_err), ("DQ runs", dq_err)) if err]
+    for name, err in failed_inputs:
+        out.append(red("  %s %s" % (name, unreadable(err))))
     flight = {}
-    if not iss_err and not ag_err:
-        flight = in_flight(ag, iss, pr_map, dq_runs, {b["slug"] for b in br or [] if b["dq"]})
+    if iss_err:
+        out.append(red("  issues " + unreadable(iss_err)))
+    else:
+        flight = in_flight(ag, iss, pr_map, dq_runs,
+                           None if br_err else {b["slug"] for b in br if b["dq"]})
         for n in sorted(flight):
-            title = by_num.get(n, {}).get("title", "?")
+            title = by_num[n]["title"] if n in by_num else "(not in the fetched issue list)"
             out.append("  #%-4d %s" % (n, clip(title, 44)))
             out.append("        " + "; ".join(flight[n]))
-        if not flight:
+        if not flight and not failed_inputs:
             out.append(yellow("  nothing in flight"))
 
     # agents
@@ -657,7 +693,10 @@ def render(ttl):
         out.append(yellow("  none running"))
     else:
         for a in sorted(ag, key=lambda x: x["age"]):
-            title = by_num.get(a["issue"], {}).get("title", "?")
+            if iss_err:
+                title = "title unreadable"
+            else:
+                title = by_num.get(a["issue"], {}).get("title", "(not in the fetched issue list)")
             skill = a["skill"].replace("-runner", "").replace("-register", "").replace("remediation-ledger", "remediation")
             out.append("  %-12s #%-4d %-6s %s" % (skill, a["issue"], age(a["age"]),
                                                    clip(title, width - 32)))
@@ -668,8 +707,12 @@ def render(ttl):
         if not b["ahead"] or (pr and pr["state"] == "MERGED"):
             continue                      # merged or empty: nothing to show
         state = green("DQ passed") if b["dq"] else "commits, no DQ yet"
+        if pr_err:
+            pr_text = "PR unreadable"
+        else:
+            pr_text = "PR #%d" % pr["number"] if pr else "no PR"
         out.append(dim("  branch fix/%-22s %-8s %d commit(s) ahead  %s" %
-                       (b["slug"], "PR #%d" % pr["number"] if pr else "no PR", b["ahead"], state)))
+                       (b["slug"], pr_text, b["ahead"], state)))
 
     # queue
     out.append(section("QUEUE (open issues)", width))
@@ -698,7 +741,9 @@ def render(ttl):
                                                  clip(c["subject"], width - 36)))
         if not shown:
             out.append(dim("  none"))
-    if iss:
+    if iss_err:
+        out.append(red("  closed issues " + unreadable(iss_err)))
+    else:
         closed = [i for i in iss if i["state"] == "CLOSED" and i.get("closedAt")
                   and iso_age(i["closedAt"]) < 86400]
         closed.sort(key=lambda i: iso_age(i["closedAt"]))
@@ -711,7 +756,9 @@ def render(ttl):
 
     # attention: blockers, stale running, failures, repeated retries
     out.append(section("BLOCKERS & ATTENTION (age = time since last update)", width))
-    if iss:
+    if iss_err:
+        out.append(red("  issues " + unreadable(iss_err)))
+    else:
         blocked = [i for i in iss if i["state"] == "OPEN" and
                    ({"status:blocked", "status:waiting-resources"} & i["labelset"])]
         blocked.sort(key=lambda i: iso_age(i["updatedAt"]))
@@ -733,7 +780,9 @@ def render(ttl):
             out.append("  %s #%-4d %-6s %s" % (red("STALE investigating"), i["number"],
                                                age(iso_age(i["updatedAt"])),
                                                clip(i["title"] + "  (no agent, process or CI)", width - 36)))
-        if not blocked and not stale and not stale_inv:
+        if failed_inputs:
+            out.append(red("  stale check not run: %s unreadable" % ", ".join(n for n, _ in failed_inputs)))
+        elif not blocked and not stale and not stale_inv:
             out.append(green("  none"))
     if pl:
         for mg in pl:
