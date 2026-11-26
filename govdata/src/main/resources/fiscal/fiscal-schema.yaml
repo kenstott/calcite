@@ -9256,6 +9256,108 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # GAO REPORT FEED — daily captures of GAO's rolling reports RSS feed
+  # ---------------------------------------------------------------------------
+  - name: gao_report_feed
+    # The feed is regenerated when GAO publishes; an unchanged body adds nothing.
+    freshness:
+      type: hash
+    pattern: "type=gao_report_feed/as_of=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+
+    comment: >
+      Daily captures of the U.S. Government Accountability Office (GAO) reports RSS feed: one
+      row per feed item per capture date (as_of), with the GAO product number (e.g.
+      GAO-27-108423), title, product page URL, publication date and the summary text GAO puts in
+      the feed (for most reports the "What GAO Found" and "Why GAO Did This Study" sections).
+      The same product repeats across capture dates, so use the gao_reports view for one row per
+      product and do not count rows here as reports. FORWARD-ONLY: the feed is a rolling window
+      of about 25 items (roughly two weeks of publications) with no history, so nothing published
+      before the window of the first capture is here (earlier reports such as GAO-24-107001 are
+      absent), and a product that enters and leaves the feed between two captures is missed.
+      This is not GAO's full catalog: it holds no recommendations or their status, no High-Risk
+      List, no bid protest decisions and no full report text. An absent report does not mean GAO
+      has not published on the subject. A U.S. government work. Source:
+      https://www.gao.gov/rss/reports.xml
+
+    columns:
+      - *partition_type
+      - name: product_number
+        type: string
+        nullable: false
+        comment: GAO product number from the product page URL, uppercased (e.g. GAO-27-108423)
+      - name: title
+        type: string
+        nullable: false
+        comment: Product title as given in the feed
+      - name: product_url
+        type: string
+        nullable: false
+        comment: GAO product page, https://www.gao.gov/products/<number>
+      - name: published_date
+        type: date
+        nullable: false
+        comment: Publication date from the feed item's pubDate (US Eastern calendar date)
+      - name: summary_text
+        type: string
+        nullable: false
+        comment: >
+          Plain-text summary from the feed item. Usually "What GAO Found" followed by "Why GAO
+          Did This Study"; some products (spotlights, supplemental material) use other headings.
+          It is GAO's summary, not the full report; figures and tables are not included.
+      - name: as_of
+        type: date
+        nullable: false
+        expression: 'CURRENT_DATE'
+        comment: Date this feed capture was materialized (UTC)
+
+    dimensions:
+      type:
+        - gao_report_feed
+
+    source:
+      type: http
+      url: "https://www.gao.gov/rss/reports.xml"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.2
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.GaoReportFeedTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=gao_report_feed/"
+      partition:
+        columns: [type, as_of]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: gao_report_feed
+        catalogType: hadoop
+        batchPartitionColumns: [type, as_of]
+        # as_of is a partition key: a same-day re-run replaces that day's capture only, and
+        # earlier captures stay. The history cannot be re-fetched from the source.
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -9265,6 +9367,9 @@ partitionedTables:
 # ============================================================================
 
 constraints:
+
+  gao_report_feed:
+    primaryKey: [type, as_of, product_number]
 
   treasury_auction_results:
     primaryKey: [auction_date, cusip]
@@ -9503,6 +9608,39 @@ constraints:
 # ============================================================================
 
 views:
+
+  - name: gao_reports
+    comment: >
+      GAO (Government Accountability Office) reports and other products seen in GAO's reports
+      RSS feed, one row per product number with the title, URL, publication date and summary
+      text from the latest capture, plus the first and last capture dates. Forward-only: covers
+      only products that appeared in the rolling feed since daily capture began (see
+      MIN(first_captured_date)); it is not GAO's full catalog and carries no recommendations,
+      High-Risk List or full report text. Derived from gao_report_feed. Example: SELECT
+      product_number, published_date, title, summary_text FROM gao_reports WHERE
+      LOWER(title) LIKE '%air traffic%' ORDER BY published_date DESC.
+    sql: >
+      SELECT
+        product_number,
+        title,
+        product_url,
+        published_date,
+        summary_text,
+        first_captured_date,
+        as_of AS last_captured_date
+      FROM (
+        SELECT
+          product_number,
+          title,
+          product_url,
+          published_date,
+          summary_text,
+          as_of,
+          MIN(as_of) OVER (PARTITION BY product_number) AS first_captured_date,
+          ROW_NUMBER() OVER (PARTITION BY product_number ORDER BY as_of DESC) AS capture_rank
+        FROM gao_report_feed
+      ) f
+      WHERE capture_rank = 1
 
   - name: soi_income_by_county_year
     # year passes through soi_income_by_county.year, stored as text: served as INTEGER (GOV-075).

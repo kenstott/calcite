@@ -31,6 +31,8 @@ fiscal.continuing_resolutions
 fiscal.exempt_org_990_schedule_h
 fiscal.federal_funding_gaps
 fiscal.foreign_assistance_by_country
+fiscal.gao_report_feed
+fiscal.gao_reports
 fiscal.tanf_caseload
 fiscal.tanf_work_participation
 fiscal.treasury_auction_results
