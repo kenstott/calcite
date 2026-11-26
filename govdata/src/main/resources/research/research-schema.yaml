@@ -980,8 +980,10 @@ partitionedTables:
       # Calendar month of the AWARD date, as in nsf_award_projects.
       award_month: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
       # Cache buster: the raw cache is immutable per dimension combination, so a reopened year
-      # re-reads the API once a month. Deliberately a single value.
-      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+      # re-reads the API once a quarter. The quarter token comes from today's date in every run
+      # mode (currentMonth is pinned to 12 on historical runs, so it would never change there).
+      # Deliberately a single value.
+      refresh_quarter: ["${GOVDATA_CURRENT_QUARTER_TOKEN}"]
 
     columns:
       - name: award_id
@@ -995,7 +997,7 @@ partitionedTables:
       - name: directorate
         type: string
         nullable: true
-        comment: "NSF directorate abbreviation of the award (e.g. ENG, MPS, BIO, GEO, CSE)"
+        comment: "NSF directorate abbreviation of the award as the API reports it when fetched (e.g. ENG, MPS, BIO, GEO, CISE; older fetches of nsf_award_projects may spell CISE as CSE)"
       - name: division
         type: string
         nullable: true
