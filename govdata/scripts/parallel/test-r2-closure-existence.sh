@@ -138,3 +138,26 @@ start=$(date +%s)
 r2_rclone 2 cat mn:x >/dev/null 2>&1 && fail "stalled rclone reported success"
 [ $(( $(date +%s) - start )) -lt 20 ] || fail "stalled rclone not cut off"
 echo "PASS stalled call times out"
+
+# 8. a failing version-hint lookup (rc other than 0/3) is logged at error level, fails the run and
+# is not silently skipped; rc 3 (no version-hint) is the non-Iceberg skip and does not fail it.
+mkdir -p "$T/home"
+rc=0
+cat > "$T/bin/rclone" <<'REOF'
+#!/usr/bin/env bash
+last="${*: -1}"
+case "$last" in
+  minio:govdata-parquet-v1) echo "s/" ;;
+  minio:govdata-parquet-v1/s) echo "t/"; echo "plain/" ;;
+  *plain/metadata/version-hint.text) exit 3 ;;
+  *t/metadata/version-hint.text) exit 1 ;;
+esac
+exit 0
+REOF
+chmod +x "$T/bin/rclone"
+HOME="$T/home" PROD_AWS_ACCESS_KEY_ID=x PROD_AWS_SECRET_ACCESS_KEY=x PROD_AWS_ENDPOINT_OVERRIDE=http://127.0.0.1:1 \
+  PATH="$T/bin:/usr/bin:/bin" bash "$DIR/catchup-sync-r2.sh" --dry-run --schema s > "$T/cu.out" 2>&1 || rc=$?
+[ "$rc" -eq 1 ] || { cat "$T/cu.out"; fail "failing lookup did not fail the run (rc=$rc)"; }
+grep -q "\[s/t\] version-hint lookup failed (rclone rc=1)" "$T/cu.out" || { cat "$T/cu.out"; fail "lookup failure not logged"; }
+grep -q "\[s/plain\] skipped: not an Iceberg table" "$T/cu.out" || { cat "$T/cu.out"; fail "rc 3 not treated as non-Iceberg"; }
+echo "PASS failing version-hint lookup is loud, rc 3 skips"
