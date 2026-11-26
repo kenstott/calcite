@@ -8035,9 +8035,11 @@ partitionedTables:
         - name: indicator
           type: string
     comment: >
-      International economic indicators from World Bank for all countries. Includes GDP, inflation,
-      unemployment, government debt, and population statistics. Uses bulk download with response
-      partitioning: one API call per indicator returns all countries/years, then partitioned on write.
+      Annual international economic indicators from the World Bank, long format: one row per
+      (indicator, country_id, date). Covers GDP, inflation, unemployment, government debt and
+      population statistics. Areas include countries and World Bank aggregates (World, regions,
+      income groups); aggregates are summaries of countries, so filter to one area level before
+      summing or ranking.
 
     # Dimensions for batch iteration - only indicator drives API calls
     # Country and year are derived from response data via responsePartitioning
@@ -8052,10 +8054,22 @@ partitionedTables:
     # Columns match World Bank API response fields from [1] array (data array)
     # API response: [metadata, [{indicator:{id,value}, country:{id,value}, countryiso3code, date, value, unit, ...}]]
     columns:
+      - name: country_id
+        type: string
+        nullable: true
+        comment: >
+          World Bank area code, present on every row (e.g., 'US', 'CN', '1W' = World,
+          'XD' = High income). Identifies the area, including aggregates that have no ISO code.
+      - name: country_name
+        type: string
+        nullable: true
+        comment: World Bank area name (e.g., 'United States', 'High income')
       - name: countryiso3code
         type: string
         nullable: true
-        comment: ISO 3-letter country code (e.g., 'USA', 'CHN')
+        comment: >
+          ISO 3-letter country code (e.g., 'USA', 'CHN'); also set for some aggregates (e.g.,
+          'WLD'). Empty for income-group aggregates, which only country_id identifies.
       - name: date
         type: integer
         nullable: true
@@ -8076,6 +8090,13 @@ partitionedTables:
         type: int
         nullable: true
         comment: Decimal precision indicator
+
+    hooks:
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.econ.WorldBankCountryTransformer"
+      errorHandling:
+        rowTransformer: FAIL
 
     # HTTP Source configuration for EtlPipeline
     # Uses bulk download: all countries, year range filter, high per_page limit
@@ -13235,8 +13256,9 @@ constraints:
   world_indicators:
     primaryKey:
       - type
-      - frequency
-      - year
+      - indicator
+      - country_id
+      - date
     foreignKeys:
       - columns:
           - countryiso3code
