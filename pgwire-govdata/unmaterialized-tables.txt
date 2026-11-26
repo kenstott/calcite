@@ -12,6 +12,7 @@ census.acs_rent_burden_by_income
 disasters.fema_firm_panels
 disasters.fema_nfhl_lomrs
 econ.business_formation_statistics
+econ.card_delinquency_by_score
 econ.federal_budget_authority_by_function
 econ.national_industry_employment
 econ.osha_inspections
