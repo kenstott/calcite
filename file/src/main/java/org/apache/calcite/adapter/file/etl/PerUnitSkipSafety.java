@@ -129,7 +129,7 @@ final class PerUnitSkipSafety {
    * {@code valueSource: {year: effective_year}} still counts as covering {@code year}. Ignoring the
    * mapping would mark safe tables unsafe.
    */
-  private static Set<String> partitionVariables(EtlPipelineConfig config) {
+  static Set<String> partitionVariables(EtlPipelineConfig config) {
     Set<String> vars = new LinkedHashSet<>();
     MaterializeConfig materialize = config.getMaterialize();
     MaterializePartitionConfig partition =
