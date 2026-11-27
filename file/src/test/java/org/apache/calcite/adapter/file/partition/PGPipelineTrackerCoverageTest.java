@@ -1124,4 +1124,10 @@ class PGPipelineTrackerCoverageTest {
     assertThrows(IllegalArgumentException.class,
         () -> tracker.bulkGetCompletedTablesByKeySuffix(keys, "staging", "__year=2024"));
   }
+  @Test void testGetFreshnessTokenThrowsOnSQLException() throws Exception {
+    when(mockConnection.prepareStatement(anyString()))
+        .thenThrow(new SQLException("connection lost"));
+    assertThrows(RuntimeException.class, () -> tracker.getFreshnessToken("p"));
+  }
+
 }

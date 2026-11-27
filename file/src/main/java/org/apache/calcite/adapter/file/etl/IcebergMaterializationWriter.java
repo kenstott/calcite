@@ -21,7 +21,10 @@ import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
+import org.apache.iceberg.data.IcebergGenerics;
+import org.apache.iceberg.data.Record;
 import org.apache.iceberg.exceptions.CommitFailedException;
+import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 
@@ -58,6 +61,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -638,6 +642,37 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           + " (existing table partitions only by " + existingPartitionColumnNames + ")";
     }
     return null;
+  }
+
+  @Override public void scanExistingKeys(List<String> columns, Consumer<String[]> consumer)
+      throws IOException {
+    if (pendingRecreate != null) {
+      // The first flush replaces the table, so none of its current rows will remain.
+      return;
+    }
+    if (table == null) {
+      throw new IllegalStateException(
+          "computed_delta with incremental.keyFields requires declared columns");
+    }
+    table.refresh();
+    for (String column : columns) {
+      Types.NestedField field = table.schema().findField(column);
+      if (field == null || field.type().typeId() != Type.TypeID.STRING) {
+        throw new IllegalStateException("incremental.keyFields column '" + column
+            + "' must be a string column of " + table.name() + ", found: " + field);
+      }
+    }
+    String[] values = new String[columns.size()];
+    try (CloseableIterable<Record> records =
+             IcebergGenerics.read(table).select(columns.toArray(new String[0])).build()) {
+      for (Record record : records) {
+        for (int i = 0; i < values.length; i++) {
+          Object value = record.getField(columns.get(i));
+          values[i] = value == null ? null : value.toString();
+        }
+        consumer.accept(values);
+      }
+    }
   }
 
   /**

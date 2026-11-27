@@ -1371,6 +1371,8 @@ public class HttpSourceConfig {
     private final String quarterField;
     /** When false, field values are compared without single-quote wrapping (numeric Socrata fields). */
     private final boolean quoteValues;
+    /** Columns identifying one record version for {@code computed_delta}; empty when unused. */
+    private final List<String> keyFields;
 
     public IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
         String filterParam, String dateField, String yearField, String quarterField) {
@@ -1389,6 +1391,15 @@ public class HttpSourceConfig {
         String untilDate, String untilYear,
         String filterParam, String dateField, String yearField, String quarterField,
         boolean quoteValues) {
+      this(sinceDate, sinceYear, sinceQuarter, untilDate, untilYear, filterParam, dateField,
+          yearField, quarterField, quoteValues, Collections.<String>emptyList());
+    }
+
+    private IncrementalConfig(String sinceDate, String sinceYear, String sinceQuarter,
+        String untilDate, String untilYear,
+        String filterParam, String dateField, String yearField, String quarterField,
+        boolean quoteValues, List<String> keyFields) {
+      this.keyFields = keyFields;
       this.sinceDate = sinceDate;
       this.sinceYear = sinceYear;
       this.sinceQuarter = sinceQuarter;
@@ -1411,6 +1422,7 @@ public class HttpSourceConfig {
     public String getYearField() { return yearField; }
     public String getQuarterField() { return quarterField; }
     public boolean isQuoteValues() { return quoteValues; }
+    public List<String> getKeyFields() { return keyFields; }
 
     private String q(String value) {
       return quoteValues ? "'" + value + "'" : value;
@@ -1466,6 +1478,21 @@ public class HttpSourceConfig {
       return null;
     }
 
+    private static List<String> parseKeyFields(Object value) {
+      if (value == null) {
+        return Collections.<String>emptyList();
+      }
+      if (!(value instanceof List) || ((List<?>) value).isEmpty()) {
+        throw new IllegalArgumentException(
+            "incremental.keyFields must be a non-empty list of column names, got: " + value);
+      }
+      List<String> fields = new ArrayList<String>();
+      for (Object field : (List<?>) value) {
+        fields.add(String.valueOf(field));
+      }
+      return Collections.unmodifiableList(fields);
+    }
+
     public static IncrementalConfig fromMap(Map<String, Object> map) {
       if (map == null) {
         return null;
@@ -1483,7 +1510,8 @@ public class HttpSourceConfig {
           (String) map.get("dateField"),
           (String) map.get("yearField"),
           (String) map.get("quarterField"),
-          quoteValues);
+          quoteValues,
+          parseKeyFields(map.get("keyFields")));
     }
   }
 

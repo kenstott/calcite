@@ -13,7 +13,9 @@ package org.apache.calcite.adapter.file.etl;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Interface for materializing data to different storage formats.
@@ -150,6 +152,23 @@ public interface MaterializationWriter extends Closeable {
   }
 
   /**
+   * Passes the named columns of every row the target table currently holds to {@code consumer}.
+   *
+   * <p>Rows staged by this writer and not yet committed are not included.
+   *
+   * @param columns Table column names, all of string type
+   * @param consumer Receives the values of {@code columns}, in order, once per row; the array is
+   *     reused between calls
+   * @throws IOException if the table cannot be read
+   */
+  default void scanExistingKeys(List<String> columns, Consumer<String[]> consumer)
+      throws IOException {
+    throw new UnsupportedOperationException(
+        "computed_delta with incremental.keyFields needs a writer that can read its target table; "
+            + getFormat() + " cannot");
+  }
+
+  /**
    * A writer that accepts and discards everything, for {@code materialize.enabled: false}.
    *
    * <p>Disabling materialization is a supported configuration — the pipeline still fetches,
@@ -177,6 +196,10 @@ public interface MaterializationWriter extends Closeable {
         rows++;
       }
       return rows;
+    }
+
+    @Override public void scanExistingKeys(List<String> columns, Consumer<String[]> consumer) {
+      // Nothing is ever written, so there are no existing rows.
     }
 
     @Override public void commit() {

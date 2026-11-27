@@ -131,12 +131,13 @@ partitionedTables:
   # ==========================================================================
   - name: gleif_entities
     # Full point-in-time GLEIF golden copy that ALREADY carries a per-record updated_at
-    # (last_update = Registration.LastUpdateDate). computed_delta keeps only the rows whose
-    # last_update advanced past the stored high-water mark and APPENDS them (materialize
-    # overwritePartitions: false below), so each publish adds just the changed LEIs instead of
-    # rewriting all ~3.2M rows — and last_update becomes the queryable history axis (group by it
-    # for point-in-time / trend queries; "current" = latest last_update per lei). No synthesized
-    # column: the source's own last_update is both the change key and the time axis.
+    # (last_update = Registration.LastUpdateDate). computed_delta APPENDS only the (lei,
+    # last_update) versions the table does not hold (materialize overwritePartitions: false
+    # below), so each publish adds just the changed LEIs instead of rewriting all ~3.2M rows —
+    # and last_update is the queryable history axis (group by it for point-in-time / trend
+    # queries; "current" = latest last_update per lei). A high-water mark on last_update does not
+    # work here: GLEIF publishes records stamped earlier than ones already published (and some
+    # stamped ahead of the publish time), in mixed UTC offsets.
     dataset_type: computed_delta
     freshness:
       type: last_modified   # pre-download gate: skip the ~450MB pull entirely when the golden copy file is unchanged
@@ -234,10 +235,10 @@ partitionedTables:
       url: "https://goldencopy.gleif.org/api/v2/golden-copies/publishes/lei2/latest.csv"
       method: GET
       extractPattern: "*.csv"
-      # computed_delta change key: only rows whose last_update exceeds the stored high-water mark
-      # are kept and appended. last_update is the source's own Registration.LastUpdateDate.
+      # computed_delta record-version key: a row is appended only when the table holds none with
+      # the same values. last_update is the source's own Registration.LastUpdateDate.
       incremental:
-        dateField: last_update
+        keyFields: [lei, last_update]
       response:
         format: csv
       rateLimit:
@@ -380,9 +381,9 @@ partitionedTables:
   # ==========================================================================
   - name: gleif_relationships
     # Same history model as gleif_entities: a full point-in-time golden copy that already carries
-    # a per-record updated_at, so computed_delta appends only the edges whose LastUpdateDate
-    # advanced past the stored high-water mark and registration_last_update becomes the history
-    # axis. Ownership changes are exactly what you want a changelog of — "when did X become a
+    # a per-record updated_at, so computed_delta appends only the edge versions (start, end,
+    # type, LastUpdateDate) the table does not hold and registration_last_update becomes the
+    # history axis. Ownership changes are exactly what you want a changelog of — "when did X become a
     # subsidiary of Y" is answerable from the appended rows, not from any single snapshot.
     # Columns are 1:1 with the RR CSV, renamed but not reshaped: all five Period / Qualifier /
     # Quantifier slots are carried as published, so a slot GLEIF starts populating lands in the
@@ -664,9 +665,9 @@ partitionedTables:
       method: GET
       extractPattern: "*.csv"
       incremental:
-        # computed_delta change key: only rows whose registration_last_update exceeds the stored
-        # high-water mark are kept and appended.
-        dateField: registration_last_update
+        # computed_delta record-version key: a row is appended only when the table holds none
+        # with the same values.
+        keyFields: [start_node_id, end_node_id, relationship_type, registration_last_update]
       response:
         format: csv
       rateLimit:

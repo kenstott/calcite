@@ -147,6 +147,13 @@ public class EtlPipeline {
       new ConcurrentHashMap<String, String>();
 
   /**
+   * Keys the target table of a {@code computed_delta} pipeline with {@code incremental.keyFields}
+   * holds, plus those emitted this run. Read from the table by the first unit that needs it.
+   * Guarded by {@code writeLock}.
+   */
+  private DeltaKeyIndex deltaKeys;
+
+  /**
    * Period-completion keys of the periods the lookback reopened this run. Populated by
    * {@link #reopenLookbackPeriods} during Phase 2 and read in {@link #processSingleBatch} to
    * drop a reopened unit's raw cache entry before fetching: an entry is validated by existence
@@ -322,6 +329,7 @@ public class EtlPipeline {
     // Deferred marks belong to one run's commit; a run that never committed must not hand them on.
     pendingFreshnessTokens.clear();
     pendingComboMarks.clear();
+    deltaKeys = null;
 
     // Release-window gate: a table-root `releaseWindow:` block restricts which calendar
     // months, days of week, and/or year parity this table's ETL is allowed to run in (e.g.
@@ -757,12 +765,13 @@ public class EtlPipeline {
           && dataSource instanceof HttpSource
           && !sourceUrlIsTemplated) {
         HttpSource httpSource = (HttpSource) dataSource;
+        // Read outside the probe's handler: a tracker that cannot be read fails the run.
+        String previousToken = incrementalTracker.getFreshnessToken(pipelineName);
         try {
           HttpSource.ProbeResult probeResult =
               httpSource.probe(freshnessConfig, Collections.<String, String>emptyMap());
           String currentToken = FreshnessCheck.token(
               freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
-          String previousToken = incrementalTracker.getFreshnessToken(pipelineName);
           // Only skip when the source is unchanged AND there is a committed table to preserve.
           // forceReprocessAll is set above when there's no Iceberg data (or the marker was
           // cleared/stale): in that case we must re-fetch and re-materialize even if the token
@@ -2328,12 +2337,13 @@ public class EtlPipeline {
     if (perUnitFreshnessEnabled && dataSource instanceof HttpSource) {
       FreshnessConfig freshnessConfig = config.getFreshness();
       String unitKey = pipelineName + "::" + freshnessUnitKey(variables);
+      // Read outside the probe's handler: a tracker that cannot be read fails the unit.
+      String previousToken = incrementalTracker.getFreshnessToken(unitKey);
       try {
         HttpSource.ProbeResult probeResult =
             ((HttpSource) dataSource).probe(freshnessConfig, variables);
         String currentToken = FreshnessCheck.token(
             freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
-        String previousToken = incrementalTracker.getFreshnessToken(unitKey);
         if (freshnessSkipAllowed
             && previousToken != null
             && !FreshnessCheck.changed(previousToken, currentToken)) {
@@ -2494,7 +2504,17 @@ public class EtlPipeline {
     final String[] computedDeltaHwm = {null};      // max(modifiedField) once `data` is drained
     final long[] computedDeltaCounts = {0L, 0L};   // [seen, emitted]
     boolean computedDeltaStreaming = false;
-    if ("computed_delta".equals(config.getDatasetType())) {
+    DeltaKeyFilter keyFilter = null;
+    if ("computed_delta".equals(config.getDatasetType())
+        && !config.getDeltaKeyFields().isEmpty()) {
+      synchronized (writeLock) {
+        if (deltaKeys == null) {
+          deltaKeys = DeltaKeyFilter.load(pipelineName, config.getDeltaKeyFields(), writer);
+        }
+      }
+      keyFilter = new DeltaKeyFilter(pipelineName, config, deltaKeys, data);
+      data = keyFilter;
+    } else if ("computed_delta".equals(config.getDatasetType())) {
       final String modifiedField = config.getModifiedField();
       final String prevHwm = latestFreshnessToken(computedDeltaHwmKey);
       LOGGER.info("computed_delta: modifiedField={}, prevHwm={}", modifiedField, prevHwm);
@@ -2583,6 +2603,7 @@ public class EtlPipeline {
     // Serialize all writer and tracker operations to prevent concurrent DuckDB access.
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     final boolean finalComputedDeltaStreaming = computedDeltaStreaming;
+    final DeltaKeyFilter finalKeyFilter = keyFilter;
     final String finalHashFreshnessToken = hashFreshnessToken;
     final String finalHashTokenKey = hashTokenKey;
     // The write consumes `data`, which on a hash-CHANGED run is the re-fetched chain (not
@@ -2642,6 +2663,10 @@ public class EtlPipeline {
             if (computedDeltaHwm[0] != null) {
               pendingFreshnessTokens.put(computedDeltaHwmKey, computedDeltaHwm[0]);
             }
+          }
+          if (finalKeyFilter != null) {
+            LOGGER.info("computed_delta: {} of {} rows new to the table",
+                finalKeyFilter.emitted(), finalKeyFilter.seen());
           }
           if (finalHashFreshnessToken != null) {
             pendingFreshnessTokens.put(finalHashTokenKey, finalHashFreshnessToken);

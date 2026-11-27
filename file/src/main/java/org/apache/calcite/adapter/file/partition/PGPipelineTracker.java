@@ -1188,7 +1188,9 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         }
       }
     } catch (SQLException e) {
-      LOGGER.debug("Error getting freshness token for {}: {}", pipelineName, e.getMessage());
+      // A failed read is not "no token": callers treat null as a first run.
+      throw new RuntimeException("PG tracker read failed (getFreshnessToken) for "
+          + pipelineName + ": " + e.getMessage(), e);
     }
     return null;
   }

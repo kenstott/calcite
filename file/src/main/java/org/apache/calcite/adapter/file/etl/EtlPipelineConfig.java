@@ -309,6 +309,18 @@ public class EtlPipelineConfig {
   }
 
   /**
+   * Returns the columns that identify one record version for {@code computed_delta}
+   * ({@code incremental.keyFields}). When non-empty, a fetched row is written only if the target
+   * table holds no row with the same values in these columns; empty when not configured.
+   */
+  public List<String> getDeltaKeyFields() {
+    if (source != null && source.getIncremental() != null) {
+      return source.getIncremental().getKeyFields();
+    }
+    return Collections.<String>emptyList();
+  }
+
+  /**
    * Creates a new builder for EtlPipelineConfig.
    */
   public static Builder builder() {
