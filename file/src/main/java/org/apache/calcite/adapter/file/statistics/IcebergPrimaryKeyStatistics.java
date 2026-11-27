@@ -44,6 +44,13 @@ public final class IcebergPrimaryKeyStatistics {
   private static final String KEYED_ROWS_PROPERTY = PREFIX + "keyed-rows";
   private static final String DISTINCT_KEYS_PROPERTY = PREFIX + "distinct-keys";
   private static final String EXACT_PROPERTY = PREFIX + "exact";
+  private static final String METHOD_PROPERTY = PREFIX + "method";
+  /**
+   * How the distinct count was measured: by the storage engine, which has no knowledge of the
+   * declared key. A count taken through a planner that holds the key as a constraint can have its
+   * DISTINCT removed, so an exact statistic without this marker is not evidence of uniqueness.
+   */
+  private static final String ENGINE_METHOD = "engine";
 
   private IcebergPrimaryKeyStatistics() {
   }
@@ -51,8 +58,9 @@ public final class IcebergPrimaryKeyStatistics {
   /**
    * Read the primary-key statistic recorded for the table's current snapshot.
    *
-   * @return the statistic, or null when none was recorded or it describes an older snapshot —
-   *     callers must then measure, never assume the key is unique
+   * @return the statistic, or null when none was recorded, it describes an older snapshot, or it
+   *     is an exact count not measured by the storage engine — callers must then measure, never
+   *     assume the key is unique
    */
   public static PrimaryKeyStatistics read(Table table) {
     if (table == null) {
@@ -80,6 +88,10 @@ public final class IcebergPrimaryKeyStatistics {
       if (columns == null || keyedRows == null || distinctKeys == null) {
         return null;
       }
+      boolean exact = Boolean.parseBoolean(props.get(EXACT_PROPERTY));
+      if (exact && !ENGINE_METHOD.equals(props.get(METHOD_PROPERTY))) {
+        return null;
+      }
       List<String> keyColumns = new ArrayList<>(Arrays.asList(columns.split(",")));
       if (keyColumns.isEmpty()) {
         return null;
@@ -87,7 +99,7 @@ public final class IcebergPrimaryKeyStatistics {
       return new PrimaryKeyStatistics(keyColumns,
           Long.parseLong(keyedRows),
           Long.parseLong(distinctKeys),
-          Boolean.parseBoolean(props.get(EXACT_PROPERTY)),
+          exact,
           snapshotId,
           null);
     // Throwable, not Exception: a missing or incompatible dependency raises an Error, and a
@@ -100,7 +112,8 @@ public final class IcebergPrimaryKeyStatistics {
   }
 
   /**
-   * Record a primary-key statistic against the table's current snapshot.
+   * Record a primary-key statistic against the table's current snapshot. The distinct count
+   * must come from the storage engine, not from a query planned against the declared key.
    *
    * <p>Sets only its own properties, leaving every other property and all statistics files
    * in place. Throws on failure so a caller that promised to persist can report that it did
@@ -119,7 +132,8 @@ public final class IcebergPrimaryKeyStatistics {
         .set(COLUMNS_PROPERTY, String.join(",", stats.getKeyColumns()))
         .set(KEYED_ROWS_PROPERTY, Long.toString(stats.getKeyedRowCount()))
         .set(DISTINCT_KEYS_PROPERTY, Long.toString(stats.getDistinctKeyEstimate()))
-        .set(EXACT_PROPERTY, Boolean.toString(stats.isExact()));
+        .set(EXACT_PROPERTY, Boolean.toString(stats.isExact()))
+        .set(METHOD_PROPERTY, ENGINE_METHOD);
     // A property commit moves the version-hint pointer like any other metadata commit, so it
     // takes the same per-table lock the ETL writers hold.
     org.apache.calcite.adapter.file.iceberg.CrossProcessCommitLock.runExclusive(
