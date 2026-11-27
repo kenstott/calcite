@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 // Long-lived helper: one headed Chrome session per ETL run for pages that refuse non-browser
-// clients (ssa.gov answers HTTP 403 to plain HTTP). Reads one JSON request per stdin line, writes
+// clients (ssa.gov answers HTTP 403 to plain HTTP, ScienceBase a Cloudflare challenge). Reads one JSON request per stdin line, writes
 // one JSON reply per stdout line. All diagnostics go to stderr.
 //
 //   usage: fetch-page.js <entry-page-url> <delay-ms> [chrome-executable]
 //   request: {"url": "<page url on the same origin as the entry page>", "binary": true|false}
+//            | {"url": "<file url>", "toFile": "<path>"} to stream the body into that file
 //   reply:   {"status": 200, "text": "<response body>"} (or "base64" when binary is true)
+//            | {"status": 200, "bytes": <bytes written>} for a toFile request
 //            | {"status": 404} | {"error": "<cause>"}
 //
 // The entry page is loaded once; every URL is then fetched from inside that page (same-origin),
 // so the browser's own cookies and headers apply. Plain headed, unmodified Chrome: no stealth
 // plugin and no spoofed fingerprint.
 'use strict';
+const fs = require('fs');
 const readline = require('readline');
 
 const [entryPage, delayArg, chromePath] = process.argv.slice(2);
@@ -37,7 +40,8 @@ try {
 }
 
 async function main() {
-  const opts = {headless: false};
+  // protocolTimeout bounds one in-page fetch, including a large file download.
+  const opts = {headless: false, protocolTimeout: 900000};
   if (chromePath && chromePath.length > 0) {
     opts.executablePath = chromePath;
   }
@@ -48,6 +52,14 @@ async function main() {
     fail('cannot start headed Chrome: ' + e.message);
   }
   const page = await browser.newPage();
+  // Receives the chunks of a toFile download, one at a time.
+  let outFile = null;
+  let outBytes = 0;
+  await page.exposeFunction('writeChunk', b64 => {
+    const chunk = Buffer.from(b64, 'base64');
+    fs.writeFileSync(outFile, chunk);
+    outBytes += chunk.length;
+  });
   const resp = await page.goto(entryPage, {waitUntil: 'domcontentloaded', timeout: 90000});
   if (!resp || resp.status() !== 200) {
     await browser.close();
@@ -69,21 +81,44 @@ async function main() {
       if (wait > 0) {
         await new Promise(r => setTimeout(r, wait));
       }
-      reply = await page.evaluate(async (u, bin) => {
-        const res = await fetch(u, {credentials: 'same-origin'});
-        if (res.status !== 200) {
-          return {status: res.status};
+      const toFile = request.toFile !== undefined;
+      if (toFile) {
+        outFile = fs.openSync(request.toFile, 'w');
+        outBytes = 0;
+      }
+      try {
+        reply = await page.evaluate(async (u, bin, stream) => {
+          const base64 = bytes => {
+            let s = '';
+            for (let i = 0; i < bytes.length; i += 8192) {
+              s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+            }
+            return btoa(s);
+          };
+          const res = await fetch(u, {credentials: 'same-origin'});
+          if (res.status !== 200) {
+            return {status: res.status};
+          }
+          if (stream) {
+            const reader = res.body.getReader();
+            for (let part = await reader.read(); !part.done; part = await reader.read()) {
+              await window.writeChunk(base64(part.value));
+            }
+            return {status: 200};
+          }
+          if (!bin) {
+            return {status: 200, text: await res.text()};
+          }
+          return {status: 200, base64: base64(new Uint8Array(await res.arrayBuffer()))};
+        }, url, binary, toFile);
+      } finally {
+        if (toFile) {
+          fs.closeSync(outFile);
         }
-        if (!bin) {
-          return {status: 200, text: await res.text()};
-        }
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        let s = '';
-        for (let i = 0; i < bytes.length; i += 8192) {
-          s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
-        }
-        return {status: 200, base64: btoa(s)};
-      }, url, binary);
+      }
+      if (toFile) {
+        reply.bytes = outBytes;
+      }
       lastRequest = Date.now();
       if (reply.status !== 200 && reply.status !== 404) {
         reply = {error: 'HTTP ' + reply.status + ' from ' + url};

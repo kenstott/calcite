@@ -349,6 +349,43 @@ SELECT 'environment', 'water_withdrawals', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips/sector rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true) WHERE county_fips IS NULL OR sector IS NULL);
 
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T7_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (county_fips, year, sector) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, year, sector
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true)
+  GROUP BY county_fips, year, sector HAVING COUNT(*) > 1));
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T8_year_completeness',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Census years with fewer than 3100 counties or other than 7 sectors'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true)
+  GROUP BY year HAVING COUNT(DISTINCT county_fips) < 3100 OR COUNT(DISTINCT sector) <> 7));
+
+-- ------------------------------------------------------------
+-- TABLE: water_use_county (partition cols: type)
+-- The 2015 census: one row per county or county-equivalent, 321.7 Bgal/d nationally.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'water_use_county', 'T2_row_count',
+  CASE WHEN n = 3223 THEN 'pass' ELSE 'fail' END, n, 3223, 'One row per county in the 2015 release'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_use_county', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'water_use_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_use_county', allow_moved_paths := true) WHERE county_fips IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'water_use_county', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate county_fips'
+FROM (SELECT COUNT(*) AS n FROM (SELECT county_fips FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_use_county', allow_moved_paths := true) GROUP BY 1 HAVING COUNT(*) > 1));
+INSERT INTO dq_results
+SELECT 'environment', 'water_use_county', 'T9_national_total',
+  CASE WHEN total BETWEEN 321000 AND 323000 THEN 'pass' ELSE 'fail' END, CAST(total AS BIGINT), 322000, 'National total withdrawals, Mgal/d (USGS Circular 1441: 322 Bgal/d)'
+FROM (SELECT SUM(total_withdrawals_mgd) AS total FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_use_county', allow_moved_paths := true));
+
 -- ------------------------------------------------------------
 -- TABLE: drinking_water (partition cols: type, state)
 -- ------------------------------------------------------------

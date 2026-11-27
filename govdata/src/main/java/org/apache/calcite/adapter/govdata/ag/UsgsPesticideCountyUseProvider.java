@@ -15,6 +15,8 @@ import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.govdata.ScienceBaseBrowserSession;
+import org.apache.calcite.adapter.govdata.ScienceBaseClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +40,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -72,6 +75,12 @@ import java.util.regex.Pattern;
  * "Archived data" section (stale preliminary duplicates of data covered by the sections
  * above) are deliberately excluded.
  *
+ * <p>ScienceBase answers a Cloudflare challenge (HTTP 403) to non-browser clients, so the item
+ * file list and the files it names go through a headed browser session; see
+ * {@link ScienceBaseBrowserSession}. The landing page, the {@code doi.org} redirect and the files
+ * on {@code water.usgs.gov} are fetched directly. A DOI redirect is followed only as far as the
+ * ScienceBase item URL, which carries the item id.
+ *
  * <p>The table has no {@code year} dimension: one run fetches every year the source
  * currently publishes and partitions by each row's own {@code year} column, the same
  * pattern {@code ers_farm_income} uses for the same reason — a multi-vintage source with
@@ -95,6 +104,16 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
       "COMPOUND", "YEAR", "STATE_FIPS_CODE", "COUNTY_FIPS_CODE", "EPEST_LOW_KG", "EPEST_HIGH_KG"
   };
 
+  private final Function<Map<String, String>, ScienceBaseClient> clients;
+
+  public UsgsPesticideCountyUseProvider() {
+    this(ScienceBaseBrowserSession::get);
+  }
+
+  UsgsPesticideCountyUseProvider(Function<Map<String, String>, ScienceBaseClient> clients) {
+    this.clients = clients;
+  }
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
     String landingUrl = config.getSource() != null ? config.getSource().getUrl() : null;
@@ -103,7 +122,9 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
     }
     String userAgent = headerOrDefault(config, "User-Agent", DEFAULT_UA);
 
-    List<String> dataFileUrls = resolveDataFileUrls(landingUrl, userAgent);
+    ScienceBaseClient scienceBase = clients.apply(config.getSource().getParameters());
+
+    List<String> dataFileUrls = resolveDataFileUrls(landingUrl, userAgent, scienceBase);
     if (dataFileUrls.isEmpty()) {
       throw new IOException("USGS pesticide use: no county-level data files resolved from "
           + landingUrl);
@@ -111,14 +132,15 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
     LOGGER.info("USGS pesticide use: resolved {} county-level data file(s) from {}",
         dataFileUrls.size(), landingUrl);
 
-    return new MultiFileRowIterator(dataFileUrls, userAgent, rawCache);
+    return new MultiFileRowIterator(dataFileUrls, userAgent, scienceBase, rawCache);
   }
 
   // ---------------------------------------------------------------------
   // Discovery: landing page -> ordered list of tab-delimited data file URLs
   // ---------------------------------------------------------------------
 
-  private List<String> resolveDataFileUrls(String landingUrl, String userAgent) throws IOException {
+  private List<String> resolveDataFileUrls(String landingUrl, String userAgent,
+      ScienceBaseClient scienceBase) throws IOException {
     String html = getText(landingUrl, userAgent);
     String lower = html.toLowerCase(Locale.ROOT);
     int start = lower.indexOf(SECTION_START_MARKER);
@@ -141,7 +163,7 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
       if (lowerHref.endsWith(".txt")) {
         fileUrls.add(URI.create(landingUrl).resolve(href).toString());
       } else if (lowerHref.startsWith("https://doi.org/") || lowerHref.startsWith("http://doi.org/")) {
-        fileUrls.addAll(resolveDoiToDataFiles(href, userAgent));
+        fileUrls.addAll(resolveDoiToDataFiles(href, userAgent, scienceBase));
       } else {
         LOGGER.debug("USGS pesticide use: ignoring unrecognized link in county-level section: {}",
             href);
@@ -151,7 +173,8 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
   }
 
   /** Follows a doi.org redirect to its ScienceBase item, then returns that item's data file URL(s). */
-  private List<String> resolveDoiToDataFiles(String doiUrl, String userAgent) throws IOException {
+  private List<String> resolveDoiToDataFiles(String doiUrl, String userAgent,
+      ScienceBaseClient scienceBase) throws IOException {
     String resolvedUrl = followRedirect(doiUrl, userAgent);
     Matcher idMatch = SCIENCEBASE_ITEM_ID.matcher(resolvedUrl);
     if (!idMatch.find()) {
@@ -160,7 +183,7 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
     }
     String itemId = idMatch.group(1);
     String apiUrl = "https://www.sciencebase.gov/catalog/item/" + itemId + "?format=json&fields=files";
-    String json = getText(apiUrl, userAgent);
+    String json = scienceBase.fetchText(apiUrl);
     JsonNode files = MAPPER.readTree(json).path("files");
     List<String> dataFiles = new ArrayList<String>();
     if (files.isArray()) {
@@ -184,10 +207,16 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
     return dataFiles;
   }
 
-  /** Manually follows the redirect chain (HttpURLConnection.getURL() does not update on redirect). */
-  private String followRedirect(String url, String userAgent) throws IOException {
+  /**
+   * Manually follows the redirect chain (HttpURLConnection.getURL() does not update on redirect),
+   * stopping at the first ScienceBase URL without requesting it.
+   */
+  static String followRedirect(String url, String userAgent) throws IOException {
     String current = url;
     for (int hop = 0; hop < 5; hop++) {
+      if (ScienceBaseBrowserSession.serves(current)) {
+        return current;
+      }
       HttpURLConnection conn = (HttpURLConnection) URI.create(current).toURL().openConnection();
       conn.setRequestProperty("User-Agent", userAgent);
       conn.setConnectTimeout(30000);
@@ -229,6 +258,7 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
     private final RawCache rawCache;
     private final List<String> fileUrls;
     private final String userAgent;
+    private final ScienceBaseClient scienceBase;
     private int fileIndex;
     private BufferedReader reader;
     private int[] columnIndex;
@@ -236,9 +266,11 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
     private Map<String, Object> nextRow;
     private boolean done;
 
-    MultiFileRowIterator(List<String> fileUrls, String userAgent, RawCache rawCache) {
+    MultiFileRowIterator(List<String> fileUrls, String userAgent, ScienceBaseClient scienceBase,
+        RawCache rawCache) {
       this.fileUrls = fileUrls;
       this.userAgent = userAgent;
+      this.scienceBase = scienceBase;
       this.rawCache = rawCache;
     }
 
@@ -284,12 +316,14 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
       }
       currentUrl = fileUrls.get(fileIndex++);
       LOGGER.info("USGS pesticide use: streaming {}", currentUrl);
-      // Read through the cache, but keep this provider's own connection as the miss path: USGS
-      // is served only to a self-identifying User-Agent, which a plain GET would not carry.
+      // Read through the cache, but keep this provider's own fetch as the miss path: USGS
+      // is served only to a self-identifying User-Agent, and ScienceBase only to a browser.
       final String fileUrl = currentUrl;
       final String ua = userAgent;
       reader = new BufferedReader(new InputStreamReader(
-          rawCache.openStream(fileUrl, () -> openWithUserAgent(fileUrl, ua)),
+          rawCache.openStream(fileUrl, () -> ScienceBaseBrowserSession.serves(fileUrl)
+              ? scienceBase.openStream(fileUrl)
+              : openWithUserAgent(fileUrl, ua)),
           StandardCharsets.UTF_8));
       String header = reader.readLine();
       if (header == null) {
