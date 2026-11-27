@@ -404,6 +404,10 @@ public class CloudDriveStorageProviderTest {
       } else if (raw.equals("/v1.0/drives/drv1/root:/data:/children")) {
         body = "{\"value\":[{\"name\":\"a.csv\",\"size\":4,\"file\":{},"
             + "\"lastModifiedDateTime\":\"2026-11-20T10:00:00Z\"}]}";
+      } else if (raw.equals("/v1.0/drives/drv1/root:/data/a.csv")) {
+        // Metadata: read when another test has initialized the shared StorageCacheManager.
+        body = "{\"name\":\"a.csv\",\"size\":4,\"file\":{},"
+            + "\"lastModifiedDateTime\":\"2026-11-20T10:00:00Z\"}";
       } else if (raw.equals("/v1.0/drives/drv1/root:/data/a.csv:/content")) {
         send(ex, 200, "x\n1\n".getBytes(StandardCharsets.UTF_8));
         return;

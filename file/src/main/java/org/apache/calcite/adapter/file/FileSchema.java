@@ -1369,9 +1369,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         && GlobMatcher.of(directoryPattern.substring(3), local).matches(relativePath);
   }
 
-  /** A listed entry's path relative to the storage base path, the path the glob is matched on. */
+  /**
+   * A listed entry's path relative to the storage base path, the path the glob is matched on.
+   * A drive provider (OneDrive, SharePoint, Google Drive) lists root-relative paths with no
+   * leading {@code /}, while {@link #storageBasePath} gives a relative directory one; the
+   * leading {@code /} is dropped from the base for such an entry, as
+   * {@link StorageProviderSource#relative} does when it names the table.
+   */
   private static String relativeToStorageBase(String basePath, StorageProvider.FileEntry entry) {
-    String relativePath = LocalPaths.relativize(basePath, entry.getPath());
+    String base = basePath;
+    if (base.startsWith("/") && !entry.getPath().startsWith("/")) {
+      base = base.substring(1);
+    }
+    String relativePath = LocalPaths.relativize(base, entry.getPath());
     return relativePath != null ? relativePath : entry.getPath();
   }
 
