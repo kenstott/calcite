@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.file.storage;
 
+import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -27,11 +29,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -60,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * against an in-process fake of the Microsoft Graph and Drive v3 HTTP APIs.
  */
 @Tag("unit")
+@Isolated("swaps the JVM-wide StorageCacheManager")
 public class CloudDriveStorageProviderTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -432,6 +439,56 @@ public class CloudDriveStorageProviderTest {
       assertEquals("x\n1\n", new String(readAll(in), StandardCharsets.UTF_8));
     }
     assertTrue(authHeaders.stream().allMatch("Bearer graph-token"::equals));
+  }
+
+  @Test void oneDriveCachesDownloadsPerDrive(@TempDir File cacheDir) throws Exception {
+    // Two drives holding the same path, with item metadata that cannot tell them apart.
+    List<String> downloads = new CopyOnWriteArrayList<>();
+    server.createContext("/v1.0", ex -> {
+      String raw = ex.getRequestURI().getPath();
+      Matcher user = Pattern.compile("/v1.0/users/(\\w+)/drive").matcher(raw);
+      Matcher item = Pattern.compile("/v1.0/drives/(\\w+)/root:/data/a.csv(:/content)?")
+          .matcher(raw);
+      if (user.matches()) {
+        send(ex, 200, ("{\"id\":\"drv" + user.group(1) + "\"}")
+            .getBytes(StandardCharsets.UTF_8));
+      } else if (item.matches() && item.group(2) != null) {
+        downloads.add(item.group(1));
+        send(ex, 200, item.group(1).getBytes(StandardCharsets.UTF_8));
+      } else if (item.matches()) {
+        send(ex, 200, "{\"size\":4,\"lastModifiedDateTime\":\"2026-11-20T10:00:00Z\"}"
+            .getBytes(StandardCharsets.UTF_8));
+      } else {
+        send(ex, 404, "{\"error\":{\"message\":\"not found\"}}".getBytes(StandardCharsets.UTF_8));
+      }
+    });
+    Field instance = StorageCacheManager.class.getDeclaredField("instance");
+    instance.setAccessible(true);
+    Object previous = instance.get(null);
+    instance.set(null, null);
+    try {
+      StorageCacheManager.initialize(cacheDir);
+      MicrosoftGraphTokenManager tokens =
+          new MicrosoftGraphTokenManager("graph-token", "https://graph.microsoft.com");
+      MicrosoftGraphStorageProvider a =
+          new MicrosoftGraphStorageProvider(tokens, "A", base + "/v1.0");
+      MicrosoftGraphStorageProvider b =
+          new MicrosoftGraphStorageProvider(tokens, "B", base + "/v1.0");
+
+      // A leading slash names the same file, so the second read of each drive is a cache hit.
+      for (String path : List.of("/data/a.csv", "data/a.csv")) {
+        try (InputStream in = a.openInputStream(path)) {
+          assertEquals("drvA", new String(readAll(in), StandardCharsets.UTF_8));
+        }
+        try (InputStream in = b.openInputStream(path)) {
+          assertEquals("drvB", new String(readAll(in), StandardCharsets.UTF_8));
+        }
+      }
+      assertEquals(List.of("drvA", "drvB"), downloads);
+    } finally {
+      StorageCacheManager.getInstance().shutdown();
+      instance.set(null, previous);
+    }
   }
 
   @Test void oneDriveConfigValidation() {
