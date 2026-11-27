@@ -2271,9 +2271,11 @@ partitionedTables:
         nullable: true
         comment: Weighted national estimate
       - name: estimate_unweighted
-        type: long
+        type: double
         nullable: true
-        comment: Raw unweighted count
+        comment: >
+          Unweighted estimate from reporting agencies, in the unit given by estimate_type:
+          a count, a percentage, or a rate
       - name: estimate_type
         type: string
         nullable: true
