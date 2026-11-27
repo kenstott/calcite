@@ -2247,9 +2247,13 @@ partitionedTables:
     pattern: "type=nibrs/endpoint_id=*/*.parquet"
     partitions: *endpoint_partitions
     comment: >
-      Bureau of Justice Statistics NIBRS national crime estimates from 6 SODA endpoints.
+      Bureau of Justice Statistics NIBRS national crime estimates from 6 SODA endpoints
+      (incidents, offenses, victimization counts and victimization rates). One row per
+      published table cell: indicator, domain and category, estimate type with its
+      percentage or rate denominator, population subgroup, and estimate year. Filter on
+      all of these before aggregating; rows are overlapping breakdowns, not additive parts.
       Includes weighted estimates, confidence intervals, standard errors, agency counts,
-      and population coverage for violent and property crime indicators.
+      and population coverage.
 
     dimensions:
       type:
@@ -2284,10 +2288,30 @@ partitionedTables:
         type: string
         nullable: true
         comment: Primary domain (Incident count, Weapon involved, etc.)
+      - name: estimate_domain_2
+        type: string
+        nullable: true
+        comment: >
+          Category within estimate_domain_1 (e.g., '1 offender', '12-17', 'Yes').
+          NULL where the source publishes no category
+      - name: estimate_type_detail_percentage
+        type: string
+        nullable: true
+        comment: >
+          Denominator of a percentage estimate (e.g., 'Incident Level',
+          'Victim Level subset to female'). NULL for other estimate types
+      - name: estimate_type_detail_rate
+        type: string
+        nullable: true
+        comment: >
+          Denominator of a rate estimate (e.g., 'Victim rate per 100,000 persons').
+          NULL for other estimate types
       - name: estimate_geographic_location
         type: string
         nullable: true
-        comment: Geographic location (typically National)
+        comment: >
+          Geography and population subgroup of the estimate, 'National' for all persons
+          or a victim subgroup such as 'Age:12-17 National' or 'Sex:Female National'
       - name: estimate_standard_error
         type: double
         nullable: true
@@ -2320,6 +2344,22 @@ partitionedTables:
         type: string
         nullable: true
         comment: BJS table reference
+      - name: der_variable_name
+        type: string
+        nullable: false
+        comment: BJS identifier of the published table cell (e.g., 't_1a_10_44_1')
+      - name: permutation_number
+        type: integer
+        nullable: false
+        comment: BJS number of the population subgroup named in estimate_geographic_location
+      - name: analysis_weight_name
+        type: string
+        nullable: true
+        comment: Name of the survey weight used for the estimate (e.g., NationalWgt)
+      - name: estimates_version
+        type: string
+        nullable: true
+        comment: Release status of the estimate (initial or final)
 
     source:
       type: http
@@ -2981,8 +3021,9 @@ constraints:
   bjs_nibrs_estimates:
     primaryKey:
       - endpoint_id
-      - indicator_name
-      - estimate_domain_1
+      - der_variable_name
+      - estimate_type
+      - permutation_number
       - time_series_start_year
 
 # ============================================================================

@@ -973,16 +973,29 @@ FROM (
   SELECT column_name
   FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_nibrs_estimates', allow_moved_paths := true))
   WHERE approx_unique <= 1
-    AND column_name NOT IN ('type', 'year')
+    AND column_name NOT IN ('type', 'year', 'analysis_weight_name')
 ) t;
 
--- T6: pk_nulls (endpoint_id NOT NULL)
+-- T6: pk_nulls
 INSERT INTO dq_results
 SELECT 'crime', 'bjs_nibrs_estimates', 'T6_pk_nulls',
   CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 0, 'endpoint_id IS NULL'
+  COUNT(*), 0, 'NULL in a primary key column'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_nibrs_estimates', allow_moved_paths := true)
-WHERE endpoint_id IS NULL;
+WHERE endpoint_id IS NULL OR der_variable_name IS NULL OR estimate_type IS NULL
+  OR permutation_number IS NULL OR time_series_start_year IS NULL;
+
+-- T10: declared primary key is unique
+INSERT INTO dq_results
+SELECT 'crime', 'bjs_nibrs_estimates', 'T10_pk_unique',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'primary key values carried by more than one row'
+FROM (
+  SELECT endpoint_id, der_variable_name, estimate_type, permutation_number, time_series_start_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_nibrs_estimates', allow_moved_paths := true)
+  GROUP BY ALL
+  HAVING COUNT(*) > 1
+) t;
 
 -- T7: all 6 SODA endpoints present
 INSERT INTO dq_results
