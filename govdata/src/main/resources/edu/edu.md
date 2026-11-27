@@ -763,11 +763,14 @@ SELECT d.lea_name, d.enrollment,
        n.avg_score, s.free_or_reduced_price_lunch * 1.0 / NULLIF(s.enrollment, 0) AS frpl_rate
 FROM ccd_districts d
 JOIN geo.school_districts g ON d.leaid = g.sd_lea
-JOIN naep_scores n ON d.fips = n.jurisdiction AND d.year = n.year
-JOIN (SELECT leaid, sum(free_or_reduced_price_lunch) AS free_or_reduced_price_lunch,
-             sum(enrollment) AS enrollment
-      FROM ccd_schools GROUP BY leaid) s ON s.leaid = d.leaid
-WHERE n.grade = 8 AND n.subject = 'MAT' AND n.variable_type = 'TOTAL';
+JOIN naep_scores n ON d.fips = n.jurisdiction AND d.year = n.year - 1  -- spring assessment
+JOIN (SELECT leaid, year,
+             sum(CASE WHEN free_or_reduced_price_lunch >= 0 THEN free_or_reduced_price_lunch END)
+               AS free_or_reduced_price_lunch,
+             sum(CASE WHEN enrollment >= 0 THEN enrollment END) AS enrollment
+      FROM ccd_schools GROUP BY leaid, year) s ON s.leaid = d.leaid AND s.year = d.year
+WHERE n.grade = 8 AND n.subject = 'MAT' AND n.variable_type = 'TOTAL'
+  AND n.subgroup_name = 'All students';
 
 -- College outcomes by county economic conditions
 SELECT i.inst_name, i.county_fips,

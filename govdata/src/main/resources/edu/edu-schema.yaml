@@ -1082,7 +1082,7 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: Survey year — PK component
+        comment: IPEDS collection year, the fall that starts the academic year (2022 = 2022-23) — PK component. Equal-year ipeds_completions and ipeds_financials rows report the award year and fiscal year ending in that calendar year
       - name: inst_name
         type: string
         nullable: true
@@ -1293,7 +1293,7 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: Award year — PK component; injected from URL dimension
+        comment: Award year's ending calendar year (2022 = awards July 2021 through June 2022) — PK component; injected from URL dimension
       - name: cipcode
         type: string
         nullable: false
@@ -4924,8 +4924,13 @@ views:
       Institution-level completions totals by award level per year.
       Collapses ipeds_completions (wide format) to one row per institution per
       year by summing ctotalt — the grand total of awards across all races and
-      both sexes — for majornum=1 (first-major) rows. Joins to ipeds_institutions
-      for institutional context.
+      both sexes — for majornum=1 (first-major) rows over the individual CIP codes
+      (the source's cipcode '99' all-fields total rows are excluded). year is the award
+      year's ending calendar year (2022 = awards from July 2021 through June 2022),
+      as in ipeds_completions; directory attributes come from the equal-year
+      ipeds_institutions row, the directory of the IPEDS collection cycle that gathered
+      those awards (it lists every reporting institution). Totals are null for an
+      institution-year with no first-major completions rows.
       award_level codes: 1/2=Certificate (<1yr/1-2yr), 3=Associate, 5=Bachelor,
       7=Master, 17/18/19=Doctoral. completions_total is the grand sum across all
       award levels, not just those broken out individually.
@@ -4940,20 +4945,20 @@ views:
         i.hbcu,
         i.tribal_college,
         SUM(CASE WHEN c.award_level = 3
-            THEN c.ctotalt ELSE 0 END)                                      AS associate_total,
+            THEN c.ctotalt WHEN c.award_level IS NOT NULL THEN 0 END)                                      AS associate_total,
         SUM(CASE WHEN c.award_level = 5
-            THEN c.ctotalt ELSE 0 END)                                      AS bachelor_total,
+            THEN c.ctotalt WHEN c.award_level IS NOT NULL THEN 0 END)                                      AS bachelor_total,
         SUM(CASE WHEN c.award_level = 7
-            THEN c.ctotalt ELSE 0 END)                                      AS masters_total,
+            THEN c.ctotalt WHEN c.award_level IS NOT NULL THEN 0 END)                                      AS masters_total,
         SUM(CASE WHEN c.award_level IN (17, 18, 19)
-            THEN c.ctotalt ELSE 0 END)                                      AS doctoral_total,
+            THEN c.ctotalt WHEN c.award_level IS NOT NULL THEN 0 END)                                      AS doctoral_total,
         SUM(CASE WHEN c.award_level IN (1, 2)
-            THEN c.ctotalt ELSE 0 END)                                      AS certificate_total,
+            THEN c.ctotalt WHEN c.award_level IS NOT NULL THEN 0 END)                                      AS certificate_total,
         SUM(c.ctotalt)                                                      AS completions_total
       FROM edu.ipeds_institutions i
       LEFT JOIN edu.ipeds_completions c
         ON i.unitid = c.unitid AND i.year = c.year
-        AND c.majornum = 1
+        AND c.majornum = 1 AND c.cipcode <> '99'
       GROUP BY
         i.unitid, i.inst_name, i.year, i.state_abbr, i.sector,
         i.inst_control, i.hbcu, i.tribal_college
@@ -4966,7 +4971,11 @@ views:
       total current expenses), and institutional_discount_rate (total student aid /
       gross tuition and fees). form_type (F1A=GASB public, F2/F3=FASB private) is
       preserved so institution types can be filtered or compared. One row per
-      institution per fiscal year.
+      institution per fiscal year. year is the fiscal year end (2022 = FY2021-22). The
+      directory attributes (inst_name, state_abbr, sector, inst_control, hbcu) come from
+      the equal-year ipeds_institutions row, the directory of the IPEDS collection cycle
+      that gathered that finance report (it lists every reporting institution); that row
+      describes the institution as of the fall after the fiscal year closed.
     sql: >
       SELECT
         f.unitid,
@@ -4997,7 +5006,11 @@ views:
       to the state level — total_enrollment (sum), avg_pupil_teacher_ratio (average of
       each district's enrollment/teachers_total_fte), avg_frpl_rate (state free/reduced
       lunch share), and district_count. Enables correlating per-pupil staffing and
-      poverty resources with NAEP outcomes. DESPITE THE NAME, this view carries NO dollar or
+      poverty resources with NAEP outcomes. year is the NAEP assessment year. NAEP is
+      assessed in the spring, so each score year Y carries the CCD resources of the school
+      year ending that spring (ccd_districts/ccd_schools year Y-1, e.g. 2019 scores with
+      2018-19 resources); resource columns are null where ccd_districts does not carry
+      year Y-1. DESPITE THE NAME, this view carries NO dollar or
       per-pupil expenditure figures — "spending" here is proxied only by staffing
       (avg_pupil_teacher_ratio) and poverty (avg_frpl_rate). For per-pupil dollars use
       f33_district_finance (Census F-33 district revenue/expenditure, joins on leaid).
@@ -5053,7 +5066,7 @@ views:
           FROM edu.ccd_schools GROUP BY leaid, year
         ) school_frpl ON d2.leaid = school_frpl.leaid AND d2.year = school_frpl.year
         GROUP BY d2.fips, d2.year
-      ) d ON n.jurisdiction = d.fips AND n.year = d.year
+      ) d ON n.jurisdiction = d.fips AND d.year = n.year - 1
       WHERE n.variable_type = 'TOTAL' AND n.subgroup_name = 'All students'
 
   # --------------------------------------------------------------------------
