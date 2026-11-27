@@ -85,4 +85,34 @@ class HudCountyIncomeLimitsRetryTest {
     assertFalse(it.hasNext());
     assertEquals(3, listCalls.get());
   }
+
+  @Test void rateLimitWaitsDoNotUseUpTheRetryAttempts() throws Exception {
+    server.createContext("/hudapi/public/il/listCounties/01", ex -> {
+      if (listCalls.incrementAndGet() <= 8) {
+        ex.getResponseHeaders().add("Retry-After", "0");
+        ex.sendResponseHeaders(429, -1);
+        ex.close();
+        return;
+      }
+      reply(ex, "[]");
+    });
+
+    assertFalse(fetch().hasNext());
+    assertEquals(9, listCalls.get());
+  }
+
+  private Iterator<Map<String, Object>> fetch() throws IOException {
+    Map<String, String> dims = new HashMap<String, String>();
+    dims.put("year", "2026");
+    dims.put("state", "01");
+    Map<String, String> headers = new HashMap<String, String>();
+    headers.put("Authorization", "Bearer t");
+    RequestContext context = RequestContext.builder()
+        .url("http://127.0.0.1:" + server.getAddress().getPort()
+            + "/hudapi/public/il/listCounties/01")
+        .dimensionValues(dims)
+        .headers(headers)
+        .build();
+    return new HudCountyIncomeLimitsStreamingTransformer().fetchAndTransform(context);
+  }
 }
