@@ -1,9 +1,9 @@
 # Images of the Druid test stack (the "Druid Tests" job in main.yml), mirrored from Docker Hub
-# to ghcr.io/kenstott/calcite so the job does not depend on Docker Hub's anonymous pull quota.
+# to ghcr.io/simpleishard-llc/calcite so the job does not depend on Docker Hub's anonymous pull quota.
 #
 #   <name>  <upstream image, pinned by digest>
 #
-# The mirror is ghcr.io/kenstott/calcite/ci-<name>@<the same digest>: mirror-ci-images.yml
+# The mirror is ghcr.io/simpleishard-llc/calcite/ci-<name>@<the same digest>: mirror-ci-images.yml
 # copies each image with its digest preserved. To move to a newer upstream image, change the
 # digest here and start that workflow; the Druid job then pulls the new digest.
 #
