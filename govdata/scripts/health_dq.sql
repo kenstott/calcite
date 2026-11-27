@@ -2526,6 +2526,15 @@ FROM (SELECT COUNT(*) AS n FROM (
   GROUP BY provider_number HAVING COUNT(*) > 1
 ));
 
+-- T7 regression guard: all five provider categories must be present — the non-hospital
+-- categories come from a different CMS file than hospitals
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_facilities', 'T7_provider_categories_present',
+  CASE WHEN n = 5 THEN 'pass' ELSE 'fail' END, n, 5, 'Distinct provider categories among 01, 06, 12, 19, 21'
+FROM (SELECT COUNT(DISTINCT provider_category_code) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_facilities', allow_moved_paths := true)
+  WHERE provider_category_code IN ('01', '06', '12', '19', '21'));
+
 -- T7 regression guard: hospitals (category 01) must be present with real bed counts —
 -- this is the SIII view's sole health-side input.
 INSERT INTO dq_results
@@ -3085,6 +3094,15 @@ FROM (SELECT COUNT(*) AS n FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true)
   GROUP BY provider_number HAVING COUNT(*) > 1
 ));
+
+-- T7 regression guard: all five provider categories must be present — the non-hospital
+-- categories come from a different CMS file than hospitals
+INSERT INTO dq_results
+SELECT 'health', 'cms_pos_termination_history', 'T7_provider_categories_present',
+  CASE WHEN n = 5 THEN 'pass' ELSE 'fail' END, n, 5, 'Distinct provider categories among 01, 06, 12, 19, 21'
+FROM (SELECT COUNT(DISTINCT provider_category_code) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cms_pos_termination_history', allow_moved_paths := true)
+  WHERE provider_category_code IN ('01', '06', '12', '19', '21'));
 
 -- T7: is_terminated must be derived exactly from termination_date presence (the table
 -- comment's contract), and terminated rows must carry a plausibly-dated event
