@@ -84,7 +84,8 @@ public class OneDriveNestedDirectorySchemaTest {
     } else if (path.equals(drive + "root:/run1/inner:")) {
       body = "{\"name\":\"inner\",\"folder\":{},"
           + "\"lastModifiedDateTime\":\"2026-11-20T10:00:00Z\"}";
-    } else if (path.equals(drive + "root:/run1/inner/orders.csv:")) {
+    } else if (path.equals(drive + "root:/run1/inner/orders.csv:")
+        || path.equals(drive + "root:/run1/inner/orders.csv")) {
       body = "{\"name\":\"orders.csv\",\"size\":22,\"file\":{},"
           + "\"lastModifiedDateTime\":\"2026-11-20T10:00:00Z\"}";
     } else if (path.equals(drive + "root:/run1/inner/orders.csv:/content")) {
