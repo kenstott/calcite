@@ -429,6 +429,18 @@ public interface IncrementalTracker {
   void invalidateTableCompletion(String pipelineName);
 
   /**
+   * Forgets everything recorded about a pipeline's committed data: per-combo states, table-level
+   * completion, and, in trackers that persist them, period markers and freshness tokens. Used when
+   * the table those records describe is discarded.
+   *
+   * @param pipelineName The pipeline name
+   */
+  default void invalidatePipeline(String pipelineName) {
+    invalidateAll(pipelineName);
+    invalidateTableCompletion(pipelineName);
+  }
+
+  /**
    * Returns true if this table was explicitly cleared (not just absent).
    * A cleared table should skip Phase 1.5 self-healing and force-reprocess all combinations.
    */
