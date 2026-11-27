@@ -3,9 +3,9 @@
 #
 #   <path>  <upstream image, pinned by digest>  <tag>
 #
-# The mirror is ghcr.io/kenstott/calcite/ci-hub/<path>:<tag>, copied from the digest given
+# The mirror is ghcr.io/simpleishard-llc/calcite/ci-hub/<path>:<tag>, copied from the digest given
 # here. Testcontainers asks for these images by the tag written in the test code (or its own
-# default), so with TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX=ghcr.io/kenstott/calcite/ci-hub/ it
+# default), so with TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX=ghcr.io/simpleishard-llc/calcite/ci-hub/ it
 # finds them in the mirror under the same path and tag. Only mirror-ci-images.yml writes
 # those tags, and only from the digests listed here.
 #
