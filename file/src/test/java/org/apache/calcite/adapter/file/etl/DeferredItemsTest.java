@@ -608,7 +608,7 @@ class DeferredItemsTest {
         new FixedDataProvider(Collections.singletonList(run1Rows)), writer);
     p1.execute();
 
-    String hwmAfterRun1 = tracker.getFreshnessToken("epoch_hwm_test::computed_delta_hwm");
+    String hwmAfterRun1 = tracker.getFreshnessToken("epoch_hwm_test::computed_delta_hwm::year=2024");
     assertEquals("1000", hwmAfterRun1,
         "HWM after run 1 must be the numerically largest modified value");
 
@@ -635,7 +635,7 @@ class DeferredItemsTest {
         "Run 2: only the row with modified=1001 must pass the numeric HWM filter");
     assertEquals("D", writer.writtenRows.get(0).get("id"),
         "The passing row must be id=D (modified=1001)");
-    assertEquals("1001", tracker.getFreshnessToken("epoch_hwm_test::computed_delta_hwm"),
+    assertEquals("1001", tracker.getFreshnessToken("epoch_hwm_test::computed_delta_hwm::year=2024"),
         "HWM must be updated to 1001 after run 2");
   }
 
@@ -691,7 +691,7 @@ class DeferredItemsTest {
     p1.execute();
 
     assertEquals("2024-03-01",
-        tracker.getFreshnessToken("iso_hwm_test::computed_delta_hwm"),
+        tracker.getFreshnessToken("iso_hwm_test::computed_delta_hwm::year=2024"),
         "HWM after run 1 must be the lexicographically largest ISO date");
 
     // Run 2: "2024-01-15" ≤ HWM → filtered; "2024-06-01" > HWM → passes
@@ -716,7 +716,7 @@ class DeferredItemsTest {
         "Run 2: only the row with lastModified=2024-06-01 must pass the ISO HWM filter");
     assertEquals("W", writer.writtenRows.get(0).get("id"));
     assertEquals("2024-06-01",
-        tracker.getFreshnessToken("iso_hwm_test::computed_delta_hwm"),
+        tracker.getFreshnessToken("iso_hwm_test::computed_delta_hwm::year=2024"),
         "HWM must advance to 2024-06-01");
   }
 
@@ -803,7 +803,7 @@ class DeferredItemsTest {
         new FixedDataProvider(Collections.singletonList(run1Rows)), writer).execute();
 
     assertEquals("2024-03-01",
-        tracker.getFreshnessToken("logical_name_test::computed_delta_hwm"),
+        tracker.getFreshnessToken("logical_name_test::computed_delta_hwm::year=2024"),
         "HWM must advance even though dateField names the logical column, not the source field");
 
     writer.writtenRows.clear();
@@ -837,7 +837,7 @@ class DeferredItemsTest {
         new FixedDataProvider(Collections.singletonList(rows)), writer).execute();
 
     assertEquals("2024-03-01",
-        tracker.getFreshnessToken("undeclared_test::computed_delta_hwm"),
+        tracker.getFreshnessToken("undeclared_test::computed_delta_hwm::year=2024"),
         "A source field named directly must still drive the high-water mark");
   }
 
@@ -871,7 +871,7 @@ class DeferredItemsTest {
     assertTrue(result.getErrors().toString().contains("Registration.LastUpdateDate"),
         "Error must name the resolved key it looked for; was: " + result.getErrors());
     assertEquals(0, writer.writtenRows.size(), "Nothing may be written before the failure");
-    assertNull(tracker.getFreshnessToken("drift_test::computed_delta_hwm"),
+    assertNull(tracker.getFreshnessToken("drift_test::computed_delta_hwm::year=2024"),
         "No high-water mark may be persisted when the modified field was never found");
   }
 }
