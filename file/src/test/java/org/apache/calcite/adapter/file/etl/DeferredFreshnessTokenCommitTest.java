@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -44,6 +45,8 @@ class DeferredFreshnessTokenCommitTest {
 
   private static final String NAME = "deferred_token_test";
   private static final String HWM_KEY = NAME + "::computed_delta_hwm";
+  private static final String HWM_2023 = HWM_KEY + "::year=2023";
+  private static final String HWM_2024 = HWM_KEY + "::year=2024";
 
   @TempDir
   File tempDir;
@@ -119,13 +122,14 @@ class DeferredFreshnessTokenCommitTest {
     TokenTracker tracker = new TokenTracker();
     EtlPipelineConfig seed = config("computed_delta", null, 2023, 2023);
     assertTrue(!run(seed, tracker, rowsModified("2023-01-01")).isFailed());
-    assertEquals("2023-01-01", tracker.tokens.get(HWM_KEY));
+    assertEquals("2023-01-01", tracker.tokens.get(HWM_2023));
 
     EtlResult failed = runWithFailingCommit(config("computed_delta", null, 2024, 2024),
         tracker, rowsModified("2024-01-01"));
 
     assertTrue(failed == null || failed.isFailed(), "commit unexpectedly succeeded");
-    assertEquals("2023-01-01", tracker.tokens.get(HWM_KEY));
+    assertEquals("2023-01-01", tracker.tokens.get(HWM_2023));
+    assertNull(tracker.tokens.get(HWM_2024));
   }
 
   @Test void pipelineHashTokenIsNotPersistedWhenTheCommitFails() throws Exception {
@@ -142,23 +146,62 @@ class DeferredFreshnessTokenCommitTest {
     assertEquals(committed, tracker.tokens.get(NAME));
   }
 
-  /** The second unit's older rows fall behind the mark the first unit recorded in this run. */
-  @Test void laterUnitFiltersAgainstTheEarlierUnitsUncommittedHwm() throws Exception {
+  /** A unit's rows are filtered only by its own mark, never by a sibling's newer one. */
+  @Test void eachUnitAdvancesOnlyItsOwnHwm() throws Exception {
     TokenTracker tracker = new TokenTracker();
-    final List<String> fetched = new ArrayList<String>();
-    // Newest date for whichever unit is fetched first, so the order of the units does not matter.
-    DataProvider newestFirst = (config, variables) -> {
-      fetched.add(variables.get("year"));
-      return row(variables, fetched.size() == 1 ? "2025-06-01" : "2024-06-01");
-    };
+    DataProvider provider = (config, variables) ->
+        row(variables, "2023".equals(variables.get("year")) ? "2024-06-01" : "2025-06-01");
 
-    EtlResult result = run(config("computed_delta", null, 2023, 2024), tracker, newestFirst);
+    EtlResult result = run(config("computed_delta", null, 2023, 2024), tracker, provider);
 
     assertTrue(!result.isFailed(), String.valueOf(result.getFailureMessage()));
-    assertEquals(2, fetched.size(), "units fetched: " + fetched);
-    assertEquals(1L, result.getTotalRows());
-    assertEquals("2025-06-01", tracker.tokens.get(HWM_KEY));
-    assertEquals(Collections.singletonList(HWM_KEY), tracker.puts);
+    assertEquals(2L, result.getTotalRows());
+    assertEquals("2024-06-01", tracker.tokens.get(HWM_2023));
+    assertEquals("2025-06-01", tracker.tokens.get(HWM_2024));
+  }
+
+  /** A failed unit's rows older than a successful sibling's still arrive on the retry. */
+  @Test void failedUnitsOlderRowsAreWrittenOnTheNextRun() throws Exception {
+    TokenTracker tracker = new TokenTracker();
+    EtlPipelineConfig config = config("computed_delta", null, 2023, 2024);
+    DataProvider failing2023 = (c, variables) -> {
+      if ("2023".equals(variables.get("year"))) {
+        throw new java.io.IOException("source unavailable for 2023");
+      }
+      return row(variables, "2025-06-01");
+    };
+
+    EtlResult partial = run(config, tracker, failing2023);
+
+    assertEquals(1, partial.getFailedBatches(), String.valueOf(partial.getFailureMessage()));
+    assertEquals(1L, partial.getTotalRows());
+    assertNull(tracker.tokens.get(HWM_2023));
+    assertEquals("2025-06-01", tracker.tokens.get(HWM_2024));
+
+    EtlResult retry = run(config, tracker, (c, variables) ->
+        row(variables, "2023".equals(variables.get("year")) ? "2024-06-01" : "2025-06-01"));
+
+    assertTrue(!retry.isFailed(), String.valueOf(retry.getFailureMessage()));
+    // 2023's row is written; 2024's unchanged row is not appended a second time.
+    assertEquals(1L, retry.getTotalRows());
+    assertEquals("2024-06-01", tracker.tokens.get(HWM_2023));
+  }
+
+  /** A pipeline with one possible unit keys its mark by pipeline name alone. */
+  @Test void singleValuedDimensionKeepsThePipelineScopedKey() {
+    Map<String, DimensionConfig> dims = DimensionConfig.fromDimensionsMap(
+        Collections.<String, Object>singletonMap("type", Collections.singletonList("t")));
+    EtlPipelineConfig single = EtlPipelineConfig.builder()
+        .name(NAME)
+        .source(HttpSourceConfig.builder().url("https://example.invalid/api").build())
+        .dimensions(dims)
+        .materialize(MaterializeConfig.builder()
+            .output(MaterializeOutputConfig.builder().build())
+            .build())
+        .build();
+
+    assertEquals(HWM_KEY,
+        EtlPipeline.computedDeltaHwmKey(single, NAME, Collections.singletonMap("type", "t")));
   }
 
   /** With one token shared by all units, identical content in the next unit reads as unchanged. */

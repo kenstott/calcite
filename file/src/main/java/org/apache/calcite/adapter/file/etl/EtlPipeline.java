@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -136,12 +137,12 @@ public class EtlPipeline {
   /**
    * Freshness tokens for units SUCCESSFULLY written this run: per-unit tokens keyed by
    * {@code pipeline::unitKey}, pipeline-scoped hash tokens keyed by the pipeline name, and the
-   * computed_delta high-water mark. A token is added only after its unit's write returns (see
+   * computed_delta high-water marks (see {@link #computedDeltaHwmKey}). A token is added only after its unit's write returns (see
    * {@link #processSingleBatch}), so a unit that throws never records one. Persisted to the
    * tracker after {@code writer.commit()} succeeds — independent of whether other units in a
    * fan-out failed — so one failing unit cannot discard the tokens of the units that committed
    * cleanly (which would force those units to re-materialize every run). Later units of the same
-   * run read a key shared across units through {@link #latestFreshnessToken}.
+   * run read a hash token shared across units through {@link #latestFreshnessToken}.
    */
   private final Map<String, String> pendingFreshnessTokens =
       new ConcurrentHashMap<String, String>();
@@ -2464,21 +2465,27 @@ public class EtlPipeline {
     // computed_delta: STREAM the pull, emitting only rows whose modifiedField advanced past the
     // stored high-water mark and tracking the new max(modifiedField) as a side effect. O(1)
     // memory — the full dump is never materialised (a 3M+ row snapshot like GLEIF would OOM).
-    // The new HWM and the seen/changed counts are only final once the write has drained the
-    // iterator, so they are read back after the write and, like the hash token, persisted only
-    // after the writer commits.
-    final String computedDeltaHwmKey = pipelineName + COMPUTED_DELTA_HWM_SUFFIX;
-    final String[] computedDeltaHwm = {null};      // max(modifiedField) once `data` is drained
+    // Each unit filters against and advances only its own combos' marks, so a mark never covers
+    // rows of a unit that failed or has not run. The new max and the seen/changed counts are only
+    // final once the write has drained the iterator, so they are read back after the write and,
+    // like the hash token, persisted only after the writer commits.
+    final Map<String, String> priorHwmByKey = new LinkedHashMap<String, String>();
+    final String[] computedDeltaMax = {null};      // max(modifiedField) once `data` is drained
     final long[] computedDeltaCounts = {0L, 0L};   // [seen, emitted]
     boolean computedDeltaStreaming = false;
     if ("computed_delta".equals(config.getDatasetType())) {
       final String modifiedField = config.getModifiedField();
-      final String prevHwm = latestFreshnessToken(computedDeltaHwmKey);
+      for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
+        String key = computedDeltaHwmKey(config, pipelineName, combo);
+        priorHwmByKey.put(key, incrementalTracker.getFreshnessToken(key));
+      }
+      // A coalesced unit covers several combos in one fetch: filter against the oldest of their
+      // marks, and against none when any combo has no mark yet.
+      final String prevHwm = oldestMark(priorHwmByKey.values());
       LOGGER.info("computed_delta: modifiedField={}, prevHwm={}", modifiedField, prevHwm);
 
       if (modifiedField != null && !modifiedField.isEmpty()) {
         computedDeltaStreaming = true;
-        computedDeltaHwm[0] = prevHwm;
         // Fetched rows are keyed by SOURCE field name; `columns:` renames happen later, during
         // materialization. Resolve the configured name to the fetch-time key so the YAML may
         // spell it either way. Falls back to the configured name when nothing is declared.
@@ -2491,7 +2498,7 @@ public class EtlPipeline {
               modifiedField, resolvedField);
         }
         final Iterator<Map<String, Object>> upstream = data;
-        // Look-ahead filter: advances past unchanged rows (updating the HWM for every row it sees)
+        // Look-ahead filter: advances past unchanged rows (updating the max for every row it sees)
         // until it finds one to emit, so the write pulls only changed rows without buffering.
         data = new Iterator<Map<String, Object>>() {
           private Map<String, Object> nextRow;
@@ -2522,10 +2529,7 @@ public class EtlPipeline {
               Object modVal = row.get(resolvedField);
               String modStr = modVal == null ? null : String.valueOf(modVal);
               // Track max(modifiedField) over EVERY row (type-aware), even ones we drop.
-              if (modStr != null && (computedDeltaHwm[0] == null
-                  || compareModifiedValues(modStr, computedDeltaHwm[0]) > 0)) {
-                computedDeltaHwm[0] = modStr;
-              }
+              computedDeltaMax[0] = newerMark(computedDeltaMax[0], modStr);
               // Emit on first run (no prior HWM), when the row carries no modified value, or when
               // it advanced past the prior HWM.
               if (prevHwm == null || modStr == null
@@ -2609,15 +2613,18 @@ public class EtlPipeline {
           } else {
             markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
           }
-          // Record the computed_delta HWM and the hash token for the post-commit persist. The
+          // Record the computed_delta marks and the hash token for the post-commit persist. The
           // streaming filter has now drained `data`, so the holder carries max(modifiedField)
           // over the whole pull. Persisting either before writer.commit() succeeds would let the
           // next run skip rows that never reached the table.
           if (finalComputedDeltaStreaming) {
             LOGGER.info("computed_delta: {} of {} rows changed (maxModified={})",
-                computedDeltaCounts[1], computedDeltaCounts[0], computedDeltaHwm[0]);
-            if (computedDeltaHwm[0] != null) {
-              pendingFreshnessTokens.put(computedDeltaHwmKey, computedDeltaHwm[0]);
+                computedDeltaCounts[1], computedDeltaCounts[0], computedDeltaMax[0]);
+            for (Map.Entry<String, String> prior : priorHwmByKey.entrySet()) {
+              String mark = newerMark(prior.getValue(), computedDeltaMax[0]);
+              if (mark != null) {
+                pendingFreshnessTokens.put(prior.getKey(), mark);
+              }
             }
           }
           if (finalHashFreshnessToken != null) {
@@ -2641,6 +2648,43 @@ public class EtlPipeline {
         closeQuietly(sourceChain);
       }
     }
+  }
+
+  /**
+   * The tracker key of the computed_delta high-water mark covering one dimension combination. The
+   * combination is identified by its multi-valued dimensions, so a pipeline that can only ever
+   * have one combination keys its mark by pipeline name alone.
+   */
+  static String computedDeltaHwmKey(EtlPipelineConfig config, String pipelineName,
+      Map<String, String> combo) {
+    Map<String, String> identity = new LinkedHashMap<String, String>();
+    for (String dimension : PerUnitSkipSafety.multiValuedDimensions(config)) {
+      identity.put(dimension, combo.get(dimension));
+    }
+    String key = pipelineName + COMPUTED_DELTA_HWM_SUFFIX;
+    return identity.isEmpty() ? key : key + "::" + freshnessUnitKey(identity);
+  }
+
+  /** The newer of two modified-field values, either of which may be null (no value). */
+  private static String newerMark(String left, String right) {
+    if (left == null) {
+      return right;
+    }
+    return right == null || compareModifiedValues(left, right) >= 0 ? left : right;
+  }
+
+  /** The oldest of the marks, or null when any of them is absent. */
+  private static String oldestMark(Collection<String> marks) {
+    String oldest = null;
+    for (String mark : marks) {
+      if (mark == null) {
+        return null;
+      }
+      if (oldest == null || compareModifiedValues(mark, oldest) < 0) {
+        oldest = mark;
+      }
+    }
+    return oldest;
   }
 
   /**
