@@ -307,8 +307,9 @@ partitionedTables:
       enacted and amended it are in source_credit. Sections that were repealed, omitted or
       transferred keep their row (status says which) but have a null section_text because
       no operative text remains. Filter on is_positive_law for titles enacted as law, and
-      on title_number/chapter_number for a subject area (e.g. title 26 = Internal Revenue
-      Code, 42 = Public Health and Welfare, 15 = Commerce and Trade).
+      on title_number/chapter_number for a subject area (title_number = '26' is the Internal
+      Revenue Code, '42' Public Health and Welfare, '15' Commerce and Trade). Both columns are
+      text, so compare them with quoted literals.
 
     dimensions:
       title: &usc_titles
@@ -372,7 +373,7 @@ partitionedTables:
       - name: title_number
         type: string
         nullable: false
-        comment: U.S. Code title number as OLRC publishes it (e.g. 5, 26, 42; 5a for the Title 5 Appendix)
+        comment: "U.S. Code title number as OLRC publishes it, stored as text (5, 26, 42; 5a for the Title 5 Appendix). Compare with a quoted literal, title_number = '8' or title_number IN ('8', '18a'); an unquoted number casts every value to integer and the query fails on appendix titles"
       - name: title_name
         type: string
         nullable: false
@@ -388,7 +389,7 @@ partitionedTables:
       - name: section_number
         type: string
         nullable: false
-        comment: Section number as printed, including letter suffixes and ranges for grouped repealed sections (e.g. 101, 1395w-4, 2 to 15)
+        comment: "Section number as printed, stored as text, including letter suffixes and ranges for grouped repealed sections (101, 1395w-4, 2 to 15). Compare with a quoted literal, section_number = '101'"
       - name: section_seq
         type: integer
         nullable: false
@@ -416,7 +417,7 @@ partitionedTables:
       - name: chapter_number
         type: string
         nullable: true
-        comment: Number of the enclosing chapter; null for sections that sit directly under the title or an appendix
+        comment: "Number of the enclosing chapter, stored as text; compare with a quoted literal, chapter_number = '33'. Null for sections that sit directly under the title or an appendix"
       - name: chapter_heading
         type: string
         nullable: true
@@ -499,11 +500,11 @@ partitionedTables:
       - name: title_number
         type: string
         nullable: false
-        comment: "U.S. Code title number as OLRC publishes it (for example 5, 26, 42; 5a for the Title 5 Appendix); with section_number and section_seq it identifies the parent usc_sections row"
+        comment: "U.S. Code title number as OLRC publishes it, stored as text (for example 5, 26, 42; 5a for the Title 5 Appendix). Compare with a quoted literal, title_number = '8'; an unquoted number casts every value to integer and the query fails on appendix titles. With section_number and section_seq it identifies the parent usc_sections row"
       - name: section_number
         type: string
         nullable: false
-        comment: "Section number as printed, including letter suffixes (for example 101, 1395w-4)"
+        comment: "Section number as printed, stored as text, including letter suffixes (for example 101, 1395w-4). Compare with a quoted literal, section_number = '101'"
       - name: section_seq
         type: integer
         nullable: false
