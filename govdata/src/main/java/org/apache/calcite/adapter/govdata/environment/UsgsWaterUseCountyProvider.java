@@ -85,7 +85,8 @@ public class UsgsWaterUseCountyProvider implements CachingDataProvider {
           "USGS county water use: hooks.responseTransformer is required for " + config.getName());
     }
     try {
-      return (ResponseTransformer) Class.forName(className).getDeclaredConstructor().newInstance();
+      return Class.forName(className).asSubclass(ResponseTransformer.class)
+          .getDeclaredConstructor().newInstance();
     } catch (ReflectiveOperationException e) {
       throw new IllegalStateException("USGS county water use: cannot create " + className, e);
     }
