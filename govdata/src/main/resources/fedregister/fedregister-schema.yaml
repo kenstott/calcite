@@ -115,7 +115,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 488256
-      checkedAt: "2026-11-26T05:27:04Z"
+      checkedAt: "2026-11-27T05:54:53Z"
     partitions: *year_month_partitions
     comment: >
       All Federal Register documents partitioned by publication year and month.
@@ -225,7 +225,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 490629
-      checkedAt: "2026-11-26T05:27:10Z"
+      checkedAt: "2026-11-27T05:55:01Z"
     partitions: *year_month_partitions
     comment: >
       Text of each Federal Register document, one row per document_number (joins to
@@ -315,7 +315,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 491062
-      checkedAt: "2026-11-26T05:27:13Z"
+      checkedAt: "2026-11-27T05:55:07Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -410,7 +410,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 14375
-      checkedAt: "2026-11-26T05:27:22Z"
+      checkedAt: "2026-11-27T05:55:08Z"
     partitions: *year_month_partitions
     comment: >
       Official text of presidential remarks, addresses, news conferences, interviews, statements,
