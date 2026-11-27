@@ -2259,12 +2259,7 @@ partitionedTables:
       type:
         - nibrs
       endpoint_id: *bjs_nibrs_endpoints
-      # Every response carries all estimate years, so the source is fetched once per calendar year.
-      year:
-        type: yearRange
-        start: "${GOVDATA_CURRENT_YEAR}"
-        end: "${GOVDATA_CURRENT_YEAR}"
-        dataLag: 0
+      year: *crime_year_range
 
     columns:
       - name: endpoint_id
