@@ -176,6 +176,20 @@ class IcebergTableDedupeTest {
     assertEquals("OK", done.verification);
   }
 
+  @Test void withoutAGroupColumnOnlyIdenticalRowsCollapse() throws IOException {
+    // "A" holds one repeated row beside an unrepeated one, which the grouped rule leaves alone.
+    file(2024, filing("A", 2, 2024));
+    file(2024, filing("A", 1, 2024));
+
+    assertEquals(0, run(2024, false).rowsToRemove);
+    DedupeReport done =
+        writer.dedupeCopies(null, KEY, Expressions.equal("year", 2024), true);
+
+    assertEquals(1, done.rowsRemoved);
+    assertEquals("OK", done.verification);
+    assertEquals(Collections.singletonMap("A", 2), countsByAcc());
+  }
+
   @Test void copiesAcrossDifferentFilesAreFound() throws IOException {
     List<Map<String, Object>> both = filing("E", 2, 2024);
     both.addAll(filing("E", 2, 2024));

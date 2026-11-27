@@ -81,6 +81,17 @@ SELECT 'ref', 'gleif_entities', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_entities', allow_moved_paths := true)
       WHERE lei IS NULL);
 
+-- T7: no identical rows (an append must not repeat a version the table holds)
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_entities', 'T7_duplicate_rows',
+  CASE WHEN extra = 0 THEN 'pass' ELSE 'fail' END,
+  extra, 0, 'rows that are an exact copy of another row'
+FROM (
+  SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_entities', allow_moved_paths := true))
+       - (SELECT COUNT(*) FROM (
+            SELECT DISTINCT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_entities', allow_moved_paths := true))) AS extra
+);
+
 -- T7: lei format (20-character alphanumeric)
 INSERT INTO dq_results
 SELECT 'ref', 'gleif_entities', 'T7_lei_format',
@@ -179,6 +190,17 @@ SELECT 'ref', 'gleif_relationships', 'T6_pk_nulls',
   n, 0, 'NULL start_node_id, end_node_id or relationship_type rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true)
       WHERE start_node_id IS NULL OR end_node_id IS NULL OR relationship_type IS NULL);
+
+-- T7: no identical rows (an append must not repeat a version the table holds)
+INSERT INTO dq_results
+SELECT 'ref', 'gleif_relationships', 'T7_duplicate_rows',
+  CASE WHEN extra = 0 THEN 'pass' ELSE 'fail' END,
+  extra, 0, 'rows that are an exact copy of another row'
+FROM (
+  SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true))
+       - (SELECT COUNT(*) FROM (
+            SELECT DISTINCT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/gleif_relationships', allow_moved_paths := true))) AS extra
+);
 
 -- T7: start_node_id / end_node_id lei format (20-character alphanumeric)
 INSERT INTO dq_results

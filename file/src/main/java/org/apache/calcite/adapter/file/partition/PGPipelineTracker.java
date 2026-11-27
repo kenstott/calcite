@@ -953,6 +953,25 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
     }
   }
 
+  @Override public void invalidatePipeline(String pipelineName) {
+    // Per-unit freshness tokens are stored under "<pipeline>::<unit>"; left(...) matches that
+    // prefix literally, where LIKE would read the underscores in table names as wildcards.
+    String unitPrefix = pipelineName + "::";
+    String sql = "DELETE FROM pipeline_tracker WHERE (table_name = ? OR left(table_name, ?) = ?) "
+        + "AND phase IN ('incremental', '" + PHASE_PERIOD + "', '" + FRESHNESS_PHASE + "')";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, pipelineName);
+      stmt.setInt(2, unitPrefix.length());
+      stmt.setString(3, unitPrefix);
+      int deleted = stmt.executeUpdate();
+      LOGGER.info("Invalidated {} tracker entries for {}", deleted, pipelineName);
+    } catch (SQLException e) {
+      throw new RuntimeException("PG tracker write failed (invalidatePipeline) for "
+          + pipelineName + ": " + e.getMessage(), e);
+    }
+    invalidateTableCompletion(pipelineName);
+  }
+
   @Override public Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
       List<Map<String, String>> allCombinations) {
     if (allCombinations == null || allCombinations.isEmpty()) {
@@ -1169,7 +1188,9 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         }
       }
     } catch (SQLException e) {
-      LOGGER.debug("Error getting freshness token for {}: {}", pipelineName, e.getMessage());
+      // A failed read is not "no token": callers treat null as a first run.
+      throw new RuntimeException("PG tracker read failed (getFreshnessToken) for "
+          + pipelineName + ": " + e.getMessage(), e);
     }
     return null;
   }

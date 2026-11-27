@@ -21,7 +21,10 @@ import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
+import org.apache.iceberg.data.IcebergGenerics;
+import org.apache.iceberg.data.Record;
 import org.apache.iceberg.exceptions.CommitFailedException;
+import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 
@@ -58,6 +61,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -155,6 +159,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * rows were lost somewhere between being processed and actually landing in a committed file.
    */
   private long totalRecordsCommitted;
+  /** Rows handed to the table writer this run that an {@code onCoercionFailure: DROP} policy left out. */
+  private long rowsDroppedByPolicy;
   private boolean initialized;
   private int maxRetries;
   private long retryDelayMs;
@@ -285,6 +291,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
     this.totalRowsWritten = 0;
     this.totalRecordsCommitted = 0;
+    this.rowsDroppedByPolicy = 0;
     this.totalFilesWritten = 0;
     this.initialized = false;
     this.maxRetries = DEFAULT_MAX_RETRIES;
@@ -637,6 +644,37 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return null;
   }
 
+  @Override public void scanExistingKeys(List<String> columns, Consumer<String[]> consumer)
+      throws IOException {
+    if (pendingRecreate != null) {
+      // The first flush replaces the table, so none of its current rows will remain.
+      return;
+    }
+    if (table == null) {
+      throw new IllegalStateException(
+          "computed_delta with incremental.keyFields requires declared columns");
+    }
+    table.refresh();
+    for (String column : columns) {
+      Types.NestedField field = table.schema().findField(column);
+      if (field == null || field.type().typeId() != Type.TypeID.STRING) {
+        throw new IllegalStateException("incremental.keyFields column '" + column
+            + "' must be a string column of " + table.name() + ", found: " + field);
+      }
+    }
+    String[] values = new String[columns.size()];
+    try (CloseableIterable<Record> records =
+             IcebergGenerics.read(table).select(columns.toArray(new String[0])).build()) {
+      for (Record record : records) {
+        for (int i = 0; i < values.length; i++) {
+          Object value = record.getField(columns.get(i));
+          values[i] = value == null ? null : value.toString();
+        }
+        consumer.accept(values);
+      }
+    }
+  }
+
   /**
    * Ensures the target Iceberg table exists with correct schema.
    *
@@ -847,6 +885,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         + "(no drop, no rewrite)", targetTableId, added);
     withdrawPublishedSchemaCache(result[0]);
     return result[0];
+  }
+
+  @Override public synchronized boolean isRebuildPending() {
+    return pendingRecreate != null;
   }
 
   /** Drift-driven recreate waiting for the first batch that has rows to commit. */
@@ -1153,17 +1195,15 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   }
 
   /**
-   * Publishes the partition this write just added rows to.
+   * Publishes the partition this write just added rows to, under append mode.
    *
    * <p>Publishing as the run proceeds is what lets an interrupted run keep its finished work:
    * the next run's skip-if-materialized check sees committed partitions in the table and does
    * not re-fetch them.
    *
-   * <p>This is called once per {@code writeBatch}, which is a CHUNK boundary, not a fetch-unit
-   * boundary — a fetch unit larger than the flush threshold arrives as several chunks for the
-   * same partition. So the same partition is committed repeatedly, and each commit must hand
-   * {@code replacePartitions} every file written for that partition so far. Handing it only the
-   * newest chunk would replace the partition with that chunk alone and discard the rest.
+   * <p>This is called once per chunk, so the same partition is committed repeatedly. Each commit
+   * appends only the files not yet committed: appending a file a second time would register its
+   * rows twice.
    */
   private void commitCompletedPartition(Map<String, String> partitionVariables)
       throws IOException {
@@ -1171,17 +1211,21 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Flush this partition's buffer so the commit below carries all of its rows.
     flushPartition(partitionKey);
     List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(partitionKey);
-    if (forPartition == null || forPartition.isEmpty()) {
+    if (forPartition == null) {
       return;
     }
-    // Cumulative, so a re-commit is a superset of the previous one rather than a replacement
-    // of it. Committing the same files again is a no-op for the table's contents.
-    commitInChunks(new ArrayList<org.apache.iceberg.DataFile>(forPartition));
+    List<org.apache.iceberg.DataFile> uncommitted =
+        new ArrayList<org.apache.iceberg.DataFile>(forPartition);
+    uncommitted.retainAll(pendingDataFiles);
+    if (uncommitted.isEmpty()) {
+      return;
+    }
+    commitInChunks(uncommitted);
     // These files are now in the table; leaving them in pendingDataFiles would have the
     // end-of-run commit publish them a second time.
-    pendingDataFiles.removeAll(forPartition);
+    pendingDataFiles.removeAll(uncommitted);
     LOGGER.info("Committed partition [{}] with {} file(s) ({} partitions committed this run)",
-        partitionKey, forPartition.size(), filesByPartition.size());
+        partitionKey, uncommitted.size(), filesByPartition.size());
   }
 
   /**
@@ -1469,7 +1513,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Deferred-schema materialize (FILE-186): first flush infers the schema and creates the table.
     ensureTableCreated(rows, partVars);
 
+    long droppedBefore = tableWriter.getRowsDroppedByPolicy();
     org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(rows, partVars);
+    rowsDroppedByPolicy += tableWriter.getRowsDroppedByPolicy() - droppedBefore;
     if (dataFile != null) {
       pendingDataFiles.add(dataFile);
       if (unitInFlight) {
@@ -3236,6 +3282,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   public long getCommittedRowCount() {
     return totalRecordsCommitted;
+  }
+
+  /**
+   * Rows accepted by {@link #writeBatch} this run that were deliberately left out of the data
+   * files by an {@code onCoercionFailure: DROP} column policy.
+   */
+  public long getRowsDroppedByPolicy() {
+    return rowsDroppedByPolicy;
   }
 
   @Override public int getTotalFilesWritten() {

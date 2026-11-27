@@ -463,6 +463,39 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/financials', allow_moved_paths := true)
 );
 
+-- T8: loan/deposit columns are populated on (nearly) every row. LNCON/LNAG have a small
+-- real null population (LNAG larger in 2010-2011), so only the near-universal items are held
+-- to a threshold; each category must still be present on at least some rows.
+INSERT INTO dq_results
+SELECT 'banking', 'financials', 'loan_fields_populated',
+  CASE WHEN n_core_null > n * 0.01 OR n_cat = 0 OR n_con = 0 OR n_ag = 0 THEN 'fail' ELSE 'pass' END,
+  n_core_null, 0, 'rows missing a core loan/deposit field, of ' || n
+FROM (
+  SELECT COUNT(*) AS n,
+    COUNT(*) FILTER (WHERE total_deposits_thousands IS NULL
+                        OR net_loans_and_leases_thousands IS NULL
+                        OR total_loans_and_leases_thousands IS NULL
+                        OR real_estate_loans_thousands IS NULL
+                        OR commercial_industrial_loans_thousands IS NULL) AS n_core_null,
+    COUNT(*) FILTER (WHERE commercial_industrial_loans_thousands > 0) AS n_cat,
+    COUNT(*) FILTER (WHERE consumer_loans_thousands > 0) AS n_con,
+    COUNT(*) FILTER (WHERE agricultural_loans_thousands > 0) AS n_ag
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/financials', allow_moved_paths := true)
+);
+
+-- T9: net loans never exceed total loans, and deposits are never below domestic deposits
+-- (both hold on every row of the 2010, 2015 and 2025 year-end API pulls).
+INSERT INTO dq_results
+SELECT 'banking', 'financials', 'loan_deposit_ordering',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  n, 0, 'rows with net loans > total loans, or domestic deposits > total deposits'
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/banking/financials', allow_moved_paths := true)
+  WHERE net_loans_and_leases_thousands > total_loans_and_leases_thousands
+     OR domestic_deposits_thousands > total_deposits_thousands
+);
+
 -- ============================================================================
 -- summary (industry-wide rollup, ~8,107 rows; grain year x state, state_abbr nullable for
 -- nationwide row; partitions: type, year)

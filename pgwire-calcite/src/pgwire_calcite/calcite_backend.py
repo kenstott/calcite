@@ -464,6 +464,15 @@ class CalciteBackend:
         "-Dcalcite.bindable.cache.maxSize=1000",
     )
 
+    #: Calcite types strings and literals as ISO-8859-1 unless told otherwise, and then refuses
+    #: any literal outside it (curly quotes, em dashes, CJK). The wire carries UTF-8, so the
+    #: engine's character sets and collation match it.
+    _UNICODE_CHARSET = (
+        "-Dcalcite.default.charset=UTF-8",
+        "-Dcalcite.default.nationalcharset=UTF-8",
+        "-Dcalcite.default.collation.name=UTF-8$en_US",
+    )
+
     _FILE_SCHEMA_FACTORY = "org.apache.calcite.adapter.file.FileSchemaFactory"
 
     def _connection_model_path(self) -> str:
@@ -547,7 +556,7 @@ class CalciteBackend:
             args = list(self._jvm_args)
             if not any("java.base/java.nio" in a for a in args):
                 args.append(self._ARROW_ADD_OPENS)
-            for prop in self._CACHE_BOUNDS:
+            for prop in self._CACHE_BOUNDS + self._UNICODE_CHARSET:
                 key = prop.split("=", 1)[0]
                 if not any(a.startswith(key) for a in args):
                     args.append(prop)

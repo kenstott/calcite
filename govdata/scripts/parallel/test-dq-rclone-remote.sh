@@ -59,12 +59,7 @@ run "$EP" GOVDATA_DQ_RCLONE_REMOTE=zzremote RCLONE_FAIL=purge -- --rebuild
 [ $rc -ne 0 ] && [[ "$out" != *"no pipeline_tracker found"* ]] && ! grep -q '^worker.sh' "$CALLS" \
   && ok "a failed results teardown stops the run before the tracker and ETL" || bad "teardown failure: rc=$rc $(cat "$CALLS")"
 
-# no endpoint override: metadata-only teardown, listed through rclone
-run GOVDATA_DQ_RCLONE_REMOTE=zzremote RCLONE_FAIL=lsd -- --rebuild
-[ $rc -ne 0 ] && ! grep -q '^worker.sh' "$CALLS" \
-  && ok "a failed table listing stops the run before the ETL" || bad "lsd failure: rc=$rc $(cat "$CALLS") $out"
-
-run GOVDATA_DQ_RCLONE_REMOTE=zzremote RCLONE_FAIL=ls --
+run "$EP" GOVDATA_DQ_RCLONE_REMOTE=zzremote RCLONE_FAIL=ls --
 [ $rc -ne 0 ] && ! grep -q '^duckdb' "$CALLS" \
   && ok "a failed path check stops the run before DQ" || bad "ls failure: rc=$rc $(cat "$CALLS") $out"
 

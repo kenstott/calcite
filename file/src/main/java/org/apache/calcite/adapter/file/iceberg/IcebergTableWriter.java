@@ -139,6 +139,8 @@ public class IcebergTableWriter {
    * write NULL — matching the historical (implicit, undocumented) behavior of this class.
    */
   private final Map<String, String> onCoercionFailurePolicies;
+  /** Rows {@link #writeRecords} left out under an {@code onCoercionFailure: DROP} policy. */
+  private long rowsDroppedByPolicy;
 
   /**
    * Runs a table-mutating operation under both serialization layers — the in-JVM per-table monitor
@@ -956,7 +958,11 @@ public class IcebergTableWriter {
    * partition column, so that it selects whole partitions exactly. After a commit the scan is
    * repeated and compared with the first.
    *
-   * @param groupColumn column that groups rows into ingestions, e.g. {@code accession_number}
+   * <p>With a null {@code groupColumn} there is no grouping: every set of identical rows is
+   * reduced to one. That fits a table in which no row can legitimately appear twice.
+   *
+   * @param groupColumn column that groups rows into ingestions, e.g. {@code accession_number};
+   *     null to keep exactly one copy of every identical row
    * @param keyColumns columns that identify a row logically; their distinct count is checked
    *     before and after, may be empty
    * @param scanFilter selects the files to examine
@@ -965,7 +971,7 @@ public class IcebergTableWriter {
   public DedupeReport dedupeCopies(String groupColumn, List<String> keyColumns,
       org.apache.iceberg.expressions.Expression scanFilter, boolean execute) throws IOException {
     Schema schema = table.schema();
-    if (groupColumn == null || schema.findField(groupColumn) == null) {
+    if (groupColumn != null && schema.findField(groupColumn) == null) {
       throw new IllegalArgumentException("dedupeCopies: no column '" + groupColumn + "'");
     }
     List<Types.NestedField> keyFields = new ArrayList<Types.NestedField>();
@@ -981,18 +987,23 @@ public class IcebergTableWriter {
 
     long rowsToRemove = 0;
     Map<Integer, Integer> groupsByCopies = new HashMap<Integer, Integer>();
-    for (int g = 0; g < before.groupGcd.length; g++) {
-      if (before.groupGcd[g] > 1) {
-        Integer k = Integer.valueOf(before.groupGcd[g]);
-        Integer n = groupsByCopies.get(k);
-        groupsByCopies.put(k, n == null ? 1 : n + 1);
+    RowDigestCounts digests = before.digests;
+    if (groupColumn != null) {
+      for (int g = 0; g < before.groupGcd.length; g++) {
+        if (before.groupGcd[g] > 1) {
+          countGroup(groupsByCopies, before.groupGcd[g]);
+        }
       }
     }
-    RowDigestCounts digests = before.digests;
     for (int slot = 0; slot < digests.capacity(); slot++) {
       int c = digests.count(slot);
       if (c > 0) {
-        rowsToRemove += c - c / before.groupGcd[digests.group(slot)];
+        // Ungrouped, each set of identical rows is its own group.
+        int surplus = c - (groupColumn == null ? 1 : c / before.groupGcd[digests.group(slot)]);
+        rowsToRemove += surplus;
+        if (groupColumn == null && surplus > 0) {
+          countGroup(groupsByCopies, c);
+        }
       }
     }
     if (!execute || rowsToRemove == 0) {
@@ -1011,14 +1022,15 @@ public class IcebergTableWriter {
       if (slot < 0) {
         return false;
       }
-      int target = digests.count(slot) / groupGcd[digests.group(slot)];
+      int target = groupColumn == null
+          ? 1 : digests.count(slot) / groupGcd[digests.group(slot)];
       if (digests.kept(slot) < target) {
         digests.keepOne(slot);
         return false;
       }
       removed.incrementAndGet();
       return true;
-    }, "dedupeCopies on " + groupColumn);
+    }, "dedupeCopies on " + (groupColumn == null ? "identical rows" : groupColumn));
 
     table.refresh();
     CopyScan after = scanCopies(groupColumn, keyFields, scanFilter);
@@ -1035,6 +1047,12 @@ public class IcebergTableWriter {
     return new DedupeReport(before.rows, digests.size(), before.distinctKeys,
         before.groupGcd.length, groupsByCopies, rowsToRemove, removed.get(), snapshotBefore,
         verification);
+  }
+
+  private static void countGroup(Map<Integer, Integer> groupsByCopies, int copies) {
+    Integer k = Integer.valueOf(copies);
+    Integer n = groupsByCopies.get(k);
+    groupsByCopies.put(k, n == null ? 1 : n + 1);
   }
 
   /** Counts every row's digest under its group, and the distinct keys, for {@link #dedupeCopies}. */
@@ -1059,7 +1077,8 @@ public class IcebergTableWriter {
                     schema, fileSchema))
             .build()) {
           for (Record record : records) {
-            String group = String.valueOf(record.getField(groupColumn));
+            String group = groupColumn == null
+                ? "" : String.valueOf(record.getField(groupColumn));
             Integer gi = groupIndex.get(group);
             if (gi == null) {
               gi = groupIndex.size();
@@ -1119,6 +1138,13 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Returns how many rows this writer left out under an {@code onCoercionFailure: DROP} policy.
+   */
+  public long getRowsDroppedByPolicy() {
+    return rowsDroppedByPolicy;
+  }
+
+  /**
    * Writes records to Iceberg using the native Parquet writer with proper field IDs.
    *
    * <p>This method creates Parquet files with Iceberg field IDs embedded in the schema,
@@ -1163,6 +1189,7 @@ public class IcebergTableWriter {
           if (coerced == DROP_ROW) {
             // onCoercionFailure: DROP on this field — skip the row entirely rather than
             // writing it with a missing/null value in a column that failed to parse.
+            rowsDroppedByPolicy++;
             continue rowLoop;
           }
           record.setField(fieldName, coerced);

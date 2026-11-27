@@ -91,6 +91,10 @@ public final class ReadOnlyPipelineTracker extends PipelineTracker.NoopPipelineT
     throw readOnly("invalidateTableCompletion");
   }
 
+  @Override public void invalidatePipeline(String pipelineName) {
+    throw readOnly("invalidatePipeline");
+  }
+
   @Override public void clearAllCompletions() {
     throw readOnly("clearAllCompletions");
   }

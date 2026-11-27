@@ -128,7 +128,7 @@ partitionedTables:
       distinctYears: 74
       contiguous: true
       rowCount: 70434
-      checkedAt: "2026-11-26T05:22:25Z"
+      checkedAt: "2026-11-27T05:43:08Z"
     partitions: *standard_partitions
     comment: >
       Canonical FEMA disaster-declaration record. One row per
@@ -303,7 +303,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 406821
-      checkedAt: "2026-11-26T05:22:26Z"
+      checkedAt: "2026-11-27T05:43:10Z"
     partitions: *standard_partitions
     comment: >
       FEMA Public Assistance grants to state/local governments and nonprofits
@@ -441,7 +441,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 31039
-      checkedAt: "2026-11-26T05:22:26Z"
+      checkedAt: "2026-11-27T05:43:11Z"
     partitions: *standard_partitions
     comment: >
       FEMA Hazard Mitigation Assistance projects (program_area: HMGP, BRIC,
@@ -576,7 +576,7 @@ partitionedTables:
       distinctYears: 49
       contiguous: true
       rowCount: 2755527
-      checkedAt: "2026-11-26T05:22:28Z"
+      checkedAt: "2026-11-27T05:43:13Z"
     partitions: *standard_partitions
     comment: >
       Paid NFIP flood-insurance claims — amount_paid_building,
@@ -739,7 +739,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2013, 2014, 2015, 2016, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
       rowCount: 2415000
-      checkedAt: "2026-11-26T05:22:29Z"
+      checkedAt: "2026-11-27T05:43:15Z"
     partitions: *standard_partitions
     dqRowLimit: 50000
     comment: >
@@ -1771,7 +1771,7 @@ partitionedTables:
       distinctYears: 23
       contiguous: true
       rowCount: 1451226
-      checkedAt: "2026-11-26T05:22:30Z"
+      checkedAt: "2026-11-27T05:43:17Z"
     partitions: *standard_partitions
     comment: >
       NOAA NCEI Storm Events Database — one row per storm event detail record
@@ -2125,7 +2125,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1268
-      checkedAt: "2026-11-26T05:22:31Z"
+      checkedAt: "2026-11-27T05:43:18Z"
     partitions: *standard_partitions
     comment: >
       Wildfire and prescribed-fire OCCURRENCE counts and reported acres by state and discovery
