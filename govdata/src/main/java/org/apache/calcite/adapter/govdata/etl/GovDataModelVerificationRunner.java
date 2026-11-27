@@ -10,6 +10,10 @@
  */
 package org.apache.calcite.adapter.govdata.etl;
 
+import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchema;
+import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.schema.SchemaPlus;
+
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -32,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import javax.sql.DataSource;
 
 /**
  * Standalone verifier that exercises the GovData Calcite model end-to-end through
@@ -185,7 +190,6 @@ public final class GovDataModelVerificationRunner {
     long distinctKeys = -1; // COUNT(DISTINCT pk-tuple) over those keyed rows
     long dupRows = -1;   // keyedRows - distinctKeys (>0 ⇒ the declared PK is not unique)
     String dupErr;       // dup-check SQL failed (reported as n/a, not a hard failure)
-    boolean dupApprox;   // cleared by the HLL sketch alone; no exact DISTINCT was run
     boolean dupFromCache; // answered from the recorded statistic; no scan and no data egress
     String dupPersistErr; // scan succeeded but recording it failed — next run scans again
   }
@@ -327,6 +331,24 @@ public final class GovDataModelVerificationRunner {
         }
       }
 
+      // Tables whose declared primaryKey the check could not decide either way.
+      List<TableResult> unverified = new ArrayList<TableResult>();
+      for (TableResult r : results) {
+        if (unverifiedReason(r) != null) {
+          unverified.add(r);
+        }
+      }
+      if (!unverified.isEmpty()) {
+        System.out.println();
+        System.out.println("-- UNVERIFIED PRIMARY KEYS (" + unverified.size()
+            + ") — uniqueness not established --");
+        System.out.printf("  %-15s %-34s %s%n", "SCHEMA", "TABLE", "REASON");
+        for (TableResult r : unverified) {
+          System.out.printf("  %-15s %-34s %s%n",
+              r.schema, trunc(r.table, 34), unverifiedReason(r));
+        }
+      }
+
       // ---- scan-plan audit ----
       // Every partitioned table in every schema YAML declares `materialize:`, so every one must
       // register in DuckDB as iceberg_scan(<table>) and resolve its files from the Iceberg
@@ -363,6 +385,7 @@ public final class GovDataModelVerificationRunner {
       System.out.println("  duplicate-PK tables  : " + dupped.size()
           + (cfg.dupCheck ? "" : "   (dup-check disabled)"));
       if (cfg.dupCheck) {
+        System.out.println("  unverified-PK tables : " + unverified.size());
         int dupCached = 0;
         int dupScanned = 0;
         int dupUnrecorded = 0;
@@ -771,7 +794,8 @@ public final class GovDataModelVerificationRunner {
       String detail = r.error != null ? trunc(r.error, 80)
           : (r.dupRows > 0 ? "DUPLICATE PK: " + r.dupRows + " dup rows over " + r.keyedRows
               + " keyed (" + dupRatio(r) + ")"
-              : (r.dupErr != null ? "dup-check n/a: " + trunc(r.dupErr, 60) : dupSource(r)));
+              : (unverifiedReason(r) != null
+                  ? "PK unverified: " + trunc(unverifiedReason(r), 60) : dupSource(r)));
       System.out.printf("%-15s %-32s %-6s %10d %-6s %-11s %s%n",
           r.schema, trunc(r.table, 32), r.reach, r.count, r.mat, dupCell(r), detail);
       results.add(r);
@@ -794,65 +818,15 @@ public final class GovDataModelVerificationRunner {
     if (readCachedDupStats(r, pk)) {
       return;
     }
-    StringBuilder cols = new StringBuilder();
-    StringBuilder notNull = new StringBuilder();
-    for (int j = 0; j < pk.size(); j++) {
-      if (j > 0) {
-        cols.append(", ");
-        notNull.append(" AND ");
-      }
-      String qc = "\"" + pk.get(j) + "\"";
-      cols.append(qc);
-      notNull.append(qc).append(" IS NOT NULL");
-    }
-    String from = "\"" + r.schema + "\".\"" + r.table + "\" WHERE " + notNull;
-    // Two plain aggregates (not a scalar subquery) so each pushes cleanly to DuckDB and can't hit
-    // a Calcite scalar-subquery planning edge case across the full table sweep.
+    // Run on the DuckDB data source, not through Calcite (see duckDbDataSource).
     try {
-      // Screen with a HyperLogLog sketch before paying for the exact DISTINCT. The exact form
-      // builds a hash set over every keyed row — on a 20M+ row table that is the single most
-      // expensive thing this runner does, and it ran on every PK table on every sweep even though
-      // almost all of them are clean. APPROX_COUNT_DISTINCT is one pass with bounded memory and
-      // is on the same aggregate shape that pushes to DuckDB. Its relative error is ~2%, so treat
-      // anything within a 5% band of the keyed count as "no duplicates" and only fall through to
-      // the exact count when the sketch says there is a real gap to measure. Duplication that
-      // matters here is whole-table file duplication (7x, 19x observed), which no sketch tolerance
-      // can hide; a delta small enough to sit inside the band would be below dupThreshold anyway.
-      // ONE query for both numbers. Planning, not scanning, is what this runner spends its time
-      // on — a plan dump for a single table shows ~1800 lines of Volcano exploration across its
-      // handful of probes, while the same aggregates run in ~2s directly in DuckDB over 22M rows.
-      // Both aggregates push down together (verified: the plan shows a single JdbcAggregate with
-      // COUNT() and COUNT(APPROXIMATE DISTINCT)), so folding them halves the planning cost of the
-      // dup check rather than merely swapping one planned query for another.
-      long keyed = -1;
-      long approx = -1;
-      try {
-        long[] both = twoCounts(conn,
-            "SELECT COUNT(*), APPROX_COUNT_DISTINCT(" + structOf(pk) + ") FROM " + from);
-        keyed = both[0];
-        approx = both[1];
-      // fallback-guard: allow a real re-query when the combined form is unsupported (e.g. a PK
-      // column type the sketch cannot hash); not a fabricated value
-      } catch (Exception combinedUnsupported) {
-        keyed = scalarCount(conn, "SELECT COUNT(*) FROM " + from);
-        approx = -1;
-      }
-      r.keyedRows = keyed;
-      if (approx >= 0 && approx >= keyed * 0.95) {
-        // Sketch says distinct ≈ keyed — no duplication worth an exact scan.
-        r.distinctKeys = approx;
-        r.dupRows = 0;
-        r.dupApprox = true;
-        r.pkChecked = true;
-        recordDupStats(r, pk, false);
-        return;
-      }
-      long distinct = scalarCount(conn,
-          "SELECT COUNT(*) FROM (SELECT DISTINCT " + cols + " FROM " + from + ")");
-      r.distinctKeys = distinct;
-      r.dupRows = keyed - distinct;
+      DataSource duckDb = duckDbDataSource(conn, r.schema, r.table);
+      long[] counts = countKeys(duckDb, r.schema, r.table, pk);
+      r.keyedRows = counts[0];
+      r.distinctKeys = counts[1];
+      r.dupRows = counts[0] - counts[1];
       r.pkChecked = true;
-      recordDupStats(r, pk, true);
+      recordDupStats(r, pk);
     } catch (Exception e) {
       r.dupErr = e.getMessage();
       // This CLI runner's own stack-trace verbosity, set by model-verify.sh — not adapter
@@ -915,18 +889,13 @@ public final class GovDataModelVerificationRunner {
     if (!stats.getKeyColumns().equals(pk)) {
       return false;
     }
+    // An estimated distinct count cannot show that a key is unique.
+    if (!stats.isExact()) {
+      return false;
+    }
     r.keyedRows = stats.getKeyedRowCount();
     r.distinctKeys = stats.getDistinctKeyEstimate();
-    // An estimated distinct count carries the sketch's relative error, so a small apparent gap
-    // is indistinguishable from none. Hold it to the same 5% band the scan path uses before
-    // calling anything a duplicate; whole-table duplication (2x and up) clears it easily.
-    if (!stats.isExact() && r.distinctKeys >= r.keyedRows * 0.95) {
-      r.dupRows = 0;
-      r.dupApprox = true;
-    } else {
-      r.dupRows = r.keyedRows - r.distinctKeys;
-      r.dupApprox = !stats.isExact();
-    }
+    r.dupRows = r.keyedRows - r.distinctKeys;
     r.pkChecked = true;
     r.dupFromCache = true;
     return true;
@@ -937,7 +906,7 @@ public final class GovDataModelVerificationRunner {
    * run answers from metadata. A failure here is reported rather than swallowed: silently
    * failing to record would make every future run pay the scan with no indication why.
    */
-  private static void recordDupStats(TableResult r, List<String> pk, boolean exact) {
+  private static void recordDupStats(TableResult r, List<String> pk) {
     try {
       org.apache.iceberg.Table table = icebergTable(r.schema, r.table);
       if (table == null) {
@@ -945,7 +914,7 @@ public final class GovDataModelVerificationRunner {
       }
       org.apache.calcite.adapter.file.statistics.IcebergPrimaryKeyStatistics.write(table,
           new org.apache.calcite.adapter.file.statistics.PrimaryKeyStatistics(pk,
-              r.keyedRows, r.distinctKeys, exact,
+              r.keyedRows, r.distinctKeys, true,
               Long.toString(table.currentSnapshot().snapshotId()), null));
     } catch (Exception e) {
       r.dupPersistErr = e.getMessage();
@@ -1011,53 +980,85 @@ public final class GovDataModelVerificationRunner {
   }
 
   /**
-   * Renders a PK column list as a single value the distinct-sketch can hash. A multi-column key
-   * has to collapse to one expression for APPROX_COUNT_DISTINCT; ROW(...) keeps the columns
-   * separate (unlike concatenating text, which would make ('a','bc') and ('ab','c') collide and
-   * under-report duplicates).
+   * The DuckDB data source behind a schema, with the table's view in place. The duplicate check
+   * runs its SQL here rather than through Calcite: the key under test is declared to Calcite as a
+   * unique key, so the planner removes a DISTINCT or GROUP BY over it and the count comes back
+   * equal to the row count whatever the data holds.
    */
-  private static String structOf(List<String> pk) {
-    if (pk.size() == 1) {
-      return "\"" + pk.get(0) + "\"";
+  static DataSource duckDbDataSource(Connection conn, String schema, String table)
+      throws SQLException {
+    SchemaPlus sub =
+        conn.unwrap(CalciteConnection.class).getRootSchema().subSchemas().get(schema);
+    if (sub == null) {
+      throw new IllegalStateException("No schema mounted as " + schema);
     }
-    StringBuilder sb = new StringBuilder("ROW(");
+    DuckDBJdbcSchema duckSchema = sub.unwrap(DuckDBJdbcSchema.class);
+    // Resolving the table is what creates, or refreshes, its DuckDB view.
+    if (sub.tables().get(table) == null) {
+      throw new IllegalStateException("No table " + schema + "." + table);
+    }
+    return duckSchema.getDataSource();
+  }
+
+  /** FROM and WHERE selecting the rows of a table whose key columns are all non-null. */
+  private static String keyedRowsFrom(String schema, String table, List<String> pk) {
+    StringBuilder sb = new StringBuilder("\"" + schema + "\".\"" + table + "\" WHERE ");
+    for (int j = 0; j < pk.size(); j++) {
+      if (j > 0) {
+        sb.append(" AND ");
+      }
+      sb.append('"').append(pk.get(j)).append("\" IS NOT NULL");
+    }
+    return sb.toString();
+  }
+
+  /**
+   * Counts a table's fully keyed rows and the distinct key tuples among them, exactly.
+   *
+   * <p>The first query holds one hash per distinct key rather than the key itself. There cannot be
+   * more distinct hashes than distinct keys, so as many hashes as rows proves the key unique. Where
+   * there are fewer, the tuples are compared, over only the rows whose hash is shared.
+   *
+   * @return keyed rows, then distinct keys
+   */
+  static long[] countKeys(DataSource source, String schema, String table, List<String> pk)
+      throws SQLException {
+    String cols = columnList(pk);
+    String from = keyedRowsFrom(schema, table, pk);
+    long[] hashed =
+        twoCounts(source, "SELECT COUNT(*), COUNT(DISTINCT HASH(" + cols + ")) FROM " + from);
+    long keyed = hashed[0];
+    if (hashed[1] == keyed) {
+      return new long[]{keyed, keyed};
+    }
+    long[] shared =
+        twoCounts(source, "SELECT COUNT(*), COUNT(DISTINCT (" + cols + ")) FROM " + from
+            + " AND HASH(" + cols + ") IN (SELECT HASH(" + cols + ") FROM " + from
+            + " GROUP BY 1 HAVING COUNT(*) > 1)");
+    return new long[]{keyed, keyed - (shared[0] - shared[1])};
+  }
+
+  /** The quoted, comma-separated key columns. */
+  private static String columnList(List<String> pk) {
+    StringBuilder sb = new StringBuilder();
     for (int j = 0; j < pk.size(); j++) {
       if (j > 0) {
         sb.append(", ");
       }
       sb.append('"').append(pk.get(j)).append('"');
     }
-    return sb.append(')').toString();
+    return sb.toString();
   }
 
-  /** Runs a single-column COUNT query and returns the long value (0 if no row). */
-  private static long scalarCount(Connection conn, String sql) throws Exception {
-    Statement st = null;
-    ResultSet rs = null;
-    try {
-      st = conn.createStatement();
-      rs = st.executeQuery(sql);
-      return rs.next() ? rs.getLong(1) : 0L;
-    } finally {
-      closeQuietly(rs);
-      closeQuietly(st);
-    }
-  }
-
-  /** Runs a two-column COUNT query and returns both values (zeros if no row). */
-  private static long[] twoCounts(Connection conn, String sql) throws Exception {
-    Statement st = null;
-    ResultSet rs = null;
-    try {
-      st = conn.createStatement();
-      rs = st.executeQuery(sql);
+  /** Runs a two-column COUNT query and returns both values. */
+  private static long[] twoCounts(DataSource source, String sql) throws SQLException {
+    try (Connection conn = source.getConnection();
+         Statement st = conn.createStatement();
+         ResultSet rs = st.executeQuery(sql)) {
       if (!rs.next()) {
-        return new long[]{0L, 0L};
+        throw new SQLException("COUNT query returned no row: " + sql);
       }
       return new long[]{rs.getLong(1), rs.getLong(2)};
-    } finally {
-      closeQuietly(rs);
-      closeQuietly(st);
     }
   }
 
@@ -1085,17 +1086,33 @@ public final class GovDataModelVerificationRunner {
     return String.format("%.2fx", (double) r.keyedRows / (double) r.distinctKeys);
   }
 
-  /** Compact DUP cell for the live table: "-" not checked, "ok", "n/a" (check errored), "DUP N.NNx". */
+  /**
+   * Compact DUP cell for the live table: "-" not checked, "ok", "DUP N.NNx", or "unverified" where
+   * the check could not say whether the key is unique.
+   */
   private static String dupCell(TableResult r) {
+    if (unverifiedReason(r) != null) {
+      return "unverified";
+    }
     if (!r.pkChecked) {
-      return r.dupErr != null ? "n/a" : "-";
+      return "-";
     }
-    if (r.dupRows > 0) {
-      return "DUP " + dupRatio(r);
+    return r.dupRows > 0 ? "DUP " + dupRatio(r) : "ok";
+  }
+
+  /**
+   * Why a table's declared primary key was left unverified, or null when it was verified or the
+   * check did not apply.
+   */
+  private static String unverifiedReason(TableResult r) {
+    return unverifiedReason(r.pkChecked, r.keyedRows, r.dupErr);
+  }
+
+  static String unverifiedReason(boolean checked, long keyedRows, String error) {
+    if (!checked) {
+      return error == null ? null : "check failed: " + trunc(error, 120);
     }
-    // "~ok" is not a weaker pass — it means the sketch showed distinct ≈ keyed, so no exact
-    // DISTINCT was needed. Surfaced so a reader can tell which tables paid the full scan.
-    return r.dupApprox ? "~ok" : "ok";
+    return keyedRows == 0 ? "no row has every key column non-null" : null;
   }
 
   private static int runProbes(Connection conn, Config cfg) throws Exception {
