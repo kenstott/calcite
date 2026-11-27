@@ -54,6 +54,7 @@ housing.zip_house_price_index
 law.bill_amendment_text_versions
 officials.member_ideology
 officials.presidential_results_by_district
+patents.patent_grants_weekly
 patents.patent_publication_applicants
 patents.patent_publication_cpc
 sec.cyber_incident_disclosures
