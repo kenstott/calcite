@@ -66,6 +66,15 @@ import java.util.concurrent.ConcurrentHashMap;
  *       <li>{@code accessToken} - a static bearer token.</li>
  *     </ul>
  *   </li>
+ *   <li>With a service account key only:
+ *     <ul>
+ *       <li>{@code subject} - a Workspace user's email; the service account acts as that user
+ *           through domain-wide delegation (the JWT {@code sub} claim);</li>
+ *       <li>{@code scope} - the OAuth scope(s) to request, as a space-separated string or a list
+ *           (default {@code https://www.googleapis.com/auth/drive.readonly}). With delegation,
+ *           only the scopes the Workspace admin granted the client are issued.</li>
+ *     </ul>
+ *   </li>
  * </ul>
  *
  * <p>Google Workspace native files (Docs, Sheets, Slides) have no binary content; they are
@@ -140,6 +149,14 @@ public class GoogleDriveStorageProvider implements StorageProvider {
   }
 
   static TokenSource tokenSourceFrom(Map<String, Object> config) {
+    boolean serviceAccount =
+        config.containsKey("serviceAccountKey") || config.containsKey("serviceAccountKeyPath");
+    if (!serviceAccount && (config.containsKey("subject") || config.containsKey("scope"))) {
+      throw new IllegalArgumentException("Google Drive 'subject' and 'scope' apply only to "
+          + "'serviceAccountKey' or 'serviceAccountKeyPath' sign-in");
+    }
+    String subject = serviceAccount ? subjectFrom(config) : null;
+    String scope = serviceAccount ? scopeFrom(config) : null;
     if (config.containsKey("serviceAccountKey")) {
       Object key = config.get("serviceAccountKey");
       JsonNode keyJson;
@@ -148,13 +165,14 @@ public class GoogleDriveStorageProvider implements StorageProvider {
       } catch (IOException e) {
         throw new IllegalArgumentException("Google Drive 'serviceAccountKey' is not valid JSON", e);
       }
-      return new ServiceAccountTokenSource(keyJson);
+      return new ServiceAccountTokenSource(keyJson, scope, subject);
     }
     if (config.containsKey("serviceAccountKeyPath")) {
       String path = (String) config.get("serviceAccountKeyPath");
       try {
         // A credential file on the host running the adapter, not data storage.
-        return new ServiceAccountTokenSource(MAPPER.readTree(Files.readAllBytes(Paths.get(path))));
+        return new ServiceAccountTokenSource(MAPPER.readTree(Files.readAllBytes(Paths.get(path))),
+            scope, subject);
       } catch (IOException e) {
         throw new IllegalArgumentException(
             "Cannot read Google Drive service account key file '" + path + "'", e);
@@ -177,6 +195,47 @@ public class GoogleDriveStorageProvider implements StorageProvider {
     throw new IllegalArgumentException("Google Drive storage requires one of: "
         + "'serviceAccountKey', 'serviceAccountKeyPath', 'clientId+clientSecret+refreshToken', "
         + "or 'accessToken'");
+  }
+
+  private static @Nullable String subjectFrom(Map<String, Object> config) {
+    if (!config.containsKey("subject")) {
+      return null;
+    }
+    Object subject = config.get("subject");
+    if (!(subject instanceof String) || ((String) subject).trim().isEmpty()) {
+      throw new IllegalArgumentException("Google Drive 'subject' must be a non-empty string");
+    }
+    return ((String) subject).trim();
+  }
+
+  private static String scopeFrom(Map<String, Object> config) {
+    if (!config.containsKey("scope")) {
+      return DRIVE_READONLY_SCOPE;
+    }
+    Object scope = config.get("scope");
+    List<String> scopes = new ArrayList<>();
+    if (scope instanceof String) {
+      for (String s : ((String) scope).trim().split("\\s+")) {
+        if (!s.isEmpty()) {
+          scopes.add(s);
+        }
+      }
+    } else if (scope instanceof List) {
+      for (Object s : (List<?>) scope) {
+        if (!(s instanceof String) || ((String) s).trim().isEmpty()) {
+          throw new IllegalArgumentException(
+              "Google Drive 'scope' list entries must be non-empty strings");
+        }
+        scopes.add(((String) s).trim());
+      }
+    } else {
+      throw new IllegalArgumentException(
+          "Google Drive 'scope' must be a space-separated string or a list of strings");
+    }
+    if (scopes.isEmpty()) {
+      throw new IllegalArgumentException("Google Drive 'scope' is empty");
+    }
+    return String.join(" ", scopes);
   }
 
   @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
@@ -461,8 +520,12 @@ public class GoogleDriveStorageProvider implements StorageProvider {
     private final String clientEmail;
     private final String tokenUri;
     private final PrivateKey privateKey;
+    private final String scope;
+    private final @Nullable String subject;
 
-    ServiceAccountTokenSource(JsonNode key) {
+    ServiceAccountTokenSource(JsonNode key, String scope, @Nullable String subject) {
+      this.scope = scope;
+      this.subject = subject;
       for (String field : new String[] {"client_email", "private_key", "token_uri"}) {
         if (!key.hasNonNull(field)) {
           throw new IllegalArgumentException(
@@ -481,7 +544,10 @@ public class GoogleDriveStorageProvider implements StorageProvider {
           "{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
       Map<String, Object> claims = new LinkedHashMap<>();
       claims.put("iss", clientEmail);
-      claims.put("scope", DRIVE_READONLY_SCOPE);
+      claims.put("scope", scope);
+      if (subject != null) {
+        claims.put("sub", subject);
+      }
       claims.put("aud", tokenUri);
       claims.put("iat", now);
       claims.put("exp", now + 3600);

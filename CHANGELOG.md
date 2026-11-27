@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.131.0](https://github.com/kenstott/calcite/compare/engine-v0.130.0...engine-v0.131.0) (2026-11-27)
+
+
+### Features
+
+* **file:** Google Drive domain-wide delegation (subject, scope) ([#1184](https://github.com/kenstott/calcite/issues/1184)) ([7840204](https://github.com/kenstott/calcite/commit/7840204fa0f3a1b460999ede4821c9f0d79ab5f6))
+* **govdata/econ:** load seasonally adjusted state payroll series into state_industry ([4967846](https://github.com/kenstott/calcite/commit/49678468d17f64e74671feb9b63d250b1ba2cddf))
+* **govdata:** census.pep_population_estimates from popest bulk CSV (2020-2025) ([7cf1d19](https://github.com/kenstott/calcite/commit/7cf1d1916820d81c57b074778e231acf4e3a9bbd))
+* **govdata:** environment annual state CAFO counts from EPA status reports ([88988a0](https://github.com/kenstott/calcite/commit/88988a0ee655fe068fbc994305036d9b993287ca))
+* **govdata:** environment NPDES permits, facilities, components and CAFO view ([8b75f8a](https://github.com/kenstott/calcite/commit/8b75f8aaa1f8850c3b26a526b7bf9e87ec130160))
+* **sec:** add cyber_incident_disclosures from 8-K Item 1.05 ([9cbff03](https://github.com/kenstott/calcite/commit/9cbff031432f131fceac446a4b64a63a9087a3bf))
+
+
+### Bug Fixes
+
+* **file:** write date partition values in the Iceberg writers ([0777c88](https://github.com/kenstott/calcite/commit/0777c8877ba0a016880354d2963d6253da92cc7a))
+* **govdata/econ:** replace the archived World Bank CO2 per capita indicator ([d23512a](https://github.com/kenstott/calcite/commit/d23512ac48991a64b119a8abfd334f9db0bdcdcb))
+* **govdata/econ:** world_indicators carries the World Bank area id and name on every row ([4cd31f7](https://github.com/kenstott/calcite/commit/4cd31f7192aad94ee84239ef9d3812d6c8c084f4))
+* **govdata/ref:** keep sec_company_tickers history by stamping as_of in the transformer ([08a3461](https://github.com/kenstott/calcite/commit/08a3461ecb6c51bdb229d7ddd06316584fb6760f))
+* **govdata:** load current-year Census trade months via dataMonthLag 2 ([a50f206](https://github.com/kenstott/calcite/commit/a50f206d7cebb1bb6828a16c954e66cf3c22cd4d))
+* **govdata:** npdes_cafo_permits returns one row per permit from the current version ([0c586c1](https://github.com/kenstott/calcite/commit/0c586c18f9b887163b51f9d7739b22fd178ad29a))
+* **govdata:** treat Census trade 204 as zero rows on non-prefixed fetches ([b44f234](https://github.com/kenstott/calcite/commit/b44f23404b4926893dcc914f7ba99f2b92f753a0))
+* **sec:** match Item 1.05 headers separated by Unicode spaces; null ransomware flag without text ([8db9356](https://github.com/kenstott/calcite/commit/8db9356d2a4f853d879ca9c325a1636b634f7819))
+
 ## [0.130.0](https://github.com/kenstott/calcite/compare/engine-v0.129.0...engine-v0.130.0) (2026-11-26)
 
 

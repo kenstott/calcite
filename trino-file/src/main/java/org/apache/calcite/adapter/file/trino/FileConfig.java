@@ -309,7 +309,10 @@ public class FileConfig
             + "named by the glob's scheme. Required for onedrive:// (userPrincipalName, tenantId, "
             + "clientId, clientSecret or refreshToken, or accessToken) and gdrive:// (folderId, "
             + "serviceAccountKey or serviceAccountKeyPath, clientId + clientSecret + refreshToken, "
-            + "or accessToken); for s3:// and sftp:// it replaces the aws.* and sftp.* properties.")
+            + "or accessToken; with a service account key, optionally subject, a Workspace user to "
+            + "act as through domain-wide delegation, and scope, default "
+            + "https://www.googleapis.com/auth/drive.readonly); for s3:// and sftp:// it replaces "
+            + "the aws.* and sftp.* properties.")
     public FileConfig setStorageConfig(String storageConfig)
     {
         this.storageConfig = storageConfig;

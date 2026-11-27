@@ -39,6 +39,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Signature;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -239,7 +240,8 @@ public class CloudDriveStorageProviderTest {
     assertEquals("q2.csv", p.resolvePath("", "q2.csv"));
   }
 
-  @Test void driveServiceAccountSignsJwtAndUsesToken() throws Exception {
+  /** Runs two listings through a service-account provider; returns the JWT claims sent. */
+  private List<JsonNode> serviceAccountClaims(Map<String, Object> extraConfig) throws Exception {
     standardDriveTree();
     KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
     gen.initialize(2048);
@@ -270,7 +272,7 @@ public class CloudDriveStorageProviderTest {
     key.put("client_email", "reader@proj.iam.gserviceaccount.com");
     key.put("private_key", pem);
     key.put("token_uri", base + "/token");
-    Map<String, Object> config = new HashMap<>();
+    Map<String, Object> config = new HashMap<>(extraConfig);
     config.put("serviceAccountKey", MAPPER.writeValueAsString(key));
     GoogleDriveStorageProvider p = new GoogleDriveStorageProvider("root",
         GoogleDriveStorageProvider.tokenSourceFrom(config), base + "/drive/v3");
@@ -278,11 +280,37 @@ public class CloudDriveStorageProviderTest {
     assertEquals(3, p.listFiles("", false).size());
     p.listFiles("sales", false);
     assertEquals(1, claimsSeen.size(), "token is cached across calls");
-    JsonNode claims = claimsSeen.get(0);
+    assertTrue(authHeaders.stream().allMatch("Bearer sa-token"::equals));
+    return claimsSeen;
+  }
+
+  @Test void driveServiceAccountSignsJwtAndUsesToken() throws Exception {
+    JsonNode claims = serviceAccountClaims(new HashMap<>()).get(0);
     assertEquals("reader@proj.iam.gserviceaccount.com", claims.get("iss").asText());
     assertEquals(GoogleDriveStorageProvider.DRIVE_READONLY_SCOPE, claims.get("scope").asText());
     assertEquals(base + "/token", claims.get("aud").asText());
-    assertTrue(authHeaders.stream().allMatch("Bearer sa-token"::equals));
+    assertFalse(claims.has("sub"), "no subject configured, no delegation");
+  }
+
+  @Test void driveServiceAccountDelegatesToSubjectWithScope() throws Exception {
+    Map<String, Object> extra = new HashMap<>();
+    extra.put("subject", "analyst@example.com");
+    extra.put("scope", "https://www.googleapis.com/auth/drive");
+    JsonNode claims = serviceAccountClaims(extra).get(0);
+    assertEquals("reader@proj.iam.gserviceaccount.com", claims.get("iss").asText());
+    assertEquals("analyst@example.com", claims.get("sub").asText());
+    assertEquals("https://www.googleapis.com/auth/drive", claims.get("scope").asText());
+  }
+
+  @Test void driveServiceAccountScopeList() throws Exception {
+    Map<String, Object> extra = new HashMap<>();
+    extra.put("subject", "analyst@example.com");
+    extra.put("scope", Arrays.asList(GoogleDriveStorageProvider.DRIVE_READONLY_SCOPE,
+        "https://www.googleapis.com/auth/drive.metadata.readonly"));
+    JsonNode claims = serviceAccountClaims(extra).get(0);
+    assertEquals(GoogleDriveStorageProvider.DRIVE_READONLY_SCOPE
+        + " https://www.googleapis.com/auth/drive.metadata.readonly",
+        claims.get("scope").asText());
   }
 
   @Test void driveRefreshTokenSignIn() throws IOException {
@@ -325,6 +353,32 @@ public class CloudDriveStorageProviderTest {
     badKey.put("serviceAccountKey", "{\"client_email\":\"x\"}");
     assertThrows(IllegalArgumentException.class,
         () -> StorageProviderFactory.createFromType("gdrive", badKey));
+
+    Map<String, Object> subjectWithoutServiceAccount = new HashMap<>(noAuth);
+    subjectWithoutServiceAccount.put("accessToken", "t");
+    subjectWithoutServiceAccount.put("subject", "analyst@example.com");
+    assertThrows(IllegalArgumentException.class,
+        () -> StorageProviderFactory.createFromType("gdrive", subjectWithoutServiceAccount));
+
+    Map<String, Object> scopeWithRefreshToken = new HashMap<>(refreshNoSecret);
+    scopeWithRefreshToken.put("clientSecret", "s");
+    scopeWithRefreshToken.put("scope", "https://www.googleapis.com/auth/drive");
+    assertThrows(IllegalArgumentException.class,
+        () -> StorageProviderFactory.createFromType("gdrive", scopeWithRefreshToken));
+
+    Map<String, Object> emptySubject = new HashMap<>(noAuth);
+    emptySubject.put("serviceAccountKeyPath", "/nonexistent/key.json");
+    emptySubject.put("subject", " ");
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> StorageProviderFactory.createFromType("gdrive", emptySubject));
+    assertTrue(e.getMessage().contains("subject"), e.getMessage());
+
+    Map<String, Object> emptyScope = new HashMap<>(noAuth);
+    emptyScope.put("serviceAccountKeyPath", "/nonexistent/key.json");
+    emptyScope.put("scope", "  ");
+    e = assertThrows(IllegalArgumentException.class,
+        () -> StorageProviderFactory.createFromType("gdrive", emptyScope));
+    assertTrue(e.getMessage().contains("scope"), e.getMessage());
 
     Map<String, Object> ok = new HashMap<>(noAuth);
     ok.put("accessToken", "t");
