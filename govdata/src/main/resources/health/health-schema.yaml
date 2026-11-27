@@ -2276,11 +2276,8 @@ partitionedTables:
   # CMS PROVIDER OF SERVICES FILE — data.cms.gov data.json discovery (snapshot, current quarter)
   # ==========================================================================
   - name: cms_pos_facilities
-    # Freshness gate: CMS data.json catalog is a dynamic index response with no
-    # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
-    # materialize/commit when unchanged (fails open on a missing prior token).
-      # Gates on the resource's own ETag, which the host serves on a HEAD (verified live). A hash
-      # gate has to download the whole body to compute a digest of it; this is one HEAD.
+    # Gates on the catalog's own ETag, which the host serves on a HEAD. A hash gate would
+    # have to download the whole body to compute a digest of it; this is one HEAD.
     freshness:
       type: etag
     releaseWindow:
@@ -2292,29 +2289,26 @@ partitionedTables:
         - name: type
           type: VARCHAR
     comment: >
-      CMS Provider of Services File (POS) — identity, location, and bed-count fields
-      for every certified hospital and non-hospital facility, one row per
-      provider_number (CMS Certification Number, unique). The current-quarter
-      snapshot only (whole file replaced each release, per CMS's own accrualPeriodicity
-      of R/P3M — no history retained upstream to backfill). provider_category_code
-      is CMS's PRVDR_CTGRY_CD: 01=hospital, 06=psychiatric/behavioral residential
-      treatment, 12=clinic, 19=community mental health center, 21=other
-      (verified live against the 2026-Q2 file's actual category population; CMS's
-      own layout PDF, linked from the data.json dataset's describedBy field, has the
-      authoritative full code list). bed_count is the facility's total certified
-      beds; the curated sub-type columns (icf_iid/medicaid_nf/medicare_snf/hospice/
-      rehab/psych_unit/rehab_unit) break that total down by care type — most are
-      null/0 for non-bed facility categories (clinics, mental health centers).
-      county_fips is derived by concatenating FIPS_STATE_CD + FIPS_CNTY_CD (only
-      when both are present at their expected 2-digit/3-digit widths). Source:
-      data.cms.gov/data.json, dataset "Provider of Services File - Quality
-      Improvement and Evaluation System". CORRECTED 2026-09-11: despite this
-      being a "current snapshot" release, CMS does NOT purge terminated facilities
-      from it — verified live (Hahnemann University Hospital's real 2019-09-06
-      closure, PRVDR_NUM 390290, is present in the current file alongside an
-      unrelated 1998 predecessor-CCN termination). This file therefore already
-      carries facility-level termination history; see cms_pos_termination_history
-      for the termination-code/date columns this table does not carry.
+      CMS Provider of Services File (POS) — identity, location, ownership and bed-count
+      fields, one row per provider_number (CMS Certification Number, unique), for
+      hospitals and four non-hospital provider types, current quarter. provider_category_code:
+      01=hospital, 06=psychiatric residential treatment facility, 12=rural health clinic,
+      19=community mental health center, 21=federally qualified health center. Other
+      provider types (nursing homes, home health, hospice, dialysis and the rest of
+      CMS's iQIES file) are not in this table. CMS publishes the file quarterly and
+      since 2026 Q3 splits it in two: hospitals in "Provider of Services File - Quality
+      Improvement and Evaluation System" (QIES) and the other four types in the
+      "Internet Quality Improvement and Evaluation System" (iQIES) series. Terminated
+      facilities stay in the file; non-hospital facilities terminated long ago that CMS
+      did not carry into iQIES come from the 2026 Q2 QIES release, so their attributes
+      are as of that quarter. ownership_code and provider_subtype_code are QIES codes and
+      are null for rows from iQIES, which publishes ownership as text in
+      ownership_description. bed_count is the facility's total beds; the sub-type bed
+      columns break it down by care type and are null/0 for non-bed facility categories
+      (clinics, mental health centers). county_fips is derived by concatenating
+      FIPS_STATE_CD + FIPS_CNTY_CD (only when both are present at their expected
+      2-digit/3-digit widths). Termination codes and dates are in
+      cms_pos_termination_history.
 
     columns:
       - name: provider_number
@@ -2324,11 +2318,11 @@ partitionedTables:
       - name: provider_category_code
         type: string
         nullable: true
-        comment: PRVDR_CTGRY_CD (01=hospital, 06=psych/behavioral residential, 12=clinic, 19=community mental health, 21=other)
+        comment: QIES provider category (01=hospital, 06=psychiatric residential treatment facility, 12=rural health clinic, 19=community mental health center, 21=federally qualified health center)
       - name: provider_subtype_code
         type: string
         nullable: true
-        comment: PRVDR_CTGRY_SBTYP_CD, refines provider_category_code
+        comment: PRVDR_CTGRY_SBTYP_CD, refines provider_category_code; null for rows from iQIES
       - name: facility_name
         type: string
         nullable: true
@@ -2356,7 +2350,11 @@ partitionedTables:
       - name: ownership_code
         type: string
         nullable: true
-        comment: GNRL_CNTL_TYPE_CD (general control/ownership type)
+        comment: GNRL_CNTL_TYPE_CD (general control/ownership type code); null for rows from iQIES
+      - name: ownership_description
+        type: string
+        nullable: true
+        comment: iQIES control_type ownership text, as published; null for rows from QIES
       - name: certification_date
         type: string
         nullable: true
@@ -2408,10 +2406,9 @@ partitionedTables:
 
     source:
       type: http
-      # Discovery source: CMS's site-wide DCAT catalog. CmsPosTransformer finds the
-      # "Provider of Services File - Quality Improvement and Evaluation System"
-      # dataset's newest CSV distribution (the downloadURL carries an opaque
-      # per-release UUID with no year-templatable pattern) and downloads it directly.
+      # Discovery source: CMS's site-wide DCAT catalog. CmsPosTransformer resolves the
+      # QIES and iQIES quarterly CSV releases from it (each download URL carries an
+      # opaque per-release UUID with no year-templatable pattern) and streams them.
       url: "https://data.cms.gov/data.json"
       method: GET
       response:
@@ -2450,11 +2447,11 @@ partitionedTables:
   # CMS POS TERMINATION HISTORY — closure/termination event per facility
   # ==========================================================================
   - name: cms_pos_termination_history
-    # Freshness gate: same CMS data-api dataset as cms_pos_facilities; no meaningful
-    # Last-Modified, so this hashes the response body post-fetch (fails open on a
-    # missing prior token).
+    # Freshness gate: the data.json catalog's own ETag, as for cms_pos_facilities.
     freshness:
-      type: hash
+      type: etag
+    releaseWindow:
+      months: [1, 4, 7, 10] # CMS POS republishes quarterly
     pattern: "type=cms_pos_termination_history"
     partitions:
       style: hive
@@ -2462,137 +2459,102 @@ partitionedTables:
         - name: type
           type: VARCHAR
     comment: >
-      Hospital/facility closure and termination events from CMS's Provider of
-      Services File (POS) — one row per provider_number (CCN), same source dataset
-      as cms_pos_facilities but scoped to the termination-code/date fields that
-      table does not carry. Despite CMS presenting this as a "current" release,
-      terminated CCNs are NOT purged from it: verified live 2026-09-11 against
-      Hahnemann University Hospital's real closure — PRVDR_NUM 390290 shows
-      termination_code='01', termination_date=2019-09-06, matching its actual
-      September 2019 shutdown; a separate, older PRVDR_NUM 390051 for the same
-      facility name shows an unrelated 1998 termination_code='04' (change-of-
-      ownership) predecessor record. One CCN can therefore have zero, one, or
-      (rarely, across a CHOW/successor chain) multiple related termination rows —
-      cross_ref_provider_number links a terminated CCN to its predecessor/successor
-      number when CMS recorded one. is_terminated is derived from termination_date
-      being non-null, not from termination_code alone (a blank code with a real
-      date, or vice versa, both count as a real event; neither is fabricated when
-      absent). psych_unit/rehab_unit termination fields capture a sub-unit closure
-      that didn't end the whole facility's participation. Joins to
-      cms_pos_facilities via provider_number.
+      Facility closure and termination events from CMS's Provider of Services File
+      (POS) — one row per provider_number (CCN), over the same providers as
+      cms_pos_facilities (hospitals, psychiatric residential treatment facilities,
+      rural health clinics, community mental health centers and federally qualified
+      health centers), with the termination-code/date columns that table does not
+      carry. CMS keeps terminated CCNs in the file; non-hospital facilities terminated
+      long ago that CMS did not carry into its iQIES file come from the 2026 Q2 QIES
+      release. For example, Hahnemann University Hospital's closure appears as
+      PRVDR_NUM 390290, termination_code='01', termination_date=2019-09-06, and a
+      separate older PRVDR_NUM 390051 for the same facility name carries a 1998
+      change-of-ownership predecessor record. cross_ref_provider_number links a
+      terminated CCN to its predecessor/successor number when CMS recorded one.
+      is_terminated is derived from termination_date being non-null, not from
+      termination_code alone. psych_unit/rehab_unit termination fields capture a
+      hospital sub-unit closure that didn't end the whole facility's participation.
+      Joins to cms_pos_facilities via provider_number.
 
     columns:
       - name: provider_number
         type: string
         nullable: false
-        expression: 'src."PRVDR_NUM"'
         comment: CMS Certification Number (CCN) — PK; FK to cms_pos_facilities.provider_number
       - name: facility_name
         type: string
         nullable: true
-        expression: 'src."FAC_NAME"'
         comment: FAC_NAME
       - name: provider_category_code
         type: string
         nullable: true
-        expression: 'src."PRVDR_CTGRY_CD"'
-        comment: PRVDR_CTGRY_CD (01=hospital, 06=psych/behavioral residential, 12=clinic, 19=community mental health, 21=other)
+        comment: QIES provider category (01=hospital, 06=psychiatric residential treatment facility, 12=rural health clinic, 19=community mental health center, 21=federally qualified health center)
       - name: state
         type: string
         nullable: true
-        expression: 'src."STATE_CD"'
         comment: STATE_CD (2-letter USPS; FK to geo.state_ref)
       - name: state_fips
         type: string
         nullable: true
-        expression: 'src."FIPS_STATE_CD"'
         comment: FIPS_STATE_CD (2-digit; FK to geo.state_ref)
       - name: county_fips
         type: string
         nullable: true
-        expression: 'CASE WHEN LENGTH(src."FIPS_STATE_CD") = 2 AND LENGTH(src."FIPS_CNTY_CD") = 3 THEN src."FIPS_STATE_CD" || src."FIPS_CNTY_CD" ELSE NULL END'
         comment: Derived 5-digit county FIPS (FK to geo.counties); null unless both source fields are present at their expected width
       - name: cross_ref_provider_number
         type: string
         nullable: true
-        expression: 'NULLIF(src."CROSS_REF_PROVIDER_NUMBER", '''')'
         comment: Predecessor/successor CCN CMS recorded for this facility (e.g. across a change-of-ownership), when one exists
       - name: original_participation_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(STRPTIME(NULLIF(src."ORGNL_PRTCPTN_DT", ''''), ''%Y%m%d'') AS DATE)'
         comment: Date this CCN first began Medicare participation (ORGNL_PRTCPTN_DT)
       - name: certification_action_type_code
         type: string
         nullable: true
-        expression: 'NULLIF(src."CRTFCTN_ACTN_TYPE_CD", '''')'
-        comment: CRTFCTN_ACTN_TYPE_CD — CMS's own certification-action code
+        comment: CMS certification-action code (1=initial, 2=recertification, 3=termination, 4=change of ownership, 5=validation, 8=full survey after complaint); null for iQIES rows whose action has no such code
       - name: termination_code
         type: string
         nullable: true
-        expression: 'NULLIF(src."PGM_TRMNTN_CD", '''')'
-        comment: PGM_TRMNTN_CD — CMS's termination-reason code; null when the facility has never been terminated
+        comment: PGM_TRMNTN_CD — CMS's termination-reason code; 00 = active
       - name: termination_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(STRPTIME(NULLIF(src."TRMNTN_EXPRTN_DT", ''''), ''%Y%m%d'') AS DATE)'
         comment: Real termination/closure date (TRMNTN_EXPRTN_DT), verified live against Hahnemann University Hospital's actual 2019-09-06 closure
       - name: is_terminated
         type: boolean
         nullable: false
-        expression: 'src."TRMNTN_EXPRTN_DT" IS NOT NULL AND src."TRMNTN_EXPRTN_DT" != '''''
         comment: Derived from termination_date being present — the primary column for "has this facility closed" questions
       - name: psych_unit_termination_code
         type: string
         nullable: true
-        expression: 'NULLIF(src."PSYCH_UNIT_TRMNTN_CD", '''')'
         comment: PSYCH_UNIT_TRMNTN_CD — termination of a psychiatric sub-unit without the whole facility closing
       - name: psych_unit_termination_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(STRPTIME(NULLIF(src."PSYCH_UNIT_TRMNTN_DT", ''''), ''%Y%m%d'') AS DATE)'
       - name: rehab_unit_termination_code
         type: string
         nullable: true
-        expression: 'NULLIF(src."REHAB_UNIT_TRMNTN_CD", '''')'
         comment: REHAB_UNIT_TRMNTN_CD — termination of a rehab sub-unit without the whole facility closing
       - name: rehab_unit_termination_date
         type: date
         nullable: true
-        expression: 'TRY_CAST(STRPTIME(NULLIF(src."REHAB_UNIT_TRMNTN_DT", ''''), ''%Y%m%d'') AS DATE)'
 
     source:
       type: http
-      # Stable dataset id (unlike the CSV distribution's per-release UUID cms_pos_facilities
-      # has to discover via data.json) — CMS's data-api serves this same POS dataset as a
-      # paginated JSON array keyed by a permanent dataset id.
-      url: "https://data.cms.gov/data-api/v1/dataset/8ba0f9b4-9493-4aa0-9f82-44ea9468d1b5/data"
+      url: "https://data.cms.gov/data.json"
       method: GET
-      parameters:
-        size: "5000"
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          pageSize: 5000
-          limitParam: "size"
-          offsetParam: "offset"
+        format: text
       rateLimit:
-        requestsPerSecond: 2.0
+        requestsPerSecond: 0.5
         retryOn: [429, 500, 503]
-        maxRetries: 4
+        maxRetries: 3
       rawCache:
-        enabled: true
+        enabled: false
 
-    # CmsPosTerminationFieldProjector narrows each page's ~473-field records down to the
-    # ~15 this table needs BEFORE the batch reaches the pipeline's DuckDB expression
-    # evaluator. Required, not an optimization: confirmed live 2026-09-11 that the full
-    # unprojected record set (highly sparse per facility category) makes DuckDB's
-    # read_json_auto infer a single MAP(VARCHAR,VARCHAR) column instead of one column per
-    # field, silently nulling every src."FIELD" expression with no error — see the
-    # projector class comment.
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsPosTerminationFieldProjector"
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CmsPosTransformer"
 
     dimensions:
       type:
@@ -3291,7 +3253,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 50519854
-      checkedAt: "2026-11-26T05:30:47Z"
+      checkedAt: "2026-11-27T05:59:04Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -4302,7 +4264,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 5326586
-      checkedAt: "2026-11-26T05:30:53Z"
+      checkedAt: "2026-11-27T05:59:12Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -8867,12 +8829,12 @@ partitionedTables:
       type: last_modified
     pattern: "type=ssa_oasdi_county/year=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
-      minYear: 2009
+      minYear: 2008
       maxYear: 2025
-      distinctYears: 17
+      distinctYears: 18
       contiguous: true
-      rowCount: 49635
-      checkedAt: "2026-11-26T05:30:54Z"
+      rowCount: 57488
+      checkedAt: "2026-11-27T05:59:13Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9391,7 +9353,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 13445
-      checkedAt: "2026-11-26T05:30:55Z"
+      checkedAt: "2026-11-27T05:59:14Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9545,7 +9507,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 7412
-      checkedAt: "2026-11-26T05:30:56Z"
+      checkedAt: "2026-11-27T05:59:15Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9693,7 +9655,7 @@ partitionedTables:
       distinctYears: 5
       contiguous: true
       rowCount: 11421
-      checkedAt: "2026-11-26T05:30:57Z"
+      checkedAt: "2026-11-27T05:59:16Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9937,7 +9899,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 73216
-      checkedAt: "2026-11-26T05:31:00Z"
+      checkedAt: "2026-11-27T05:59:19Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -10075,7 +10037,7 @@ partitionedTables:
       distinctYears: 2
       contiguous: true
       rowCount: 100
-      checkedAt: "2026-11-26T05:31:01Z"
+      checkedAt: "2026-11-27T05:59:20Z"
     comment: >
       CMS Rural Health Transformation Program (RHTP) awards by state and fiscal year: one row
       per state per year, the dollar amount CMS announced for that state. The program is the

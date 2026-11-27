@@ -154,6 +154,7 @@ grep -q '1 table pointer(s) held' "$T/errors" || fail "hold count not reported"
 echo "PASS standing hold keeps its age and is reported"
 # the candidate is the published version: nothing to guard, stale marker cleared
 printf '7' > "$RT/metadata/version-hint.text"
+cp "$MT/metadata/v7.metadata.json" "$RT/metadata/"
 r2_pointer_guard mn rr "$B" s t 7 || fail "republish of the published version held"
 [ ! -e "$T/state/held/s__t.json" ] || fail "stale marker kept"
 echo "PASS published version is not guarded"
@@ -165,6 +166,45 @@ reset; meta "$MT" 7 5 5 0 append; printf 'aaaa' > "$MT/data/a.parquet"
 printf 'VERSION 7\nmetadata/v7.metadata.json\t-1\ndata/a.parquet\t4\n' > "$RESOLVE_OUT"
 sync >/dev/null || fail "first publish held"
 echo "PASS first publish unguarded"
+
+# 8. a version number is not a file identity: R2 keeps v7 of an earlier table of the same name
+# (1000 rows) while the recreated table's v7 holds 150. The candidate is what MinIO holds, and R2
+# must serve exactly those bytes once the pointer names v7.
+stale() { # <published total> : R2 publishes v3 and also holds a leftover v7
+  setup_guard "$1" 150 0 0 append
+  jq -n '{"current-snapshot-id": 2, snapshots: [{"snapshot-id": 2, "timestamp-ms": 500,
+      summary: {operation: "append", "total-records": "1000"}}]}' > "$RT/metadata/v7.metadata.json"
+}
+stale 150
+sync >/dev/null || fail "recreated table held"
+[ "$(hint)" = 7 ] || fail "recreated table not published: $(hint)"
+cmp -s "$MT/metadata/v7.metadata.json" "$RT/metadata/v7.metadata.json" \
+  || fail "pointer names the earlier table's v7 metadata"
+echo "PASS leftover version metadata is overwritten"
+stale 1000
+sync >/dev/null && fail "shrunk table published over a leftover version file"
+[ "$(hint)" = 3 ] || fail "pointer moved on a held shrink: $(hint)"
+grep -q '"candidate_total_records": "150"' "$T/state/held/s__t.json" || fail "held marker for shrink"
+echo "PASS leftover version file does not mask a shrink"
+# the pointer already names v7 but its bytes are another table's: guarded, and left alone while held
+stale 150; printf '7' > "$RT/metadata/version-hint.text"
+cp "$RT/metadata/v7.metadata.json" "$T/published.json"
+sync >/dev/null && fail "shrink published under an unchanged version number"
+cmp -s "$T/published.json" "$RT/metadata/v7.metadata.json" || fail "published metadata overwritten while held"
+echo "PASS same version number, different table: held and untouched"
+# a same-size leftover is overwritten too (size and time are not trusted)
+setup_guard 1000 1000 0 0 append
+tr 'a' 'b' < "$MT/metadata/v7.metadata.json" > "$RT/metadata/v7.metadata.json"
+touch -r "$MT/metadata/v7.metadata.json" "$RT/metadata/v7.metadata.json"
+sync >/dev/null || fail "same-size leftover held"
+cmp -s "$MT/metadata/v7.metadata.json" "$RT/metadata/v7.metadata.json" || fail "same-size leftover kept"
+echo "PASS same size and time leftover is overwritten"
+# a table with no snapshot: the closure is the metadata json alone
+reset; jq -n '{"current-snapshot-id": -1, snapshots: []}' > "$MT/metadata/v7.metadata.json"
+printf 'VERSION 7\nmetadata/v7.metadata.json\t-1\n' > "$RESOLVE_OUT"
+sync >/dev/null || fail "metadata-only closure not published"
+[ "$(hint)" = 7 ] || fail "metadata-only pointer: $(hint)"
+echo "PASS metadata-only closure publishes"
 
 # 7. an unreachable endpoint times out instead of hanging
 cat > "$T/bin/rclone" <<'REOF'
