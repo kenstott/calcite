@@ -552,6 +552,16 @@ SELECT 'ref', tbl, 'existence',
 FROM dq_existence_counts;
 
 
+-- T7: calendar holds exactly one row per date_key (declared FK target)
+INSERT INTO dq_results
+SELECT 'ref', 'calendar', 'T7_date_key_uniqueness',
+  CASE WHEN extra = 0 THEN 'pass' ELSE 'fail' END,
+  extra, 0, 'Rows beyond one per date_key (joins on calendar fan out)'
+FROM (
+  SELECT COUNT(*) - COUNT(DISTINCT date_key) AS extra
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/calendar', allow_moved_paths := true)
+);
+
 -- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
