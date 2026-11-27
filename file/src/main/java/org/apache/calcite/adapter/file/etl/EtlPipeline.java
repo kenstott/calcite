@@ -106,13 +106,19 @@ public class EtlPipeline {
   private final Object writeLock = new Object();
 
   /**
-   * True when per-period freshness gating is active for this run. Set in {@link #execute()} once
+   * True when per-unit freshness probing is active for this run. Set in {@link #execute()} once
    * the data source and freshness config are known. When true, {@link #processSingleBatch} probes
-   * each fetch unit's templated source and skips the fetch+write for units whose source is
-   * unchanged since the last clean commit — the per-period analogue of the pipeline-level
-   * freshness gate, which can only probe a single non-templated URL.
+   * each fetch unit's templated source — the per-period analogue of the pipeline-level freshness
+   * gate, which can only probe a single non-templated URL. A unit whose token changed re-reads the
+   * source instead of its raw cache entry.
    */
-  private boolean perUnitFreshnessEnabled;
+  private boolean perUnitProbeEnabled;
+
+  /**
+   * True when a unit the probe reports unchanged may also skip its fetch and write, which requires
+   * the partition key to be a function of the fetch unit (see {@link PerUnitSkipSafety}).
+   */
+  private boolean perUnitSkipSafe;
 
   /**
    * Set only when the pipeline-level freshness probe ran AND reported the source CHANGED. A
@@ -832,19 +838,19 @@ public class EtlPipeline {
           && config.getLookbackPeriods() == null;
       // Per-unit skipping is only safe when the partition key is a function of the fetch unit;
       // otherwise a run that wrote some units would replace the partition with a subset and drop
-      // the rest. Falling back to all-or-nothing removes an optimization without changing what is
-      // written, and is what these tables did before per-unit skipping was extended to them.
+      // the rest. Without it every unit is fetched and written; the probe still runs, so a unit
+      // whose source changed re-reads it while an unchanged one replays its raw cache entry.
       Set<String> unsafeDims = PerUnitSkipSafety.unsafeDimensions(config);
       if (!unsafeDims.isEmpty()) {
-        LOGGER.warn("Per-unit freshness DISABLED for '{}': fetch dimension(s) {} are not in the "
-            + "partition key, so a per-unit skip could replace the partition with a subset. "
-            + "Falling back to all-or-nothing. Add them to the partition to restore skipping.",
+        LOGGER.warn("Per-unit freshness skip DISABLED for '{}': fetch dimension(s) {} are not in "
+            + "the partition key, so a per-unit skip could replace the partition with a subset. "
+            + "Every unit is written. Add them to the partition to restore skipping.",
             pipelineName, unsafeDims);
       }
-      perUnitFreshnessEnabled = (hasPeriod || templatedMultiUnitFetch)
+      perUnitSkipSafe = unsafeDims.isEmpty();
+      perUnitProbeEnabled = (hasPeriod || templatedMultiUnitFetch)
           && freshnessConfig != null
           && !hashPreDownloadExcluded
-          && unsafeDims.isEmpty()
           && dataSource instanceof HttpSource;
       // Probe+capture always runs (to seed the token on a cold run); only the skip is gated on
       // having committed data, exactly like the pipeline-level gate above.
@@ -2292,13 +2298,13 @@ public class EtlPipeline {
     // here, and a CachingDataProvider's handle bypasses its entries (see rawCacheForBatch).
     boolean refetchUnit = false;
 
-    // Per-period freshness gate: probe this unit's templated source and skip the fetch+write when
-    // it is unchanged since the last clean commit. Returning 0 leaves the unit's existing Iceberg
+    // Per-period freshness gate: probe this unit's templated source. Where a skip is safe, an
+    // unchanged unit skips its fetch+write: returning 0 leaves the unit's existing Iceberg
     // partition untouched (replacePartitions only rewrites the partitions we actually fetch), so
-    // unchanged periods are preserved without re-download or re-materialization. Only fires when a
-    // previous token exists (a prior clean run committed this unit's data) and the source is
-    // unchanged; otherwise the new token is captured for persistence after a clean commit.
-    if (perUnitFreshnessEnabled && dataSource instanceof HttpSource) {
+    // unchanged periods are preserved without re-download or re-materialization. A skip only fires
+    // when a previous token exists (a prior clean run committed this unit's data). A unit that is
+    // processed captures its token for persistence after a clean commit.
+    if (perUnitProbeEnabled && dataSource instanceof HttpSource) {
       FreshnessConfig freshnessConfig = config.getFreshness();
       String unitKey = pipelineName + "::" + freshnessUnitKey(variables);
       try {
@@ -2307,24 +2313,33 @@ public class EtlPipeline {
         String currentToken = FreshnessCheck.token(
             freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
         String previousToken = incrementalTracker.getFreshnessToken(unitKey);
-        if (freshnessSkipAllowed
-            && previousToken != null
-            && !FreshnessCheck.changed(previousToken, currentToken)) {
+        boolean changed = FreshnessCheck.changed(previousToken, currentToken);
+        if (perUnitSkipSafe && freshnessSkipAllowed && !changed) {
           LOGGER.info("Pipeline '{}': per-period freshness UNCHANGED for unit {} (token={}) — "
               + "skipping fetch and write", pipelineName, variables, currentToken);
           return 0;
         }
-        if (currentToken != null) {
-          // Reaching here means the probe did not match, so the upstream content changed (or was
-          // never seen). Drop this unit's raw cache entry before fetching: entries are validated by
-          // existence alone, so otherwise the fetch is handed the very bytes the probe just called
-          // out of date, writes them, and records the new token -- burying the revision and making
-          // sure no later run looks again. This is what makes a lookback able to see a restatement
-          // on a table that caches.
-          if (previousToken != null && !isCacheReparsed(pipelineName)) {
-            ((HttpSource) dataSource).invalidateRawCache(variables);
+        // Raw cache entries are validated by existence alone, so a changed unit has to be made to
+        // read the source; otherwise the fetch is handed the very bytes the probe just called out
+        // of date, writes them, and records the new token -- burying the revision and making sure
+        // no later run looks again.
+        if (!perUnitSkipSafe) {
+          // This probe is the only gate such a unit has, so one it cannot prove unchanged (no
+          // stored token, or none from the source) reads the source.
+          if (changed && !isCacheReparsed(pipelineName)) {
+            LOGGER.info("Pipeline '{}': unit {} changed at source (prev={}, cur={}) — "
+                + "re-reading it", pipelineName, variables,
+                previousToken == null ? "<none>" : previousToken,
+                currentToken == null ? "<null>" : currentToken);
+            ((HttpSource) dataSource).requireFreshRawCache(variables);
             refetchUnit = true;
           }
+        } else if (currentToken != null && previousToken != null
+            && !isCacheReparsed(pipelineName)) {
+          ((HttpSource) dataSource).invalidateRawCache(variables);
+          refetchUnit = true;
+        }
+        if (currentToken != null) {
           // Defer recording until the write succeeds (see the successful return below).
           capturedFreshnessUnitKey = unitKey;
           capturedFreshnessToken = currentToken;
@@ -2336,8 +2351,8 @@ public class EtlPipeline {
     }
 
     // The pipeline-level gate reported CHANGED, so every unit this run processes has to see what
-    // the source serves now. This covers the units the per-unit gate cannot judge: no dimensions, a
-    // partition-unsafe fan-out, or a probe that yields no token.
+    // the source serves now. This covers the units no per-unit probe runs for, and those whose
+    // probe yields no token.
     if (sourceFreshnessChanged && !isCacheReparsed(pipelineName)) {
       ((HttpSource) dataSource).requireFreshRawCache(variables);
       refetchUnit = true;
