@@ -1427,7 +1427,7 @@ public class EtlPipeline {
         LOGGER.info("Dispatch: {} fetch units from {} unprocessed combos (backfill_period={})",
             unitCount, neededCount, config.getBackfillPeriod());
 
-        partitionCompletion = PartitionCompletion.applies(config, writer, dataWriter)
+        partitionCompletion = PartitionCompletion.applies(config, writer)
             ? new PartitionCompletion(config, fetchUnits) : null;
 
         if (threadCount > 1 && unitCount > 1) {
@@ -2574,6 +2574,9 @@ public class EtlPipeline {
         }
 
         long batchRows;
+        // A unit a custom DataWriter takes never reaches the standard writer, so its partition
+        // is not known to be complete.
+        boolean writtenByDataWriter = false;
         if (hasResponsePartitioning) {
           batchRows =
               writeWithResponsePartitioning(data, variables,
@@ -2583,6 +2586,7 @@ public class EtlPipeline {
           if (dataWriter != null) {
             batchRows = dataWriter.write(config, data, variables);
             if (batchRows >= 0) {
+              writtenByDataWriter = true;
               LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
             } else {
               batchRows = writer.writeBatch(data, variables);
@@ -2636,7 +2640,7 @@ public class EtlPipeline {
           }
         }
 
-        if (partitionCompletion != null) {
+        if (partitionCompletion != null && !writtenByDataWriter) {
           publishIfComplete(fetchUnit, (IcebergMaterializationWriter) writer, pipelineName);
         }
 

@@ -55,10 +55,8 @@ final class PartitionCompletion {
    * {@code options.commitPerPartition}, its partitions are fed by several fetch units, it writes
    * through the Iceberg writer, and each unit is written in one pass.
    */
-  static boolean applies(EtlPipelineConfig config, MaterializationWriter writer,
-      Object dataWriter) {
-    return dataWriter == null
-        && writer instanceof IcebergMaterializationWriter
+  static boolean applies(EtlPipelineConfig config, MaterializationWriter writer) {
+    return writer instanceof IcebergMaterializationWriter
         && PartialPartitionGuard.applies(config)
         && config.getMaterialize().getOptions() != null
         && config.getMaterialize().getOptions().isCommitPerPartition()

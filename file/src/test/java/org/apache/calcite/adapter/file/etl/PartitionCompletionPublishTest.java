@@ -53,6 +53,9 @@ class PartitionCompletionPublishTest {
   @TempDir
   File tempDir;
 
+  /** A schema run always hands the pipeline a writer hook, so the tests do too. */
+  private final DataWriter dataWriter = decliningDataWriter();
+
   @Test void failedUnitStillPublishesTheCompletePartitions() throws Exception {
     EtlPipelineCommitFailureTrackerTest.RecordingTracker tracker =
         new EtlPipelineCommitFailureTrackerTest.RecordingTracker();
@@ -117,7 +120,17 @@ class PartitionCompletionPublishTest {
       }
     };
     return new EtlPipeline(config(warehouse, commitPerPartition), new LocalFileStorageProvider(),
-        warehouse.getAbsolutePath(), null, tracker, provider, null).execute();
+        warehouse.getAbsolutePath(), null, tracker, provider, dataWriter).execute();
+  }
+
+  /** Declines every unit, as the schema lifecycle's writer hook does by default. */
+  private static DataWriter decliningDataWriter() {
+    return new DataWriter() {
+      @Override public long write(EtlPipelineConfig config, Iterator<Map<String, Object>> data,
+          Map<String, String> variables) {
+        return -1;
+      }
+    };
   }
 
   private static EtlPipelineConfig config(File warehouse, boolean commitPerPartition) {

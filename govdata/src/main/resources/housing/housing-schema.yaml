@@ -915,8 +915,8 @@ partitionedTables:
       fair_market_rents.hud_area_code (New England rows are sub-county towns);
       county_fips joins geo.counties. Values are the 4-person-household figures.
       Requires HUD_TOKEN. Source: huduser.gov/hudapi/public/il/data/{area}.
-    # DQ samples 40 areas per (year, state): every area is one rate-limited request.
-    dqRowLimit: 40
+    # DQ samples 25 areas per (year, state): every area is one rate-limited request.
+    dqRowLimit: 25
 
     dimensions:
       type:
