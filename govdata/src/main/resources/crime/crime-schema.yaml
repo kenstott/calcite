@@ -2363,10 +2363,16 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.ojp.gov/bjsdataset/v1/{endpoint_id}.json?$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/{endpoint_id}.json?$order=:id"
       method: GET
       response:
         format: json
+        # SODA caps a single request at 50k rows; page through $offset in row-id order.
+        pagination:
+          type: OFFSET
+          limitParam: "$limit"
+          offsetParam: "$offset"
+          pageSize: 50000
       rateLimit:
         requestsPerSecond: 10.0
         retryOn: [429, 503]

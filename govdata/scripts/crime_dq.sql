@@ -1026,6 +1026,20 @@ FROM (
   HAVING COUNT(estimate_unweighted) < 0.9 * COUNT(estimate)
 ) t;
 
+-- T11: an endpoint whose row count is a multiple of the SODA page size was cut off at a page
+INSERT INTO dq_results
+SELECT 'crime', 'bjs_nibrs_estimates', 'T11_page_truncation',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'endpoints with a row count that is a multiple of 50000: '
+    || COALESCE(STRING_AGG(endpoint_id, ', '), 'none')
+FROM (
+  SELECT endpoint_id
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_nibrs_estimates', allow_moved_paths := true)
+  GROUP BY endpoint_id
+  HAVING COUNT(*) % 50000 = 0
+) t;
+
 -- ============================================================================
 -- bjs_ncvs_personal (NCVS personal victimization microdata; type/year)
 -- 2-year publication lag — historical: MIN<=2022, daily confirmed by MAX>=2022
@@ -1089,6 +1103,14 @@ SELECT 'crime', 'bjs_ncvs_personal', 'T8_worker_coverage',
   'MIN=' || MIN(year) || ' MAX=' || MAX(year) || ' | NCVS 2yr lag: historical: MIN<=2022, MAX>=2022'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal', allow_moved_paths := true);
 
+-- T9: every row carries source fields; a year of all-null rows is a mis-read cached response
+INSERT INTO dq_results
+SELECT 'crime', 'bjs_ncvs_personal', 'T9_null_rows',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'rows with yearq IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal', allow_moved_paths := true)
+WHERE yearq IS NULL;
+
 -- ============================================================================
 -- bjs_ncvs_personal_pop (NCVS personal population/demographics; type/year)
 -- ============================================================================
@@ -1150,6 +1172,14 @@ SELECT 'crime', 'bjs_ncvs_personal_pop', 'T8_worker_coverage',
   MAX(CAST(year AS INT)), 2022,
   'MIN=' || MIN(year) || ' MAX=' || MAX(year) || ' | NCVS 2yr lag: historical: MIN<=2022, MAX>=2022'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal_pop', allow_moved_paths := true);
+
+-- T9: every row carries source fields; a year of all-null rows is a mis-read cached response
+INSERT INTO dq_results
+SELECT 'crime', 'bjs_ncvs_personal_pop', 'T9_null_rows',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'rows with yearq IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_personal_pop', allow_moved_paths := true)
+WHERE yearq IS NULL;
 
 -- ============================================================================
 -- bjs_ncvs_household (NCVS household property crime victimization; type/year)
@@ -1213,6 +1243,14 @@ SELECT 'crime', 'bjs_ncvs_household', 'T8_worker_coverage',
   'MIN=' || MIN(year) || ' MAX=' || MAX(year) || ' | NCVS 2yr lag: historical: MIN<=2022, MAX>=2022'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_household', allow_moved_paths := true);
 
+-- T9: every row carries source fields; a year of all-null rows is a mis-read cached response
+INSERT INTO dq_results
+SELECT 'crime', 'bjs_ncvs_household', 'T9_null_rows',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'rows with yearq IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_household', allow_moved_paths := true)
+WHERE yearq IS NULL;
+
 -- ============================================================================
 -- bjs_ncvs_household_pop (NCVS household demographics denominator; type/year)
 -- ============================================================================
@@ -1274,6 +1312,14 @@ SELECT 'crime', 'bjs_ncvs_household_pop', 'T8_worker_coverage',
   MAX(CAST(year AS INT)), 2022,
   'MIN=' || MIN(year) || ' MAX=' || MAX(year) || ' | NCVS 2yr lag: historical: MIN<=2022, MAX>=2022'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_household_pop', allow_moved_paths := true);
+
+-- T9: every row carries source fields; a year of all-null rows is a mis-read cached response
+INSERT INTO dq_results
+SELECT 'crime', 'bjs_ncvs_household_pop', 'T9_null_rows',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'rows with yearq IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/bjs_ncvs_household_pop', allow_moved_paths := true)
+WHERE yearq IS NULL;
 
 -- ============================================================================
 -- T8 worker coverage summary
