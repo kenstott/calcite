@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -373,6 +374,56 @@ class FreshnessSkipGateTest {
         boolean forceReprocessAll) {
       return stubSource;
     }
+  }
+
+  /**
+   * A token committed under one declared {@code scope} says nothing about another: the same source
+   * token must not skip a run whose scope has no committed token, and each scope then skips on its
+   * own.
+   */
+  @Test void testUnchangedTokenDoesNotSkipAnotherScope() throws IOException {
+    StorageProvider sp = new LocalFileStorageProvider();
+    MemoryFreshnessTracker tracker = new MemoryFreshnessTracker();
+    Map<String, String> probeHeaders = new HashMap<String, String>();
+    probeHeaders.put("ETag", "etag-xyz");
+    HttpSource.ProbeResult probeResult = new HttpSource.ProbeResult(probeHeaders, null);
+    StubHttpSource stubSource = new StubHttpSource(
+        HttpSourceConfig.builder().url("https://example.invalid/api").build(),
+        probeResult);
+    CountingDataProvider provider = new CountingDataProvider(
+        Collections.singletonList(
+            Collections.<String, Object>singletonMap("id", "1")));
+    CountingDataWriter writer = new CountingDataWriter();
+
+    new StubProbePipeline(buildConfig(scopedEtag("2026")), sp, tempDir.toString(), tracker,
+        provider, writer, stubSource).execute();
+    assertEquals(1, writer.writeCount.get());
+
+    new StubProbePipeline(buildConfig(scopedEtag("2024")), sp, tempDir.toString(), tracker,
+        provider, writer, stubSource).execute();
+    assertEquals(2, writer.writeCount.get(), "a different scope must load");
+
+    new StubProbePipeline(buildConfig(scopedEtag("2024")), sp, tempDir.toString(), tracker,
+        provider, writer, stubSource).execute();
+    new StubProbePipeline(buildConfig(scopedEtag("2026")), sp, tempDir.toString(), tracker,
+        provider, writer, stubSource).execute();
+    assertEquals(2, writer.writeCount.get(), "each committed scope skips while unchanged");
+    for (String key : tracker.tokenKeys()) {
+      assertTrue(key.startsWith("freshness_test_pipeline::@scope="), key);
+    }
+    assertTrue(tracker.tokenKeys().contains("freshness_test_pipeline::@scope=2024"));
+    assertTrue(tracker.tokenKeys().contains("freshness_test_pipeline::@scope=2026"));
+  }
+
+  @Test void testScopeResolvingToEmptyIsRejected() {
+    assertThrows(IllegalArgumentException.class, () -> scopedEtag(""));
+  }
+
+  private static FreshnessConfig scopedEtag(String scope) {
+    Map<String, Object> map = new HashMap<String, Object>();
+    map.put("type", "etag");
+    map.put("scope", scope);
+    return FreshnessConfig.fromMap(map);
   }
 
   /**

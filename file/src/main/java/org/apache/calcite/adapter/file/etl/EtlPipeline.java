@@ -749,7 +749,8 @@ public class EtlPipeline {
               httpSource.probe(freshnessConfig, Collections.<String, String>emptyMap());
           String currentToken = FreshnessCheck.token(
               freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
-          String previousToken = incrementalTracker.getFreshnessToken(pipelineName);
+          String previousToken =
+              incrementalTracker.getFreshnessToken(freshnessConfig.tokenKey(pipelineName));
           // Only skip when the source is unchanged AND there is a committed table to preserve.
           // forceReprocessAll is set above when there's no Iceberg data (or the marker was
           // cleared/stale): in that case we must re-fetch and re-materialize even if the token
@@ -1893,7 +1894,8 @@ public class EtlPipeline {
         // Persist the freshness token so the next run can skip if unchanged.
         // Only written on a clean run (no failed batches) to avoid caching a partial state.
         if (probedFreshnessToken != null) {
-          incrementalTracker.putFreshnessToken(pipelineName, probedFreshnessToken);
+          incrementalTracker.putFreshnessToken(
+              freshnessConfig.tokenKey(pipelineName), probedFreshnessToken);
           LOGGER.info("Pipeline '{}': persisted freshness token after clean commit: {}",
               pipelineName, probedFreshnessToken);
         }
@@ -2313,7 +2315,8 @@ public class EtlPipeline {
     // unchanged; otherwise the new token is captured for persistence after a clean commit.
     if (perUnitFreshnessEnabled && dataSource instanceof HttpSource) {
       FreshnessConfig freshnessConfig = config.getFreshness();
-      String unitKey = pipelineName + "::" + freshnessUnitKey(variables);
+      String unitKey =
+          freshnessConfig.tokenKey(pipelineName) + "::" + freshnessUnitKey(variables);
       try {
         HttpSource.ProbeResult probeResult =
             ((HttpSource) dataSource).probe(freshnessConfig, variables);
@@ -2431,9 +2434,11 @@ public class EtlPipeline {
     // one unit per run) declare no lookback, so their behavior is unchanged.
     boolean hashTokenPerUnit = hashFreshnessActive && config.getLookbackPeriods() != null
         && PerUnitSkipSafety.isSafe(config);
-    String hashTokenKey = hashTokenPerUnit
-        ? pipelineName + "::" + freshnessUnitKey(variables)
-        : pipelineName;
+    String hashTokenKey = hashFreshnessActive
+        ? freshnessConfigForHash.tokenKey(pipelineName) : pipelineName;
+    if (hashTokenPerUnit) {
+      hashTokenKey = hashTokenKey + "::" + freshnessUnitKey(variables);
+    }
     // hashFreshnessToken is set if we computed a hash and must store it post-write
     String hashFreshnessToken = null;
     if (hashFreshnessActive) {
@@ -2637,7 +2642,7 @@ public class EtlPipeline {
             if (finalHashTokenPerUnit) {
               pendingUnitFreshnessTokens.put(finalHashTokenKey, finalHashFreshnessToken);
             } else {
-              incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
+              incrementalTracker.putFreshnessToken(finalHashTokenKey, finalHashFreshnessToken);
               LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
                   finalHashFreshnessToken, pipelineName);
             }

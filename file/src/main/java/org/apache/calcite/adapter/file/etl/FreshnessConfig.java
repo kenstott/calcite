@@ -26,6 +26,12 @@ import java.util.Map;
  *   count_probe: { url: "...?resultsPerPage=1", path: "$.totalResults" }
  * }</pre>
  *
+ * <p>A table-level token says the source is unchanged; it does not say which slice of the source
+ * the committing run loaded. A table whose fetch range is set by configuration rather than by a
+ * period dimension declares that bound as {@code scope} (e.g. {@code scope: "${START_YEAR:1999}"}).
+ * Each distinct scope keeps its own token, so a run over a range never committed under that token
+ * is not skipped. See {@link #tokenKey}.
+ *
  * <p>Reopening recently-published periods so their freshness is re-evaluated is a separate
  * concern, declared as {@code lookbackPeriods} on the table rather than here; this class only
  * describes how the comparable signal is obtained. See {@link PeriodLookback}.
@@ -106,10 +112,11 @@ final class FreshnessConfig {
   private final String queryPath;
   private final String normalize;
   private final String watermarkVar;
+  private final String scope;
 
   private FreshnessConfig(Type type, String probeUrl, String versionField,
       String checksumUrl, boolean objectMetadata, String countUrl, String countPath,
-      String query, String queryPath, String normalize, String watermarkVar) {
+      String query, String queryPath, String normalize, String watermarkVar, String scope) {
     this.type = type;
     this.probeUrl = probeUrl;
     this.versionField = versionField;
@@ -121,6 +128,7 @@ final class FreshnessConfig {
     this.queryPath = queryPath;
     this.normalize = normalize;
     this.watermarkVar = watermarkVar;
+    this.scope = scope;
   }
 
   Type getType() {
@@ -184,6 +192,16 @@ final class FreshnessConfig {
   }
 
   /**
+   * Tracker key under which this table's freshness tokens are stored: the pipeline name, qualified
+   * by the declared {@code scope} when there is one. Per-unit keys extend it. The {@code ::}
+   * separator keeps the key inside the table's namespace, so purging a table's tracker rows
+   * removes its scoped tokens too.
+   */
+  String tokenKey(String pipelineName) {
+    return scope == null ? pipelineName : pipelineName + "::@scope=" + scope;
+  }
+
+  /**
    * Parses a {@code freshness:} map, or returns null if absent/invalid (freshness off).
    */
   @SuppressWarnings("unchecked")
@@ -212,8 +230,16 @@ final class FreshnessConfig {
     String queryPath = asString(map.get("path"));
     String normalize = asString(map.get("normalize"));
     String watermarkVar = asString(map.get("watermark_var"));
+    String scope = asString(map.get("scope"));
+    if (scope != null) {
+      scope = VariableResolver.resolveEnvVars(scope);
+      if (scope == null || scope.trim().isEmpty()) {
+        throw new IllegalArgumentException(
+            "freshness.scope is declared but resolves to an empty value: " + map.get("scope"));
+      }
+    }
     return new FreshnessConfig(type, probeUrl, versionField, checksumUrl, objectMetadata,
-        countUrl, countPath, query, queryPath, normalize, watermarkVar);
+        countUrl, countPath, query, queryPath, normalize, watermarkVar, scope);
   }
 
   private static String asString(Object o) {
