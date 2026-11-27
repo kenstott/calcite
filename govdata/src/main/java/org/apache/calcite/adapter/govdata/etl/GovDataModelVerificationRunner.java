@@ -10,6 +10,10 @@
  */
 package org.apache.calcite.adapter.govdata.etl;
 
+import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchema;
+import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.schema.SchemaPlus;
+
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -32,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import javax.sql.DataSource;
 
 /**
  * Standalone verifier that exercises the GovData Calcite model end-to-end through
@@ -794,47 +799,26 @@ public final class GovDataModelVerificationRunner {
     if (readCachedDupStats(r, pk)) {
       return;
     }
-    StringBuilder cols = new StringBuilder();
-    StringBuilder notNull = new StringBuilder();
-    for (int j = 0; j < pk.size(); j++) {
-      if (j > 0) {
-        cols.append(", ");
-        notNull.append(" AND ");
-      }
-      String qc = "\"" + pk.get(j) + "\"";
-      cols.append(qc);
-      notNull.append(qc).append(" IS NOT NULL");
-    }
-    String from = "\"" + r.schema + "\".\"" + r.table + "\" WHERE " + notNull;
-    // Two plain aggregates (not a scalar subquery) so each pushes cleanly to DuckDB and can't hit
-    // a Calcite scalar-subquery planning edge case across the full table sweep.
+    // Run on the DuckDB data source, not through Calcite (see duckDbDataSource).
     try {
       // Screen with a HyperLogLog sketch before paying for the exact DISTINCT. The exact form
       // builds a hash set over every keyed row — on a 20M+ row table that is the single most
-      // expensive thing this runner does, and it ran on every PK table on every sweep even though
-      // almost all of them are clean. APPROX_COUNT_DISTINCT is one pass with bounded memory and
-      // is on the same aggregate shape that pushes to DuckDB. Its relative error is ~2%, so treat
-      // anything within a 5% band of the keyed count as "no duplicates" and only fall through to
-      // the exact count when the sketch says there is a real gap to measure. Duplication that
-      // matters here is whole-table file duplication (7x, 19x observed), which no sketch tolerance
-      // can hide; a delta small enough to sit inside the band would be below dupThreshold anyway.
-      // ONE query for both numbers. Planning, not scanning, is what this runner spends its time
-      // on — a plan dump for a single table shows ~1800 lines of Volcano exploration across its
-      // handful of probes, while the same aggregates run in ~2s directly in DuckDB over 22M rows.
-      // Both aggregates push down together (verified: the plan shows a single JdbcAggregate with
-      // COUNT() and COUNT(APPROXIMATE DISTINCT)), so folding them halves the planning cost of the
-      // dup check rather than merely swapping one planned query for another.
+      // expensive thing this runner does, and almost all PK tables are clean. The sketch is one
+      // pass with bounded memory, so only fall through to the exact count when it falls outside a
+      // 5% band of the keyed count.
       long keyed = -1;
       long approx = -1;
+      DataSource duckDb = duckDbDataSource(conn, r.schema, r.table);
+      String from = keyedRowsFrom(r.schema, r.table, pk);
       try {
-        long[] both = twoCounts(conn,
+        long[] both = twoCounts(duckDb,
             "SELECT COUNT(*), APPROX_COUNT_DISTINCT(" + structOf(pk) + ") FROM " + from);
         keyed = both[0];
         approx = both[1];
       // fallback-guard: allow a real re-query when the combined form is unsupported (e.g. a PK
       // column type the sketch cannot hash); not a fabricated value
       } catch (Exception combinedUnsupported) {
-        keyed = scalarCount(conn, "SELECT COUNT(*) FROM " + from);
+        keyed = scalarCount(duckDb, "SELECT COUNT(*) FROM " + from);
         approx = -1;
       }
       r.keyedRows = keyed;
@@ -847,8 +831,7 @@ public final class GovDataModelVerificationRunner {
         recordDupStats(r, pk, false);
         return;
       }
-      long distinct = scalarCount(conn,
-          "SELECT COUNT(*) FROM (SELECT DISTINCT " + cols + " FROM " + from + ")");
+      long distinct = scalarCount(duckDb, distinctKeysSql(r.schema, r.table, pk));
       r.distinctKeys = distinct;
       r.dupRows = keyed - distinct;
       r.pkChecked = true;
@@ -1011,6 +994,52 @@ public final class GovDataModelVerificationRunner {
   }
 
   /**
+   * The DuckDB data source behind a schema, with the table's view in place. The duplicate check
+   * runs its SQL here rather than through Calcite: the key under test is declared to Calcite as a
+   * unique key, so the planner removes a DISTINCT or GROUP BY over it and the count comes back
+   * equal to the row count whatever the data holds.
+   */
+  static DataSource duckDbDataSource(Connection conn, String schema, String table)
+      throws SQLException {
+    SchemaPlus sub =
+        conn.unwrap(CalciteConnection.class).getRootSchema().subSchemas().get(schema);
+    if (sub == null) {
+      throw new IllegalStateException("No schema mounted as " + schema);
+    }
+    DuckDBJdbcSchema duckSchema = sub.unwrap(DuckDBJdbcSchema.class);
+    // Resolving the table is what creates, or refreshes, its DuckDB view.
+    if (sub.tables().get(table) == null) {
+      throw new IllegalStateException("No table " + schema + "." + table);
+    }
+    return duckSchema.getDataSource();
+  }
+
+  /** FROM and WHERE selecting the rows of a table whose key columns are all non-null. */
+  private static String keyedRowsFrom(String schema, String table, List<String> pk) {
+    StringBuilder sb = new StringBuilder("\"" + schema + "\".\"" + table + "\" WHERE ");
+    for (int j = 0; j < pk.size(); j++) {
+      if (j > 0) {
+        sb.append(" AND ");
+      }
+      sb.append('"').append(pk.get(j)).append("\" IS NOT NULL");
+    }
+    return sb.toString();
+  }
+
+  /** SQL counting the distinct key tuples among a table's fully keyed rows. */
+  static String distinctKeysSql(String schema, String table, List<String> pk) {
+    StringBuilder cols = new StringBuilder();
+    for (int j = 0; j < pk.size(); j++) {
+      if (j > 0) {
+        cols.append(", ");
+      }
+      cols.append('"').append(pk.get(j)).append('"');
+    }
+    return "SELECT COUNT(*) FROM (SELECT DISTINCT " + cols + " FROM "
+        + keyedRowsFrom(schema, table, pk) + ") AS k";
+  }
+
+  /**
    * Renders a PK column list as a single value the distinct-sketch can hash. A multi-column key
    * has to collapse to one expression for APPROX_COUNT_DISTINCT; ROW(...) keeps the columns
    * separate (unlike concatenating text, which would make ('a','bc') and ('ab','c') collide and
@@ -1030,34 +1059,27 @@ public final class GovDataModelVerificationRunner {
     return sb.append(')').toString();
   }
 
-  /** Runs a single-column COUNT query and returns the long value (0 if no row). */
-  private static long scalarCount(Connection conn, String sql) throws Exception {
-    Statement st = null;
-    ResultSet rs = null;
-    try {
-      st = conn.createStatement();
-      rs = st.executeQuery(sql);
-      return rs.next() ? rs.getLong(1) : 0L;
-    } finally {
-      closeQuietly(rs);
-      closeQuietly(st);
+  /** Runs a single-column COUNT query and returns the long value. */
+  static long scalarCount(DataSource source, String sql) throws SQLException {
+    try (Connection conn = source.getConnection();
+         Statement st = conn.createStatement();
+         ResultSet rs = st.executeQuery(sql)) {
+      if (!rs.next()) {
+        throw new SQLException("COUNT query returned no row: " + sql);
+      }
+      return rs.getLong(1);
     }
   }
 
-  /** Runs a two-column COUNT query and returns both values (zeros if no row). */
-  private static long[] twoCounts(Connection conn, String sql) throws Exception {
-    Statement st = null;
-    ResultSet rs = null;
-    try {
-      st = conn.createStatement();
-      rs = st.executeQuery(sql);
+  /** Runs a two-column COUNT query and returns both values. */
+  private static long[] twoCounts(DataSource source, String sql) throws SQLException {
+    try (Connection conn = source.getConnection();
+         Statement st = conn.createStatement();
+         ResultSet rs = st.executeQuery(sql)) {
       if (!rs.next()) {
-        return new long[]{0L, 0L};
+        throw new SQLException("COUNT query returned no row: " + sql);
       }
       return new long[]{rs.getLong(1), rs.getLong(2)};
-    } finally {
-      closeQuietly(rs);
-      closeQuietly(st);
     }
   }
 
