@@ -890,6 +890,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         ? String.valueOf(currentDateObj) : today.toString();
     System.setProperty("GOVDATA_CURRENT_DATE", currentDate);
 
+    // Year-unique month token (e.g. 2026-11) — re-keys a monthly-refreshed raw cache. It follows
+    // currentDate, not currentMonth: a run that pins currentMonth to select a source file must
+    // still re-read an accruing API.
+    System.setProperty("GOVDATA_CURRENT_MONTH_TOKEN", currentDate.substring(0, 7));
+
     Object currentYearObj = operand.get("currentYear");
     String currentYear = currentYearObj != null
         ? String.valueOf(currentYearObj) : String.valueOf(today.getYear());

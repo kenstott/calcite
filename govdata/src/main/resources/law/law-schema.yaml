@@ -226,7 +226,7 @@ dimension_values:
 
   # Cache buster for the registry snapshots (lobbyists, registrants, clients), which are read whole
   # and take a while: a new month is a new fetch unit; runs within a month reuse the cached pages.
-  lobbying_refresh_month: &lobbying_refresh_month ["${GOVDATA_CURRENT_MONTH:12}"]
+  lobbying_refresh_month: &lobbying_refresh_month ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
   # The Clerk of the House's bulk financial-disclosure index (financial-pdfs/{year}FD.zip) exists
   # back to 2008, and the "P" (Periodic Transaction Report) filing type first appears in the 2015

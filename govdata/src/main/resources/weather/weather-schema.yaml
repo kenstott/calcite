@@ -1997,7 +1997,7 @@ partitionedTables:
         - gistemp_global
       # cache-busters only (not partition columns): the file grows monthly, so a new calendar
       # month changes the raw-cache key and forces a fresh fetch
-      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+      fetch_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: year
@@ -2072,7 +2072,7 @@ partitionedTables:
       # cache-busters only (not partition columns): the file grows monthly, so a new calendar
       # month changes the raw-cache key and forces a fresh fetch
       end_year: ["${GOVDATA_CURRENT_YEAR}"]
-      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+      fetch_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: year
@@ -2246,7 +2246,7 @@ partitionedTables:
         - enso_oni
       # cache-buster only (not a partition column): a new calendar month changes the raw-cache
       # key and forces a fresh fetch
-      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+      fetch_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: year
@@ -2327,7 +2327,7 @@ partitionedTables:
         - enso_roni
       # cache-buster only (not a partition column): a new calendar month changes the raw-cache
       # key and forces a fresh fetch
-      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+      fetch_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: year
@@ -2403,7 +2403,7 @@ partitionedTables:
         - enso_nino_monthly
       # cache-buster only (not a partition column): a new calendar month changes the raw-cache
       # key and forces a fresh fetch
-      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+      fetch_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: year
@@ -2503,7 +2503,7 @@ partitionedTables:
         - enso_nino_weekly
       # cache-buster only (not a partition column): a new calendar month changes the raw-cache
       # key and forces a fresh fetch
-      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+      fetch_month: ["${GOVDATA_CURRENT_MONTH_TOKEN}"]
 
     columns:
       - name: week_center_date
