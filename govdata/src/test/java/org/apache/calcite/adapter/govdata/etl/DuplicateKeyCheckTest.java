@@ -26,7 +26,9 @@ import java.util.List;
 import java.util.Properties;
 import javax.sql.DataSource;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * The duplicate-key count must see the rows as stored, on a connection where the key being tested
@@ -35,14 +37,78 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Tag("unit")
 public class DuplicateKeyCheckTest {
 
+  private static final List<String> KEY = Arrays.asList("type", "date_key");
+
   @Test void duplicatesUnderADeclaredKeyAreCounted(@TempDir File dir) throws Exception {
+    try (Connection conn = calendar(dir, "SELECT * FROM (VALUES ('day',1),('day',1),('day',1),"
+        + "('day',2),('day',2),('day',2)) AS t(\"type\", date_key)")) {
+      // The premise: planned through Calcite, the declared key makes the DISTINCT a no-op.
+      try (Statement st = conn.createStatement();
+           ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM (SELECT DISTINCT "
+               + "\"type\", \"date_key\" FROM \"ref\".\"calendar\")")) {
+        rs.next();
+        assertEquals(6L, rs.getLong(1), "constraint not applied; this test proves nothing");
+      }
+
+      DataSource duckDb =
+          GovDataModelVerificationRunner.duckDbDataSource(conn, "ref", "calendar");
+      assertArrayEquals(new long[]{6L, 2L},
+          GovDataModelVerificationRunner.countKeys(duckDb, "ref", "calendar", KEY));
+    }
+  }
+
+  @Test void aSingleDuplicateAmongManyKeysIsCounted(@TempDir File dir) throws Exception {
+    // 1,000 distinct keys, one of them stored twice, and one row with a null key column.
+    try (Connection conn = calendar(dir, "SELECT 'day' AS \"type\", i AS date_key "
+        + "FROM range(1000) AS r(i) UNION ALL SELECT 'day', 7 UNION ALL SELECT 'day', NULL")) {
+      DataSource duckDb =
+          GovDataModelVerificationRunner.duckDbDataSource(conn, "ref", "calendar");
+      assertArrayEquals(new long[]{1001L, 1000L},
+          GovDataModelVerificationRunner.countKeys(duckDb, "ref", "calendar", KEY));
+      assertArrayEquals(new long[]{1001L, 1000L},
+          GovDataModelVerificationRunner.countKeys(duckDb, "ref", "calendar",
+              Arrays.asList("date_key")));
+    }
+  }
+
+  @Test void aUniqueKeyCountsAsManyKeysAsRows(@TempDir File dir) throws Exception {
+    try (Connection conn = calendar(dir,
+        "SELECT 'day' AS \"type\", i AS date_key FROM range(1000) AS r(i)")) {
+      DataSource duckDb =
+          GovDataModelVerificationRunner.duckDbDataSource(conn, "ref", "calendar");
+      assertArrayEquals(new long[]{1000L, 1000L},
+          GovDataModelVerificationRunner.countKeys(duckDb, "ref", "calendar", KEY));
+    }
+  }
+
+  @Test void aTableWithNoFullyKeyedRowIsUnverified(@TempDir File dir) throws Exception {
+    try (Connection conn = calendar(dir, "SELECT 'day' AS \"type\", "
+        + "CAST(NULL AS INTEGER) AS date_key FROM range(3) AS r(i)")) {
+      DataSource duckDb =
+          GovDataModelVerificationRunner.duckDbDataSource(conn, "ref", "calendar");
+      long[] counts =
+          GovDataModelVerificationRunner.countKeys(duckDb, "ref", "calendar", KEY);
+      assertArrayEquals(new long[]{0L, 0L}, counts);
+      assertEquals("no row has every key column non-null",
+          GovDataModelVerificationRunner.unverifiedReason(true, counts[0], null));
+    }
+  }
+
+  @Test void onlyACompletedCheckOverKeyedRowsIsVerified() {
+    assertNull(GovDataModelVerificationRunner.unverifiedReason(true, 5L, null));
+    assertNull(GovDataModelVerificationRunner.unverifiedReason(false, -1L, null));
+    assertEquals("check failed: out of memory",
+        GovDataModelVerificationRunner.unverifiedReason(false, -1L, "out of memory"));
+  }
+
+  /** A Calcite connection over a one-table schema whose declared key is (type, date_key). */
+  private static Connection calendar(File dir, String rows) throws Exception {
     File data = new File(dir, "data");
     File tableDir = new File(data, "calendar");
     Files.createDirectories(tableDir.toPath());
     try (Connection duck = DriverManager.getConnection("jdbc:duckdb:");
          Statement st = duck.createStatement()) {
-      st.execute("COPY (SELECT * FROM (VALUES ('day',1),('day',1),('day',1),"
-          + "('day',2),('day',2),('day',2)) AS t(\"type\", date_key)) TO '"
+      st.execute("COPY (" + rows + ") TO '"
           + new File(tableDir, "part.parquet").getAbsolutePath() + "' (FORMAT PARQUET)");
     }
     File model = new File(dir, "model.json");
@@ -56,25 +122,10 @@ public class DuplicateKeyCheckTest {
         + "\"tableConstraints\":{\"calendar\":{\"primaryKey\":[\"type\",\"date_key\"]}}"
         + "}}]}").getBytes(StandardCharsets.UTF_8));
 
-    List<String> key = Arrays.asList("type", "date_key");
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
     props.setProperty("unquotedCasing", "TO_LOWER");
     props.setProperty("model", model.getAbsolutePath());
-    try (Connection conn = DriverManager.getConnection("jdbc:calcite:", props)) {
-      // The premise: planned through Calcite, the declared key makes the DISTINCT a no-op.
-      try (Statement st = conn.createStatement();
-           ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM (SELECT DISTINCT "
-               + "\"type\", \"date_key\" FROM \"ref\".\"calendar\")")) {
-        rs.next();
-        assertEquals(6L, rs.getLong(1), "constraint not applied; this test proves nothing");
-      }
-
-      DataSource duckDb =
-          GovDataModelVerificationRunner.duckDbDataSource(conn, "ref", "calendar");
-      assertEquals(2L,
-          GovDataModelVerificationRunner.scalarCount(duckDb,
-              GovDataModelVerificationRunner.distinctKeysSql("ref", "calendar", key)));
-    }
+    return DriverManager.getConnection("jdbc:calcite:", props);
   }
 }

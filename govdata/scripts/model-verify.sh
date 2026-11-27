@@ -50,8 +50,10 @@
 # Duplicate-row check: for every base table with a declared primaryKey, the runner compares the
 # count of fully-keyed rows (all PK columns non-null) against the count of DISTINCT PK tuples. A
 # non-unique declared PK (>= threshold duplicate rows) is reported in the DUP column and fails the
-# schema — it is the signature of the Iceberg file-duplication bug. Views / tables with no PK show
-# DUP=- and are not checked.
+# schema — it is the signature of the Iceberg file-duplication bug. The count is exact. A table
+# shows DUP=unverified, and is listed under UNVERIFIED PRIMARY KEYS, when the check failed or no row
+# has every PK column non-null; neither fails the run. Views / tables with no PK show DUP=- and are
+# not checked.
 #
 # Exit code: 0 if every schema passed; 1 if any schema reported ERROR / probe failure / duplicate PK.
 #
