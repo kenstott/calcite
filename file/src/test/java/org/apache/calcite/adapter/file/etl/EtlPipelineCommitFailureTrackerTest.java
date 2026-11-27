@@ -168,7 +168,7 @@ class EtlPipelineCommitFailureTrackerTest {
    * <p>On Windows {@link File#setWritable(boolean, boolean)} is refused for a directory; what
    * stops files being added to one there is an access-control entry that denies it.
    */
-  private static Runnable denyNewFiles(File dir) throws IOException {
+  static Runnable denyNewFiles(File dir) throws IOException {
     final AclFileAttributeView acl =
         Files.getFileAttributeView(dir.toPath(), AclFileAttributeView.class);
     if (acl == null) {

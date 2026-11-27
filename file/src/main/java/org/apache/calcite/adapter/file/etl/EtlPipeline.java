@@ -134,14 +134,16 @@ public class EtlPipeline {
   private String deltaBoundValue;
 
   /**
-   * Per-unit freshness tokens for units SUCCESSFULLY written this run, keyed by
-   * {@code pipeline::unitKey}. A unit's token is added only after its write returns (see
+   * Freshness tokens for units SUCCESSFULLY written this run: per-unit tokens keyed by
+   * {@code pipeline::unitKey}, pipeline-scoped hash tokens keyed by the pipeline name, and the
+   * computed_delta high-water mark. A token is added only after its unit's write returns (see
    * {@link #processSingleBatch}), so a unit that throws never records one. Persisted to the
    * tracker after {@code writer.commit()} succeeds — independent of whether other units in a
    * fan-out failed — so one failing unit cannot discard the tokens of the units that committed
-   * cleanly (which would force those units to re-materialize every run).
+   * cleanly (which would force those units to re-materialize every run). Later units of the same
+   * run read a key shared across units through {@link #latestFreshnessToken}.
    */
-  private final Map<String, String> pendingUnitFreshnessTokens =
+  private final Map<String, String> pendingFreshnessTokens =
       new ConcurrentHashMap<String, String>();
 
   /**
@@ -157,7 +159,7 @@ public class EtlPipeline {
   /**
    * Per-combo completion marks for combos SUCCESSFULLY written this run, captured by
    * {@link #markCombosProcessed} but not applied to the tracker until {@code writer.commit()}
-   * succeeds — same reasoning as {@link #pendingUnitFreshnessTokens} above, applied to the more
+   * succeeds — same reasoning as {@link #pendingFreshnessTokens} above, applied to the more
    * consequential marker. A combo whose rows were only buffered, not yet durably committed, must
    * not be recorded {@code state=complete}: found live, fec.committee_contributions was marked
    * complete for 3 combos (2022/2024/2026, ~1.45M rows) even though every retry of the single
@@ -317,6 +319,9 @@ public class EtlPipeline {
     LOGGER.info("Starting ETL pipeline: {}", pipelineName);
     long startTime = System.currentTimeMillis();
     standardWriterRows.set(0);
+    // Deferred marks belong to one run's commit; a run that never committed must not hand them on.
+    pendingFreshnessTokens.clear();
+    pendingComboMarks.clear();
 
     // Release-window gate: a table-root `releaseWindow:` block restricts which calendar
     // months, days of week, and/or year parity this table's ETL is allowed to run in (e.g.
@@ -1878,19 +1883,21 @@ public class EtlPipeline {
               pipelineName, probedFreshnessToken);
         }
       }
-      // Persist per-unit freshness tokens for the units actually written this run, independent of
-      // whether OTHER units in a fan-out failed. Each token here was recorded only after that
-      // unit's write returned (see processSingleBatch), and reaching this point means writer.commit()
-      // above succeeded — so those writes are durable. NOT gated on the whole-table clean commit:
-      // a single failing unit (e.g. one FIA state's HEAD timeout) must not discard the tokens of the
-      // ~50 states that committed cleanly, which otherwise forces a full re-materialize of every
-      // state on the next run.
-      if (!pendingUnitFreshnessTokens.isEmpty()) {
-        for (Map.Entry<String, String> entry : pendingUnitFreshnessTokens.entrySet()) {
+      // Persist the deferred freshness tokens for the units actually written this run,
+      // independent of whether OTHER units in a fan-out failed. Each token here was recorded only
+      // after that unit's write returned (see processSingleBatch), and reaching this point means
+      // writer.commit() above succeeded — so those writes are durable. NOT gated on the
+      // whole-table clean commit: a single failing unit (e.g. one FIA state's HEAD timeout) must
+      // not discard the tokens of the ~50 states that committed cleanly, which otherwise forces a
+      // full re-materialize of every state on the next run.
+      if (!pendingFreshnessTokens.isEmpty()) {
+        for (Map.Entry<String, String> entry : pendingFreshnessTokens.entrySet()) {
           incrementalTracker.putFreshnessToken(entry.getKey(), entry.getValue());
+          LOGGER.debug("Pipeline '{}': persisted freshness token {}={}",
+              pipelineName, entry.getKey(), entry.getValue());
         }
-        LOGGER.info("Pipeline '{}': persisted {} per-unit freshness tokens (committed units)",
-            pipelineName, pendingUnitFreshnessTokens.size());
+        LOGGER.info("Pipeline '{}': persisted {} freshness tokens (committed units)",
+            pipelineName, pendingFreshnessTokens.size());
       }
       // Apply deferred per-combo completion marks — reaching this point means writer.commit()
       // above succeeded, so every combo buffered this run is now durable. Must run before
@@ -2283,7 +2290,7 @@ public class EtlPipeline {
     Map<String, String> variables = fetchUnit.getFetchVariables();
 
     // Freshness token captured for THIS unit by the gate below. Published to
-    // pendingUnitFreshnessTokens only at this method's successful return (after the write), so a
+    // pendingFreshnessTokens only at this method's successful return (after the write), so a
     // unit whose fetch/transform/write throws never records a token — it re-processes next run
     // rather than skipping unwritten data.
     String capturedFreshnessUnitKey = null;
@@ -2424,7 +2431,7 @@ public class EtlPipeline {
       // Stream the chain once through a multiset hash — O(1) memory, order-independent.
       String currentHash = hashRowsStreaming(data);
       closeQuietly(data);
-      String previousHash = incrementalTracker.getFreshnessToken(hashTokenKey);
+      String previousHash = latestFreshnessToken(hashTokenKey);
       // Only skip when committed data exists to preserve. Under forceReprocessAll (no Iceberg data /
       // purged / cleared marker) we still capture+persist the hash below, but must WRITE this run —
       // otherwise an unchanged source after a purge would skip forever and leave the table empty.
@@ -2458,14 +2465,15 @@ public class EtlPipeline {
     // stored high-water mark and tracking the new max(modifiedField) as a side effect. O(1)
     // memory — the full dump is never materialised (a 3M+ row snapshot like GLEIF would OOM).
     // The new HWM and the seen/changed counts are only final once the write has drained the
-    // iterator, so they are read back and persisted AFTER the write (mirrors the hash gate above).
+    // iterator, so they are read back after the write and, like the hash token, persisted only
+    // after the writer commits.
     final String computedDeltaHwmKey = pipelineName + COMPUTED_DELTA_HWM_SUFFIX;
     final String[] computedDeltaHwm = {null};      // max(modifiedField) once `data` is drained
     final long[] computedDeltaCounts = {0L, 0L};   // [seen, emitted]
     boolean computedDeltaStreaming = false;
     if ("computed_delta".equals(config.getDatasetType())) {
       final String modifiedField = config.getModifiedField();
-      final String prevHwm = incrementalTracker.getFreshnessToken(computedDeltaHwmKey);
+      final String prevHwm = latestFreshnessToken(computedDeltaHwmKey);
       LOGGER.info("computed_delta: modifiedField={}, prevHwm={}", modifiedField, prevHwm);
 
       if (modifiedField != null && !modifiedField.isEmpty()) {
@@ -2553,7 +2561,6 @@ public class EtlPipeline {
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     final boolean finalComputedDeltaStreaming = computedDeltaStreaming;
     final String finalHashFreshnessToken = hashFreshnessToken;
-    final boolean finalHashTokenPerUnit = hashTokenPerUnit;
     final String finalHashTokenKey = hashTokenKey;
     // The write consumes `data`, which on a hash-CHANGED run is the re-fetched chain (not
     // sourceChain). Close that chain after the write; sourceChain is closed too (idempotent,
@@ -2602,31 +2609,19 @@ public class EtlPipeline {
           } else {
             markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
           }
-          // Persist computed_delta HWM after a successful write. The streaming filter has now
-          // drained `data`, so the holder carries max(modifiedField) over the whole pull.
+          // Record the computed_delta HWM and the hash token for the post-commit persist. The
+          // streaming filter has now drained `data`, so the holder carries max(modifiedField)
+          // over the whole pull. Persisting either before writer.commit() succeeds would let the
+          // next run skip rows that never reached the table.
           if (finalComputedDeltaStreaming) {
             LOGGER.info("computed_delta: {} of {} rows changed (maxModified={})",
                 computedDeltaCounts[1], computedDeltaCounts[0], computedDeltaHwm[0]);
             if (computedDeltaHwm[0] != null) {
-              incrementalTracker.putFreshnessToken(computedDeltaHwmKey, computedDeltaHwm[0]);
-              LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
-                  computedDeltaHwm[0], pipelineName);
+              pendingFreshnessTokens.put(computedDeltaHwmKey, computedDeltaHwm[0]);
             }
           }
-          // Persist hash freshness token after a successful write. Per-unit (lookback)
-          // tokens are deferred to pendingUnitFreshnessTokens — published only after the
-          // whole-pipeline writer.commit() succeeds, same as the ETAG/LAST_MODIFIED per-unit gate
-          // above — so a later commit failure can't leave a token recorded for data that was
-          // never actually made durable. Pipeline-scoped (non-trailing-window) HASH tables keep
-          // the prior immediate-write behavior unchanged.
           if (finalHashFreshnessToken != null) {
-            if (finalHashTokenPerUnit) {
-              pendingUnitFreshnessTokens.put(finalHashTokenKey, finalHashFreshnessToken);
-            } else {
-              incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
-              LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
-                  finalHashFreshnessToken, pipelineName);
-            }
+            pendingFreshnessTokens.put(finalHashTokenKey, finalHashFreshnessToken);
           }
         }
 
@@ -2634,7 +2629,7 @@ public class EtlPipeline {
         // persist can skip this unit next run. Only reached on success — a throwing unit never
         // records a token, and the whole-table commit below makes this write durable.
         if (capturedFreshnessToken != null) {
-          pendingUnitFreshnessTokens.put(capturedFreshnessUnitKey, capturedFreshnessToken);
+          pendingFreshnessTokens.put(capturedFreshnessUnitKey, capturedFreshnessToken);
         }
 
         LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
@@ -2646,6 +2641,15 @@ public class EtlPipeline {
         closeQuietly(sourceChain);
       }
     }
+  }
+
+  /**
+   * The token the next unit must compare against: the one an earlier unit of this run recorded
+   * and has not yet committed, otherwise the persisted one.
+   */
+  private String latestFreshnessToken(String key) {
+    String pending = pendingFreshnessTokens.get(key);
+    return pending != null ? pending : incrementalTracker.getFreshnessToken(key);
   }
 
   /**
