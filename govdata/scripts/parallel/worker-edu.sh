@@ -302,9 +302,9 @@ run_biennial_cadence() {
       '"naep_scores", "naep_achievement_levels"' "$BIENNIAL_START"
   fi
 
-  # district_assessments' yearRange is capped at maxYear:2020 (source dormant since —
-  # verified live 2026-09-14); this call is a safe no-op until the source resumes
-  # publishing and the cap in edu-schema.yaml is bumped.
+  # district_assessments' yearRange is capped at maxYear:2021 in edu-schema.yaml, so this
+  # call fetches nothing once the biennial start passes the cap; bump the cap when a newer
+  # district file is published.
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "district_assessments"; then
     run_edu_model "edu-biennial-district-assessments" \
       '"district_assessments"' "$BIENNIAL_START"

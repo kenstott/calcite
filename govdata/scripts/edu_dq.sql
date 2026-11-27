@@ -1251,6 +1251,24 @@ FROM (
   WHERE read_test_pct_prof_midpt IS NOT NULL OR math_test_pct_prof_midpt IS NOT NULL
 );
 
+-- district_assessments year=2021 (ED Data Express, reading only): rows exist with real reading
+-- values, no math value, and ordered low <= midpt <= high.
+INSERT INTO dq_results
+SELECT 'edu', 'district_assessments', 'sy2021_reading_only',
+  CASE WHEN n = 0 OR real_reading = 0 OR math_values > 0 OR unordered > 0 THEN 'fail' ELSE 'pass' END,
+  'rows=' || n || ', reading=' || real_reading || ', math=' || math_values || ', unordered=' || unordered,
+  'rows>0, reading>0, math=0, unordered=0', NULL
+FROM (
+  SELECT COUNT(*) AS n,
+         COUNT(*) FILTER (WHERE read_test_pct_prof_midpt >= 0) AS real_reading,
+         COUNT(*) FILTER (WHERE math_test_num_valid IS NOT NULL
+                             OR math_test_pct_prof_midpt IS NOT NULL) AS math_values,
+         COUNT(*) FILTER (WHERE read_test_pct_prof_low > read_test_pct_prof_midpt
+                             OR read_test_pct_prof_midpt > read_test_pct_prof_high) AS unordered
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments', allow_moved_paths=true)
+  WHERE year = 2021
+);
+
 -- ipeds_financials: form_type must be F1A, F2, or F3
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_financials', 'form_type_values',

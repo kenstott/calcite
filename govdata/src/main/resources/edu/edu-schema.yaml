@@ -3850,13 +3850,23 @@ partitionedTables:
       Virginia's 2016-17 grade 5-8 math results are flagged by the source
       itself as erroneously low (users referred to VDOE's own reporting
       instead) — left as-is here since this table mirrors the source
-      verbatim. This endpoint's "all students" aggregate is fetched (race/
+      verbatim. School year 2021-22 (year=2021) comes instead from the U.S.
+      Department of Education's own ED Data Express district file (FS178 /
+      DG584, https://eddataexpress.ed.gov/download/data-library), because the
+      Urban endpoint carries nothing after year=2020. That year has
+      READING/LANGUAGE ARTS ONLY: ED publishes no district mathematics file for
+      it, so all four math_test_* columns are NULL for year=2021. It has grades
+      3-8 and high school (grade 9); an exact published percentage is stored as
+      low = high = midpt, and a bounded or ranged one (e.g. <50%, 30-34%) as
+      its low, high and midpoint, with S stored as -3. ED suppressed Utah and
+      Virginia reading for 2021-22 over data quality concerns. This endpoint's "all students" aggregate is fetched (race/
       sex/disability subgroup breakdowns live on separate sub-endpoints and
       are out of scope for this table — one table mirrors one source
-      endpoint). Years 2009-2018 and 2020 only; the source has not published
-      2019 (which errors, not just 404s, on this endpoint) or any year after
-      2020, so this table cannot track current-year district achievement —
-      only the historical window that overlaps f33_district_finance. All six
+      endpoint). Years 2009-2018, 2020 and 2021 (reading only); the Urban
+      endpoint has not published 2019 (which errors, not just 404s), and no
+      district file for 2022-23 or later was listed by ED Data Express as of
+      2026-11-27, so this table cannot track current-year district
+      achievement. All six
       numeric outcome fields (read/math _num_valid, _pct_prof_low/high/midpt)
       can carry the source's own negative sentinel codes instead of a real
       count or percentage — confirmed live via the source's own
@@ -3948,6 +3958,9 @@ partitionedTables:
           start: "${GOVDATA_START_YEAR:2009}"
 
     hooks:
+      # Returns rows only for the years ED Data Express supplies (2021); null for every other
+      # year, which leaves the Urban Institute source above in charge.
+      dataProvider: "org.apache.calcite.adapter.govdata.edu.DistrictAssessmentsEdDataExpressProvider"
       responseTransformer: "org.apache.calcite.adapter.govdata.edu.DistrictAssessmentsResponseTransformer"
 
     dimensions:
@@ -3955,7 +3968,7 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2009}"
         minYear: 2009
-        maxYear: 2020  # source has published nothing since 2020 (verified live 2026-09-14); bump if a newer cycle appears
+        maxYear: 2021  # 2021 = ED Data Express reading file; no district file for 2022 or later listed on 2026-11-27. A new year needs its file address in DistrictAssessmentsEdDataExpressProvider
         excludeYears: [2019]  # not published on this endpoint — a live request errors (HTTP 500), not 404
       grade:
         - "3"
