@@ -38,19 +38,24 @@ hcy_state_dir() {
 # added to the schema afterwards never ran in a slot already marked done. A marker line is now
 # "<token> <fingerprint>", where the fingerprint is a hash of the table names the slot covers
 # (year tokens: tables with a year dimension; "once": tables without; any other token: all
-# tables), read from the schema YAML in the source tree. A marker whose fingerprint differs from
-# the current one is stale and the slot runs again. A bare "<token>" line from before this change
+# tables), read from the schema YAML bundled in the pool's pinned jar ($GOVDATA_JAR) — the jar the
+# slot's worker runs, so a marker never claims a table that run could not load. The source tree can
+# be ahead of the jar; such a table makes the slot stale once a pool runs a jar that has it. A
+# marker whose fingerprint differs from the current one is stale and the slot runs again. A bare "<token>" line from before this change
 # stays valid (no fleet-wide re-run on deploy); the next successful run rewrites it fingerprinted.
 hcy_fingerprint() {   # <schema> <token> — echoes the fingerprint, fails loudly if it cannot be computed
-  local schema="$1" token="$2" rel yaml
+  local schema="$1" token="$2" rel
   rel=$(schema_yaml_resource "$schema") || return 1
-  yaml="$SCRIPT_DIR/../../src/main/resources/$rel"
-  [ -f "$yaml" ] || { log_error "[historical-complete] schema YAML not found: $yaml"; return 1; }
-  python3 - "$yaml" "$token" <<'PY'
-import hashlib, sys
+  [ -f "${GOVDATA_JAR:-}" ] || { log_error "[historical-complete] GOVDATA_JAR is not a file: '${GOVDATA_JAR:-}'"; return 1; }
+  python3 - "$GOVDATA_JAR" "$rel" "$token" <<'PY'
+import hashlib, subprocess, sys
 import yaml
-path, token = sys.argv[1], sys.argv[2]
-doc = yaml.safe_load(open(path)) or {}
+jar, resource, token = sys.argv[1], sys.argv[2], sys.argv[3]
+res = subprocess.run(["unzip", "-p", jar, resource], capture_output=True)
+if res.returncode != 0 or not res.stdout:
+    sys.stderr.write("%s not found in %s\n" % (resource, jar))
+    sys.exit(1)
+doc = yaml.safe_load(res.stdout) or {}
 names = []
 for key in ("partitionedTables", "tables"):
     for t in doc.get(key) or []:
@@ -67,7 +72,7 @@ for key in ("partitionedTables", "tables"):
         if keep:
             names.append(name)
 if not names:
-    sys.stderr.write("no tables derived from %s for token %s\n" % (path, token))
+    sys.stderr.write("no tables derived from %s in %s for token %s\n" % (resource, jar, token))
     sys.exit(1)
 print(hashlib.sha1(",".join(sorted(names)).encode()).hexdigest()[:16])
 PY

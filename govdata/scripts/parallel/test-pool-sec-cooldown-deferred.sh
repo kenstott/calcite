@@ -67,7 +67,9 @@ drive() { # runner mode arg -> exit status of the runner, run in a clean shell w
   ( set -u; [ "${ERREXIT:-0}" = 1 ] && set -eo pipefail
     source "$HERE/../sec-cooldown.sh"; sec_cooldown_init
     SCRIPT_DIR="$T/scripts"; mkdir -p "$SCRIPT_DIR"
-    eval "$(awk -v fn=etl_exit_status '$0 ~ "^"fn"\\(\\) \\{" {p=1} p {print} p && /^}/ {exit}' "$HERE/common.sh")"
+    for fn in private_dir private_log etl_exit_status; do
+      eval "$(awk -v fn="$fn" '$0 ~ "^"fn"\\(\\) \\{" {p=1} p {print} p && /^}/ {exit}' "$HERE/common.sh")"
+    done
     eval "$(awk -v fn="$1" '$0 ~ "^"fn"\\(\\) \\{" {p=1} p {print} p && /^}/ {exit}' "$HERE/common.sh")"
     resolve_classpath() { echo fake.jar; }
     get_heap_config() { _HEAP_MIN=1m; _HEAP_MAX=1m; }
