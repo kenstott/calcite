@@ -109,8 +109,8 @@ public class EtlPipeline {
    * True when per-unit freshness probing is active for this run. Set in {@link #execute()} once
    * the data source and freshness config are known. When true, {@link #processSingleBatch} probes
    * each fetch unit's templated source — the per-period analogue of the pipeline-level freshness
-   * gate, which can only probe a single non-templated URL. A unit whose token changed re-reads the
-   * source instead of its raw cache entry.
+   * gate, which can only probe a single non-templated URL. A unit the probe cannot prove unchanged
+   * re-reads the source instead of its raw cache entry.
    */
   private boolean perUnitProbeEnabled;
 
@@ -2319,24 +2319,24 @@ public class EtlPipeline {
               + "skipping fetch and write", pipelineName, variables, currentToken);
           return 0;
         }
-        // Raw cache entries are validated by existence alone, so a changed unit has to be made to
-        // read the source; otherwise the fetch is handed the very bytes the probe just called out
-        // of date, writes them, and records the new token -- burying the revision and making sure
-        // no later run looks again.
-        if (!perUnitSkipSafe) {
-          // This probe is the only gate such a unit has, so one it cannot prove unchanged (no
-          // stored token, or none from the source) reads the source.
-          if (changed && !isCacheReparsed(pipelineName)) {
-            LOGGER.info("Pipeline '{}': unit {} changed at source (prev={}, cur={}) — "
-                + "re-reading it", pipelineName, variables,
-                previousToken == null ? "<none>" : previousToken,
-                currentToken == null ? "<null>" : currentToken);
-            ((HttpSource) dataSource).requireFreshRawCache(variables);
-            refetchUnit = true;
-          }
-        } else if (currentToken != null && previousToken != null
+        // Raw cache entries are validated by existence alone, so a unit the probe cannot prove
+        // unchanged (a different token, no stored token, or none from the source) reads the
+        // source. Otherwise the fetch is handed bytes of unknown age, writes them, and records
+        // the current token against them, and no later run looks again. A token that differs
+        // drops the entry; without two tokens to compare, the entry stays until the new response
+        // replaces it. A HASH gate computes its token from the body and refetches on its own,
+        // below.
+        if (changed && freshnessConfig.getType() != FreshnessConfig.Type.HASH
             && !isCacheReparsed(pipelineName)) {
-          ((HttpSource) dataSource).invalidateRawCache(variables);
+          LOGGER.info("Pipeline '{}': unit {} not proven unchanged at source (prev={}, cur={}) — "
+              + "re-reading it", pipelineName, variables,
+              previousToken == null ? "<none>" : previousToken,
+              currentToken == null ? "<null>" : currentToken);
+          if (perUnitSkipSafe && previousToken != null && currentToken != null) {
+            ((HttpSource) dataSource).invalidateRawCache(variables);
+          } else {
+            ((HttpSource) dataSource).requireFreshRawCache(variables);
+          }
           refetchUnit = true;
         }
         if (currentToken != null) {
@@ -2352,7 +2352,7 @@ public class EtlPipeline {
 
     // The pipeline-level gate reported CHANGED, so every unit this run processes has to see what
     // the source serves now. This covers the units no per-unit probe runs for, and those whose
-    // probe yields no token.
+    // probe fails.
     if (sourceFreshnessChanged && !isCacheReparsed(pipelineName)) {
       ((HttpSource) dataSource).requireFreshRawCache(variables);
       refetchUnit = true;

@@ -43,9 +43,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * A templated table whose fetch dimension is outside the partition key writes every unit on every
- * run, and the per-unit probe decides which of those units read the source: a changed unit
- * re-reads it, an unchanged one replays its raw cache entry.
+ * For a templated table the per-unit probe decides which of the processed units read the source: a
+ * unit it cannot prove unchanged re-reads it, an unchanged one replays its raw cache entry. A
+ * table whose fetch dimension is outside the partition key writes every unit on every run; one
+ * partitioned by that dimension skips its unchanged units.
  */
 @Tag("unit")
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
@@ -63,6 +64,7 @@ class PartitionUnsafeUnitRawCacheTest {
   private volatile boolean sendEtag = true;
   private final List<String> written = Collections.synchronizedList(new ArrayList<String>());
   private MemoryFreshnessTracker tracker = new MemoryFreshnessTracker();
+  private boolean partitionedByUnit;
 
   @BeforeEach void startServer() throws IOException {
     versions.put("a", "1");
@@ -123,6 +125,10 @@ class PartitionUnsafeUnitRawCacheTest {
         .materialize(MaterializeConfig.builder()
             .format(MaterializeConfig.Format.PARQUET)
             .output(MaterializeOutputConfig.builder().location(tempDir.toString()).build())
+            .partition(MaterializePartitionConfig.builder()
+                .columns(partitionedByUnit
+                    ? Collections.singletonList("unit") : Collections.<String>emptyList())
+                .build())
             .build())
         .build();
     DataWriter writer = new DataWriter() {
@@ -181,6 +187,50 @@ class PartitionUnsafeUnitRawCacheTest {
 
     assertEquals(Arrays.asList("a", "b"), sorted(downloads));
     assertEquals(Arrays.asList("a1", "b2"), sorted(written));
+  }
+
+  @Test void skipSafeUnitWithoutStoredTokenReadsTheSource() throws IOException {
+    partitionedByUnit = true;
+    run();
+    versions.put("a", "2");
+    tracker = new MemoryFreshnessTracker();
+    run();
+
+    assertEquals(Arrays.asList("a", "b"), sorted(downloads));
+    assertEquals(Arrays.asList("a2", "b1"), sorted(written));
+  }
+
+  @Test void skipSafeProbeWithoutTokenRefetchesOnEveryRun() throws IOException {
+    partitionedByUnit = true;
+    sendEtag = false;
+    run();
+    versions.put("b", "2");
+    run();
+
+    assertEquals(Arrays.asList("a", "b"), sorted(downloads));
+    assertEquals(Arrays.asList("a1", "b2"), sorted(written));
+  }
+
+  @Test void skipSafeUnchangedUnitsAreSkipped() throws IOException {
+    partitionedByUnit = true;
+    run();
+    versions.put("a", "2");
+    run();
+
+    assertEquals(Collections.singletonList("a"), downloads);
+    assertEquals(Collections.singletonList("a2"), written);
+  }
+
+  @Test void skipSafeReparseListedTableReadsTheCache() throws IOException {
+    partitionedByUnit = true;
+    run();
+    tracker = new MemoryFreshnessTracker();
+    versions.put("a", "2");
+    System.setProperty(REPARSE, TABLE);
+    run();
+
+    assertEquals(Collections.<String>emptyList(), downloads);
+    assertEquals(Arrays.asList("a1", "b1"), sorted(written));
   }
 
   @Test void reparseListedTableReadsTheCache() throws IOException {
