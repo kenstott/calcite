@@ -10,9 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata.crime;
 
+import org.apache.calcite.adapter.file.etl.HooksConfig;
 import org.apache.calcite.adapter.file.etl.HttpSource;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
-import org.apache.calcite.adapter.file.etl.HooksConfig;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 
