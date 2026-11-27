@@ -13,11 +13,14 @@ package org.apache.calcite.adapter.govdata.econ;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.RawCache;
+import org.apache.calcite.adapter.govdata.ScienceBaseClient;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,7 +53,7 @@ class UsgsMineralCommodityStatsProviderTest {
         + "COPPER,Salient\u2014United States,Copper,United States,Production,Mine,"
         + "metric tons,2024,\"1,100\",,Yes,\r\n";
     UsgsMineralCommodityStatsProvider provider =
-        new UsgsMineralCommodityStatsProvider(p -> new UsgsMineralCommodityStatsProvider.Client() {
+        new UsgsMineralCommodityStatsProvider(p -> new ScienceBaseClient() {
           @Override public String fetchText(String url) {
             requested.add(url);
             if (url.equals(LISTING)) {
@@ -61,9 +64,9 @@ class UsgsMineralCommodityStatsProviderTest {
                 + CSV_URL + "\"}]}";
           }
 
-          @Override public byte[] fetchBytes(String url) {
+          @Override public InputStream openStream(String url) {
             requested.add(url);
-            return csv.getBytes(Charset.forName("windows-1252"));
+            return new ByteArrayInputStream(csv.getBytes(Charset.forName("windows-1252")));
           }
         });
 

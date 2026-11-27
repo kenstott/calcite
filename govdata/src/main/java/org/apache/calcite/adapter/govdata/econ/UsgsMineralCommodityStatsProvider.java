@@ -14,6 +14,8 @@ import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.RawCache;
+import org.apache.calcite.adapter.govdata.ScienceBaseBrowserSession;
+import org.apache.calcite.adapter.govdata.ScienceBaseClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -86,20 +87,13 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
           Pattern.CASE_INSENSITIVE);
   private static final Pattern SINGLE_YEAR = Pattern.compile("^\\d{4}$");
 
-  /** Retrieves ScienceBase resources; a resource the site does not serve is an error. */
-  interface Client {
-    String fetchText(String url) throws IOException;
-
-    byte[] fetchBytes(String url) throws IOException;
-  }
-
-  private final Function<Map<String, String>, Client> clients;
+  private final Function<Map<String, String>, ScienceBaseClient> clients;
 
   public UsgsMineralCommodityStatsProvider() {
     this(ScienceBaseBrowserSession::get);
   }
 
-  UsgsMineralCommodityStatsProvider(Function<Map<String, String>, Client> clients) {
+  UsgsMineralCommodityStatsProvider(Function<Map<String, String>, ScienceBaseClient> clients) {
     this.clients = clients;
   }
 
@@ -109,7 +103,7 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     if (listingUrl == null || listingUrl.isEmpty()) {
       throw new IOException("USGS MCS: source.url (ScienceBase parent listing) is required");
     }
-    Client client = clients.apply(config.getSource().getParameters());
+    ScienceBaseClient client = clients.apply(config.getSource().getParameters());
 
     List<ReleaseFile> releases = resolveReleases(listingUrl, client);
     if (releases.isEmpty()) {
@@ -136,7 +130,7 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     }
   }
 
-  private List<ReleaseFile> resolveReleases(String listingUrl, Client client)
+  private List<ReleaseFile> resolveReleases(String listingUrl, ScienceBaseClient client)
       throws IOException {
     JsonNode items = MAPPER.readTree(client.fetchText(listingUrl)).path("items");
     List<ReleaseFile> releases = new ArrayList<ReleaseFile>();
@@ -166,7 +160,8 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     return releases;
   }
 
-  private String findCommoditiesDataCsv(String itemId, Client client) throws IOException {
+  private String findCommoditiesDataCsv(String itemId, ScienceBaseClient client)
+      throws IOException {
     String apiUrl = "https://www.sciencebase.gov/catalog/item/" + itemId
         + "?format=json&fields=files";
     JsonNode files = MAPPER.readTree(client.fetchText(apiUrl)).path("files");
@@ -196,7 +191,7 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
 
   private static final class MultiReleaseRowIterator implements Iterator<Map<String, Object>> {
     private final List<ReleaseFile> releases;
-    private final Client client;
+    private final ScienceBaseClient client;
     private final RawCache rawCache;
     private int releaseIndex;
     private int currentReleaseYear;
@@ -205,7 +200,8 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     private Map<String, Object> nextRow;
     private boolean done;
 
-    MultiReleaseRowIterator(List<ReleaseFile> releases, Client client, RawCache rawCache) {
+    MultiReleaseRowIterator(List<ReleaseFile> releases, ScienceBaseClient client,
+        RawCache rawCache) {
       this.releases = releases;
       this.client = client;
       this.rawCache = rawCache;
@@ -242,7 +238,7 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
       final String csvUrl = release.csvUrl;
       reader = new BufferedReader(new InputStreamReader(
           rawCache.openStream(csvUrl,
-              () -> new ByteArrayInputStream(client.fetchBytes(csvUrl))), MCS_CHARSET));
+              () -> client.openStream(csvUrl)), MCS_CHARSET));
       String header = CsvRecordReader.readRecord(reader);
       if (header == null) {
         throw new IOException("USGS MCS " + currentReleaseYear + ": empty file " + csvUrl);

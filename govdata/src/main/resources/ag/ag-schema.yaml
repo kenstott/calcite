@@ -2613,6 +2613,16 @@ partitionedTables:
       method: GET
       headers:
         User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+      # www.sciencebase.gov answers a Cloudflare challenge (HTTP 403) to non-browser clients, so
+      # the provider reads its ScienceBase URLs through a headed browser session configured by the parameters
+      # below. Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY); when the browser cannot
+      # start the table fails, naming the cause.
+      parameters:
+        browserScript: "${SSA_BROWSER_SCRIPT:}"
+        browserNodeCommand: "${SSA_NODE_COMMAND:node}"
+        browserChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        browserRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        browserEntryPageUrl: "https://www.sciencebase.gov/catalog/item/5e95c12282ce172707f2524e?format=json&fields=files"
       response:
         format: json  # ignored: UsgsPesticideCountyUseProvider discovers and streams the files itself
 

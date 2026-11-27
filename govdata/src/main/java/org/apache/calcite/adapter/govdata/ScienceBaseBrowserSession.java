@@ -8,17 +8,19 @@
  * machine learning models is strictly prohibited without explicit written
  * permission from the copyright holder.
  */
-package org.apache.calcite.adapter.govdata.econ;
-
-import org.apache.calcite.adapter.govdata.BrowserHelperProcess;
+package org.apache.calcite.adapter.govdata;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.Map;
 
 /**
@@ -32,9 +34,10 @@ import java.util.Map;
  * {@code browserEntryPageUrl}); a missing or unusable one throws {@link IllegalStateException}
  * naming the cause. There is no fallback to a plain HTTP client.
  */
-final class ScienceBaseBrowserSession implements UsgsMineralCommodityStatsProvider.Client {
+public final class ScienceBaseBrowserSession implements ScienceBaseClient {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final String HOST = "www.sciencebase.gov";
   private static final String LABEL = "sciencebase";
   private static final String INSTALL_HINT =
       "run govdata/scripts/browser-fetch/install.sh and set SSA_BROWSER_SCRIPT";
@@ -49,8 +52,13 @@ final class ScienceBaseBrowserSession implements UsgsMineralCommodityStatsProvid
     this.helper = helper;
   }
 
+  /** Whether {@code url} is served by ScienceBase, and so has to be fetched through a browser. */
+  public static boolean serves(String url) {
+    return HOST.equalsIgnoreCase(URI.create(url).getHost());
+  }
+
   /** The shared session for the source parameters {@code p}, started if needed. */
-  static synchronized ScienceBaseBrowserSession get(Map<String, String> p) {
+  public static synchronized ScienceBaseBrowserSession get(Map<String, String> p) {
     String node = require(p, "browserNodeCommand");
     String script = p.get("browserScript");
     String entry = require(p, "browserEntryPageUrl");
@@ -80,18 +88,35 @@ final class ScienceBaseBrowserSession implements UsgsMineralCommodityStatsProvid
   }
 
   @Override public String fetchText(String url) throws IOException {
-    return call(url, false).path("text").asText();
-  }
-
-  /** The whole file is held in memory: the helper replies with one JSON line per request. */
-  @Override public byte[] fetchBytes(String url) throws IOException {
-    return Base64.getDecoder().decode(call(url, true).path("base64").asText());
-  }
-
-  private synchronized JsonNode call(String url, boolean binary) throws IOException {
     ObjectNode req = MAPPER.createObjectNode();
     req.put("url", url);
-    req.put("binary", binary);
+    return call(req, url).path("text").asText();
+  }
+
+  /** The helper writes the body to a temporary file, which is removed when the stream closes. */
+  @Override public InputStream openStream(String url) throws IOException {
+    File file = File.createTempFile("sciencebase-", ".download");
+    boolean opened = false;
+    try {
+      ObjectNode req = MAPPER.createObjectNode();
+      req.put("url", url);
+      req.put("toFile", file.getAbsolutePath());
+      long reported = call(req, url).path("bytes").asLong(-1L);
+      if (reported <= 0L || reported != file.length()) {
+        throw new IOException(LABEL + ": incomplete download of " + url + ": helper reported "
+            + reported + " bytes, file holds " + file.length());
+      }
+      InputStream in = Files.newInputStream(file.toPath(), StandardOpenOption.DELETE_ON_CLOSE);
+      opened = true;
+      return in;
+    } finally {
+      if (!opened) {
+        Files.deleteIfExists(file.toPath());
+      }
+    }
+  }
+
+  private JsonNode call(ObjectNode req, String url) throws IOException {
     JsonNode reply = helper.call(req);
     if (reply.path("status").asInt() != 200) {
       throw new IOException(LABEL + ": HTTP " + reply.path("status").asInt() + " for " + url);

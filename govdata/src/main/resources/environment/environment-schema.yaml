@@ -2801,8 +2801,9 @@ partitionedTables:
     # separate per-category ScienceBase items with no combined county file and no predictable
     # URL, so a new dimension value cannot be added mechanically. See kenstott/govdata-ops#340.
     # Freshness gate: ScienceBase serves Last-Modified stamped to request time (verified live
-    # 2026-09-21, not the file's real mtime) and no ETag, so this hashes the response body
-    # post-fetch to skip the materialize/commit when unchanged (fails open).
+    # 2026-09-21, not the file's real mtime) and no ETag, so this hashes the fetched rows to skip
+    # the materialize/commit when unchanged. The file URL identifies its content, so the provider
+    # serves it from the raw cache once fetched.
     dataset_type: snapshot
     freshness:
       type: hash
@@ -3012,8 +3013,18 @@ partitionedTables:
       # Stable ScienceBase file-download URL for usco2015v2.0.csv within item 5af3311be4b0da30c1b245d8
       # (resolved from the citable DOI https://doi.org/10.5066/F7TB15V5, verified live 2026-09-21).
       # No {year}/dimension templating: this is the one usable all-sector single-file vintage.
+      # www.sciencebase.gov answers a Cloudflare challenge (HTTP 403) to non-browser clients, so
+      # the provider downloads the file through a headed browser session configured by the
+      # parameters below. Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY); when the
+      # browser cannot start the table fails, naming the cause.
       url: "https://www.sciencebase.gov/catalog/file/get/5af3311be4b0da30c1b245d8?f=__disk__eb%2F74%2Feb%2Feb74ebb41169c76aaf374990bd5a71cac82604c1"
       method: GET
+      parameters:
+        browserScript: "${SSA_BROWSER_SCRIPT:}"
+        browserNodeCommand: "${SSA_NODE_COMMAND:node}"
+        browserChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        browserRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        browserEntryPageUrl: "https://www.sciencebase.gov/catalog/item/5af3311be4b0da30c1b245d8?format=json&fields=files"
       response:
         format: text
       rateLimit:
@@ -3027,6 +3038,7 @@ partitionedTables:
       # format: text (not csv) — the CSV's real header is on line 2 (line 1 is a citation
       # string), so the built-in CSV parser would misparse it. The transformer locates the
       # header by content and reduces ~140 raw sector columns to this table's columns.
+      dataProvider: "org.apache.calcite.adapter.govdata.environment.UsgsWaterUseCountyProvider"
       responseTransformer: "org.apache.calcite.adapter.govdata.environment.UsgsWaterUseCountyTransformer"
 
     materialize:
