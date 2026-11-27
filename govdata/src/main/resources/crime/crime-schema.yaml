@@ -2379,6 +2379,8 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
+        # Keyed on the variables that select the paginated response; the cache holds the merged pages.
+        keyVars: [endpoint_id, year]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer"
