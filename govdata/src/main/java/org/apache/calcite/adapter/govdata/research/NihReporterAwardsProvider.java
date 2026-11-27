@@ -51,6 +51,11 @@ import java.util.Set;
  */
 public class NihReporterAwardsProvider implements CachingDataProvider {
 
+  /** The table's {@code refresh_month} dimension puts each calendar month in its own directory. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
+
   private static final Logger LOGGER = LoggerFactory.getLogger(NihReporterAwardsProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String ENDPOINT = "https://api.reporter.nih.gov/v2/projects/search";

@@ -55,6 +55,11 @@ import java.util.Map;
  */
 public class OpmFederalWorkforceProvider implements CachingDataProvider {
 
+  /** The URL names the release version, which is looked up uncached on every fetch. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
+
   private static final Logger LOGGER = LoggerFactory.getLogger(OpmFederalWorkforceProvider.class);
   private static final String BASE = "https://data.opm.gov/api/v1/files/employment";
   private static final int MAX_ATTEMPTS = 3;

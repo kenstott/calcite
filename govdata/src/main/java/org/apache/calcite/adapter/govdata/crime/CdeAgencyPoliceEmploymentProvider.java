@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
+import org.apache.calcite.adapter.govdata.MonthlyCacheKey;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +67,11 @@ import java.util.Map;
  */
 public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
 
+  /** Keys carry the calendar month: a state-year is one API call per agency. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
+
   private static final Logger LOGGER =
       LoggerFactory.getLogger(CdeAgencyPoliceEmploymentProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -95,7 +101,7 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
     }
 
     // Step 1: list agencies for this state (fresh fetch per (state, year) combo — cheap, one
-    // call, and the cache key includes the year so a lookback re-fetch is a raw-cache hit).
+    // call, with the year in the cache key so each year holds its own copy).
     long intervalMs = requestIntervalMs(config);
     Map<String, AgencyInfo> agencies =
         fetchAgencies(stateAbbr, apiKey, year, rawCache, intervalMs);
@@ -123,7 +129,7 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
   private Map<String, AgencyInfo> fetchAgencies(String state, String apiKey, String year,
       RawCache rawCache, long intervalMs) throws IOException {
     String url = AGENCIES_ENDPOINT + state + "?API_KEY=" + apiKey;
-    String cacheKey = url + "#year=" + year;
+    String cacheKey = MonthlyCacheKey.of(url + "#year=" + year);
     JsonNode root;
     try (InputStream in = rawCache.openStream(cacheKey, () -> rawGet(url, intervalMs))) {
       root = MAPPER.readTree(in);
@@ -160,7 +166,8 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
       String year, RawCache rawCache, long intervalMs) throws IOException {
     String url = PE_AGENCY_ENDPOINT + ori + "?from=" + year + "&to=" + year;
     JsonNode root;
-    try (InputStream in = rawCache.openStream(url, () -> rawGet(url, intervalMs))) {
+    try (InputStream in = rawCache.openStream(MonthlyCacheKey.of(url),
+        () -> rawGet(url, intervalMs))) {
       root = MAPPER.readTree(in);
     }
     JsonNode actuals = root.path("actuals");

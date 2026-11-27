@@ -54,6 +54,11 @@ import java.util.zip.ZipInputStream;
  */
 public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
 
+  /** Keys carry the calendar month: a fiscal year is one generated download per period. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
+
   private static final Logger LOGGER =
       LoggerFactory.getLogger(UsaSpendingAccountBalancesProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
