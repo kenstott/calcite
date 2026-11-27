@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Tag("unit")
-class UsgsWaterUseFileProviderTest {
+class UsgsWaterUseCountyProviderTest {
 
   private static final String URL = "https://www.sciencebase.gov/catalog/file/get/abc?f=x";
 
@@ -49,9 +49,9 @@ class UsgsWaterUseFileProviderTest {
         .build();
   }
 
-  private static UsgsWaterUseFileProvider provider(final List<String> requested,
+  private static UsgsWaterUseCountyProvider provider(final List<String> requested,
       final String body) {
-    return new UsgsWaterUseFileProvider(p -> new ScienceBaseClient() {
+    return new UsgsWaterUseCountyProvider(p -> new ScienceBaseClient() {
       @Override public String fetchText(String url) {
         throw new AssertionError("no text resource expected: " + url);
       }
@@ -85,6 +85,6 @@ class UsgsWaterUseFileProviderTest {
         assertThrows(IOException.class, () ->
             provider(new ArrayList<String>(), "<html>Just a moment...</html>").fetch(config(),
                 Collections.<String, String>emptyMap(), RawCache.passthrough()));
-    assertEquals("USGS water use: no county rows parsed from " + URL, e.getMessage());
+    assertEquals("USGS county water use: no county rows parsed from " + URL, e.getMessage());
   }
 }
