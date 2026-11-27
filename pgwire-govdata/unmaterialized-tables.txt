@@ -12,6 +12,7 @@ census.acs_rent_burden_by_income
 census.pep_population_estimates
 disasters.fema_firm_panels
 disasters.fema_nfhl_lomrs
+disasters.usgs_seismic_hazard_by_county
 econ.business_formation_statistics
 econ.federal_budget_authority_by_function
 econ.national_industry_employment
