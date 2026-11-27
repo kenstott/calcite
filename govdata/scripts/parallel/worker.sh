@@ -203,64 +203,8 @@ fi
 # snapshot/full-archive table for the single :once slot. Query-time views live under
 # `views:` rather than `partitionedTables`, so they are excluded automatically.
 #
-# Year tables whose source is the HUD API (`huduser.gov/hudapi`) form a third group, `serial`,
-# for the schemas in SERIAL_SCHEMAS. Every request to that API draws on one shared token and
-# rate limit, so running them once per year slot in parallel gives no extra throughput: the
-# workers throttle each other (HTTP 429/5xx retries) while each holds a full memory slot. The
-# serial slot runs them in one worker, years in sequence. Adding a schema to SERIAL_SCHEMAS
-# also needs a `hcy_enqueue <schema> serial` line in run-pool.sh, or its serial tables never run.
-SERIAL_SCHEMAS="housing"
-_schema_table_split() {   # <schema> <year|once|serial> → JSON-quoted, comma-separated list
-  local schema="$1" kind="$2" jar resource
-  jar=$(resolve_classpath) || return 1
-  resource=$(schema_yaml_resource "$schema")
-  python3 - "$jar" "$schema" "$kind" "$resource" "$SERIAL_SCHEMAS" <<'PY'
-import subprocess, sys
-try:
-    import yaml
-except ImportError:
-    sys.stderr.write("ERROR: PyYAML required to derive the ETL table split\n")
-    sys.exit(1)
-
-jar, schema, kind, resource = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-serial_schemas = sys.argv[5].split()
-res = subprocess.run(["unzip", "-p", jar, resource], capture_output=True)
-if res.returncode != 0 or not res.stdout:
-    sys.stderr.write("ERROR: %s not found in %s\n" % (resource, jar))
-    sys.exit(1)
-
-doc = yaml.safe_load(res.stdout) or {}
-names = []
-for t in doc.get("partitionedTables") or []:
-    name = t.get("name")
-    if not name:
-        continue
-    dims = t.get("dimensions") or {}
-    has_year = "year" in dims
-    serial = has_year and schema in serial_schemas \
-        and "huduser.gov/hudapi/" in ((t.get("source") or {}).get("url") or "")
-    if kind == "once":
-        keep = not has_year
-    elif kind == "year":
-        keep = has_year and not serial
-    elif kind == "serial":
-        keep = serial
-    else:
-        sys.stderr.write("ERROR: unknown table-split kind '%s'\n" % kind)
-        sys.exit(1)
-    if keep:
-        names.append(name)
-
-# Fail loudly rather than emitting an empty set: an empty enabledTables would scope the
-# worker to nothing and "succeed", which is the exact silent-skip this change removes.
-if not names:
-    sys.stderr.write("ERROR: no '%s' tables derived for schema '%s'\n" % (kind, schema))
-    sys.exit(1)
-
-print(",".join('"%s"' % n for n in names))
-PY
-}
-
+# Year tables sharing one rate-limited API form a third group, `serial` (SERIAL_SCHEMAS and
+# _schema_table_split, common.sh).
 _split_year_tables() {   # year-addressable base tables → per-year slots
   _schema_table_split "$1" year
 }

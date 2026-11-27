@@ -1969,6 +1969,64 @@ print(",".join(names))
 PY
 }
 
+# Year tables whose source is the HUD API (`huduser.gov/hudapi`) form a third group, `serial`,
+# for the schemas in SERIAL_SCHEMAS. Every request to that API draws on one shared token and
+# rate limit, so running them once per year slot in parallel gives no extra throughput: the
+# workers throttle each other (HTTP 429/5xx retries) while each holds a full memory slot. The
+# serial slot runs them in one worker, years in sequence. Adding a schema to SERIAL_SCHEMAS
+# also needs a `hcy_enqueue <schema> serial` line in run-pool.sh, or its serial tables never run.
+SERIAL_SCHEMAS="housing"
+_schema_table_split() {   # <schema> <year|once|serial> → JSON-quoted, comma-separated list
+  local schema="$1" kind="$2" jar resource
+  jar=$(resolve_classpath) || return 1
+  resource=$(schema_yaml_resource "$schema")
+  python3 - "$jar" "$schema" "$kind" "$resource" "$SERIAL_SCHEMAS" <<'PY'
+import subprocess, sys
+try:
+    import yaml
+except ImportError:
+    sys.stderr.write("ERROR: PyYAML required to derive the ETL table split\n")
+    sys.exit(1)
+
+jar, schema, kind, resource = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+serial_schemas = sys.argv[5].split()
+res = subprocess.run(["unzip", "-p", jar, resource], capture_output=True)
+if res.returncode != 0 or not res.stdout:
+    sys.stderr.write("ERROR: %s not found in %s\n" % (resource, jar))
+    sys.exit(1)
+
+doc = yaml.safe_load(res.stdout) or {}
+names = []
+for t in doc.get("partitionedTables") or []:
+    name = t.get("name")
+    if not name:
+        continue
+    dims = t.get("dimensions") or {}
+    has_year = "year" in dims
+    serial = has_year and schema in serial_schemas \
+        and "huduser.gov/hudapi/" in ((t.get("source") or {}).get("url") or "")
+    if kind == "once":
+        keep = not has_year
+    elif kind == "year":
+        keep = has_year and not serial
+    elif kind == "serial":
+        keep = serial
+    else:
+        sys.stderr.write("ERROR: unknown table-split kind '%s'\n" % kind)
+        sys.exit(1)
+    if keep:
+        names.append(name)
+
+# Fail loudly rather than emitting an empty set: an empty enabledTables would scope the
+# worker to nothing and "succeed", which is the exact silent-skip this change removes.
+if not names:
+    sys.stderr.write("ERROR: no '%s' tables derived for schema '%s'\n" % (kind, schema))
+    sys.exit(1)
+
+print(",".join('"%s"' % n for n in names))
+PY
+}
+
 # Diffs a schema's real table list (from schema_tables) against the union of a bespoke worker's
 # hand-maintained groups, and echoes the tables present in the schema but assigned to none of
 # them. Empty output means full coverage. Each remaining arg is one "<label>|<comma-separated
@@ -2300,10 +2358,53 @@ _schemas_write_same_tables() {
   return 1
 }
 
+# Usage: _pid_table_scope <pid>  -> echoes the GOVDATA_TABLES a live worker was started with (empty
+# when unscoped). Returns 1 when its environment cannot be read.
+_pid_table_scope() {
+  local _env="/proc/$1/environ"
+  [ -r "$_env" ] || return 1
+  tr '\0' '\n' < "$_env" | sed -n 's/^GOVDATA_TABLES=//p'
+}
+
+# Usage: _scope_within_mode_group <schema> <mode> <table_scope>
+# A GOVDATA_TABLES scope replaces a slot's own table set. Returns 0 if the slot still writes only its
+# side of the serial split: serial tables only for a `serial` slot, none of them for a year or :once
+# slot. An empty scope leaves the slot's own set in place. Returns 1 otherwise, or if the serial set
+# cannot be derived.
+_scope_within_mode_group() {
+  local _schema=$1 _mode=$2 _scope=$3 _serial _t _in_serial
+  [ -n "$_scope" ] || return 0
+  _serial=$(_schema_table_split "$_schema" serial) || return 1
+  _serial=",${_serial//\"/},"
+  local -a _scope_arr
+  IFS=',' read -ra _scope_arr <<< "$_scope"
+  for _t in "${_scope_arr[@]}"; do
+    _t="$(echo "$_t" | xargs)"
+    [ -n "$_t" ] || continue
+    _in_serial=false
+    [[ "$_serial" == *",${_t},"* ]] && _in_serial=true
+    if [ "$_mode" = serial ]; then
+      $_in_serial || return 1
+    else
+      ! $_in_serial || return 1
+    fi
+  done
+  return 0
+}
+
+# Usage: _serial_split_pair <mode_a> <mode_b>  -> 0 when one is `serial` and the other a year, a year
+# range or `once`.
+_serial_split_pair() {
+  local _slot='^([0-9]{4}(-[0-9]{4})?|once)$'
+  { [ "$1" = serial ] && [[ "$2" =~ $_slot ]]; } || { [ "$2" = serial ] && [[ "$1" =~ $_slot ]]; }
+}
+
 # Usage: check_schema_year_conflict <pid_dir> <schema> <start_year> <end_year> [<mode>]
 # The optional mode lets a `serial` worker (the year tables that share one rate-limited API) run
 # beside the year and :once slots of its schema: those slots skip the serial tables, so the two
-# never write the same table. Without it every keyword mode spans all years, as before.
+# never write the same table. That holds only while each side's table scope (GOVDATA_TABLES: this
+# shell's for the new slot, the process environment for the running one) stays on its own side of the
+# split; otherwise the overlap is refused. Without a mode every keyword mode spans all years.
 # Returns 1 (and prints a message to stderr) if a live worker registered under
 # <pid_dir> already targets the same schema with an overlapping year range; 0 otherwise.
 #
@@ -2325,7 +2426,7 @@ _schemas_write_same_tables() {
 check_schema_year_conflict() {
   local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4 _new_mode=${5:-}
   [ -d "$_pid_dir" ] || return 0
-  local _pf _id _id_base _wpid _rest _other_schema _other_mode _o_start _o_end _lock_h
+  local _pf _id _id_base _wpid _rest _other_schema _other_mode _other_scope _o_start _o_end _lock_h
   if ! target_is_dq_bucket && _lock_h=$(schema_lock_holder "$(schema_lock_dir "$_pid_dir")" "$_schema"); then
     echo "REFUSING: schema '${_schema}' is write-locked by a live remediation pass (pid ${_lock_h%% *}," \
          "$(echo "$_lock_h" | cut -d' ' -f2)) -- held for the whole pass; retry after it ends." >&2
@@ -2355,13 +2456,11 @@ check_schema_year_conflict() {
     _other_mode="${_rest#*-}"                          # after first hyphen (may itself have hyphens)
     read -r _o_start _o_end <<< "$(_year_range_from_mode "$_other_mode")"
     _schemas_write_same_tables "$_other_schema" "$_schema" || continue
-    if [ "$_other_schema" = "$_schema" ]; then
-      if [ "$_new_mode" = serial ] && [[ "$_other_mode" =~ ^([0-9]{4}(-[0-9]{4})?|once)$ ]]; then
-        continue
-      fi
-      if [ "$_other_mode" = serial ] && [[ "$_new_mode" =~ ^([0-9]{4}(-[0-9]{4})?|once)$ ]]; then
-        continue
-      fi
+    if [ "$_other_schema" = "$_schema" ] && _serial_split_pair "$_new_mode" "$_other_mode" \
+        && _scope_within_mode_group "$_schema" "$_new_mode" "${GOVDATA_TABLES:-}" \
+        && _other_scope=$(_pid_table_scope "$_wpid") \
+        && _scope_within_mode_group "$_schema" "$_other_mode" "$_other_scope"; then
+      continue
     fi
     if (( _o_start <= _new_end && _new_start <= _o_end )); then
       echo "REFUSING: schema '${_schema}' years ${_new_start}-${_new_end} overlaps" \
