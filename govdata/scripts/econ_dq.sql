@@ -55,6 +55,9 @@ INSERT INTO dq_existence_counts SELECT 'county_qcew',          (SELECT COUNT(*) 
 INSERT INTO dq_existence_counts SELECT 'county_wages',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',         allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'jolts_regional',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',       allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'jolts_state',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',          allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'county_unemployment', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'metro_unemployment', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'laus_areas', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'wage_growth',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',          allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'osha_inspections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 1) t);
@@ -121,6 +124,10 @@ INSERT INTO dq_row_count_counts SELECT 'county_qcew',           (SELECT COUNT(*)
 INSERT INTO dq_row_count_counts SELECT 'county_wages',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',          allow_moved_paths := true)), 10000;
 INSERT INTO dq_row_count_counts SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 0;
 INSERT INTO dq_row_count_counts SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 0;
+  -- LAUS bulk files carry full history from 1990: ~3,200 counties and ~395 metros x 4 measures
+INSERT INTO dq_row_count_counts SELECT 'county_unemployment', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true)), 6000000;
+INSERT INTO dq_row_count_counts SELECT 'metro_unemployment', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true)), 700000;
+INSERT INTO dq_row_count_counts SELECT 'laus_areas', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true)), 3500;
 INSERT INTO dq_row_count_counts SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 10;  -- recalibrated: BLS wage_growth yields ~15 rows for the DQ window; 50 was prod-scale
 INSERT INTO dq_row_count_counts SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000;  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
 INSERT INTO dq_row_count_counts SELECT 'osha_inspections',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true)), 200000;  -- ~30-40k inspections/yr over 2019 onward; DQ run may cover fewer years
@@ -197,6 +204,9 @@ SELECT 'county_qcew'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'county_wages'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_wages',           allow_moved_paths := true) LIMIT 1;
 SELECT 'jolts_regional'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',         allow_moved_paths := true) LIMIT 1;
 SELECT 'jolts_state'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',            allow_moved_paths := true) LIMIT 1;
+SELECT 'county_unemployment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true) LIMIT 1;
+SELECT 'metro_unemployment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true) LIMIT 1;
+SELECT 'laus_areas' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true) LIMIT 1;
 SELECT 'wage_growth'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',            allow_moved_paths := true) LIMIT 1;
 SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_cola'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1;
@@ -3261,3 +3271,139 @@ FROM (
          (SELECT COUNT(*) FROM sh a JOIN sh b ON a.year = b.year AND a.industry_code = '334' AND b.industry_code = '5412OP' WHERE a.share > b.share) AS hi_ok
   FROM sh
 );
+
+-- ============================================================================
+-- BLS Local Area Unemployment Statistics (county, metro, area names)
+-- ============================================================================
+INSERT INTO dq_results
+SELECT 'econ', 'county_unemployment', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+INSERT INTO dq_results
+SELECT 'econ', 'county_unemployment', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'year');
+INSERT INTO dq_results
+SELECT 'econ', 'metro_unemployment', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+INSERT INTO dq_results
+SELECT 'econ', 'metro_unemployment', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'year');
+INSERT INTO dq_results
+SELECT 'econ', 'laus_areas', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+INSERT INTO dq_results
+SELECT 'econ', 'laus_areas', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'frequency', 'year');
+INSERT INTO dq_results
+SELECT 'econ', 'county_unemployment', 'pk_duplicates', 'fail', 'series,year,period', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, year, period FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'metro_unemployment', 'pk_duplicates', 'fail', 'series,year,period', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT series, year, period FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'laus_areas', 'pk_duplicates', 'fail', 'area_code', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT area_code FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'county_unemployment', 'expected_values', 'fail',
+  CAST(COUNT(*) AS VARCHAR) || ' bad rows', '0 bad rows',
+  'NULL key column, malformed FIPS/CBSA, unknown measure, negative value or rate above 100'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true)
+WHERE series IS NULL OR year IS NULL OR period IS NULL OR preliminary IS NULL
+   OR county_fips IS NULL OR NOT regexp_full_match(county_fips, '[0-9]{5}')
+   OR measure NOT IN ('unemployment_rate', 'unemployment', 'employment', 'labor_force')
+   OR value < 0 OR (measure = 'unemployment_rate' AND value > 100)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'county_unemployment', 'labor_force_identity',
+  CASE WHEN checked > 0 AND bad <= checked * 0.001 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR) || ' of ' || CAST(checked AS VARCHAR) || ' area-periods disagree', '<= 0.1%',
+  'labor_force = employment + unemployment and the published rate = 100 * unemployment / labor_force'
+FROM (
+  SELECT COUNT(*) AS checked,
+         COUNT(*) FILTER (WHERE ABS(lf - emp - unemp) > 2 OR ABS(rate - 100.0 * unemp / NULLIF(lf, 0)) > 0.11) AS bad
+  FROM (
+    SELECT area_code, year, period,
+           MAX(value) FILTER (WHERE measure = 'labor_force') AS lf,
+           MAX(value) FILTER (WHERE measure = 'employment') AS emp,
+           MAX(value) FILTER (WHERE measure = 'unemployment') AS unemp,
+           MAX(value) FILTER (WHERE measure = 'unemployment_rate') AS rate
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true)
+    GROUP BY ALL
+  )
+  WHERE lf IS NOT NULL AND emp IS NOT NULL AND unemp IS NOT NULL AND rate IS NOT NULL
+);
+INSERT INTO dq_results
+SELECT 'econ', 'county_unemployment', 'area_name_coverage', 'fail',
+  CAST(COUNT(DISTINCT f.area_code) AS VARCHAR) || ' areas without a name', '0 areas',
+  'every area_code must resolve in laus_areas'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true) f
+LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true) a ON a.area_code = f.area_code
+WHERE a.area_name IS NULL
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'county_unemployment', 'recency', CASE WHEN MAX(year) >= YEAR(CURRENT_DATE) - 1 THEN 'pass' ELSE 'fail' END,
+  CAST(MIN(year) AS VARCHAR) || '-' || CAST(MAX(year) AS VARCHAR), 'latest year >= current year - 1',
+  'monthly release, about one month behind'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/county_unemployment', allow_moved_paths := true);
+INSERT INTO dq_results
+SELECT 'econ', 'metro_unemployment', 'expected_values', 'fail',
+  CAST(COUNT(*) AS VARCHAR) || ' bad rows', '0 bad rows',
+  'NULL key column, malformed FIPS/CBSA, unknown measure, negative value or rate above 100'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true)
+WHERE series IS NULL OR year IS NULL OR period IS NULL OR preliminary IS NULL
+   OR cbsa_code IS NULL OR NOT regexp_full_match(cbsa_code, '[0-9]{5}')
+   OR measure NOT IN ('unemployment_rate', 'unemployment', 'employment', 'labor_force')
+   OR value < 0 OR (measure = 'unemployment_rate' AND value > 100)
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'metro_unemployment', 'labor_force_identity',
+  CASE WHEN checked > 0 AND bad <= checked * 0.001 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR) || ' of ' || CAST(checked AS VARCHAR) || ' area-periods disagree', '<= 0.1%',
+  'labor_force = employment + unemployment and the published rate = 100 * unemployment / labor_force'
+FROM (
+  SELECT COUNT(*) AS checked,
+         COUNT(*) FILTER (WHERE ABS(lf - emp - unemp) > 2 OR ABS(rate - 100.0 * unemp / NULLIF(lf, 0)) > 0.11) AS bad
+  FROM (
+    SELECT area_code, year, period,
+           MAX(value) FILTER (WHERE measure = 'labor_force') AS lf,
+           MAX(value) FILTER (WHERE measure = 'employment') AS emp,
+           MAX(value) FILTER (WHERE measure = 'unemployment') AS unemp,
+           MAX(value) FILTER (WHERE measure = 'unemployment_rate') AS rate
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true)
+    GROUP BY ALL
+  )
+  WHERE lf IS NOT NULL AND emp IS NOT NULL AND unemp IS NOT NULL AND rate IS NOT NULL
+);
+INSERT INTO dq_results
+SELECT 'econ', 'metro_unemployment', 'area_name_coverage', 'fail',
+  CAST(COUNT(DISTINCT f.area_code) AS VARCHAR) || ' areas without a name', '0 areas',
+  'every area_code must resolve in laus_areas'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true) f
+LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/laus_areas', allow_moved_paths := true) a ON a.area_code = f.area_code
+WHERE a.area_name IS NULL
+HAVING COUNT(*) > 0;
+INSERT INTO dq_results
+SELECT 'econ', 'metro_unemployment', 'recency', CASE WHEN MAX(year) >= YEAR(CURRENT_DATE) - 1 THEN 'pass' ELSE 'fail' END,
+  CAST(MIN(year) AS VARCHAR) || '-' || CAST(MAX(year) AS VARCHAR), 'latest year >= current year - 1',
+  'monthly release, about one month behind'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/metro_unemployment', allow_moved_paths := true);

@@ -48,7 +48,8 @@ public class EconSchemaFactory implements GovDataSubSchemaFactory {
       "food_cpi", "regional_food_cpi", "metro_food_cpi", "average_prices",
       "state_industry", "state_wages", "national_wages", "national_industry_employment", "metro_industry", "metro_wages",
       "county_qcew", "county_wages", "jolts_regional", "jolts_state", "jolts_industry",
-      "wage_growth", "regional_employment"));
+      "wage_growth", "regional_employment",
+      "county_unemployment", "metro_unemployment", "laus_areas"));
 
   private static final Set<String> TREASURY_TABLES =
       new HashSet<>(Arrays.asList("treasury_yields", "federal_debt"));
