@@ -19,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,7 +59,7 @@ class FreshnessSkipGateTest {
    * round-trips. All other operations delegate to the same no-op semantics as
    * {@link IncrementalTracker#NOOP} so the pipeline can run to completion.
    */
-  static final class MemoryFreshnessTracker implements IncrementalTracker {
+  static class MemoryFreshnessTracker implements IncrementalTracker {
 
     private final Map<String, String> freshnessTokens = new ConcurrentHashMap<String, String>();
 
@@ -133,6 +135,28 @@ class FreshnessSkipGateTest {
 
     @Override public void clearAllCompletions() {
       // no-op
+    }
+  }
+
+  /** A freshness tracker that also remembers which combinations were processed. */
+  static final class MemoryComboTracker extends MemoryFreshnessTracker {
+    private final Set<Map<String, String>> processed =
+        ConcurrentHashMap.<Map<String, String>>newKeySet();
+
+    @Override public void markProcessed(String alternateName, String sourceTable,
+        Map<String, String> keyValues, String targetPattern) {
+      processed.add(new HashMap<String, String>(keyValues));
+    }
+
+    @Override public Set<Integer> filterUnprocessed(String alternateName, String sourceTable,
+        List<Map<String, String>> allCombinations) {
+      Set<Integer> pending = new HashSet<Integer>();
+      for (int i = 0; i < allCombinations.size(); i++) {
+        if (!processed.contains(allCombinations.get(i))) {
+          pending.add(i);
+        }
+      }
+      return pending;
     }
   }
 
@@ -699,6 +723,125 @@ class FreshnessSkipGateTest {
     assertEquals(Collections.singletonList("2023"), writer2.writtenYears,
         "The rewritten year must be 2023 (the changed one), not 2024 (unchanged, must stay "
             + "skipped) — proves the hash-changed branch fires per-unit, not table-wide");
+  }
+
+  private static HttpSource.ProbeResult etag(String value) {
+    return new HttpSource.ProbeResult(Collections.singletonMap("ETag", value), null);
+  }
+
+  /** Runs a period table whose probe URL is fixed and returns the years it wrote. */
+  private List<String> runFixedProbe(EtlPipelineConfig config, IncrementalTracker tracker,
+      String token) throws IOException {
+    CountingDataWriter writer = new CountingDataWriter();
+    new StubProbePipeline(config, new LocalFileStorageProvider(), tempDir.toString(), tracker,
+        new CountingDataProvider(Collections.singletonList(
+            Collections.<String, Object>singletonMap("id", 1))),
+        writer,
+        new StubHttpSource(HttpSourceConfig.builder().url("https://example.invalid/api").build(),
+            etag(token))).execute();
+    Collections.sort(writer.writtenYears);
+    return writer.writtenYears;
+  }
+
+  private EtlPipelineConfig fixedProbeConfig(int startYear, int endYear,
+      String partitionColumn) {
+    EtlPipelineConfig base = buildPeriodConfig(FreshnessConfig.fromMap(
+        Collections.<String, Object>singletonMap("type", "etag")), startYear, endYear);
+    return EtlPipelineConfig.builder()
+        .name(base.getName())
+        .source(HttpSourceConfig.builder().url("https://example.invalid/api").build())
+        .dimensions(base.getDimensions())
+        .materialize(MaterializeConfig.builder()
+            .format(MaterializeConfig.Format.PARQUET)
+            .partition(MaterializePartitionConfig.builder()
+                .columns(Collections.singletonList(partitionColumn))
+                .build())
+            .output(MaterializeOutputConfig.builder().location(tempDir.toString()).build())
+            .build())
+        .freshness(base.getFreshness())
+        .build();
+  }
+
+  /**
+   * A run over a wider year range, against an unchanged fixed-URL source, loads the years the
+   * narrower run never fetched and only those. Once loaded, the same run skips.
+   */
+  @Test void testUnchangedSourceStillLoadsNeverFetchedYears() throws IOException {
+    MemoryComboTracker tracker = new MemoryComboTracker();
+
+    assertEquals(Collections.singletonList("2024"),
+        runFixedProbe(fixedProbeConfig(2024, 2024, "year"), tracker, "v1"));
+    assertEquals(Arrays.asList("2022", "2023"),
+        runFixedProbe(fixedProbeConfig(2022, 2024, "year"), tracker, "v1"));
+    assertEquals(Collections.emptyList(),
+        runFixedProbe(fixedProbeConfig(2022, 2024, "year"), tracker, "v1"));
+  }
+
+  /**
+   * A narrower run that saw a new source version stores the pipeline token; a wider run must not
+   * take that as proof its other pending years were fetched from that version.
+   */
+  @Test void testPendingYearFetchedFromOlderVersionIsRefetched() throws IOException {
+    MemoryComboTracker tracker = new MemoryComboTracker();
+    runFixedProbe(fixedProbeConfig(2022, 2024, "year"), tracker, "v1");
+    tracker.processed.clear();
+    runFixedProbe(fixedProbeConfig(2024, 2024, "year"), tracker, "v2");
+
+    assertEquals(Arrays.asList("2022", "2023"),
+        runFixedProbe(fixedProbeConfig(2022, 2024, "year"), tracker, "v2"));
+  }
+
+  /**
+   * Where a partition holds several fetch units, loading a never-fetched one rewrites the units
+   * already in that partition too, or replace-partitions would drop them.
+   */
+  @Test void testNewUnitInPartitionRewritesItsSiblings() throws IOException {
+    MemoryComboTracker tracker = new MemoryComboTracker();
+    // Committed data must be visible, or each run would reprocess everything regardless.
+    Files.createDirectories(tempDir.resolve("freshness_test_pipeline").resolve("data"));
+    assertEquals(Collections.singletonList("2024"),
+        runFixedProbe(siblingConfig("budget_authority"), tracker, "v1"));
+
+    assertEquals(Arrays.asList("2024", "2024"),
+        runFixedProbe(siblingConfig("budget_authority", "outlays"), tracker, "v1"));
+  }
+
+  private EtlPipelineConfig siblingConfig(String... measures) {
+    EtlPipelineConfig base = fixedProbeConfig(2024, 2024, "year");
+    Map<String, DimensionConfig> dims =
+        new LinkedHashMap<String, DimensionConfig>(base.getDimensions());
+    dims.put("measure", DimensionConfig.builder()
+        .name("measure").type(DimensionType.LIST).values(Arrays.asList(measures)).build());
+    return EtlPipelineConfig.builder()
+        .name(base.getName())
+        .source(base.getSource())
+        .dimensions(dims)
+        .columns(Collections.singletonList(
+            ColumnConfig.builder().name("id").type("integer").build()))
+        .materialize(MaterializeConfig.builder()
+            .format(MaterializeConfig.Format.ICEBERG)
+            .targetTableId(base.getName())
+            .iceberg(MaterializeConfig.IcebergConfig.builder()
+                .warehousePath(tempDir.toString())
+                .overwritePartitions(true)
+                .build())
+            .partition(base.getMaterialize().getPartition())
+            .output(MaterializeOutputConfig.builder().location(tempDir.toString()).build())
+            .build())
+        .freshness(base.getFreshness())
+        .build();
+  }
+
+  /**
+   * Where the period is not in the partition key it stamps a snapshot, so a new period against an
+   * unchanged source has nothing to load.
+   */
+  @Test void testUnchangedSourceSkipsNewPeriodOutsidePartitionKey() throws IOException {
+    MemoryComboTracker tracker = new MemoryComboTracker();
+    runFixedProbe(fixedProbeConfig(2023, 2023, "type"), tracker, "v1");
+
+    assertEquals(Collections.emptyList(),
+        runFixedProbe(fixedProbeConfig(2024, 2024, "type"), tracker, "v1"));
   }
 
   /**

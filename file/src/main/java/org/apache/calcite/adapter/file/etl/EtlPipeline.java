@@ -124,6 +124,13 @@ public class EtlPipeline {
   private boolean freshnessSkipAllowed;
 
   /**
+   * True when this run passed an unchanged pipeline-level freshness gate to load unfetched periods
+   * into a table whose partitions hold several fetch units. Every dispatched unit must then be
+   * written: skipping the unchanged ones would replace a partition with a subset of its units.
+   */
+  private boolean partitionReloadRequired;
+
+  /**
    * Delta incremental bound for this run: the fetch variable name and the recovered watermark
    * value (prior committed freshness token). Set from the freshness probe when the source declares
    * {@code freshness.watermark_var}; consumed in {@link #processSingleBatch} to inject the bound
@@ -634,6 +641,14 @@ public class EtlPipeline {
         LOGGER.debug("Memory after_bulk_filter: {}", filterSnap);
       }
 
+      // What the per-period filter reports as pending, taken before the freshness deferral below
+      // widens it to every combination. The freshness gate may not skip a pending period that has
+      // never been fetched from the current source version.
+      Set<Integer> filterPendingIndices = !forceReprocessAll && hasPeriod
+          && !usePartitionedExpansion && !"snapshot".equals(config.getDatasetType())
+          ? new HashSet<Integer>(standardUnprocessedIndices)
+          : Collections.<Integer>emptySet();
+
       // A declared freshness gate outranks "every combination is already processed". That
       // conclusion is drawn from per-combo markers alone, and a table whose combos are constant
       // across runs (a snapshot pinned by a cache-buster dimension, say) can never reopen one — so
@@ -739,6 +754,7 @@ public class EtlPipeline {
       // per-unit probe in processSingleBatch (below) does the real check with the substituted
       // concrete URL for each fetch unit.
       boolean sourceUrlIsTemplated = isUrlTemplated(config.getSource(), freshnessConfig);
+      partitionReloadRequired = false;
       if (freshnessConfig != null
           && freshnessConfig.getType() != FreshnessConfig.Type.HASH
           && dataSource instanceof HttpSource
@@ -757,7 +773,14 @@ public class EtlPipeline {
           // freshness token would skip forever, leaving the table unscannable (DuckDB
           // "Could not guess Iceberg table version"). We still probe so the token is captured
           // and persisted after the commit, letting the NEXT run skip normally.
-          if (!forceReprocessAll && !FreshnessCheck.changed(previousToken, currentToken)) {
+          boolean unchanged = !FreshnessCheck.changed(previousToken, currentToken);
+          // The pipeline token says the source is the one last committed, not that this run's
+          // periods were loaded from it: a run over a narrower year range stores the same token.
+          int unfetchedUnits = !forceReprocessAll && unchanged
+              ? countUnfetchedPeriodUnits(config, pipelineName, combinations,
+                  filterPendingIndices, currentToken)
+              : 0;
+          if (!forceReprocessAll && unchanged && unfetchedUnits == 0) {
             long elapsed = System.currentTimeMillis() - startTime;
             LOGGER.info("Pipeline '{}': freshness check UNCHANGED (token={}) — skipping fetch "
                 + "and commit ({}ms)", pipelineName, currentToken, elapsed);
@@ -769,10 +792,15 @@ public class EtlPipeline {
                 .elapsedMs(elapsed)
                 .build();
           }
-          if (forceReprocessAll && !FreshnessCheck.changed(previousToken, currentToken)) {
+          if (forceReprocessAll && unchanged) {
             LOGGER.info("Pipeline '{}': freshness token unchanged but reprocessing (no committed "
                 + "data / cleared marker) — proceeding, will re-persist token={}",
                 pipelineName, currentToken);
+          } else if (unfetchedUnits > 0) {
+            LOGGER.info("Pipeline '{}': freshness token unchanged (token={}) but {} period unit(s) "
+                + "have not been fetched from this source version — proceeding", pipelineName,
+                currentToken, unfetchedUnits);
+            partitionReloadRequired = PartialPartitionGuard.applies(config);
           } else {
             LOGGER.info("Pipeline '{}': freshness check CHANGED (prev={}, cur={}) — proceeding",
                 pipelineName,
@@ -787,7 +815,9 @@ public class EtlPipeline {
           // the crawl pulls only records changed since the last commit. Skipped on a cold run
           // (no prior token) and under forceReprocessAll (full rebuild), which both full-pull.
           String wmVar = freshnessConfig.getWatermarkVar();
-          if (wmVar != null && !wmVar.isEmpty() && previousToken != null && !forceReprocessAll) {
+          // Periods never fetched need a full pull, not the records changed since the token.
+          if (wmVar != null && !wmVar.isEmpty() && previousToken != null && !forceReprocessAll
+              && unfetchedUnits == 0) {
             deltaBoundVar = wmVar;
             deltaBoundValue = previousToken;
             LOGGER.info("Pipeline '{}': delta bound {}={}", pipelineName, wmVar, previousToken);
@@ -2290,7 +2320,7 @@ public class EtlPipeline {
     // unchanged; otherwise the new token is captured for persistence after a clean commit.
     if (perUnitFreshnessEnabled && dataSource instanceof HttpSource) {
       FreshnessConfig freshnessConfig = config.getFreshness();
-      String unitKey = pipelineName + "::" + freshnessUnitKey(variables);
+      String unitKey = unitFreshnessTokenKey(pipelineName, variables);
       try {
         HttpSource.ProbeResult probeResult =
             ((HttpSource) dataSource).probe(freshnessConfig, variables);
@@ -2298,6 +2328,7 @@ public class EtlPipeline {
             freshnessConfig, probeResult.getHeaders(), probeResult.getBody(), null);
         String previousToken = incrementalTracker.getFreshnessToken(unitKey);
         if (freshnessSkipAllowed
+            && !partitionReloadRequired
             && previousToken != null
             && !FreshnessCheck.changed(previousToken, currentToken)) {
           LOGGER.info("Pipeline '{}': per-period freshness UNCHANGED for unit {} (token={}) — "
@@ -2409,7 +2440,7 @@ public class EtlPipeline {
     boolean hashTokenPerUnit = hashFreshnessActive && config.getLookbackPeriods() != null
         && PerUnitSkipSafety.isSafe(config);
     String hashTokenKey = hashTokenPerUnit
-        ? pipelineName + "::" + freshnessUnitKey(variables)
+        ? unitFreshnessTokenKey(pipelineName, variables)
         : pipelineName;
     // hashFreshnessToken is set if we computed a hash and must store it post-write
     String hashFreshnessToken = null;
@@ -2917,6 +2948,50 @@ public class EtlPipeline {
       sb.append(key).append('=').append(variables.get(key));
     }
     return sb.toString();
+  }
+
+  /** The tracker key holding one fetch unit's freshness token. */
+  private static String unitFreshnessTokenKey(String pipelineName, Map<String, String> variables) {
+    return pipelineName + "::" + freshnessUnitKey(variables);
+  }
+
+  /**
+   * Counts the pending fetch units whose own token is not {@code currentToken}: periods never
+   * fetched, or last fetched from an older source version. A unit that was fetched from this
+   * version and returned nothing holds the token and is not counted.
+   *
+   * <p>Only a table partitioned by a period dimension is considered. Where the period is not in the
+   * partition key it stamps a snapshot rather than selecting data, and an unchanged source has
+   * nothing further to load.
+   */
+  private int countUnfetchedPeriodUnits(EtlPipelineConfig config, String pipelineName,
+      List<Map<String, String>> combinations, Set<Integer> pending, String currentToken) {
+    if (pending.isEmpty() || !isPartitionedByPeriod(config)) {
+      return 0;
+    }
+    int unfetched = 0;
+    for (FetchUnit unit : buildFetchUnits(combinations, pending, config.getBackfillPeriod())) {
+      String unitToken = incrementalTracker.getFreshnessToken(
+          unitFreshnessTokenKey(pipelineName, unit.getFetchVariables()));
+      if (FreshnessCheck.changed(unitToken, currentToken)) {
+        unfetched++;
+      }
+    }
+    return unfetched;
+  }
+
+  /** True when a period dimension is part of the table's partition key. */
+  private static boolean isPartitionedByPeriod(EtlPipelineConfig config) {
+    Set<String> partitionVars = PerUnitSkipSafety.partitionVariables(config);
+    for (Map.Entry<String, DimensionConfig> e : config.getDimensions().entrySet()) {
+      DimensionType t = e.getValue().getType();
+      boolean period = t == DimensionType.YEAR_RANGE || CalendarPeriodProvider.isPeriodUnit(t)
+          || isPeriodDimensionName(e.getKey());
+      if (period && partitionVars.contains(e.getKey())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private void markCombosProcessed(FetchUnit fetchUnit, EtlPipelineConfig config,
