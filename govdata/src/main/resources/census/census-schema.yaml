@@ -4233,12 +4233,18 @@ partitionedTables:
       ACS bands are fixed by Census, so custom bands such as $45,000-74,999 cannot be rebuilt
       exactly. Geography: us, state, county (geography column); the us row has no state/county
       codes. Vintage = year (5-year window ends that year, published each December).
+      Coverage starts with vintage 2014: earlier vintages publish B25074 with a single
+      "35.0 percent or more" bracket, so the 30.0-49.9 and 50.0-or-more split does not exist.
       Owner equivalent tables are B25101/B25106 and are not in this table.
 
     dimensions:
       type:
         - acs
-      year: *acs_year_range
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2016          # B25074 split into 35.0-39.9 / 40.0-49.9 / 50.0+ (the variable set requested) from vintage 2014; minYear is a publish year (vintage + dataLag 2)
+        dataLag: 2
       geography:
         - us
         - state
