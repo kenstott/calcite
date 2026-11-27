@@ -55,6 +55,17 @@ class KeyedComputedDeltaTest {
     assertEquals(0L, run(keyed(), row("c", "2025-12-31T00:00:00Z")));
   }
 
+  @Test void refillsARecreatedTableWithoutFilteringAgainstTheDiscardedKeys() throws Exception {
+    assertEquals(2L, run(keyed(), row("a", "2026-01-01"), row("b", "2026-01-01")));
+
+    // A new partition column forces a drop-and-recreate; the source is unchanged.
+    EtlPipelineConfig repartitioned = config(
+        Collections.<String, Object>singletonMap("keyFields", Arrays.asList("id", "modified")),
+        Arrays.asList("type", "region"));
+    assertEquals(2L, run(repartitioned, row("a", "2026-01-01"), row("b", "2026-01-01")));
+    assertEquals(0L, run(repartitioned, row("a", "2026-01-01"), row("b", "2026-01-01")));
+  }
+
   @Test void appendsARepeatedSourceRowOnce() throws Exception {
     assertEquals(1L, run(keyed(), row("a", "2026-01-01"), row("a", "2026-01-01")));
   }
@@ -104,16 +115,25 @@ class KeyedComputedDeltaTest {
   }
 
   private EtlPipelineConfig config(Map<String, Object> incremental) {
-    List<ColumnConfig> columns = Arrays.asList(
-        ColumnConfig.builder().name("id").type("VARCHAR").source("Record.Id").build(),
-        ColumnConfig.builder().name("modified").type("VARCHAR").build(),
-        ColumnConfig.builder().name("type").type("VARCHAR").build());
+    return config(incremental, Collections.singletonList("type"));
+  }
+
+  private EtlPipelineConfig config(Map<String, Object> incremental,
+      List<String> partitionColumns) {
+    // Every partition column is a column of the table and a single-valued fetch dimension.
+    List<ColumnConfig> columns = new ArrayList<ColumnConfig>(
+        Arrays.asList(
+            ColumnConfig.builder().name("id").type("VARCHAR").source("Record.Id").build(),
+            ColumnConfig.builder().name("modified").type("VARCHAR").build()));
     Map<String, DimensionConfig> dims = new LinkedHashMap<String, DimensionConfig>();
-    dims.put("type", DimensionConfig.builder()
-        .name("type")
-        .type(DimensionType.LIST)
-        .values(Collections.singletonList("t"))
-        .build());
+    for (String partitionColumn : partitionColumns) {
+      columns.add(ColumnConfig.builder().name(partitionColumn).type("VARCHAR").build());
+      dims.put(partitionColumn, DimensionConfig.builder()
+          .name(partitionColumn)
+          .type(DimensionType.LIST)
+          .values(Collections.singletonList("t"))
+          .build());
+    }
     return EtlPipelineConfig.builder()
         .name(NAME)
         .datasetType("computed_delta")
@@ -131,7 +151,7 @@ class KeyedComputedDeltaTest {
             .output(MaterializeOutputConfig.builder().build())
             .columns(columns)
             .partition(MaterializePartitionConfig.builder()
-                .columns(Collections.singletonList("type"))
+                .columns(partitionColumns)
                 .build())
             .iceberg(MaterializeConfig.IcebergConfig.builder()
                 .catalogType(MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
