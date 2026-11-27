@@ -49,7 +49,7 @@ public class PatentWeeklyIssueResolver implements DimensionResolver {
         throw new IllegalStateException(
             "No PTBLXML file for issue date " + context.get("issue_date"));
       }
-      return Collections.singletonList(file);
+      return new ArrayList<String>(Collections.singletonList(file));
     }
     throw new IllegalArgumentException("Unknown dimension: " + dimensionName);
   }
