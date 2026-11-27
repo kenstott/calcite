@@ -70,6 +70,11 @@ import java.util.NoSuchElementException;
  */
 public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
 
+  /** CMS posts every upload of a quarter under its own URL, and the catalog read is uncached. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
+
   private static final Logger LOGGER = LoggerFactory.getLogger(CmsPbjNurseStaffingProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String DEFAULT_UA = "Apache-Calcite-GovData/1.0";

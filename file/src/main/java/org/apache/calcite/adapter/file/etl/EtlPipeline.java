@@ -115,6 +115,15 @@ public class EtlPipeline {
   private boolean perUnitFreshnessEnabled;
 
   /**
+   * Set only when the pipeline-level freshness probe ran AND reported the source CHANGED. A
+   * declared freshness config is not the same thing: the probe is skipped for a templated URL, a
+   * non-HttpSource, or a HASH-type gate, and an UNCHANGED verdict returns from the pipeline before
+   * any unit is processed. Read in {@link #processSingleBatch} so each unit's fetch bypasses its
+   * raw cache entry.
+   */
+  private boolean sourceFreshnessChanged;
+
+  /**
    * True when a freshness match is allowed to actually SKIP a write (vs only probe/hash and
    * capture the token). Equals {@code !forceReprocessAll}: under forceReprocessAll (no committed
    * data / cleared marker) we still capture and persist the token so the NEXT run can skip, but
@@ -380,11 +389,7 @@ public class EtlPipeline {
       // Read once, early: used both by the trailing-window force-reopen (Phase 2, below) and by
       // the freshness skip-gates (Phase 3b / processSingleBatch).
       FreshnessConfig freshnessConfig = config.getFreshness();
-      // Set only when the pipeline-level freshness probe actually ran AND reported the source
-      // CHANGED. A declared freshnessConfig is not the same thing: the probe is skipped for a
-      // templated URL, a non-HttpSource, or a HASH-type gate, and an UNCHANGED verdict returns
-      // from the pipeline before any of the skip paths below are reached.
-      boolean sourceFreshnessChanged = false;
+      sourceFreshnessChanged = false;
 
       // Completion markers are a *period* concept — a marker means "done for time period T".
       // A non-period table has no T, so completion / self-heal / per-period filtering does not
@@ -2282,6 +2287,11 @@ public class EtlPipeline {
     String capturedFreshnessUnitKey = null;
     String capturedFreshnessToken = null;
 
+    // Set when this unit's fetch has to see what the source serves now: a changed per-unit token,
+    // a hash gate, or a lookback reopen. It reaches both raw caches: HttpSource's entry is dropped
+    // here, and a CachingDataProvider's handle bypasses its entries (see rawCacheForBatch).
+    boolean refetchUnit = false;
+
     // Per-period freshness gate: probe this unit's templated source and skip the fetch+write when
     // it is unchanged since the last clean commit. Returning 0 leaves the unit's existing Iceberg
     // partition untouched (replacePartitions only rewrites the partitions we actually fetch), so
@@ -2313,6 +2323,7 @@ public class EtlPipeline {
           // on a table that caches.
           if (previousToken != null && !isCacheReparsed(pipelineName)) {
             ((HttpSource) dataSource).invalidateRawCache(variables);
+            refetchUnit = true;
           }
           // Defer recording until the write succeeds (see the successful return below).
           capturedFreshnessUnitKey = unitKey;
@@ -2322,6 +2333,14 @@ public class EtlPipeline {
         LOGGER.warn("Pipeline '{}': per-period freshness probe failed for unit {} ({}), "
             + "proceeding with full fetch", pipelineName, variables, e.getMessage());
       }
+    }
+
+    // The pipeline-level gate reported CHANGED, so every unit this run processes has to see what
+    // the source serves now. This covers the units the per-unit gate cannot judge: no dimensions, a
+    // partition-unsafe fan-out, or a probe that yields no token.
+    if (sourceFreshnessChanged && !isCacheReparsed(pipelineName)) {
+      ((HttpSource) dataSource).requireFreshRawCache(variables);
+      refetchUnit = true;
     }
 
     // Document sources use dataWriter directly — serialize writes
@@ -2351,14 +2370,15 @@ public class EtlPipeline {
     // validated by existence alone, so on a table whose cache key does not change between runs the
     // gate would hash the bytes the cache just handed back and match its own stored token forever:
     // the table frozen at its first fetch, reporting "unchanged" every day while the source moves.
-    // Drop this unit's entry first so the hash sees the source. The drain below repopulates it, and
-    // the write re-fetch then reads that warm entry, so the body is still downloaded only once.
+    // Drop or bypass this unit's entry so the hash sees the source. The drain below repopulates it,
+    // and the write re-fetch then reads that warm entry, so the body is still downloaded only once.
     FreshnessConfig freshnessConfigForHash = config.getFreshness();
     boolean hashFreshnessActive = freshnessConfigForHash != null
         && freshnessConfigForHash.getType() == FreshnessConfig.Type.HASH
         && dataSource instanceof HttpSource;
     if (hashFreshnessActive && !isCacheReparsed(pipelineName)) {
       ((HttpSource) dataSource).invalidateRawCache(variables);
+      refetchUnit = true;
     }
 
     // A lookback-reopened unit must reach the source for the same reason: the raw cache is
@@ -2374,6 +2394,7 @@ public class EtlPipeline {
             && lookbackReopenedPeriodKeys.contains(
                 IncrementalTracker.periodCompletionKey(pipelineName, combo))) {
           ((HttpSource) dataSource).invalidateRawCache(variables);
+          refetchUnit = true;
           break;
         }
       }
@@ -2387,7 +2408,8 @@ public class EtlPipeline {
     // a SUSPECT empty (scanned > 0 — a transform/filter dropped every row).
     final long[] scannedRows = {0L};
     Iterator<Map<String, Object>> data =
-        fetchDataChain(config, dataSource, variables, pipelineName, processedCount, scannedRows);
+        fetchDataChain(config, dataSource, variables, pipelineName, processedCount, refetchUnit,
+            scannedRows);
     // Hold the source-chain head so its underlying stream is released after the write even when
     // dqRowLimit stops iteration before EOF (otherwise the S3 InputStream leaks one connection per
     // fetch-unit). The hash/computed_delta branches below fully drain it first (self-close).
@@ -2444,7 +2466,8 @@ public class EtlPipeline {
       // is cached after the first pull, so this re-parses from the warm cache (no second download).
       // Reset the scanned counter so it reflects the chain actually written (not the hash pass).
       scannedRows[0] = 0L;
-      data = fetchDataChain(config, dataSource, variables, pipelineName, processedCount, scannedRows);
+      data = fetchDataChain(config, dataSource, variables, pipelineName, processedCount,
+          refetchUnit, scannedRows);
     }
 
     // computed_delta: STREAM the pull, emitting only rows whose modifiedField advanced past the
@@ -2650,13 +2673,18 @@ public class EtlPipeline {
    *
    * <p>Returns a handle that always downloads when the table has {@code rawCache.enabled: false},
    * when no raw-cache storage is configured, or when this run is bypassing the cache — the same
-   * conditions under which {@code HttpSource} would skip it.
+   * conditions under which {@code HttpSource} would skip it. A unit that has to be re-fetched
+   * bypasses too, unless the provider keys its entries by revision, in which case an existing
+   * entry is already the content the source serves now.
    *
    * @param config the pipeline config
    * @param variables the batch's dimension values
+   * @param provider the provider the handle is for
+   * @param refetchUnit whether this unit's fetch has to see what the source serves now
    * @return a cache handle; never null
    */
-  private RawCache rawCacheForBatch(EtlPipelineConfig config, Map<String, String> variables) {
+  private RawCache rawCacheForBatch(EtlPipelineConfig config, Map<String, String> variables,
+      CachingDataProvider provider, boolean refetchUnit) {
     HttpSourceConfig source = config.getSource();
     HttpSourceConfig.RawCacheConfig rawCacheConfig =
         source != null ? source.getRawCache() : null;
@@ -2670,15 +2698,17 @@ public class EtlPipeline {
     // condition createDataSource applies to HttpSource: a run that concluded it holds no reliable
     // committed state must re-fetch rather than replay an entry whose existence is its only
     // validity check.
+    boolean mustRefetch = !freshnessSkipAllowed
+        || (refetchUnit && !provider.isCacheKeyedByRevision());
     boolean bypass = isTableForceDownloaded(config.getName())
-        || (!freshnessSkipAllowed && !isCacheReparsed(config.getName()));
+        || (mustRefetch && !isCacheReparsed(config.getName()));
     return StorageRawCache.forBatch(config, variables, sourceStorageProvider, rawCachePath, bypass,
         workDirectory());
   }
 
   private Iterator<Map<String, Object>> fetchDataChain(EtlPipelineConfig config,
       DataSource dataSource, Map<String, String> variables, String pipelineName,
-      int processedCount, long[] scannedOut) throws IOException {
+      int processedCount, boolean refetchUnit, long[] scannedOut) throws IOException {
     Iterator<Map<String, Object>> data = null;
     if (dataProvider != null) {
       // A CachingDataProvider gets the same raw cache HttpSource would have used: it is here to
@@ -2689,7 +2719,8 @@ public class EtlPipeline {
       // from one would read here as "declined the batch" and fall through to HttpSource.
       data = dataProvider instanceof CachingDataProvider
           ? ((CachingDataProvider) dataProvider).fetch(config, variables,
-              rawCacheForBatch(config, variables))
+              rawCacheForBatch(config, variables, (CachingDataProvider) dataProvider,
+                  refetchUnit))
           : dataProvider.fetch(config, variables);
       if (data != null) {
         LOGGER.debug("Using custom DataProvider for batch {}", processedCount);

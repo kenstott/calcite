@@ -70,6 +70,11 @@ import java.util.Map;
  */
 public class NsfAwardsProvider implements CachingDataProvider {
 
+  /** The table's {@code refresh_month} dimension puts each calendar month in its own directory. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
+
   private static final Logger LOGGER = LoggerFactory.getLogger(NsfAwardsProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String ENDPOINT = "https://api.nsf.gov/services/v1/awards.json";
