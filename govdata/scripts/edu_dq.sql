@@ -587,6 +587,18 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions', allow_moved_paths=true)
 );
 
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_institutions', 'pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '0', 'Duplicate (unitid, year) rows'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT unitid, year, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_institutions', allow_moved_paths=true)
+    GROUP BY unitid, year HAVING COUNT(*) > 1
+  )
+);
+
 -- ipeds_completions PK: unitid, year, cipcode, majornum, award_level (NCES wide format)
 INSERT INTO dq_results
 SELECT 'edu', 'ipeds_completions', 'pk_nulls',

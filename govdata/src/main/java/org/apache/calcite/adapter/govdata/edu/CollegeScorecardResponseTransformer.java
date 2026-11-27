@@ -10,8 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.edu;
 
+import org.apache.calcite.adapter.file.etl.MergedEnvelopeResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +37,7 @@ import java.util.Map;
  * <p>Note: The correct API host is {@code api.data.gov/ed/collegescorecard/v1/schools.json};
  * {@code api.collegescorecard.ed.gov} is NXDOMAIN.
  */
-public class CollegeScorecardResponseTransformer implements ResponseTransformer {
+public class CollegeScorecardResponseTransformer implements MergedEnvelopeResponseTransformer {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(CollegeScorecardResponseTransformer.class);

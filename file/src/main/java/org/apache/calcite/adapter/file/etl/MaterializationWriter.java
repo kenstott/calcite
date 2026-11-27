@@ -112,6 +112,16 @@ public interface MaterializationWriter extends Closeable {
   String getTableLocation();
 
   /**
+   * Whether the existing table is going to be dropped and recreated by this writer, discarding its
+   * committed rows. Known once {@link #initialize} has returned.
+   *
+   * @return true if a drop-and-recreate is pending
+   */
+  default boolean isRebuildPending() {
+    return false;
+  }
+
+  /**
    * Stores ETL completion metadata in the table properties.
    *
    * <p>For Iceberg format, this stores properties in the Iceberg table metadata

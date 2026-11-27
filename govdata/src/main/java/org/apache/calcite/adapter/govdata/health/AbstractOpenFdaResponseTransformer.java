@@ -11,9 +11,9 @@
 package org.apache.calcite.adapter.govdata.health;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.MergedEnvelopeResponseTransformer;
 import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -54,7 +54,7 @@ import java.util.zip.ZipInputStream;
  * <p>Subclasses implement {@link #flattenRecord} to map one {@code results[i]} object
  * to the output row shape expected by the schema — identical for both modes.
  */
-abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer {
+abstract class AbstractOpenFdaResponseTransformer implements MergedEnvelopeResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AbstractOpenFdaResponseTransformer.class);
   static final ObjectMapper MAPPER = new ObjectMapper();

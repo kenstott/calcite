@@ -10,13 +10,15 @@
  */
 package org.apache.calcite.adapter.govdata.energy;
 
+import org.apache.calcite.adapter.file.etl.MergedEnvelopeResponseTransformer;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class EiaV2Transformer {
+public abstract class EiaV2Transformer implements MergedEnvelopeResponseTransformer {
 
   protected static final ObjectMapper MAPPER = new ObjectMapper();
   protected static final Logger LOGGER = LoggerFactory.getLogger(EiaV2Transformer.class);

@@ -10,8 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.disasters;
 
+import org.apache.calcite.adapter.file.etl.MergedEnvelopeResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * <p>The {@code year} partition value comes from the {@code year} dimension (the API is filtered
  * to one year per fetch), so subclasses never emit a {@code year} column.
  */
-abstract class AbstractOpenFemaTransformer implements ResponseTransformer {
+abstract class AbstractOpenFemaTransformer implements MergedEnvelopeResponseTransformer {
 
   protected static final ObjectMapper MAPPER = new ObjectMapper();
 

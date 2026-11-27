@@ -187,6 +187,23 @@ class PGPipelineTrackerCoverageTest {
     verify(pstmt).setString(4, "error");
   }
 
+  // ===== invalidatePipeline =====
+
+  @Test void testInvalidatePipelineClearsCombosPeriodsAndPerUnitTokens() throws Exception {
+    PreparedStatement pstmt = mock(PreparedStatement.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(pstmt);
+
+    tracker.invalidatePipeline("national_accounts");
+
+    verify(mockConnection).prepareStatement(
+        "DELETE FROM pipeline_tracker WHERE (table_name = ? OR left(table_name, ?) = ?) "
+            + "AND phase IN ('incremental', 'period_completion', 'freshness_token')");
+    verify(pstmt).setInt(2, "national_accounts::".length());
+    verify(pstmt).setString(3, "national_accounts::");
+    verify(mockConnection)
+        .prepareStatement("DELETE FROM table_completion WHERE pipeline_name = ?");
+  }
+
   // ===== markCleared =====
 
   @Test void testMarkCleared() throws Exception {

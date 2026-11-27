@@ -349,6 +349,22 @@ SELECT 'environment', 'water_withdrawals', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips/sector rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true) WHERE county_fips IS NULL OR sector IS NULL);
 
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T7_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (county_fips, year, sector) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, year, sector
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true)
+  GROUP BY county_fips, year, sector HAVING COUNT(*) > 1));
+INSERT INTO dq_results
+SELECT 'environment', 'water_withdrawals', 'T8_year_completeness',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Census years with fewer than 3100 counties or other than 7 sectors'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/water_withdrawals', allow_moved_paths := true)
+  GROUP BY year HAVING COUNT(DISTINCT county_fips) < 3100 OR COUNT(DISTINCT sector) <> 7));
+
 -- ------------------------------------------------------------
 -- TABLE: drinking_water (partition cols: type, state)
 -- ------------------------------------------------------------

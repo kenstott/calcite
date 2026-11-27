@@ -450,7 +450,7 @@ partitionedTables:
       distinctYears: 93
       contiguous: true
       rowCount: 572532
-      checkedAt: "2026-11-26T05:18:42Z"
+      checkedAt: "2026-11-27T05:38:30Z"
     partitions: *standard_partitions
     comment: >
       Branch-network change events (opening / closing / acquired-in-merger, etc.) — the
@@ -591,7 +591,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019, 2020, 2023, 2024, 2025, 2026]
       rowCount: 384
-      checkedAt: "2026-11-26T05:18:43Z"
+      checkedAt: "2026-11-27T05:38:31Z"
     partitions: *standard_partitions
     comment: >
       FDIC failed bank list — every FDIC-insured bank failure, one row per failure
@@ -841,7 +841,7 @@ partitionedTables:
       distinctYears: 33
       contiguous: true
       rowCount: 2898836
-      checkedAt: "2026-11-26T05:18:45Z"
+      checkedAt: "2026-11-27T05:38:34Z"
     partitions: *standard_partitions
     comment: >
       Annual branch-level deposit totals from FDIC's Summary of Deposits survey —
@@ -956,7 +956,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 386056
-      checkedAt: "2026-11-26T05:18:46Z"
+      checkedAt: "2026-11-27T05:38:35Z"
     partitions: *standard_partitions
     # DQ sample cap (GOVDATA_DQ mode): call-report financials are millions of rows
     # nationwide across all history. Cap each year's sample so DQ stops paginating
@@ -966,8 +966,12 @@ partitionedTables:
       Quarterly call-report financials — total assets/liabilities, domestic deposits,
       net income, employee count, key ratios (equity/assets, net interest margin), CRE
       loan balances by property type (nonfarm-nonresidential, construction/land
-      development, multifamily), and total risk-based capital, per institution per
-      report date. One row per (cert, repdte). VERY LARGE (millions of rows
+      development, multifamily), total risk-based capital, total deposits, and the loan
+      book (net and total loans and leases, plus real estate, commercial and industrial,
+      consumer and agricultural loans), per institution per report date. Supports
+      loan-to-deposit ratios and loans by bank size: group on total_assets_thousands,
+      filter to one repdte (balances are point-in-time, so never sum across report dates),
+      and compute SUM(net_loans_and_leases_thousands) / SUM(total_deposits_thousands). One row per (cert, repdte). VERY LARGE (millions of rows
       all-history). Windowed by a REPDTE date range covering the calendar year. Joins
       to institutions by cert. The CRE fields let a caller compute a standard
       CRE-concentration ratio (CRE loans / total risk-based capital) directly, joined
@@ -1055,6 +1059,48 @@ partitionedTables:
           every institution regardless of CBLR election (see total_risk_based_capital_thousands
           above) — the correct capital denominator for a CBLR-electing bank, whose total RBC
           reports 0.
+      - name: total_deposits_thousands
+        type: long
+        nullable: true
+        comment: >
+          Total deposits, domestic and foreign offices — Call Report item DEP (USD
+          thousands). Consolidated on the same basis as the loan columns, so it is the
+          denominator for a loan-to-deposit ratio; domestic_deposits_thousands omits
+          foreign-office deposits.
+      - name: net_loans_and_leases_thousands
+        type: long
+        nullable: true
+        comment: >
+          Net loans and leases (total loans and leases less the allowance for loan and lease
+          losses) — Call Report item LNLSNET (USD thousands)
+      - name: total_loans_and_leases_thousands
+        type: long
+        nullable: true
+        comment: >
+          Total (gross of loss allowance) loans and leases — Call Report item LNLSGR (USD
+          thousands). The category columns need not add up to it: they are not exhaustive
+          and can differ from it by unearned income.
+      - name: real_estate_loans_thousands
+        type: long
+        nullable: true
+        comment: >
+          All loans secured by real estate — Call Report item LNRE (USD thousands). Includes
+          the cre_* columns, so do not add them to it.
+      - name: commercial_industrial_loans_thousands
+        type: long
+        nullable: true
+        comment: Commercial and industrial (C&I) loans — Call Report item LNCI (USD thousands)
+      - name: consumer_loans_thousands
+        type: long
+        nullable: true
+        comment: Consumer loans (loans to individuals) — Call Report item LNCON (USD thousands)
+      - name: agricultural_loans_thousands
+        type: long
+        nullable: true
+        comment: >
+          Agricultural production loans — Call Report item LNAG (USD thousands). Farmland-
+          secured loans are in real_estate_loans_thousands, not here. Null where the
+          institution does not report the item (more common in 2010-2011).
 
     backfill_period: annual
 
@@ -1072,7 +1118,7 @@ partitionedTables:
       method: GET
       parameters:
         filters: "REPDTE:[{year}0101 TO {year}1231]"
-        fields: "CERT,REPDTE,ASSET,DEPDOM,NETINC,LIAB,NUMEMP,EQV,NIMY,EINTEXP,LNRENRES,LNRECONS,LNREMULT,RBC,RBCT1"
+        fields: "CERT,REPDTE,ASSET,DEPDOM,NETINC,LIAB,NUMEMP,EQV,NIMY,EINTEXP,LNRENRES,LNRECONS,LNREMULT,RBC,RBCT1,DEP,LNLSNET,LNLSGR,LNRE,LNCI,LNCON,LNAG"
         format: "json"
       response:
         format: json
@@ -1122,7 +1168,7 @@ partitionedTables:
       distinctYears: 92
       contiguous: true
       rowCount: 8107
-      checkedAt: "2026-11-26T05:18:48Z"
+      checkedAt: "2026-11-27T05:38:37Z"
     partitions: *standard_partitions
     comment: >
       Annual FDIC industry summary — bank count, net income, interest income,
@@ -1238,7 +1284,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 2674343
-      checkedAt: "2026-11-26T05:18:49Z"
+      checkedAt: "2026-11-27T05:38:38Z"
     partitions: *complaints_partitions
     # DQ sample cap (GOVDATA_DQ mode): the full complaint database is millions of rows
     # nationwide across all history. Cap each (year, state, product) fetch unit so DQ
