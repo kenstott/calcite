@@ -338,7 +338,7 @@ Discrepancies from original plan:
 | Column | Type | Source Field | Description |
 |---|---|---|---|
 | leaid | VARCHAR | `leaid` | NCES LEA ID (7-digit string) |
-| year | INTEGER | `year` | School year (end year, e.g. 2019 = 2018-19) |
+| year | INTEGER | `year` | School year's starting calendar year (2019 = 2019-20) |
 | lea_name | VARCHAR | `lea_name` | District name |
 | fips | INTEGER | `fips` | State FIPS code (integer 1-56) |
 | state_abbr | VARCHAR | `state_location` | 2-letter state abbreviation |
@@ -394,7 +394,7 @@ Discrepancies from original plan:
 |---|---|---|---|
 | ncessch | VARCHAR | `ncessch` | NCES school ID (12-digit string) |
 | leaid | VARCHAR | `leaid` | Parent LEA ID (7-digit) |
-| year | INTEGER | `year` | School year end year |
+| year | INTEGER | `year` | School year's starting calendar year (2019 = 2019-20) |
 | school_name | VARCHAR | `school_name` | School name |
 | fips | INTEGER | `fips` | State FIPS (integer) |
 | county_code | VARCHAR | `county_code` | 4-digit county FIPS |
@@ -805,8 +805,9 @@ WHERE c.year = 2015;
 - **NAEP network access.** The hostname `api.nationsreportcard.gov` is not resolvable
   from all networks (was unreachable during development). Implement with a fallback to
   cached/bulk data. No API key is required if the host is reachable.
-- **Year alignment.** K-12 CCD uses school year end year (2019 API = 2018-19 school year).
-  IPEDS uses fiscal year. College Scorecard uses cohort entry year. Document clearly
+- **Year alignment.** K-12 CCD and EDFacts use the school year's starting calendar year
+  (2019 API = 2019-20 school year). F-33 and IPEDS finance use the fiscal year that ends the
+  school year (F-33 year = CCD year + 1). College Scorecard uses cohort entry year. Document clearly
   in column descriptions — do not normalize to a single convention.
 - **CRDC is biennial** (odd NCES years: 2011, 2013, 2015, 2017). Schema should handle
   sparse year coverage without breaking annual joins — use latest available year logic.

@@ -54,7 +54,9 @@ partitionedTables:
 
     comment: >
       NCES Common Core of Data — Local Education Agency (district) directory.
-      One row per LEA per school year (year = end year; 2022 = 2021-22).
+      One row per LEA per school year. year is the school year's STARTING calendar year
+      (2022 = school year 2022-23). f33_district_finance.year is the fiscal year, which ends
+      that school year, so join finance on f33_district_finance.year = ccd_districts.year + 1.
       Primary join target for ccd_schools (leaid) and geo.school_districts (sd_lea = leaid).
       Staff FTE fields (teachers, counselors, psychologists) enable resource equity analysis.
       Several numeric fields (number_of_schools, enrollment, spec_ed_students,
@@ -76,7 +78,7 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: School year end year (e.g. 2022 = 2021-22) — PK component
+        comment: School year's starting calendar year (2022 = school year 2022-23) — PK component. f33_district_finance.year equals this year + 1.
       - name: lea_name
         type: string
         nullable: true
@@ -297,7 +299,7 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: School year end year — PK component
+        comment: School year's starting calendar year (2022 = school year 2022-23) — PK component. Same convention as ccd_districts.year.
       - name: school_name
         type: string
         nullable: true
@@ -3826,8 +3828,14 @@ partitionedTables:
       the district-grain achievement side of a spend-vs-outcome analysis that
       f33_district_finance's dollar figures need (see that table's comment,
       and district_naep_spending's, both of which explicitly note the absence
-      of this data until now). One row per LEA x year x grade (3-12), math and
-      reading/language-arts side by side. Source: Urban Institute's Education
+      of this data until now). One row per LEA x year x grade, math and
+      reading/language-arts side by side. year is the school year's STARTING
+      calendar year (2018 = school year 2018-19), the same convention as
+      ccd_districts.year; f33_district_finance.year is the fiscal year that ends
+      that school year, so join finance on f33_district_finance.year =
+      district_assessments.year + 1. grade is 3-8 for the single tested grade,
+      and 9 is the source's high-school aggregate (grades 9-12), not ninth grade;
+      there are no rows for grades 10-12. Source: Urban Institute's Education
       Data Portal mirror of NCES EDFacts (educationdata.urban.org, ODC-BY
       v1.0 license — free redistribution with attribution, no key required),
       itself sourced from state education agencies' federally-mandated
@@ -3889,11 +3897,11 @@ partitionedTables:
       - name: year
         type: int
         nullable: false
-        comment: School year end year (e.g. 2018 = 2017-18) — PK component
+        comment: School year's starting calendar year (2018 = school year 2018-19) — PK component. f33_district_finance.year equals this year + 1.
       - name: grade
         type: int
         nullable: false
-        comment: Tested grade, 3-12 — PK component. Source field grade_edfacts.
+        comment: EDFacts grade category — PK component. 3-8 = that tested grade; 9 = high-school aggregate (grades 9-12). Source field grade_edfacts.
       - name: lea_name
         type: string
         nullable: true
