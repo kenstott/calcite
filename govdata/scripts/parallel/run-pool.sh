@@ -227,6 +227,10 @@ for arg in "$@"; do
       # year's data lands together instead of one schema's whole range at a time.
       export GOVDATA_RUN_MODE="historical"
       _cy=$(date +%Y)
+      # Completion markers are fingerprinted from the jar the workers run, so pin it before the
+      # first marker is read.
+      GOVDATA_JAR="$(resolve_classpath)"
+      export GOVDATA_JAR
       # Specialty schemas that don't partition by calendar year — run once.
       # Daily-only schemas are intentionally NOT here — they run only in the daily window:
       #   • ref, econ_reference — current-snapshot reference; no point-in-time history to backfill,
@@ -1187,7 +1191,8 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
           if hcy_sec_all_failed "$_hcy_schema" "$SCRIPT_DIR/runs/${id}/launch.log"; then
             log_info "$id: exited 0 but EVERY accession failed this run (sustained transient outage?) — NOT marking $_hcy_schema:$_hcy_token complete, will retry next historical run. See runs/${id}/launch.log."
           else
-            hcy_mark_complete "$_hcy_schema" "$_hcy_token"
+            hcy_mark_complete "$_hcy_schema" "$_hcy_token" \
+              || log_info "$id: no completion marker written for $_hcy_schema:$_hcy_token — it runs again in the next historical pool"
           fi
         fi
       else
