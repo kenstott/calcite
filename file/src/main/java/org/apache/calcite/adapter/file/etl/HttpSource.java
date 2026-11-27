@@ -14,8 +14,10 @@ package org.apache.calcite.adapter.file.etl;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.util.LocalPaths;
 
+import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -36,6 +38,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -93,6 +96,13 @@ public class HttpSource implements DataSource {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HttpSource.class);
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+  /** Reads a page cache, where one JSON string holds a whole response body. */
+  private static final JsonFactory PAGE_CACHE_FACTORY = JsonFactory.builder()
+      .streamReadConstraints(
+          StreamReadConstraints.builder().maxStringLength(Integer.MAX_VALUE).build())
+      .build();
+  /** Top-level field of a raw cache entry that stores response pages verbatim. */
+  private static final String PAGES_FIELD = "pages";
   private static final String DEFAULT_USER_AGENT =
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -482,7 +492,10 @@ public class HttpSource implements DataSource {
           return java.util.Collections.<Map<String, Object>>emptyIterator();
         }
       }
-      if (hasValidRawCache(rawCacheFilePath)) {
+      if (hasValidRawCache(rawCacheFilePath) && isReplayableRawCache(rawCacheFilePath)) {
+        if (cachesVerbatimPages()) {
+          return streamPagesFromRawCache(rawCacheFilePath, url, params, variables);
+        }
         HttpSourceConfig.ResponseConfig respConfig = config.getResponse();
         if ((respConfig.getFormat() == HttpSourceConfig.ResponseFormat.CSV
             || respConfig.getFormat() == HttpSourceConfig.ResponseFormat.TSV)
@@ -511,8 +524,7 @@ public class HttpSource implements DataSource {
           return streamFromRawCache(rawCacheFilePath, url, params, variables,
               (PerRecordResponseTransformer) responseTransformer);
         }
-        // A paginated JSON source's cache holds the merged {"results":[...]} envelope, not any
-        // upstream body. With no transformer to extract the records itself, parseResponse would
+        // This paginated JSON cache holds the merged {"results":[...]} envelope. With no transformer to extract the records itself, parseResponse would
         // see that envelope as one object and emit a single row whose every source column is
         // null — so stream the envelope's array instead.
         if (respConfig.getFormat() == HttpSourceConfig.ResponseFormat.JSON
@@ -623,6 +635,7 @@ public class HttpSource implements DataSource {
     private FileOutputStream tempCacheStream = null;
     private com.fasterxml.jackson.core.JsonGenerator cacheGenerator = null;
     private long cachedRecordCount = 0;
+    private long cachedPageCount = 0;
     private boolean mergedCacheWritten = false;
 
     PaginatedIterator(String url, Map<String, String> baseParams, Map<String, String> variables,
@@ -1018,6 +1031,7 @@ public class HttpSource implements DataSource {
         return;
       }
       try {
+        boolean verbatim = cachesVerbatimPages();
         if (cacheGenerator == null) {
           tempCacheFile = tempFile("http-raw-cache-", ".json");
           tempCacheFile.deleteOnExit();
@@ -1025,7 +1039,12 @@ public class HttpSource implements DataSource {
           cacheGenerator =
               OBJECT_MAPPER.getFactory().createGenerator(tempCacheStream, com.fasterxml.jackson.core.JsonEncoding.UTF8);
           cacheGenerator.writeStartObject();
-          cacheGenerator.writeArrayFieldStart("results");
+          cacheGenerator.writeArrayFieldStart(verbatim ? PAGES_FIELD : "results");
+        }
+        if (verbatim) {
+          cacheGenerator.writeString(rawResponse);
+          cachedPageCount++;
+          return;
         }
         com.fasterxml.jackson.databind.JsonNode root = OBJECT_MAPPER.readTree(rawResponse);
         com.fasterxml.jackson.databind.JsonNode resultsNode;
@@ -1043,9 +1062,16 @@ public class HttpSource implements DataSource {
             OBJECT_MAPPER.writeTree(cacheGenerator, record);
             cachedRecordCount++;
           }
+        } else if ((configuredDataPath == null || configuredDataPath.isEmpty())
+            && !(root.isObject() && root.size() == 0)) {
+          // An empty object is a source's "no records". Any other body without a record array
+          // would be cached as zero records and replayed as an empty source.
+          throw new IllegalStateException("Cannot cache page of " + rawCacheFilePath
+              + ": no record array found; declare response.dataPath");
         }
-      } catch (Exception e) {
-        LOGGER.warn("Failed to stream raw page to cache: {}", SecretRedaction.redact(e.getMessage()));
+      } catch (IOException e) {
+        // A cache missing a page replays as a complete, shorter source.
+        throw new UncheckedIOException("Failed to stream raw page to cache " + rawCacheFilePath, e);
       }
     }
 
@@ -1064,8 +1090,13 @@ public class HttpSource implements DataSource {
           storageProvider.writeFile(rawCacheFilePath, in);
         }
         mergedCacheWritten = true;
-        LOGGER.info("Wrote streaming merged cache: {} ({} records)",
-            rawCacheFilePath, cachedRecordCount);
+        if (cachesVerbatimPages()) {
+          LOGGER.info("Wrote streaming page cache: {} ({} pages)",
+              rawCacheFilePath, cachedPageCount);
+        } else {
+          LOGGER.info("Wrote streaming merged cache: {} ({} records)",
+              rawCacheFilePath, cachedRecordCount);
+        }
       } catch (Exception e) {
         LOGGER.warn("Failed to write merged cache: {}", SecretRedaction.redact(e.getMessage()));
       } finally {
@@ -4105,6 +4136,103 @@ public class HttpSource implements DataSource {
         Map<String, Object> row = base.next();
         transformer.transformRecord(row, context);
         return row;
+      }
+    };
+  }
+
+  /**
+   * Whether this source's raw cache holds each page's response body as received, rather than the
+   * merged record array. That is the case for a paginated JSON source whose transformer reads
+   * upstream bodies: one that is neither per-record nor a
+   * {@link MergedEnvelopeResponseTransformer}.
+   */
+  private boolean cachesVerbatimPages() {
+    return isPaginatedJson()
+        && responseTransformer != null
+        && !(responseTransformer instanceof PerRecordResponseTransformer)
+        && !(responseTransformer instanceof MergedEnvelopeResponseTransformer);
+  }
+
+  private boolean isPaginatedJson() {
+    HttpSourceConfig.PaginationType type = config.getResponse().getPagination().getType();
+    return config.getResponse().getFormat() == HttpSourceConfig.ResponseFormat.JSON
+        && type != HttpSourceConfig.PaginationType.NONE
+        && type != HttpSourceConfig.PaginationType.CSV_STREAM;
+  }
+
+  /**
+   * Whether an existing paginated cache entry is in the layout this source's transformer reads. An
+   * entry in the other layout cannot reproduce the fetch, so it counts as a miss and is replaced.
+   */
+  private boolean isReplayableRawCache(String cachePath) throws IOException {
+    if (!isPaginatedJson()) {
+      return true;
+    }
+    boolean holdsPages;
+    try (InputStream is = storageProvider.openInputStream(cachePath);
+         JsonParser parser = PAGE_CACHE_FACTORY.createParser(is)) {
+      holdsPages = parser.nextToken() == JsonToken.START_OBJECT
+          && parser.nextToken() == JsonToken.FIELD_NAME
+          && PAGES_FIELD.equals(parser.currentName());
+    }
+    if (holdsPages != cachesVerbatimPages()) {
+      LOGGER.info("Raw cache {} holds {}, which this source cannot replay; fetching", cachePath,
+          holdsPages ? "response pages" : "merged records");
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Replays a page cache: each stored body goes through the transformer and parser as it did when
+   * fetched, one page in memory at a time.
+   */
+  private Iterator<Map<String, Object>> streamPagesFromRawCache(final String cachePath,
+      final String url, final Map<String, String> params, final Map<String, String> variables)
+      throws IOException {
+
+    final InputStream is = storageProvider.openInputStream(cachePath);
+    final JsonParser parser = PAGE_CACHE_FACTORY.createParser(is);
+    // START_OBJECT, the "pages" field name and START_ARRAY, as isReplayableRawCache verified
+    parser.nextToken();
+    parser.nextToken();
+    if (parser.nextToken() != JsonToken.START_ARRAY) {
+      parser.close();
+      throw new IOException("Malformed raw cache for " + cachePath + ": 'pages' is not an array");
+    }
+
+    LOGGER.info("Streaming response pages from raw cache: {}", cachePath);
+
+    return new Iterator<Map<String, Object>>() {
+      private Iterator<Map<String, Object>> page =
+          Collections.<Map<String, Object>>emptyList().iterator();
+      private boolean exhausted;
+
+      @Override public boolean hasNext() {
+        while (!page.hasNext() && !exhausted) {
+          try {
+            JsonToken token = parser.nextToken();
+            if (token == JsonToken.VALUE_STRING) {
+              String body = transformResponse(parser.getText(), url, params, variables);
+              page = normalizeRecords(parseResponse(body), variables).iterator();
+            } else if (token == JsonToken.END_ARRAY) {
+              exhausted = true;
+              parser.close();
+            } else {
+              throw new IOException("Malformed raw cache: unexpected token " + token);
+            }
+          } catch (IOException e) {
+            throw new UncheckedIOException("Error reading raw cache " + cachePath, e);
+          }
+        }
+        return page.hasNext();
+      }
+
+      @Override public Map<String, Object> next() {
+        if (!hasNext()) {
+          throw new NoSuchElementException();
+        }
+        return page.next();
       }
     };
   }

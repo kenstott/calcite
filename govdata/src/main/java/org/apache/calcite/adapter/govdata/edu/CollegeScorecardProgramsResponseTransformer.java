@@ -10,8 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.edu;
 
+import org.apache.calcite.adapter.file.etl.MergedEnvelopeResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>The {@code year} dimension is injected into every output row.
  */
-public class CollegeScorecardProgramsResponseTransformer implements ResponseTransformer {
+public class CollegeScorecardProgramsResponseTransformer implements MergedEnvelopeResponseTransformer {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(CollegeScorecardProgramsResponseTransformer.class);

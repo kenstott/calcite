@@ -10,8 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.weather;
 
+import org.apache.calcite.adapter.file.etl.MergedEnvelopeResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,7 +45,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Enriches each station record with {@code state_fips} from dimensions.
  */
-public class CdoStationTransformer implements ResponseTransformer {
+public class CdoStationTransformer implements MergedEnvelopeResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(CdoStationTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
