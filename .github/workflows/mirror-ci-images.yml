@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 1
 
       - name: Log in to ghcr.io
-        run: echo "${{ secrets.GHCR_ORG_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+        run: echo "${{ secrets.GHCR }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Copy each image with its digest preserved
         run: |
