@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
+import org.apache.calcite.adapter.govdata.HeadedPageSession;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -69,7 +70,7 @@ public class FhwaApportionmentsTransformer implements StreamingResponseTransform
   }
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context) {
-    FiscalBrowserSession session = FiscalBrowserSession.get(context);
+    HeadedPageSession session = HeadedPageSession.get(context);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     try {
       String index = session.fetchText(INDEX_URL);
@@ -95,7 +96,7 @@ public class FhwaApportionmentsTransformer implements StreamingResponseTransform
     return rows.iterator();
   }
 
-  private static String fetchNotice(FiscalBrowserSession session, int notice) throws IOException {
+  private static String fetchNotice(HeadedPageSession session, int notice) throws IOException {
     String url = NOTICE_URL + "4510" + notice;
     String html = session.fetchText(url);
     if (html == null) {
