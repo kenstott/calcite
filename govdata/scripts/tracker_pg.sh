@@ -231,6 +231,7 @@ declare -gA SEC_TABLE_ACCESSION_SUFFIX=(
   [mda_sections]=mda [xbrl_relationships]=relationships [financial_line_items]=facts
   [filing_contexts]=contexts [filing_metadata]=metadata [vectorized_chunks]=chunks
   [insider_transactions]=insider [earnings_transcripts]=earnings
+  [cyber_incident_disclosures]=cyber
   [institutional_holdings]=13f [beneficial_ownership]=13dg
 )
 

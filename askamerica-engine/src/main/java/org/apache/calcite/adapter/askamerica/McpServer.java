@@ -982,7 +982,14 @@ public class McpServer {
             + "conclusions, causal statements, characterizations, framing, the headline. "
             + "`subject_claims`: a person or organization the piece covers asserts it; it MUST "
             + "carry `speaker`. A quoted politician's assertion is the politician's; the "
-            + "reporter's sentence around the quote is the author's. A figure relayed "
+            + "reporter's sentence around the quote is the author's. In a press release or "
+            + "statement issued by an organization, a quote from that organization's own "
+            + "officials MUST be grouped `author_claims`. A headline or sentence that ties a "
+            + "trend to a person or policy by its start date ('under X', 'since X took "
+            + "office', 'Nth straight month under X') MUST be extracted as its own "
+            + "author claim that X's tenure or policy produced the trend, graded against the "
+            + "same series for the period before that start date, and marked `central` when "
+            + "it is the piece's thesis. A figure relayed "
             + "correctly from a cited source MUST be grouped `fidelity` and MUST NOT be "
             + "restated as an author or subject claim. Every author and subject claim MUST "
             + "carry `rests_on`: the numbers (1-based position in `claims`) of the claims "
@@ -12356,6 +12363,10 @@ public class McpServer {
      * pay that, including the exact hits that are the common case; running exact alone first
      * returns those in seconds and leaves the scan for terms that genuinely need it.
      */
+    /** ref.sec_company_tickers keeps one capture per as_of date; lookups read the latest. */
+    private static final String CURRENT_TICKER_CAPTURE =
+        "as_of = (SELECT MAX(as_of) FROM ref.sec_company_tickers)";
+
     /**
      * Resolves a ticker to the normalized form of its registered company name, or null.
      *
@@ -12367,7 +12378,7 @@ public class McpServer {
      * filers — see the identifierHit note above — but that backfill still runs off a resolved
      * name, so this ticker-to-name translation remains the way a bare ticker reaches it.)
      *
-     * <p>ref.sec_company_tickers is ~10k rows, so this costs a small scan and only runs when
+     * <p>One capture of ref.sec_company_tickers is ~10k rows, so this costs a small scan and only runs when
      * the term could plausibly be a ticker.
      */
     private static String tickerAlias(String term) {
@@ -12379,8 +12390,8 @@ public class McpServer {
         }
         try {
             ArrayNode rows = runSqlRows(
-                "SELECT title FROM ref.sec_company_tickers WHERE upper(ticker) = "
-                + sqlStr(t.toUpperCase(java.util.Locale.ROOT)), 1);
+                "SELECT title FROM ref.sec_company_tickers WHERE " + CURRENT_TICKER_CAPTURE
+                + " AND upper(ticker) = " + sqlStr(t.toUpperCase(java.util.Locale.ROOT)), 1);
             if (rows.size() == 0) {
                 return null;
             }
@@ -12757,7 +12768,8 @@ public class McpServer {
                     up.add(t.toUpperCase(java.util.Locale.ROOT));
                 }
                 for (JsonNode r : timedRows("tickers", "SELECT ticker, title FROM ref.sec_company_tickers "
-                        + "WHERE upper(ticker) IN (" + inList(up) + ")")) {
+                        + "WHERE " + CURRENT_TICKER_CAPTURE
+                        + " AND upper(ticker) IN (" + inList(up) + ")")) {
                     String tk = rowText(r, "ticker");
                     String title = rowText(r, "title");
                     if (tk != null && title != null) {

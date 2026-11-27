@@ -119,6 +119,44 @@ setup_guard 1000 990 0 0 append
 meta "$MT" 7 990 700 1000 overwrite   # deleted-added = 300 > 5% of 1000, total 990 within 5%
 sync >/dev/null && fail "lossy overwrite published"
 echo "PASS lossy overwrite snapshot holds"
+# a lossy overwrite whose rows are back in the candidate does not hold
+# chain <candidate total>: published 1000, overwrite to 700, then append back to <candidate total>
+chain() {
+  setup_guard 1000 "$1" 0 0 append
+  jq -n --arg tot "$1" --arg add "$(( $1 - 700 ))" '{"current-snapshot-id": 3, snapshots: [
+       {"snapshot-id": 1, "timestamp-ms": 1000, summary: {operation: "append", "total-records": "1000"}},
+       {"snapshot-id": 2, "timestamp-ms": 2000, summary: {operation: "overwrite", "total-records": "700", "added-records": "700", "deleted-records": "1000"}},
+       {"snapshot-id": 3, "timestamp-ms": 3000, summary: {operation: "append", "total-records": $tot, "added-records": $add}}]}' \
+    > "$MT/metadata/v7.metadata.json"
+}
+chain 1000
+sync >/dev/null || fail "recovered rewrite held"
+[ "$(hint)" = 7 ] || fail "recovered rewrite not published"
+echo "PASS recovered rewrite publishes"
+chain 960
+sync >/dev/null || fail "rewrite recovered within the threshold held"
+echo "PASS recovery within threshold publishes"
+setup_guard 1000 1100 0 0 append   # the loss predates a larger pre-rewrite total: 1300 -> 900 -> 1100
+jq -n '{"current-snapshot-id": 3, snapshots: [
+     {"snapshot-id": 2, "timestamp-ms": 2000, summary: {operation: "overwrite", "total-records": "900", "added-records": "900", "deleted-records": "1300"}},
+     {"snapshot-id": 3, "timestamp-ms": 3000, summary: {operation: "append", "total-records": "1100", "added-records": "200"}}]}' \
+  > "$MT/metadata/v7.metadata.json"
+sync >/dev/null && fail "partly recovered rewrite published"
+[ "$(hint)" = 3 ] || fail "pointer moved on a partial recovery"
+echo "PASS partial recovery holds"
+# a standing hold keeps its first-held time and is reported
+jq '.first_held_at = "2000-01-01T00:00:00Z"' "$T/state/held/s__t.json" > "$T/m" && mv "$T/m" "$T/state/held/s__t.json"
+sync >/dev/null && fail "repeat pass published a held table"
+grep -q '"first_held_at": "2000-01-01T00:00:00Z"' "$T/state/held/s__t.json" || fail "first_held_at not preserved"
+: > "$T/errors"; r2_report_holds
+grep -q 'HELD s/t held since 2000-01-01T00:00:00Z' "$T/errors" || fail "hold not reported"
+grep -q '1 table pointer(s) held' "$T/errors" || fail "hold count not reported"
+echo "PASS standing hold keeps its age and is reported"
+# the candidate is the published version: nothing to guard, stale marker cleared
+printf '7' > "$RT/metadata/version-hint.text"
+r2_pointer_guard mn rr "$B" s t 7 || fail "republish of the published version held"
+[ ! -e "$T/state/held/s__t.json" ] || fail "stale marker kept"
+echo "PASS published version is not guarded"
 setup_guard 1000 1000 1000 1000 replace   # compaction: deleted == added
 sync >/dev/null || fail "compaction held"
 echo "PASS compaction passes"

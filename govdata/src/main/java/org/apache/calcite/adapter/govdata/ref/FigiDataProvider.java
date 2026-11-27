@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
+import org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -118,16 +119,21 @@ public class FigiDataProvider implements DataProvider {
     return path.replace("s3:/", "s3://").replace("s3:///", "s3://");
   }
 
+  /** The distinct tickers of the latest as_of capture in the Iceberg table at the path. */
+  static String latestTickersSql(String tickersPath) {
+    String scan = "iceberg_scan('" + tickersPath + "', allow_moved_paths=true)";
+    return "SELECT DISTINCT ticker FROM " + scan
+        + " WHERE as_of = (SELECT MAX(as_of) FROM " + scan + ")"
+        + " AND ticker IS NOT NULL ORDER BY ticker";
+  }
+
   @SuppressWarnings("MixedMutabilityReturnType")
   private List<String> loadTickers(String tickersPath) {
     try (Connection conn = createDuckDBWithS3(tickersPath);
          Statement stmt = conn.createStatement()) {
 
-      String sql = "SELECT DISTINCT ticker "
-          + "FROM read_parquet('" + tickersPath + "/data/**/*.parquet', "
-          + "hive_partitioning=true, union_by_name=true) "
-          + "WHERE ticker IS NOT NULL "
-          + "ORDER BY ticker";
+      stmt.execute("LOAD '" + DuckDbExtensionInstaller.getLocalExtensionPath("iceberg") + "'");
+      String sql = latestTickersSql(tickersPath);
 
       LOGGER.debug("FigiDataProvider: loading tickers from {}", tickersPath);
       ResultSet rs = stmt.executeQuery(sql);

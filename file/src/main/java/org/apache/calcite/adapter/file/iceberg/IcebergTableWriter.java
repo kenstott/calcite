@@ -48,8 +48,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -639,10 +641,13 @@ public class IcebergTableWriter {
           return Double.parseDouble(value);
         case BOOLEAN:
           return Boolean.parseBoolean(value);
+        case DATE:
+          // Iceberg holds a date partition value as days since the epoch.
+          return Integer.valueOf((int) LocalDate.parse(value).toEpochDay());
         default:
           return value;
       }
-    } catch (NumberFormatException e) {
+    } catch (NumberFormatException | DateTimeParseException e) {
       // A partition value is the path every row of its file lands under: one that is not its
       // column's declared type is a defect in what wrote it, not a value to null out.
       throw new IllegalStateException("Partition column '" + field.name() + "' value '" + value
@@ -884,7 +889,13 @@ public class IcebergTableWriter {
           for (int i = 0; i < spec.fields().size(); i++) {
             Object value = oldFile.partition().get(i, Object.class);
             if (value != null) {
-              partitionValues.put(spec.fields().get(i).name(), String.valueOf(value));
+              org.apache.iceberg.PartitionField field = spec.fields().get(i);
+              boolean isDate = table.schema().findType(field.sourceId()).typeId()
+                  == org.apache.iceberg.types.Type.TypeID.DATE;
+              partitionValues.put(field.name(),
+                  isDate
+                      ? LocalDate.ofEpochDay(((Number) value).longValue()).toString()
+                      : String.valueOf(value));
             }
           }
           DataFile replacement = copyRowsNotMatching(oldFile, matched, partitionValues);

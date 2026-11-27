@@ -2337,11 +2337,15 @@ partitionedTables:
     comment: >
       Monthly employment by industry (22 NAICS supersectors: manufacturing, construction, retail,
       healthcare, government, and others) for all 53 U.S. jurisdictions (50 states + DC, Puerto
-      Rico, Virgin Islands), from BLS SM series (not seasonally adjusted, statewide total nonfarm
-      all-employees series). For the metro-area version of the same series, see metro_industry
+      Rico, Virgin Islands), from BLS SM series (statewide all-employees series, both seasonally
+      adjusted and not seasonally adjusted). ALWAYS filter on seasonal: 'S' = seasonally adjusted
+      (series prefix SMS, the figures state labor departments and the press quote; BLS publishes it
+      for total nonfarm and only some supersectors), 'U' = not seasonally adjusted (prefix SMU).
+      Summing or ranking without that filter mixes the two. For the metro-area version of the same series, see metro_industry
       (27 major metros). SERIES ID LAYOUT (20 characters): SM + seasonal(1) + state FIPS(2) +
       area(5) + supersector(2) + industry(6) + datatype(2). The supersector is characters
-      11-12. Nevada examples: SMU32000000000000001 total nonfarm, SMU32000000500000001 total
+      11-12. Nevada examples: SMS32000000000000001 total nonfarm seasonally adjusted,
+      SMU32000000000000001 total nonfarm not seasonally adjusted, SMU32000000500000001 total
       private, SMU32000005000000001 information, SMU32000006000000001 professional and
       business services, SMU32000006500000001 private education and health services. To
       compare one supersector across states use series LIKE 'SMU__00000' || '<ss>' ||
@@ -2369,12 +2373,17 @@ partitionedTables:
           econ_reference.naics_sectors. This table is long-format: one row per (series, period),
           so ALWAYS filter on series or the decoded code columns.
           Rows here are the statewide all-employees slice: series matching
-          ^SMU\d{2}00000\d{2}00000001 — area 00000 (statewide), industry 000000 (supersector
-          totals), data type 01, not seasonally adjusted. That is 51 jurisdictions x 22
-          supersectors = 1,122 series; e.g. SMU01000000000000001 is Alabama, statewide,
-          total nonfarm, all employees. Metro-area rows live in metro_industry and seasonally
-          adjusted (SMS) rows are not loaded.
+          ^SM[SU]\d{2}00000\d{2}00000001 — area 00000 (statewide), industry 000000 (supersector
+          totals), data type 01, seasonally adjusted (SMS) and not (SMU). E.g.
+          SMS01000000000000001 is Alabama, statewide, total nonfarm, all employees, seasonally
+          adjusted. Metro-area rows live in metro_industry.
         source: series_id
+      - name: seasonal
+        type: string
+        nullable: true
+        comment: "S = seasonally adjusted (series prefix SMS), U = not seasonally adjusted (prefix SMU)"
+        source: seasonal
+        expression: "SUBSTR(TRIM(series), 3, 1)"
       - name: year
         type: integer
         nullable: true
@@ -2421,12 +2430,12 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-      # Reproduce the prior selection exactly: SMU (seasonally unadjusted), area 00000 (statewide),
-      # industry 000000 (supersector totals), datatype 01 (all employees) = 51 states x 22 supersectors
-      # = 1,122 series. Drops metro-area rows (captured by metro_industry) and seasonally adjusted (SMS).
+      # SMS (seasonally adjusted) and SMU (unadjusted), area 00000 (statewide), industry 000000
+      # (supersector totals), datatype 01 (all employees). Drops metro-area rows (captured by
+      # metro_industry).
       rowFilter:
         column: series_id
-        pattern: '^SMU\d{2}00000\d{2}00000001.*$'
+        pattern: '^SM[SU]\d{2}00000\d{2}00000001.*$'
 
     # Materialization configuration
     materialize:
@@ -8026,9 +8035,13 @@ partitionedTables:
         - name: indicator
           type: string
     comment: >
-      International economic indicators from World Bank for all countries. Includes GDP, inflation,
-      unemployment, government debt, and population statistics. Uses bulk download with response
-      partitioning: one API call per indicator returns all countries/years, then partitioned on write.
+      Annual international economic indicators from the World Bank, long format: one row per
+      (indicator, country_id, date). Covers GDP, inflation, unemployment, government debt and
+      population statistics. Areas include countries and World Bank aggregates (World, regions,
+      income groups); aggregates are summaries of countries, so filter to one area level before
+      summing or ranking. CO2 emissions per capita is indicator 'EN.GHG.CO2.PC.CE.AR5': tonnes of
+      CO2 equivalent per person from the EDGAR database, excluding land use, land-use change and
+      forestry (LULUCF).
 
     # Dimensions for batch iteration - only indicator drives API calls
     # Country and year are derived from response data via responsePartitioning
@@ -8043,10 +8056,22 @@ partitionedTables:
     # Columns match World Bank API response fields from [1] array (data array)
     # API response: [metadata, [{indicator:{id,value}, country:{id,value}, countryiso3code, date, value, unit, ...}]]
     columns:
+      - name: country_id
+        type: string
+        nullable: true
+        comment: >
+          World Bank area code, present on every row (e.g., 'US', 'CN', '1W' = World,
+          'XD' = High income). Identifies the area, including aggregates that have no ISO code.
+      - name: country_name
+        type: string
+        nullable: true
+        comment: World Bank area name (e.g., 'United States', 'High income')
       - name: countryiso3code
         type: string
         nullable: true
-        comment: ISO 3-letter country code (e.g., 'USA', 'CHN')
+        comment: >
+          ISO 3-letter country code (e.g., 'USA', 'CHN'); also set for some aggregates (e.g.,
+          'WLD'). Empty for income-group aggregates, which only country_id identifies.
       - name: date
         type: integer
         nullable: true
@@ -8067,6 +8092,14 @@ partitionedTables:
         type: int
         nullable: true
         comment: Decimal precision indicator
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.WorldBankResponseTransformer"
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.econ.WorldBankCountryTransformer"
+      errorHandling:
+        rowTransformer: FAIL
 
     # HTTP Source configuration for EtlPipeline
     # Uses bulk download: all countries, year range filter, high per_page limit
@@ -11139,14 +11172,16 @@ partitionedTables:
       # Period dimension: dynamic yearRange (never hardcoded). The publish year is
       # iterated start->current; effective_year = publish - dataLag is the data year
       # written to the partition. The intltrade HS timeseries begins in 2013, so the
-      # data floor is 2013 (publish 2014 with dataLag 1); minYear hard-floors it even
+      # data floor is 2013; minYear hard-floors it even
       # if GOVDATA_START_YEAR is set lower for other schemas.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        minYear: 2014
-        dataLag: 1
+        minYear: 2013
+        # Census publishes each month about five weeks after it closes, so the newest
+        # published month is two months back; a whole-year lag would defer the current year.
+        dataMonthLag: 2
         descending: true
       # Full monthly cadence: one fetch per (year, month) = one overwrite partition,
       # so the fetch unit equals the partition granularity (required for correct
@@ -11295,8 +11330,10 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        minYear: 2014
-        dataLag: 1
+        minYear: 2013
+        # Census publishes each month about five weeks after it closes, so the newest
+        # published month is two months back; a whole-year lag would defer the current year.
+        dataMonthLag: 2
         descending: true
       # Full monthly cadence: one fetch per (year, month) = one overwrite partition.
       month:
@@ -11444,13 +11481,15 @@ partitionedTables:
       # Period dimension: dynamic yearRange (never hardcoded). publish year is
       # iterated start->current; effective_year = publish - dataLag is the data
       # year written to the partition. The intltrade statehs timeseries begins in
-      # 2013; minYear hard-floors the publish year at 2014 (=> data floor 2013).
+      # 2013; minYear hard-floors the year at 2013.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        minYear: 2014
-        dataLag: 1
+        minYear: 2013
+        # Census publishes each month about five weeks after it closes, so the newest
+        # published month is two months back; a whole-year lag would defer the current year.
+        dataMonthLag: 2
         descending: true
       # Full monthly cadence: one fetch per (year, month) = one overwrite
       # partition, so the fetch unit equals the partition granularity.
@@ -11630,13 +11669,15 @@ partitionedTables:
         type: list
         values: ['25', '26', '28', '72', '73', '74', '75', '76', '81']
       # Period dimension: dynamic yearRange (never hardcoded), same floor as trade_imports
-      # (the intltrade HS timeseries begins in 2013 -> publish floor 2014, dataLag 1).
+      # (the intltrade HS timeseries begins in 2013).
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        minYear: 2014
-        dataLag: 1
+        minYear: 2013
+        # Census publishes each month about five weeks after it closes, so the newest
+        # published month is two months back; a whole-year lag would defer the current year.
+        dataMonthLag: 2
         descending: true
       month:
         type: list
@@ -11786,8 +11827,10 @@ partitionedTables:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
-        minYear: 2014
-        dataLag: 1
+        minYear: 2013
+        # Census publishes each month about five weeks after it closes, so the newest
+        # published month is two months back; a whole-year lag would defer the current year.
+        dataMonthLag: 2
         descending: true
       month:
         type: list
@@ -13226,8 +13269,9 @@ constraints:
   world_indicators:
     primaryKey:
       - type
-      - frequency
-      - year
+      - indicator
+      - country_id
+      - date
     foreignKeys:
       - columns:
           - countryiso3code

@@ -78,7 +78,8 @@ public class SecSchemaYamlTest extends AbstractSecDataDownloader {
         "mda_sections",
         "xbrl_relationships",
         "insider_transactions",
-        "earnings_transcripts"
+        "earnings_transcripts",
+        "cyber_incident_disclosures"
     };
 
     for (String tableName : tableNames) {

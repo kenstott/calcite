@@ -5784,6 +5784,107 @@ public class XbrlToParquetConverter implements FileConverter {
     }
   }
 
+  /**
+   * Matches an 8-K item header such as "Item 1.05". Filers separate the word and the number with
+   * Unicode space characters (thin space, em space), which {@code \\s} alone does not match.
+   */
+  private static final Pattern CYBER_ITEM_HEADER =
+      Pattern.compile("Item[\\s\\p{Z}]+(\\d+\\.\\d+)", Pattern.CASE_INSENSITIVE);
+
+  /** Upper bound on stored Item 1.05 text; longer disclosures are cut at this length. */
+  private static final int CYBER_TEXT_MAX_CHARS = 20000;
+
+  /**
+   * Writes the {@code _cyber.parquet} row for an 8-K that reports Item 1.05 (Material
+   * Cybersecurity Incidents), and returns its path; returns null for every other 8-K.
+   *
+   * <p>EDGAR's own item list for the accession decides whether Item 1.05 is reported, not a text
+   * match, so a filing that merely mentions the item is not counted. Item numbers only exist in
+   * EDGAR's payload for accessions it covers; when it does not cover this one the filing is
+   * logged and skipped rather than guessed at.
+   */
+  private String writeCyberIncidentIfReported(String fileContent, String targetDirectoryPath,
+      String relativePartitionPath, String uniqueId, String cik, String filingType,
+      String filingDate, String accession, int year) throws IOException {
+    if (year < 2023 || accession == null || accession.isEmpty()) {
+      return null;
+    }
+    String items = SecDataFetcher.getFilingItems(cik, accession);
+    if (items == null) {
+      LOGGER.warn("EDGAR submissions do not cover cik={} accession={}; cannot tell whether it "
+          + "reports Item 1.05", cik, accession);
+      return null;
+    }
+    if (!FormType.reportsItem(items, "1.05")) {
+      return null;
+    }
+
+    String incidentText = extractItemText(fileContent, "1.05");
+    if (incidentText == null) {
+      LOGGER.warn("Item 1.05 listed by EDGAR but no 'Item 1.05' section text found in primary "
+          + "document for cik={} accession={}", cik, accession);
+    } else if (incidentText.length() > CYBER_TEXT_MAX_CHARS) {
+      incidentText = incidentText.substring(0, CYBER_TEXT_MAX_CHARS);
+    }
+    Map<String, String> info = SecDataFetcher.getCompanyInfoForCik(cik);
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
+    data.put("accession_number", accession);
+    data.put("filing_date", filingDate);
+    data.put("year", year);
+    data.put("filing_type", normalizeFilingType(filingType));
+    data.put("company_name", info.get("company_name"));
+    data.put("sic_code", info.get("sic_code"));
+    data.put("items", items);
+    data.put("is_amendment", filingType != null && filingType.toUpperCase(Locale.ROOT).contains("/A"));
+    data.put("ransomware_mentioned", incidentText == null
+        ? null : incidentText.toLowerCase(Locale.ROOT).contains("ransom"));
+    data.put("incident_text", incidentText);
+
+    List<Map<String, Object>> rows = new ArrayList<>();
+    rows.add(data);
+    String path = storageProvider.resolvePath(targetDirectoryPath,
+        relativePartitionPath + "/" + String.format("%s_%s_cyber.parquet", cik, uniqueId));
+    storageProvider.writeAvroParquet(path,
+        AbstractSecDataDownloader.loadTableColumns("cyber_incident_disclosures"), rows,
+        "CyberIncidentDisclosure", "cyber_incident_disclosures");
+    LOGGER.info("Wrote Item 1.05 disclosure for cik={} accession={}", cik, accession);
+    return path;
+  }
+
+  /**
+   * Returns the text under an "Item N.NN" header up to the next item header or SIGNATURES, or
+   * null when the document has no such section with text.
+   */
+  static String extractItemText(String html, String itemNumber) {
+    org.jsoup.nodes.Document doc = Jsoup.parse(html);
+    doc.select("script, style").remove();
+    String body = doc.body() != null ? doc.body().text() : doc.text();
+    Matcher m = CYBER_ITEM_HEADER.matcher(body);
+    int start = -1;
+    int end = body.length();
+    while (m.find()) {
+      if (start < 0) {
+        if (itemNumber.equals(m.group(1))) {
+          start = m.end();
+        }
+      } else {
+        end = m.start();
+        break;
+      }
+    }
+    if (start < 0) {
+      return null;
+    }
+    int sig = body.toUpperCase(Locale.ROOT).indexOf("SIGNATURE", start);
+    if (sig >= 0 && sig < end) {
+      end = sig;
+    }
+    String text = body.substring(start, end).trim();
+    return text.isEmpty() ? null : text;
+  }
+
   private List<String> extract8KExhibits(String sourcePath, String targetDirectoryPath,
       String cik, String filingType, String filingDate, String accession,
       boolean writeMetadata) {
@@ -5938,6 +6039,15 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       } else {
         LOGGER.debug("Skipping earnings_transcripts write (not in enabledTables): " + earningsPath);
+      }
+
+      // 3b. cyber_incident_disclosures: one row for an 8-K whose EDGAR item list names Item 1.05.
+      if (isTableEnabled("cyber_incident_disclosures")) {
+        String cyberPath = writeCyberIncidentIfReported(fileContent, targetDirectoryPath,
+            relativePartitionPath, uniqueId, cik, filingType, filingDate, accession, year);
+        if (cyberPath != null) {
+          outputFiles.add(cyberPath);
+        }
       }
 
       // 4. Extract ALL item sections + merge with earnings chunks

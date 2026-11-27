@@ -811,6 +811,8 @@ for s in "${_schemas[@]}"; do
   [ "$_cursor" -ge "$_now" ] && log_info "sync-to-r2: [$s] synced through $(date -u -d "@$_now" +%Y-%m-%dT%H:%MZ)"
 done
 
+$DRY_RUN || r2_report_holds
+
 if [ "$_fail" -ne 0 ]; then
   log_error "sync-to-r2: incomplete — one or more schema slices failed; they resume from their held sentinels next pass"
   return 1

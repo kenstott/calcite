@@ -1320,6 +1320,23 @@ FROM (
   WHERE value IS NOT NULL AND value < 0
 );
 
+-- state_industry: both seasonal adjustments loaded, each covering statewide total nonfarm for
+-- all 50 states + DC, and seasonal agreeing with the series prefix (#1492)
+INSERT INTO dq_results
+SELECT
+  'econ', 'state_industry', 'expected_values',
+  CASE WHEN sa >= 51 AND nsa >= 51 AND mismatched = 0 THEN 'pass' ELSE 'fail' END,
+  'SA=' || sa || ' NSA=' || nsa || ' mismatched=' || mismatched, 'SA>=51 NSA>=51 mismatched=0',
+  'states with statewide total nonfarm per seasonal code; rows whose seasonal differs from series char 3'
+FROM (
+  SELECT
+    COUNT(DISTINCT CASE WHEN series LIKE 'SMS__000000000000001' THEN SUBSTR(series, 4, 2) END) AS sa,
+    COUNT(DISTINCT CASE WHEN series LIKE 'SMU__000000000000001' THEN SUBSTR(series, 4, 2) END) AS nsa,
+    COUNT(*) FILTER (WHERE seasonal IS DISTINCT FROM SUBSTR(series, 3, 1)
+                        OR seasonal NOT IN ('S', 'U')) AS mismatched
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry', allow_moved_paths := true)
+);
+
 -- state_wages: must cover all 51 US states+DC (distinct area_fips ending in 000)
 INSERT INTO dq_results
 SELECT

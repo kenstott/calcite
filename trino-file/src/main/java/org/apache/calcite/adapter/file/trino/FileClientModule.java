@@ -65,6 +65,9 @@ public class FileClientModule
             "org.apache.calcite.adapter.file.FileSchemaFactory";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    /** Schemes whose storage provider takes drive-relative paths and needs storage-config. */
+    static final java.util.Set<String> DRIVE_SCHEMES =
+            java.util.Set.of("onedrive", "gdrive", "googledrive");
 
     @Override
     protected void setup(Binder binder)
@@ -142,27 +145,43 @@ public class FileClientModule
         if (config.getCrawl() != null) {
             // The catalog property is the file adapter's crawl operand, as JSON: one setting
             // with the same names on every way of reaching the adapter.
-            try {
-                operand.put("crawl", MAPPER.readValue(config.getCrawl(), LinkedHashMap.class));
-            }
-            catch (JsonProcessingException e) {
-                throw new IllegalArgumentException("The crawl property is not a JSON object", e);
-            }
+            operand.put("crawl", jsonObjectProperty(config.getCrawl(), "crawl"));
         }
         if (config.getExcelHints() != null) {
             // The catalog property is the file adapter's excelHints operand, as JSON.
-            try {
-                operand.put("excelHints", MAPPER.readValue(config.getExcelHints(), LinkedHashMap.class));
-            }
-            catch (JsonProcessingException e) {
-                throw new IllegalArgumentException("The excel-hints property is not a JSON object", e);
-            }
+            operand.put("excelHints", jsonObjectProperty(config.getExcelHints(), "excel-hints"));
         }
 
         // Derive the storage backend from the URI scheme. The file adapter only auto-detects
         // s3/http/hdfs from the directory, so ftp/ftps/sftp must be set explicitly here.
         String scheme = schemeOf(glob);
-        if (scheme != null) {
+        Map<String, Object> explicitStorageConfig = config.getStorageConfig() == null
+                ? null
+                : jsonObjectProperty(config.getStorageConfig(), "storage-config");
+        if (scheme == null) {
+            if (explicitStorageConfig != null) {
+                throw new IllegalArgumentException("The storage-config property needs a glob with a "
+                        + "storage scheme (onedrive://, gdrive://, s3://, sftp://), not '" + glob + "'");
+            }
+        }
+        else if (explicitStorageConfig != null) {
+            if (hasS3Properties(config) || hasSftpProperties(config)) {
+                throw new IllegalArgumentException("Set either the storage-config property or the "
+                        + "aws.* / sftp.* properties, not both");
+            }
+            operand.put("storageType", scheme);
+            operand.put("storageConfig", explicitStorageConfig);
+        }
+        else if (DRIVE_SCHEMES.contains(scheme)) {
+            throw new IllegalArgumentException("A " + scheme + ":// glob requires the storage-config "
+                    + "property (the drive's sign-in and location)");
+        }
+        if (scheme != null && DRIVE_SCHEMES.contains(scheme)) {
+            // Drive providers take paths relative to the drive (or root folder), not URIs.
+            String drivePath = directory.substring(scheme.length() + "://".length());
+            operand.put("directory", "/" + drivePath.replaceFirst("^/+", ""));
+        }
+        if (scheme != null && explicitStorageConfig == null) {
             operand.put("storageType", scheme);
             if ("s3".equals(scheme)) {
                 operand.put("storageConfig", buildS3StorageConfig(config, env));
@@ -237,10 +256,7 @@ public class FileClientModule
      */
     static Map<String, Object> buildSftpStorageConfig(FileConfig config)
     {
-        boolean hasCredential = config.getSftpUsername() != null
-                || config.getSftpPassword() != null
-                || config.getSftpPrivateKeyPath() != null;
-        if (!hasCredential) {
+        if (!hasSftpProperties(config)) {
             return null;
         }
         Map<String, Object> storageConfig = new LinkedHashMap<>();
@@ -284,6 +300,33 @@ public class FileClientModule
      * {@code null} when there is none — a plain local path, which the file adapter treats as
      * {@code local} storage.
      */
+    private static boolean hasSftpProperties(FileConfig config)
+    {
+        return config.getSftpUsername() != null
+                || config.getSftpPassword() != null
+                || config.getSftpPrivateKeyPath() != null;
+    }
+
+    private static boolean hasS3Properties(FileConfig config)
+    {
+        return config.getAwsAccessKey() != null
+                || config.getAwsSecretKey() != null
+                || config.getAwsRegion() != null
+                || config.getAwsEndpoint() != null;
+    }
+
+    /** Parses a catalog property holding one of the file adapter's operands as a JSON object. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> jsonObjectProperty(String json, String property)
+    {
+        try {
+            return MAPPER.readValue(json, LinkedHashMap.class);
+        }
+        catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("The " + property + " property is not a JSON object", e);
+        }
+    }
+
     static String schemeOf(String spec)
     {
         int idx = spec.indexOf("://");

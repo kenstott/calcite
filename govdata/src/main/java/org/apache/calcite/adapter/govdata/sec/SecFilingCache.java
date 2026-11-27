@@ -222,7 +222,7 @@ public class SecFilingCache implements AutoCloseable {
       if (!completed.isEmpty()) {
         FormType form = FormType.fromString(ie.formType);
         FileInventory inv = inventoryFromCompletedTables(completed);
-        String items = earningsItemsIfNeeded(form, inv, ie.cik, ie.accession);
+        String items = itemsIfNeeded(form, inv, ie.cik, ie.accession);
         if (inv.isComplete(form, vectorizationEnabled, items)) {
           cntTrackerComplete++;
           continue;
@@ -266,12 +266,25 @@ public class SecFilingCache implements AutoCloseable {
    * "unknown" and resolves conservatively. That is the correct reading here: the verdict was
    * reached without needing the items, not in spite of missing them.
    */
-  private static String earningsItemsIfNeeded(FormType form, FileInventory inv, String cik,
+  private static String itemsIfNeeded(FormType form, FileInventory inv, String cik,
       String accession) {
-    if (!form.expectsEarnings() || inv.has(FormType.OutputType.EARNINGS)) {
+    boolean earningsOwed = form.expectsEarnings() && !inv.has(FormType.OutputType.EARNINGS);
+    // Item 1.05 exists only since 2023-12-18, so an earlier accession cannot owe a cyber output.
+    boolean cyberMayBeOwed = (form == FormType.FORM_8K || form == FormType.FORM_8K_A)
+        && !inv.has(FormType.OutputType.CYBER_INCIDENT)
+        && accessionYearAtLeast(accession, CYBER_ITEM_FIRST_YEAR);
+    if (!earningsOwed && !cyberMayBeOwed) {
       return null;
     }
     return SecDataFetcher.getFilingItems(cik, accession);
+  }
+
+  /** First year in which an 8-K can carry Item 1.05 (Material Cybersecurity Incidents). */
+  private static final int CYBER_ITEM_FIRST_YEAR = 2023;
+
+  private static boolean accessionYearAtLeast(String accession, int year) {
+    String y = yearFromAccession(accession);
+    return y != null && Integer.parseInt(y) >= year;
   }
 
   /**
@@ -318,7 +331,7 @@ public class SecFilingCache implements AutoCloseable {
 
     // Have some tracker entries - check if complete
     FileInventory trackerInventory = inventoryFromCompletedTables(completedTables);
-    String items = earningsItemsIfNeeded(form, trackerInventory, cik, accession);
+    String items = itemsIfNeeded(form, trackerInventory, cik, accession);
     if (trackerInventory.isComplete(form, vectorizationEnabled, items)) {
       return ProcessingDecision.skip("Already complete");
     }
@@ -650,6 +663,9 @@ public class SecFilingCache implements AutoCloseable {
     if (inventory.hasEarnings()) {
       tracker.markComplete(key, "earnings", PHASE_STAGING, 1);
     }
+    if (inventory.hasCyberIncident()) {
+      tracker.markComplete(key, "cyber", PHASE_STAGING, 1);
+    }
     if (inventory.hasChunks()) {
       tracker.markComplete(key, "chunks", PHASE_STAGING, 1);
     }
@@ -673,6 +689,7 @@ public class SecFilingCache implements AutoCloseable {
         .hasRiskFactors(tables.contains("risk_factors"))
         .hasInsider(tables.contains("insider"))
         .hasEarnings(tables.contains("earnings"))
+        .hasCyberIncident(tables.contains("cyber"))
         .hasChunks(tables.contains("chunks"))
         .hasInstitutionalHoldings(tables.contains("13f"))
         .hasBeneficialOwnership(tables.contains("13dg"))
