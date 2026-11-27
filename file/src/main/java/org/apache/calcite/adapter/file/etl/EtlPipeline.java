@@ -168,6 +168,13 @@ public class EtlPipeline {
   private final Queue<PendingComboMark> pendingComboMarks =
       new ConcurrentLinkedQueue<PendingComboMark>();
 
+  /**
+   * Rows the standard writer reported accepting through {@link MaterializationWriter#writeBatch}
+   * this run. Units a {@link DataWriter} hook wrote itself are excluded: the standard writer
+   * never saw them, so its commit cannot account for them.
+   */
+  private final AtomicLong standardWriterRows = new AtomicLong();
+
   /** One deferred {@link #markCombosProcessed} call, held until the pipeline's commit succeeds. */
   private static final class PendingComboMark {
     final String pipelineName;
@@ -309,6 +316,7 @@ public class EtlPipeline {
     String pipelineName = config.getName();
     LOGGER.info("Starting ETL pipeline: {}", pipelineName);
     long startTime = System.currentTimeMillis();
+    standardWriterRows.set(0);
 
     // Release-window gate: a table-root `releaseWindow:` block restricts which calendar
     // months, days of week, and/or year parity this table's ETL is allowed to run in (e.g.
@@ -1863,28 +1871,23 @@ public class EtlPipeline {
 
       // Mark table as complete if all batches succeeded without errors
       if (failedBatches == 0 && errors.isEmpty()) {
-        // Reconcile rows this pipeline believes it processed (totalRows) against rows actually
-        // registered in the commit just performed, read back from the committed files
-        // themselves (Iceberg only — a Parquet writer has no equivalent post-commit readback,
-        // and every other writer here is a test mock with no real commit to reconcile against).
-        // A mismatch means rows were silently lost between being processed and landing in a
-        // committed file (e.g. a concurrent writer's commit interleaving with this one) — the
-        // tracker must never record `complete` with a row count that does not match what
-        // actually landed, since a `complete` marker makes the freshness gate skip the period on
-        // every subsequent run and the table never self-heals (kenstott/govdata-ops#86:
-        // weather.ghcnd_daily sat at 0.14% of its real size for four years, marked complete with
-        // the full row count, undetected for weeks).
-        // Skipped when a custom DataWriter hook is configured: totalRows there counts whatever
-        // dataWriter.write() reports, which materializes data through a path the standard writer
-        // never sees (writer.writeBatch is bypassed whenever dataWriter.write() succeeds — see
-        // processSingleBatch), so the two counts are not comparable.
-        if (dataWriter == null && writer instanceof IcebergMaterializationWriter) {
-          long committedRowCount = ((IcebergMaterializationWriter) writer).getCommittedRowCount();
-          if (committedRowCount != totalRows) {
-            throw new IOException("Pipeline '" + pipelineName + "' processed " + totalRows
-                + " rows but only " + committedRowCount + " were registered in the Iceberg"
-                + " commit — refusing to mark complete with a row count that does not match what"
-                + " actually landed in the table.");
+        // Reconcile the rows handed to the standard writer against the rows registered in this
+        // run's commits, read back from the committed files themselves (Iceberg only — a Parquet
+        // writer has no equivalent post-commit readback). A mismatch means rows were lost or
+        // duplicated between the writer and a committed file. The tracker must never record
+        // `complete` over that: a `complete` marker makes the freshness gate skip the period on
+        // every later run, so the table would not heal. Runs before the deferred per-combo and
+        // freshness marks below, so a mismatch leaves those unapplied too.
+        if (writer instanceof IcebergMaterializationWriter) {
+          IcebergMaterializationWriter icebergWriter = (IcebergMaterializationWriter) writer;
+          long expectedRowCount =
+              standardWriterRows.get() - icebergWriter.getRowsDroppedByPolicy();
+          long committedRowCount = icebergWriter.getCommittedRowCount();
+          if (committedRowCount != expectedRowCount) {
+            throw new IOException("Pipeline '" + pipelineName + "' handed " + expectedRowCount
+                + " rows to the writer but " + committedRowCount + " were registered in the"
+                + " Iceberg commit — refusing to mark complete with a row count that does not"
+                + " match what actually landed in the table.");
           }
         }
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);
@@ -2192,6 +2195,7 @@ public class EtlPipeline {
     // Stream rows through writeBatch — DuckDB PARTITION_BY handles physical partitioning.
     // writeBatch chunks internally so heap usage is bounded by batchSize, not dataset size.
     long writtenRows = writer.writeBatch(filtered, urlVariables);
+    standardWriterRows.addAndGet(writtenRows);
 
     if (counts[1] > 0) {
       LOGGER.info("Response partitioning: scanned={}, filtered={}, written={}",
@@ -2200,8 +2204,11 @@ public class EtlPipeline {
       LOGGER.info("Response partitioning complete: {} rows written", writtenRows);
     }
 
-    // Track at URL dimension level (e.g., indicator), not every partition combination
-    tracker.markProcessedWithRowCount(pipelineName, pipelineName, urlVariables, null, writtenRows);
+    // Track at URL dimension level (e.g., indicator), not every partition combination. Deferred
+    // like every other completion mark: the rows are not durable until the writer commits.
+    pendingComboMarks.add(
+        new PendingComboMark(pipelineName,
+            new LinkedHashMap<String, String>(urlVariables), writtenRows));
 
     return writtenRows;
   }
@@ -2594,9 +2601,11 @@ public class EtlPipeline {
               LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
             } else {
               batchRows = writer.writeBatch(data, variables);
+              standardWriterRows.addAndGet(batchRows);
             }
           } else {
             batchRows = writer.writeBatch(data, variables);
+            standardWriterRows.addAndGet(batchRows);
           }
           // Zero rows written: distinguish a GENUINE empty (source returned nothing — scanned == 0;
           // e.g. a period not yet published) from a SUSPECT empty (source returned rows but a

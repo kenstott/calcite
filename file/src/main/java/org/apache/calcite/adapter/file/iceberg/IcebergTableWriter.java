@@ -139,6 +139,8 @@ public class IcebergTableWriter {
    * write NULL — matching the historical (implicit, undocumented) behavior of this class.
    */
   private final Map<String, String> onCoercionFailurePolicies;
+  /** Rows {@link #writeRecords} left out under an {@code onCoercionFailure: DROP} policy. */
+  private long rowsDroppedByPolicy;
 
   /**
    * Runs a table-mutating operation under both serialization layers — the in-JVM per-table monitor
@@ -1119,6 +1121,13 @@ public class IcebergTableWriter {
   }
 
   /**
+   * Returns how many rows this writer left out under an {@code onCoercionFailure: DROP} policy.
+   */
+  public long getRowsDroppedByPolicy() {
+    return rowsDroppedByPolicy;
+  }
+
+  /**
    * Writes records to Iceberg using the native Parquet writer with proper field IDs.
    *
    * <p>This method creates Parquet files with Iceberg field IDs embedded in the schema,
@@ -1163,6 +1172,7 @@ public class IcebergTableWriter {
           if (coerced == DROP_ROW) {
             // onCoercionFailure: DROP on this field — skip the row entirely rather than
             // writing it with a missing/null value in a column that failed to parse.
+            rowsDroppedByPolicy++;
             continue rowLoop;
           }
           record.setField(fieldName, coerced);
