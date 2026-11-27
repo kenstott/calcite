@@ -63,7 +63,8 @@ partitionedTables:
       raw NCES CCD sentinel codes instead of a real count on some rows: -1 = Missing and
       -2 = Not Applicable are NCES's own official codes (numeric fields, all CCD surveys
       since 2002-03); -9 = does not meet NCES data quality standards is also an official
-      code, observed here on english_language_learners. These are meaningful metadata, not
+      code, observed here on english_language_learners; -3 also occurs, on
+      teachers_total_fte among other fields. These are meaningful metadata, not
       corrupted data, so this raw table keeps them as-is — but any view aggregating these
       fields (SUM/AVG/ratio) MUST exclude negative values first (value < 0), or the
       sentinel codes get silently summed in as if they were real counts.
@@ -144,7 +145,7 @@ partitionedTables:
       - name: spec_ed_students
         type: int
         nullable: true
-        comment: Students receiving special education services. Null for every LEA from year 2022 onward (the Urban Institute CCD directory API no longer publishes the field); populated 2013-2021. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
+        comment: Students receiving special education services. Null for every LEA from year 2022 onward (the Urban Institute CCD directory API no longer publishes the field); populated 2010-2021. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: english_language_learners
         type: int
         nullable: true
@@ -160,11 +161,11 @@ partitionedTables:
       - name: school_counselors_fte
         type: double
         nullable: true
-        comment: FTE school counselors
+        comment: FTE school counselors. Null before year 2016.
       - name: school_psychologists_fte
         type: double
         nullable: true
-        comment: FTE school psychologists
+        comment: FTE school psychologists. Null before year 2019.
       - name: librarian_specialists_fte
         type: double
         nullable: true
@@ -172,7 +173,7 @@ partitionedTables:
       - name: staff_total_fte
         type: double
         nullable: true
-        comment: Total FTE all staff categories. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
+        comment: Total FTE all staff categories. Null before year 2014. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: state_leg_district_lower
         type: string
         nullable: true
@@ -215,7 +216,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
-        minYear: 2015
+        minYear: 2012  # publish year; the data floor is year 2010 (minYear - dataLag), matching ccd_schools
         dataLag: 2
 
     materialize:
