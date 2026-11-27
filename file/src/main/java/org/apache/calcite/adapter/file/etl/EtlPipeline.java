@@ -115,6 +115,15 @@ public class EtlPipeline {
   private boolean perUnitFreshnessEnabled;
 
   /**
+   * Set only when the pipeline-level freshness probe ran AND reported the source CHANGED. A
+   * declared freshness config is not the same thing: the probe is skipped for a templated URL, a
+   * non-HttpSource, or a HASH-type gate, and an UNCHANGED verdict returns from the pipeline before
+   * any unit is processed. Read in {@link #processSingleBatch} so each unit's fetch bypasses its
+   * raw cache entry.
+   */
+  private boolean sourceFreshnessChanged;
+
+  /**
    * True when a freshness match is allowed to actually SKIP a write (vs only probe/hash and
    * capture the token). Equals {@code !forceReprocessAll}: under forceReprocessAll (no committed
    * data / cleared marker) we still capture and persist the token so the NEXT run can skip, but
@@ -380,11 +389,7 @@ public class EtlPipeline {
       // Read once, early: used both by the trailing-window force-reopen (Phase 2, below) and by
       // the freshness skip-gates (Phase 3b / processSingleBatch).
       FreshnessConfig freshnessConfig = config.getFreshness();
-      // Set only when the pipeline-level freshness probe actually ran AND reported the source
-      // CHANGED. A declared freshnessConfig is not the same thing: the probe is skipped for a
-      // templated URL, a non-HttpSource, or a HASH-type gate, and an UNCHANGED verdict returns
-      // from the pipeline before any of the skip paths below are reached.
-      boolean sourceFreshnessChanged = false;
+      sourceFreshnessChanged = false;
 
       // Completion markers are a *period* concept — a marker means "done for time period T".
       // A non-period table has no T, so completion / self-heal / per-period filtering does not
@@ -2328,6 +2333,14 @@ public class EtlPipeline {
         LOGGER.warn("Pipeline '{}': per-period freshness probe failed for unit {} ({}), "
             + "proceeding with full fetch", pipelineName, variables, e.getMessage());
       }
+    }
+
+    // The pipeline-level gate reported CHANGED, so every unit this run processes has to see what
+    // the source serves now. This covers the units the per-unit gate cannot judge: no dimensions, a
+    // partition-unsafe fan-out, or a probe that yields no token.
+    if (sourceFreshnessChanged && !isCacheReparsed(pipelineName)) {
+      ((HttpSource) dataSource).requireFreshRawCache(variables);
+      refetchUnit = true;
     }
 
     // Document sources use dataWriter directly — serialize writes
