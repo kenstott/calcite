@@ -101,27 +101,36 @@ final class PerUnitSkipSafety {
    * @return offending dimension names, in declaration order; empty when the key determines the unit
    */
   static Set<String> dimensionsOutsidePartition(EtlPipelineConfig config) {
-    if (config == null) {
-      return new LinkedHashSet<>();
-    }
-    Map<String, DimensionConfig> dimensions = config.getDimensions();
-    if (dimensions == null || dimensions.isEmpty()) {
-      return new LinkedHashSet<>();
-    }
-
-    Set<String> partitionVars = partitionVariables(config);
-    Set<String> offending = new LinkedHashSet<>();
-    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
-      String name = entry.getKey();
-      if (DERIVED.contains(name) || partitionVars.contains(name)) {
-        continue;
-      }
-      if (isSingleValued(entry.getValue())) {
-        continue;
-      }
-      offending.add(name);
+    Set<String> offending = multiValuedDimensions(config);
+    if (!offending.isEmpty()) {
+      offending.removeAll(partitionVariables(config));
     }
     return offending;
+  }
+
+  /**
+   * The independent fetch axes along which two units of a pipeline can differ: the declared
+   * dimensions other than derived companions and single-valued ones.
+   *
+   * @param config the pipeline config
+   * @return dimension names, in declaration order
+   */
+  static Set<String> multiValuedDimensions(EtlPipelineConfig config) {
+    Set<String> multiValued = new LinkedHashSet<>();
+    if (config == null) {
+      return multiValued;
+    }
+    Map<String, DimensionConfig> dimensions = config.getDimensions();
+    if (dimensions == null) {
+      return multiValued;
+    }
+    for (Map.Entry<String, DimensionConfig> entry : dimensions.entrySet()) {
+      String name = entry.getKey();
+      if (!DERIVED.contains(name) && !isSingleValued(entry.getValue())) {
+        multiValued.add(name);
+      }
+    }
+    return multiValued;
   }
 
   /**

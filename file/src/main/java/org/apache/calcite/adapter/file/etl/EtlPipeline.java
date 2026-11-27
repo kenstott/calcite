@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -134,14 +135,16 @@ public class EtlPipeline {
   private String deltaBoundValue;
 
   /**
-   * Per-unit freshness tokens for units SUCCESSFULLY written this run, keyed by
-   * {@code pipeline::unitKey}. A unit's token is added only after its write returns (see
+   * Freshness tokens for units SUCCESSFULLY written this run: per-unit tokens keyed by
+   * {@code pipeline::unitKey}, pipeline-scoped hash tokens keyed by the pipeline name, and the
+   * computed_delta high-water marks (see {@link #computedDeltaHwmKey}). A token is added only after its unit's write returns (see
    * {@link #processSingleBatch}), so a unit that throws never records one. Persisted to the
    * tracker after {@code writer.commit()} succeeds — independent of whether other units in a
    * fan-out failed — so one failing unit cannot discard the tokens of the units that committed
-   * cleanly (which would force those units to re-materialize every run).
+   * cleanly (which would force those units to re-materialize every run). Later units of the same
+   * run read a hash token shared across units through {@link #latestFreshnessToken}.
    */
-  private final Map<String, String> pendingUnitFreshnessTokens =
+  private final Map<String, String> pendingFreshnessTokens =
       new ConcurrentHashMap<String, String>();
 
   /**
@@ -157,7 +160,7 @@ public class EtlPipeline {
   /**
    * Per-combo completion marks for combos SUCCESSFULLY written this run, captured by
    * {@link #markCombosProcessed} but not applied to the tracker until {@code writer.commit()}
-   * succeeds — same reasoning as {@link #pendingUnitFreshnessTokens} above, applied to the more
+   * succeeds — same reasoning as {@link #pendingFreshnessTokens} above, applied to the more
    * consequential marker. A combo whose rows were only buffered, not yet durably committed, must
    * not be recorded {@code state=complete}: found live, fec.committee_contributions was marked
    * complete for 3 combos (2022/2024/2026, ~1.45M rows) even though every retry of the single
@@ -167,6 +170,13 @@ public class EtlPipeline {
    */
   private final Queue<PendingComboMark> pendingComboMarks =
       new ConcurrentLinkedQueue<PendingComboMark>();
+
+  /**
+   * Rows the standard writer reported accepting through {@link MaterializationWriter#writeBatch}
+   * this run. Units a {@link DataWriter} hook wrote itself are excluded: the standard writer
+   * never saw them, so its commit cannot account for them.
+   */
+  private final AtomicLong standardWriterRows = new AtomicLong();
 
   /** One deferred {@link #markCombosProcessed} call, held until the pipeline's commit succeeds. */
   private static final class PendingComboMark {
@@ -309,6 +319,10 @@ public class EtlPipeline {
     String pipelineName = config.getName();
     LOGGER.info("Starting ETL pipeline: {}", pipelineName);
     long startTime = System.currentTimeMillis();
+    standardWriterRows.set(0);
+    // Deferred marks belong to one run's commit; a run that never committed must not hand them on.
+    pendingFreshnessTokens.clear();
+    pendingComboMarks.clear();
 
     // Release-window gate: a table-root `releaseWindow:` block restricts which calendar
     // months, days of week, and/or year parity this table's ETL is allowed to run in (e.g.
@@ -1863,28 +1877,23 @@ public class EtlPipeline {
 
       // Mark table as complete if all batches succeeded without errors
       if (failedBatches == 0 && errors.isEmpty()) {
-        // Reconcile rows this pipeline believes it processed (totalRows) against rows actually
-        // registered in the commit just performed, read back from the committed files
-        // themselves (Iceberg only — a Parquet writer has no equivalent post-commit readback,
-        // and every other writer here is a test mock with no real commit to reconcile against).
-        // A mismatch means rows were silently lost between being processed and landing in a
-        // committed file (e.g. a concurrent writer's commit interleaving with this one) — the
-        // tracker must never record `complete` with a row count that does not match what
-        // actually landed, since a `complete` marker makes the freshness gate skip the period on
-        // every subsequent run and the table never self-heals (kenstott/govdata-ops#86:
-        // weather.ghcnd_daily sat at 0.14% of its real size for four years, marked complete with
-        // the full row count, undetected for weeks).
-        // Skipped when a custom DataWriter hook is configured: totalRows there counts whatever
-        // dataWriter.write() reports, which materializes data through a path the standard writer
-        // never sees (writer.writeBatch is bypassed whenever dataWriter.write() succeeds — see
-        // processSingleBatch), so the two counts are not comparable.
-        if (dataWriter == null && writer instanceof IcebergMaterializationWriter) {
-          long committedRowCount = ((IcebergMaterializationWriter) writer).getCommittedRowCount();
-          if (committedRowCount != totalRows) {
-            throw new IOException("Pipeline '" + pipelineName + "' processed " + totalRows
-                + " rows but only " + committedRowCount + " were registered in the Iceberg"
-                + " commit — refusing to mark complete with a row count that does not match what"
-                + " actually landed in the table.");
+        // Reconcile the rows handed to the standard writer against the rows registered in this
+        // run's commits, read back from the committed files themselves (Iceberg only — a Parquet
+        // writer has no equivalent post-commit readback). A mismatch means rows were lost or
+        // duplicated between the writer and a committed file. The tracker must never record
+        // `complete` over that: a `complete` marker makes the freshness gate skip the period on
+        // every later run, so the table would not heal. Runs before the deferred per-combo and
+        // freshness marks below, so a mismatch leaves those unapplied too.
+        if (writer instanceof IcebergMaterializationWriter) {
+          IcebergMaterializationWriter icebergWriter = (IcebergMaterializationWriter) writer;
+          long expectedRowCount =
+              standardWriterRows.get() - icebergWriter.getRowsDroppedByPolicy();
+          long committedRowCount = icebergWriter.getCommittedRowCount();
+          if (committedRowCount != expectedRowCount) {
+            throw new IOException("Pipeline '" + pipelineName + "' handed " + expectedRowCount
+                + " rows to the writer but " + committedRowCount + " were registered in the"
+                + " Iceberg commit — refusing to mark complete with a row count that does not"
+                + " match what actually landed in the table.");
           }
         }
         incrementalTracker.markTableCompleteWithConfig(pipelineName, configHash, dimensionSignature, totalRows);
@@ -1898,19 +1907,21 @@ public class EtlPipeline {
               pipelineName, probedFreshnessToken);
         }
       }
-      // Persist per-unit freshness tokens for the units actually written this run, independent of
-      // whether OTHER units in a fan-out failed. Each token here was recorded only after that
-      // unit's write returned (see processSingleBatch), and reaching this point means writer.commit()
-      // above succeeded — so those writes are durable. NOT gated on the whole-table clean commit:
-      // a single failing unit (e.g. one FIA state's HEAD timeout) must not discard the tokens of the
-      // ~50 states that committed cleanly, which otherwise forces a full re-materialize of every
-      // state on the next run.
-      if (!pendingUnitFreshnessTokens.isEmpty()) {
-        for (Map.Entry<String, String> entry : pendingUnitFreshnessTokens.entrySet()) {
+      // Persist the deferred freshness tokens for the units actually written this run,
+      // independent of whether OTHER units in a fan-out failed. Each token here was recorded only
+      // after that unit's write returned (see processSingleBatch), and reaching this point means
+      // writer.commit() above succeeded — so those writes are durable. NOT gated on the
+      // whole-table clean commit: a single failing unit (e.g. one FIA state's HEAD timeout) must
+      // not discard the tokens of the ~50 states that committed cleanly, which otherwise forces a
+      // full re-materialize of every state on the next run.
+      if (!pendingFreshnessTokens.isEmpty()) {
+        for (Map.Entry<String, String> entry : pendingFreshnessTokens.entrySet()) {
           incrementalTracker.putFreshnessToken(entry.getKey(), entry.getValue());
+          LOGGER.debug("Pipeline '{}': persisted freshness token {}={}",
+              pipelineName, entry.getKey(), entry.getValue());
         }
-        LOGGER.info("Pipeline '{}': persisted {} per-unit freshness tokens (committed units)",
-            pipelineName, pendingUnitFreshnessTokens.size());
+        LOGGER.info("Pipeline '{}': persisted {} freshness tokens (committed units)",
+            pipelineName, pendingFreshnessTokens.size());
       }
       // Apply deferred per-combo completion marks — reaching this point means writer.commit()
       // above succeeded, so every combo buffered this run is now durable. Must run before
@@ -2192,6 +2203,7 @@ public class EtlPipeline {
     // Stream rows through writeBatch — DuckDB PARTITION_BY handles physical partitioning.
     // writeBatch chunks internally so heap usage is bounded by batchSize, not dataset size.
     long writtenRows = writer.writeBatch(filtered, urlVariables);
+    standardWriterRows.addAndGet(writtenRows);
 
     if (counts[1] > 0) {
       LOGGER.info("Response partitioning: scanned={}, filtered={}, written={}",
@@ -2200,8 +2212,11 @@ public class EtlPipeline {
       LOGGER.info("Response partitioning complete: {} rows written", writtenRows);
     }
 
-    // Track at URL dimension level (e.g., indicator), not every partition combination
-    tracker.markProcessedWithRowCount(pipelineName, pipelineName, urlVariables, null, writtenRows);
+    // Track at URL dimension level (e.g., indicator), not every partition combination. Deferred
+    // like every other completion mark: the rows are not durable until the writer commits.
+    pendingComboMarks.add(
+        new PendingComboMark(pipelineName,
+            new LinkedHashMap<String, String>(urlVariables), writtenRows));
 
     return writtenRows;
   }
@@ -2299,7 +2314,7 @@ public class EtlPipeline {
     Map<String, String> variables = fetchUnit.getFetchVariables();
 
     // Freshness token captured for THIS unit by the gate below. Published to
-    // pendingUnitFreshnessTokens only at this method's successful return (after the write), so a
+    // pendingFreshnessTokens only at this method's successful return (after the write), so a
     // unit whose fetch/transform/write throws never records a token — it re-processes next run
     // rather than skipping unwritten data.
     String capturedFreshnessUnitKey = null;
@@ -2440,7 +2455,7 @@ public class EtlPipeline {
       // Stream the chain once through a multiset hash — O(1) memory, order-independent.
       String currentHash = hashRowsStreaming(data);
       closeQuietly(data);
-      String previousHash = incrementalTracker.getFreshnessToken(hashTokenKey);
+      String previousHash = latestFreshnessToken(hashTokenKey);
       // Only skip when committed data exists to preserve. Under forceReprocessAll (no Iceberg data /
       // purged / cleared marker) we still capture+persist the hash below, but must WRITE this run —
       // otherwise an unchanged source after a purge would skip forever and leave the table empty.
@@ -2473,20 +2488,27 @@ public class EtlPipeline {
     // computed_delta: STREAM the pull, emitting only rows whose modifiedField advanced past the
     // stored high-water mark and tracking the new max(modifiedField) as a side effect. O(1)
     // memory — the full dump is never materialised (a 3M+ row snapshot like GLEIF would OOM).
-    // The new HWM and the seen/changed counts are only final once the write has drained the
-    // iterator, so they are read back and persisted AFTER the write (mirrors the hash gate above).
-    final String computedDeltaHwmKey = pipelineName + COMPUTED_DELTA_HWM_SUFFIX;
-    final String[] computedDeltaHwm = {null};      // max(modifiedField) once `data` is drained
+    // Each unit filters against and advances only its own combos' marks, so a mark never covers
+    // rows of a unit that failed or has not run. The new max and the seen/changed counts are only
+    // final once the write has drained the iterator, so they are read back after the write and,
+    // like the hash token, persisted only after the writer commits.
+    final Map<String, String> priorHwmByKey = new LinkedHashMap<String, String>();
+    final String[] computedDeltaMax = {null};      // max(modifiedField) once `data` is drained
     final long[] computedDeltaCounts = {0L, 0L};   // [seen, emitted]
     boolean computedDeltaStreaming = false;
     if ("computed_delta".equals(config.getDatasetType())) {
       final String modifiedField = config.getModifiedField();
-      final String prevHwm = incrementalTracker.getFreshnessToken(computedDeltaHwmKey);
+      for (Map<String, String> combo : fetchUnit.getCombosToMark()) {
+        String key = computedDeltaHwmKey(config, pipelineName, combo);
+        priorHwmByKey.put(key, incrementalTracker.getFreshnessToken(key));
+      }
+      // A coalesced unit covers several combos in one fetch: filter against the oldest of their
+      // marks, and against none when any combo has no mark yet.
+      final String prevHwm = oldestMark(priorHwmByKey.values());
       LOGGER.info("computed_delta: modifiedField={}, prevHwm={}", modifiedField, prevHwm);
 
       if (modifiedField != null && !modifiedField.isEmpty()) {
         computedDeltaStreaming = true;
-        computedDeltaHwm[0] = prevHwm;
         // Fetched rows are keyed by SOURCE field name; `columns:` renames happen later, during
         // materialization. Resolve the configured name to the fetch-time key so the YAML may
         // spell it either way. Falls back to the configured name when nothing is declared.
@@ -2499,7 +2521,7 @@ public class EtlPipeline {
               modifiedField, resolvedField);
         }
         final Iterator<Map<String, Object>> upstream = data;
-        // Look-ahead filter: advances past unchanged rows (updating the HWM for every row it sees)
+        // Look-ahead filter: advances past unchanged rows (updating the max for every row it sees)
         // until it finds one to emit, so the write pulls only changed rows without buffering.
         data = new Iterator<Map<String, Object>>() {
           private Map<String, Object> nextRow;
@@ -2530,10 +2552,7 @@ public class EtlPipeline {
               Object modVal = row.get(resolvedField);
               String modStr = modVal == null ? null : String.valueOf(modVal);
               // Track max(modifiedField) over EVERY row (type-aware), even ones we drop.
-              if (modStr != null && (computedDeltaHwm[0] == null
-                  || compareModifiedValues(modStr, computedDeltaHwm[0]) > 0)) {
-                computedDeltaHwm[0] = modStr;
-              }
+              computedDeltaMax[0] = newerMark(computedDeltaMax[0], modStr);
               // Emit on first run (no prior HWM), when the row carries no modified value, or when
               // it advanced past the prior HWM.
               if (prevHwm == null || modStr == null
@@ -2569,7 +2588,6 @@ public class EtlPipeline {
     // Data is streamed directly — no pre-buffering; writeWithResponsePartitioning filters lazily.
     final boolean finalComputedDeltaStreaming = computedDeltaStreaming;
     final String finalHashFreshnessToken = hashFreshnessToken;
-    final boolean finalHashTokenPerUnit = hashTokenPerUnit;
     final String finalHashTokenKey = hashTokenKey;
     // The write consumes `data`, which on a hash-CHANGED run is the re-fetched chain (not
     // sourceChain). Close that chain after the write; sourceChain is closed too (idempotent,
@@ -2594,9 +2612,11 @@ public class EtlPipeline {
               LOGGER.debug("Used custom DataWriter for batch {}: {} rows", processedCount, batchRows);
             } else {
               batchRows = writer.writeBatch(data, variables);
+              standardWriterRows.addAndGet(batchRows);
             }
           } else {
             batchRows = writer.writeBatch(data, variables);
+            standardWriterRows.addAndGet(batchRows);
           }
           // Zero rows written: distinguish a GENUINE empty (source returned nothing — scanned == 0;
           // e.g. a period not yet published) from a SUSPECT empty (source returned rows but a
@@ -2616,31 +2636,22 @@ public class EtlPipeline {
           } else {
             markCombosProcessed(fetchUnit, config, pipelineName, batchRows);
           }
-          // Persist computed_delta HWM after a successful write. The streaming filter has now
-          // drained `data`, so the holder carries max(modifiedField) over the whole pull.
+          // Record the computed_delta marks and the hash token for the post-commit persist. The
+          // streaming filter has now drained `data`, so the holder carries max(modifiedField)
+          // over the whole pull. Persisting either before writer.commit() succeeds would let the
+          // next run skip rows that never reached the table.
           if (finalComputedDeltaStreaming) {
             LOGGER.info("computed_delta: {} of {} rows changed (maxModified={})",
-                computedDeltaCounts[1], computedDeltaCounts[0], computedDeltaHwm[0]);
-            if (computedDeltaHwm[0] != null) {
-              incrementalTracker.putFreshnessToken(computedDeltaHwmKey, computedDeltaHwm[0]);
-              LOGGER.info("computed_delta: persisted HWM={} for pipeline '{}'",
-                  computedDeltaHwm[0], pipelineName);
+                computedDeltaCounts[1], computedDeltaCounts[0], computedDeltaMax[0]);
+            for (Map.Entry<String, String> prior : priorHwmByKey.entrySet()) {
+              String mark = newerMark(prior.getValue(), computedDeltaMax[0]);
+              if (mark != null) {
+                pendingFreshnessTokens.put(prior.getKey(), mark);
+              }
             }
           }
-          // Persist hash freshness token after a successful write. Per-unit (lookback)
-          // tokens are deferred to pendingUnitFreshnessTokens — published only after the
-          // whole-pipeline writer.commit() succeeds, same as the ETAG/LAST_MODIFIED per-unit gate
-          // above — so a later commit failure can't leave a token recorded for data that was
-          // never actually made durable. Pipeline-scoped (non-trailing-window) HASH tables keep
-          // the prior immediate-write behavior unchanged.
           if (finalHashFreshnessToken != null) {
-            if (finalHashTokenPerUnit) {
-              pendingUnitFreshnessTokens.put(finalHashTokenKey, finalHashFreshnessToken);
-            } else {
-              incrementalTracker.putFreshnessToken(pipelineName, finalHashFreshnessToken);
-              LOGGER.info("hash freshness: persisted token={} for pipeline '{}'",
-                  finalHashFreshnessToken, pipelineName);
-            }
+            pendingFreshnessTokens.put(finalHashTokenKey, finalHashFreshnessToken);
           }
         }
 
@@ -2648,7 +2659,7 @@ public class EtlPipeline {
         // persist can skip this unit next run. Only reached on success — a throwing unit never
         // records a token, and the whole-table commit below makes this write durable.
         if (capturedFreshnessToken != null) {
-          pendingUnitFreshnessTokens.put(capturedFreshnessUnitKey, capturedFreshnessToken);
+          pendingFreshnessTokens.put(capturedFreshnessUnitKey, capturedFreshnessToken);
         }
 
         LOGGER.debug("Wrote {} rows for batch {}", batchRows, processedCount);
@@ -2660,6 +2671,52 @@ public class EtlPipeline {
         closeQuietly(sourceChain);
       }
     }
+  }
+
+  /**
+   * The tracker key of the computed_delta high-water mark covering one dimension combination. The
+   * combination is identified by its multi-valued dimensions, so a pipeline that can only ever
+   * have one combination keys its mark by pipeline name alone.
+   */
+  static String computedDeltaHwmKey(EtlPipelineConfig config, String pipelineName,
+      Map<String, String> combo) {
+    Map<String, String> identity = new LinkedHashMap<String, String>();
+    for (String dimension : PerUnitSkipSafety.multiValuedDimensions(config)) {
+      identity.put(dimension, combo.get(dimension));
+    }
+    String key = pipelineName + COMPUTED_DELTA_HWM_SUFFIX;
+    return identity.isEmpty() ? key : key + "::" + freshnessUnitKey(identity);
+  }
+
+  /** The newer of two modified-field values, either of which may be null (no value). */
+  private static String newerMark(String left, String right) {
+    if (left == null) {
+      return right;
+    }
+    return right == null || compareModifiedValues(left, right) >= 0 ? left : right;
+  }
+
+  /** The oldest of the marks, or null when any of them is absent. */
+  private static String oldestMark(Collection<String> marks) {
+    String oldest = null;
+    for (String mark : marks) {
+      if (mark == null) {
+        return null;
+      }
+      if (oldest == null || compareModifiedValues(mark, oldest) < 0) {
+        oldest = mark;
+      }
+    }
+    return oldest;
+  }
+
+  /**
+   * The token the next unit must compare against: the one an earlier unit of this run recorded
+   * and has not yet committed, otherwise the persisted one.
+   */
+  private String latestFreshnessToken(String key) {
+    String pending = pendingFreshnessTokens.get(key);
+    return pending != null ? pending : incrementalTracker.getFreshnessToken(key);
   }
 
   /**
