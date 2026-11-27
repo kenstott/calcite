@@ -21,6 +21,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -41,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * forceReprocessAll keep dropping or bypassing the cache.
  */
 @Tag("unit")
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 class ReparseCacheTablesTest {
   private static final String TABLE = "reparse_test_pipeline";
   private static final String REPARSE = "GOVDATA_REPARSE_CACHE_TABLES";

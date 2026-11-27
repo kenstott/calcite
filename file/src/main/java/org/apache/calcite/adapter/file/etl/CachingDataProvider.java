@@ -55,6 +55,21 @@ public interface CachingDataProvider extends DataProvider {
       RawCache rawCache) throws IOException;
 
   /**
+   * Whether every cache key this provider builds changes when the content behind it may have: the
+   * key carries the source's revision (a Last-Modified, a per-upload URL) or the refresh period the
+   * table re-reads on (a calendar month). Such an entry stays readable when a freshness gate or a
+   * lookback reopens the unit.
+   *
+   * <p>A provider whose keys name only the request returns false, and the pipeline then bypasses its
+   * entries for those units, so the fetch reaches the source.
+   *
+   * @return whether an existing entry is current by construction
+   */
+  default boolean isCacheKeyedByRevision() {
+    return false;
+  }
+
+  /**
    * Routes the plain form through the cache-aware one with a non-caching handle, so a caller that
    * only knows about {@link DataProvider} still gets correct results.
    */
