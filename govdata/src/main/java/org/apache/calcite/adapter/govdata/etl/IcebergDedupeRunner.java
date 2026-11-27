@@ -17,8 +17,11 @@ import org.apache.calcite.adapter.file.iceberg.S3FileIOTables;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,10 +49,13 @@ import java.util.TreeSet;
  * <p>Defaults to a dry run that reports what would be removed. {@code --execute} needs an explicit
  * {@code --tables} and {@code --years}, so a run never defaults to the whole warehouse.
  *
+ * <p>{@code --identical-rows} drops the grouping rule and keeps one copy of every identical row,
+ * for tables in which no row can legitimately repeat.
+ *
  * <pre>
  *   IcebergDedupeRunner --warehouse s3://bucket/sec --schema sec \
  *       [--tables t1,t2] [--years 2018,2019] [--group-column accession_number] \
- *       [--partition-column year] [--execute]
+ *       [--identical-rows] [--partition-column year] [--execute]
  *   IcebergDedupeRunner --warehouse s3://bucket/sec --tables t --rollback-to &lt;snapshotId&gt;
  * </pre>
  * Primary keys come from the schema YAML's {@code constraints}. S3 credentials come from
@@ -70,6 +76,7 @@ public final class IcebergDedupeRunner {
     String partitionColumn = "year";
     String rollbackTo = null;
     boolean execute = false;
+    boolean identicalRows = false;
     for (int i = 0; i < args.length; i++) {
       String a = args[i];
       if ("--warehouse".equals(a) && i + 1 < args.length) {
@@ -86,6 +93,8 @@ public final class IcebergDedupeRunner {
         partitionColumn = args[++i];
       } else if ("--rollback-to".equals(a) && i + 1 < args.length) {
         rollbackTo = args[++i];
+      } else if ("--identical-rows".equals(a)) {
+        identicalRows = true;
       } else if ("--execute".equals(a)) {
         execute = true;
       } else {
@@ -117,6 +126,9 @@ public final class IcebergDedupeRunner {
       System.exit(2);
     }
 
+    if (identicalRows) {
+      groupColumn = null;
+    }
     Map<String, List<String>> primaryKeys = loadPrimaryKeys(schemaName);
     List<String> tables = new ArrayList<String>();
     if (tablesCsv != null) {
@@ -128,7 +140,8 @@ public final class IcebergDedupeRunner {
     System.out.println(execute
         ? "MODE: EXECUTE — surplus copies will be removed"
         : "MODE: DRY RUN — nothing will be changed (pass --execute with --tables and --years)");
-    System.out.println("Warehouse: " + base + "   group column: " + groupColumn);
+    System.out.println("Warehouse: " + base + "   group column: "
+        + (groupColumn == null ? "none (identical rows)" : groupColumn));
     System.out.println();
     System.out.printf("%-24s %-6s %12s %12s %10s %12s  %s%n",
         "table", partitionColumn, "rows", "distinct", "groups*k", "to remove", "result");
@@ -145,7 +158,7 @@ public final class IcebergDedupeRunner {
       }
       try {
         Table table = S3FileIOTables.loadWritable(base + "/" + tableName, s3);
-        if (table.schema().findField(groupColumn) == null) {
+        if (groupColumn != null && table.schema().findField(groupColumn) == null) {
           System.out.printf("%-24s has no column %s — skipped%n", tableName, groupColumn);
           continue;
         }
@@ -155,7 +168,7 @@ public final class IcebergDedupeRunner {
         for (String year : years) {
           table.refresh();
           DedupeReport r = writer.dedupeCopies(groupColumn, key,
-              Expressions.equal(partitionColumn, Integer.parseInt(year)), execute);
+              partitionEquals(table, partitionColumn, year), execute);
           totalToRemove += r.rowsToRemove;
           totalRemoved += r.rowsRemoved;
           String result;
@@ -225,6 +238,17 @@ public final class IcebergDedupeRunner {
     return new ArrayList<String>(values);
   }
 
+  /** Equality on the partition column, with the value typed as the column is. */
+  static Expression partitionEquals(Table table, String partitionColumn, String value) {
+    Types.NestedField field = table.schema().findField(partitionColumn);
+    if (field == null) {
+      throw new IllegalArgumentException("no partition column '" + partitionColumn + "'");
+    }
+    return field.type().typeId() == Type.TypeID.STRING
+        ? Expressions.equal(partitionColumn, value)
+        : Expressions.equal(partitionColumn, Integer.parseInt(value));
+  }
+
   /** {@code constraints.<table>.primaryKey} for every table in the schema's YAML resource. */
   @SuppressWarnings("unchecked")
   static Map<String, List<String>> loadPrimaryKeys(String schema) throws Exception {
@@ -265,7 +289,7 @@ public final class IcebergDedupeRunner {
   private static void usage() {
     System.out.println("Usage: IcebergDedupeRunner --warehouse <s3://bucket/schema> --schema <name>");
     System.out.println("         [--tables t1,t2] [--years 2018,2019] [--group-column accession_number]");
-    System.out.println("         [--partition-column year] [--execute]");
+    System.out.println("         [--identical-rows] [--partition-column year] [--execute]");
     System.out.println("       IcebergDedupeRunner --warehouse <...> --tables <t> --rollback-to <snapshotId>");
     System.out.println("Dry run by default; --execute needs --tables and --years.");
   }
