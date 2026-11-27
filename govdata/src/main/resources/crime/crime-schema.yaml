@@ -330,7 +330,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 102000
-      checkedAt: "2026-11-26T05:22:07Z"
+      checkedAt: "2026-11-27T05:42:34Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE summarized crime rates by state and offense type. Includes offense rate,
@@ -442,7 +442,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 867
-      checkedAt: "2026-11-26T05:22:08Z"
+      checkedAt: "2026-11-27T05:42:35Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE police employment data by state and year. Includes officers per 1,000
@@ -536,7 +536,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 221031
-      checkedAt: "2026-11-26T05:22:09Z"
+      checkedAt: "2026-11-27T05:42:37Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE LEOKA (Law Enforcement Officers Killed and Assaulted) Police Employee data at
@@ -674,7 +674,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 250869
-      checkedAt: "2026-11-26T05:22:10Z"
+      checkedAt: "2026-11-27T05:42:38Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE hate crime statistics by state and year. Flattened from nested sections
@@ -745,7 +745,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 12312
-      checkedAt: "2026-11-26T05:22:10Z"
+      checkedAt: "2026-11-27T05:42:39Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE use of force data by state and year, flattened into generic
@@ -820,7 +820,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 5004480
-      checkedAt: "2026-11-26T05:22:12Z"
+      checkedAt: "2026-11-27T05:42:41Z"
     # DQ sample cap (GOVDATA_DQ mode): the national Return A file unpivots to ~313k rows/year
     # (≈26k agencies × 12 months). Cap each year's sample; applied after the month-unpivot
     # transformer so it bounds output rows. Cache-safe — the fixed-width raw cache is written in
@@ -1588,7 +1588,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 153459
-      checkedAt: "2026-11-26T05:22:12Z"
+      checkedAt: "2026-11-27T05:42:42Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE arrest data by state, aggregated to annual (Jan-Dec) totals for all
@@ -1666,7 +1666,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 116178
-      checkedAt: "2026-11-26T05:22:13Z"
+      checkedAt: "2026-11-27T05:42:43Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE Supplementary Homicide Report data, aggregated to annual (Jan-Dec)
@@ -1742,7 +1742,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 71043
-      checkedAt: "2026-11-26T05:22:13Z"
+      checkedAt: "2026-11-27T05:42:43Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE Law Enforcement Officers Killed and Assaulted (LEOKA) data.
@@ -2176,7 +2176,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 9537
-      checkedAt: "2026-11-26T05:22:14Z"
+      checkedAt: "2026-11-27T05:42:44Z"
     partitions: *standard_partitions
     comment: >
       FBI CDE supplemental property crime data. Stolen and recovered property
@@ -2247,9 +2247,13 @@ partitionedTables:
     pattern: "type=nibrs/endpoint_id=*/*.parquet"
     partitions: *endpoint_partitions
     comment: >
-      Bureau of Justice Statistics NIBRS national crime estimates from 6 SODA endpoints.
+      Bureau of Justice Statistics NIBRS national crime estimates from 6 SODA endpoints
+      (incidents, offenses, victimization counts and victimization rates). One row per
+      published table cell: indicator, domain and category, estimate type with its
+      percentage or rate denominator, population subgroup, and estimate year. Filter on
+      all of these before aggregating; rows are overlapping breakdowns, not additive parts.
       Includes weighted estimates, confidence intervals, standard errors, agency counts,
-      and population coverage for violent and property crime indicators.
+      and population coverage.
 
     dimensions:
       type:
@@ -2271,9 +2275,11 @@ partitionedTables:
         nullable: true
         comment: Weighted national estimate
       - name: estimate_unweighted
-        type: long
+        type: double
         nullable: true
-        comment: Raw unweighted count
+        comment: >
+          Unweighted estimate from reporting agencies, in the unit given by estimate_type:
+          a count, a percentage, or a rate
       - name: estimate_type
         type: string
         nullable: true
@@ -2282,10 +2288,30 @@ partitionedTables:
         type: string
         nullable: true
         comment: Primary domain (Incident count, Weapon involved, etc.)
+      - name: estimate_domain_2
+        type: string
+        nullable: true
+        comment: >
+          Category within estimate_domain_1 (e.g., '1 offender', '12-17', 'Yes').
+          NULL where the source publishes no category
+      - name: estimate_type_detail_percentage
+        type: string
+        nullable: true
+        comment: >
+          Denominator of a percentage estimate (e.g., 'Incident Level',
+          'Victim Level subset to female'). NULL for other estimate types
+      - name: estimate_type_detail_rate
+        type: string
+        nullable: true
+        comment: >
+          Denominator of a rate estimate (e.g., 'Victim rate per 100,000 persons').
+          NULL for other estimate types
       - name: estimate_geographic_location
         type: string
         nullable: true
-        comment: Geographic location (typically National)
+        comment: >
+          Geography and population subgroup of the estimate, 'National' for all persons
+          or a victim subgroup such as 'Age:12-17 National' or 'Sex:Female National'
       - name: estimate_standard_error
         type: double
         nullable: true
@@ -2318,19 +2344,43 @@ partitionedTables:
         type: string
         nullable: true
         comment: BJS table reference
+      - name: der_variable_name
+        type: string
+        nullable: false
+        comment: BJS identifier of the published table cell (e.g., 't_1a_10_44_1')
+      - name: permutation_number
+        type: integer
+        nullable: false
+        comment: BJS number of the population subgroup named in estimate_geographic_location
+      - name: analysis_weight_name
+        type: string
+        nullable: true
+        comment: Name of the survey weight used for the estimate (e.g., NationalWgt)
+      - name: estimates_version
+        type: string
+        nullable: true
+        comment: Release status of the estimate (initial or final)
 
     source:
       type: http
-      url: "https://api.ojp.gov/bjsdataset/v1/{endpoint_id}.json?$limit=50000"
+      url: "https://api.ojp.gov/bjsdataset/v1/{endpoint_id}.json?$order=:id"
       method: GET
       response:
         format: json
+        # SODA caps a single request at 50k rows; page through $offset in row-id order.
+        pagination:
+          type: OFFSET
+          limitParam: "$limit"
+          offsetParam: "$offset"
+          pageSize: 50000
       rateLimit:
         requestsPerSecond: 10.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
         enabled: true
+        # Keyed on the variables that select the paginated response; the cache holds the merged pages.
+        keyVars: [endpoint_id, year]
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.crime.BjsSodaTransformer"
@@ -2363,7 +2413,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 20878
-      checkedAt: "2026-11-26T05:22:15Z"
+      checkedAt: "2026-11-27T05:42:45Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS personal victimization microdata, one row
@@ -2515,7 +2565,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2302736
-      checkedAt: "2026-11-26T05:22:16Z"
+      checkedAt: "2026-11-27T05:42:47Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS personal population data. Demographic
@@ -2652,7 +2702,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 81536
-      checkedAt: "2026-11-26T05:22:16Z"
+      checkedAt: "2026-11-27T05:42:48Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS household victimization microdata, one row
@@ -2779,7 +2829,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1669337
-      checkedAt: "2026-11-26T05:22:18Z"
+      checkedAt: "2026-11-27T05:42:51Z"
     partitions: *standard_partitions
     comment: >
       Bureau of Justice Statistics NCVS household population data — demographic
@@ -2979,8 +3029,9 @@ constraints:
   bjs_nibrs_estimates:
     primaryKey:
       - endpoint_id
-      - indicator_name
-      - estimate_domain_1
+      - der_variable_name
+      - estimate_type
+      - permutation_number
       - time_series_start_year
 
 # ============================================================================

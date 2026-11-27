@@ -10,89 +10,69 @@
  */
 package org.apache.calcite.adapter.govdata.crime;
 
+import org.apache.calcite.adapter.file.etl.PerRecordResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.io.IOException;
+import java.util.Map;
 
 /**
  * Transforms Bureau of Justice Statistics SODA API responses.
  *
  * <p>SODA (Socrata Open Data API) returns JSON arrays directly.
- * This transformer validates the response and enriches records with
+ * This transformer validates each fetched page and enriches records with
  * the {@code endpoint_id} dimension for multi-endpoint tables like
  * {@code bjs_nibrs_estimates}.
  *
- * <p>For empty or error responses, returns an empty array.
+ * <p>Implements {@link PerRecordResponseTransformer} because the raw cache of a paginated
+ * source holds a merged {@code {"results":[...]}} envelope rather than a SODA response;
+ * {@code HttpSource} streams its records through {@link #transformRecord}.
+ *
+ * <p>An empty body, an error object or any other non-array response fails the fetch, so a
+ * failed page never ends pagination as if the data were complete.
  */
-public class BjsSodaTransformer implements ResponseTransformer {
+public class BjsSodaTransformer implements PerRecordResponseTransformer {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(BjsSodaTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final String ENDPOINT_ID = "endpoint_id";
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
-      LOGGER.warn("BJS SODA: Empty response for {}", context.getUrl());
-      return "[]";
+      throw new RuntimeException("BJS SODA: Empty response for " + context.getUrl());
     }
 
+    JsonNode root;
     try {
-      JsonNode root = MAPPER.readTree(response);
-
-      // Check for error responses (SODA returns error objects, not arrays)
-      if (root.isObject()) {
-        if (root.has("error") || root.has("message")) {
-          String errorMsg = root.has("error")
-              ? root.get("error").asText()
-              : root.get("message").asText();
-          LOGGER.warn("BJS SODA: API error for {}: {}", context.getUrl(), errorMsg);
-          return "[]";
-        }
-        // Single object - wrap in array
-        LOGGER.debug("BJS SODA: Wrapping single object in array");
-        return "[" + root.toString() + "]";
-      }
-
-      if (!root.isArray()) {
-        LOGGER.warn("BJS SODA: Unexpected response type {} for {}",
-            root.getNodeType(), context.getUrl());
-        return "[]";
-      }
-
-      if (root.size() == 0) {
-        LOGGER.debug("BJS SODA: Empty array for {}", context.getUrl());
-        return "[]";
-      }
-
-      // Enrich with endpoint_id if present in dimensions
-      String endpointId = context.getDimensionValues().get("endpoint_id");
-      if (endpointId != null) {
-        ArrayNode enriched = MAPPER.createArrayNode();
-        for (JsonNode item : root) {
-          if (item.isObject()) {
-            ObjectNode row = ((ObjectNode) item).deepCopy();
-            row.put("endpoint_id", endpointId);
-            enriched.add(row);
-          } else {
-            enriched.add(item);
-          }
-        }
-        LOGGER.debug("BJS SODA: Enriched {} records with endpoint_id={}",
-            enriched.size(), endpointId);
-        return enriched.toString();
-      }
-
-      LOGGER.debug("BJS SODA: Passing through {} records", root.size());
-      return root.toString();
-
-    } catch (Exception e) {
+      root = MAPPER.readTree(response);
+    } catch (IOException e) {
       throw new RuntimeException("BJS SODA: Failed to parse response for " + context.getUrl(), e);
+    }
+
+    if (!root.isArray()) {
+      JsonNode error = root.has("error") ? root.get("error") : root.get("message");
+      throw new RuntimeException("BJS SODA: Expected a JSON array from " + context.getUrl()
+          + ", got " + (error != null ? "error: " + error.asText() : root.getNodeType()));
+    }
+
+    String endpointId = context.getDimensionValues().get(ENDPOINT_ID);
+    if (endpointId != null) {
+      for (JsonNode item : root) {
+        if (item.isObject()) {
+          ((ObjectNode) item).put(ENDPOINT_ID, endpointId);
+        }
+      }
+    }
+    return root.toString();
+  }
+
+  @Override public void transformRecord(Map<String, Object> row, RequestContext context) {
+    String endpointId = context.getDimensionValues().get(ENDPOINT_ID);
+    if (endpointId != null) {
+      row.put(ENDPOINT_ID, endpointId);
     }
   }
 }
