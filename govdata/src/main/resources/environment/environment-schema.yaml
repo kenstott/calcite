@@ -1842,7 +1842,10 @@ partitionedTables:
       the last county-grain vintage published; USGS moved to an annual/HUC12/model-based
       approach after 2015). Livestock and aquaculture are omitted: their sector-code assignment
       is ambiguous before 2005 and immaterial to industrial-siting screening. state_fips/
-      county_fips join geo.
+      county_fips join geo. The 2000 vintage leaves domestic and total blank (null) for every
+      county in Connecticut, Hawaii, Kentucky, Maine, Oregon, Pennsylvania, Tennessee, Texas,
+      Utah, West Virginia and the U.S. Virgin Islands, and mining is null for many states, so
+      2000 national sums of those sectors are partial.
 
     dimensions:
       type:
