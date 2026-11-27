@@ -193,6 +193,24 @@ public class CommitPerPartitionMultiChunkTest {
     assertEquals(6, committedRecords(), "every row survives the replace-then-append sequence");
   }
 
+  /** In append mode each commit adds only the new files; a re-added file duplicates its rows. */
+  @Test public void appendModeCommitsEveryChunkExactlyOnce() throws Exception {
+    File warehouseDir = new File(tempDir, "warehouse_append_chunks");
+    warehouseDir.mkdirs();
+    writer = new IcebergMaterializationWriter(storageProvider,
+        warehouseDir.getAbsolutePath(), null, tempDir);
+    writer.initialize(config(warehouseDir, "append_chunk_table", true, false));
+
+    Map<String, String> partition = partition("east");
+    writer.writeBatch(rows(1, 2), partition);
+    writer.writeBatch(rows(3, 4), partition);
+    writer.writeBatch(rows(5, 6), partition);
+    writer.commit();
+
+    assertEquals(6L, committedRecords());
+    assertEquals(6L, writer.getCommittedRowCount());
+  }
+
   private static Map<String, String> partition(String region) {
     Map<String, String> vars = new LinkedHashMap<>();
     vars.put("region", region);
@@ -223,6 +241,11 @@ public class CommitPerPartitionMultiChunkTest {
 
   private static MaterializeConfig config(File warehouseDir, String tableName,
       boolean commitPerPartition) {
+    return config(warehouseDir, tableName, commitPerPartition, true);
+  }
+
+  private static MaterializeConfig config(File warehouseDir, String tableName,
+      boolean commitPerPartition, boolean overwritePartitions) {
     List<ColumnConfig> columns = Arrays.asList(
         column("id", "INTEGER"), column("value", "VARCHAR"), column("region", "VARCHAR"));
     return MaterializeConfig.builder()
@@ -242,7 +265,7 @@ public class CommitPerPartitionMultiChunkTest {
             .catalogType(MaterializeConfig.IcebergConfig.CatalogType.HADOOP)
             .warehousePath(warehouseDir.getAbsolutePath())
             .namespace("default")
-            .overwritePartitions(true)
+            .overwritePartitions(overwritePartitions)
             .build())
         .build();
   }
