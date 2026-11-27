@@ -27,6 +27,7 @@ public class FileInventory {
   private final boolean hasRiskFactors;
   private final boolean hasInsider;
   private final boolean hasEarnings;
+  private final boolean hasCyberIncident;
   private final boolean hasChunks;
   private final boolean hasInstitutionalHoldings;
   private final boolean hasBeneficialOwnership;
@@ -41,6 +42,7 @@ public class FileInventory {
     this.hasRiskFactors = builder.hasRiskFactors;
     this.hasInsider = builder.hasInsider;
     this.hasEarnings = builder.hasEarnings;
+    this.hasCyberIncident = builder.hasCyberIncident;
     this.hasChunks = builder.hasChunks;
     this.hasInstitutionalHoldings = builder.hasInstitutionalHoldings;
     this.hasBeneficialOwnership = builder.hasBeneficialOwnership;
@@ -88,6 +90,10 @@ public class FileInventory {
 
   public boolean hasInsider() {
     return hasInsider;
+  }
+
+  public boolean hasCyberIncident() {
+    return hasCyberIncident;
   }
 
   public boolean hasEarnings() {
@@ -147,6 +153,8 @@ public class FileInventory {
       return hasInsider;
     case EARNINGS:
       return hasEarnings;
+    case CYBER_INCIDENT:
+      return hasCyberIncident;
     case CHUNKS:
       return hasChunks;
     case INSTITUTIONAL_HOLDINGS:
@@ -163,7 +171,7 @@ public class FileInventory {
    */
   public boolean hasAnyFiles() {
     return hasMetadata || hasFacts || hasContexts || hasRelationships
-        || hasMda || hasRiskFactors || hasInsider || hasEarnings || hasChunks
+        || hasMda || hasRiskFactors || hasInsider || hasEarnings || hasCyberIncident || hasChunks
         || hasInstitutionalHoldings || hasBeneficialOwnership;
   }
 
@@ -227,6 +235,9 @@ public class FileInventory {
     if (hasEarnings) {
       present.add("earnings");
     }
+    if (hasCyberIncident) {
+      present.add("cyber");
+    }
     if (hasChunks) {
       present.add("chunks");
     }
@@ -254,6 +265,7 @@ public class FileInventory {
     private boolean hasRiskFactors;
     private boolean hasInsider;
     private boolean hasEarnings;
+    private boolean hasCyberIncident;
     private boolean hasChunks;
     private boolean hasInstitutionalHoldings;
     private boolean hasBeneficialOwnership;
@@ -300,6 +312,11 @@ public class FileInventory {
 
     public Builder hasEarnings(boolean hasEarnings) {
       this.hasEarnings = hasEarnings;
+      return this;
+    }
+
+    public Builder hasCyberIncident(boolean hasCyberIncident) {
+      this.hasCyberIncident = hasCyberIncident;
       return this;
     }
 

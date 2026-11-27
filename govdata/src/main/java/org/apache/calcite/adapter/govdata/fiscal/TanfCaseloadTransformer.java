@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
+import org.apache.calcite.adapter.govdata.HeadedPageSession;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -67,7 +68,7 @@ public class TanfCaseloadTransformer implements StreamingResponseTransformer {
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context) {
     int minFy = Integer.parseInt(param(context, "minFiscalYear"));
     int lastFy = currentFiscalYear() + 1;
-    FiscalBrowserSession session = FiscalBrowserSession.get(context);
+    HeadedPageSession session = HeadedPageSession.get(context);
     Map<String, Map<String, Object>> rows = new LinkedHashMap<String, Map<String, Object>>();
     int workbooks = 0;
     try {

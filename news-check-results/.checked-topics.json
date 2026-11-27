@@ -2759,5 +2759,145 @@
       "everyman"
     ],
     "note": "causal credit extracted as author claim mostly false (post-fix); engine 1 vs unaided 2 (rubric cap, same as q5)"
+  },
+  {
+    "topic_slug": "americangreatness-hanson-biden-inflation-21-4-percent",
+    "headline": "American Greatness: Victor Davis Hanson, 'Affordability\u2014Really?'",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q1/askamerica/2026-11-27",
+    "pinocchios": 1,
+    "source_url": "https://amgreatness.com/2026/11/26/affordability-really",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "shape ok (columnist assertions, all author_claims); no gap; GDP 4.3% verified (GDPC1 24408.0->24665.2)"
+  },
+  {
+    "topic_slug": "fortune-brookings-defense-13-percent-federal-budget",
+    "headline": "Fortune: U.S. defense spend falls to 13% of federal budget, lowest since World War II",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q2/askamerica/2026-11-27",
+    "pinocchios": 2,
+    "source_url": "https://fortune.com/2026/11/25/u-s-defense-federal-budget-china-military-investment-gap/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "shape fixed via resume (Schweikert + China quote -> subject_claims, verified); no gap (Medicaid 'no line' = MTS nav miss; data in health/OMB tables)"
+  },
+  {
+    "topic_slug": "cei-crews-federal-register-rule-count-historic-low",
+    "headline": "CEI: The regulatory turkey lost weight, but Washington's still gobbling this Thanksgiving",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q3/askamerica/2026-11-27",
+    "pinocchios": 1,
+    "source_url": "https://cei.org/blog/the-regulatory-turkey-lost-weight-but-washingtons-still-gobbling-this-thanksgiving/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "shape fixed via resume (Miller -> subject_claims, verified; report now states rating); filed #1600 fedregister page fields"
+  },
+  {
+    "topic_slug": "dtn-lower-mississippi-drought-driest-warmest-aug-oct",
+    "headline": "DTN: Drought Maintains a Tight Grip on the Lower Mississippi River",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q4/askamerica/2026-11-27",
+    "pinocchios": 1,
+    "source_url": "https://www.dtnpf.com/agriculture/web/ag/blogs/ag-weather-forum/blog-post/2026/11/23/drought-maintains-tight-grip-lower",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "shape ok (relayed NIDIS/USDM statements as fidelity audits); no gap filed (USDM narrative text only)"
+  },
+  {
+    "topic_slug": "patentlyo-record-weekly-patent-issues-since-1976",
+    "headline": "Patently-O: Issue Fee to Grant: Record Weekly Patent Issues Are a USPTO Catch-Up",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q5/askamerica/2026-11-27",
+    "pinocchios": null,
+    "source_url": "https://patentlyo.com/patent/2026/11/issue-fee-to-grant-record-weekly-patent-issues-are-a-uspto-catch-up.html",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "engine no rating (too few checkable); agent stated 1 provisional; resolution (a) filed #1602 patent_grants no 2026; expert counted Official Gazette number ranges (9,913)"
+  },
+  {
+    "topic_slug": "medicaldaily-medicaid-work-rule-delay-or-ky-nh",
+    "headline": "Medical Daily: Oregon, Kentucky and New Hampshire Delay Medicaid Work-Rule Coverage Cuts Until July 2027",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q6/askamerica/2026-11-27",
+    "pinocchios": 0,
+    "source_url": "https://medicaldaily.com/states-delay-medicaid-work-rule-cuts-2027-481661",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "shape ok (Beshear/Williams subject_claims); no gap; cause (d): expert found AZ ~104k must-report figure via secondary trade report (different measure), web depth only"
+  },
+  {
+    "topic_slug": "bettermarkets-community-bank-asset-share-45-to-15",
+    "headline": "Better Markets: FDIC Merger Rules Threaten Survival of Community Banks and the Main Street Economy",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q7/askamerica/2026-11-27",
+    "pinocchios": 0,
+    "source_url": "https://bettermarkets.org/newsroom/fdic-merger-rules-threaten-survival-of-community-banks-and-the-main-street-economy/",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "shape ok (advocacy group's own assertions); 14.39%/69.94% verified live; filed #1610 banking.financials loan columns"
+  },
+  {
+    "topic_slug": "wjac-pa-electric-price-to-compare-dec-1-increase",
+    "headline": "WJAC: Electric rates set to rise Dec. 1 for most Pa. utilities; PUC urges help options",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q8/askamerica/2026-11-27",
+    "pinocchios": 0,
+    "source_url": "https://wjactv.com/news/local/electric-rates-set-to-rise-dec-1-for-most-pa-utilities-puc-urges-help-options",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "first pass SEVERITY [expert, everyman, askamerica] (missed 2026 PUC release); resolution (b) fact-check recipe step 16 current-year release; rerun found 2026-11-23 PUC release -> [expert, askamerica, everyman]; jar bak-2026-11-27-news-q8-current-year-release"
+  },
+  {
+    "topic_slug": "wftv-florida-traffic-fatalities-2155-vs-3000",
+    "headline": "WDBO/WFTV: Traffic fatalities drop significantly across Florida and the nation",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q9/askamerica/2026-11-27",
+    "pinocchios": null,
+    "source_url": "https://www.wdbo.com/news/local/traffic-fatalities-drop-significantly-across-florida-nation/BOX42ZXJDVFM7ENMFIZHNNILQE/",
+    "ranks": [
+      "expert",
+      "askamerica",
+      "everyman"
+    ],
+    "note": "first pass SEVERITY [expert, everyman, askamerica] (engine 0pin with central claim unsupported; read only NHTSA press release); resolution (b) fact-check recipe step 17 sub-national table of the federal release; rerun read DOT HS 813 875 Table 3 (FL 1,474->1,439, verified) -> [expert, askamerica, everyman]; engine no rating on rerun, agent 3; jar bak-2026-11-27-news-q9-subnational-table"
+  },
+  {
+    "topic_slug": "foxbusiness-trump-gdp-revision-fake-purposeful-error",
+    "headline": "Fox Business: Trump demands probe into 'fake' pre-election GDP data after Q3 growth revised up to 4.3%",
+    "checked_date": "2026-11-27",
+    "run_subpath": "q10/askamerica/2026-11-27",
+    "pinocchios": 0,
+    "source_url": "https://www.foxbusiness.com/politics/trump-demands-probe-pre-election-gdp-data-revision",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "shape ok (Trump quote subject_claims); no gap; GDPC1 values match q1's independent read"
   }
 ]

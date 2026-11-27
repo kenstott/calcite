@@ -171,6 +171,9 @@ public enum FormType {
     if (outputs.contains(OutputType.EARNINGS) && items != null && !reportsEarningsItem(items)) {
       outputs.remove(OutputType.EARNINGS);
     }
+    if ((this == FORM_8K || this == FORM_8K_A) && items != null && reportsItem(items, "1.05")) {
+      outputs.add(OutputType.CYBER_INCIDENT);
+    }
     return outputs;
   }
 
@@ -182,8 +185,15 @@ public enum FormType {
    * {@code 2.02}.
    */
   private static boolean reportsEarningsItem(String items) {
+    return reportsItem(items, "2.02");
+  }
+
+  /**
+   * Whether a comma-separated EDGAR item list names {@code wanted} as a whole item.
+   */
+  static boolean reportsItem(String items, String wanted) {
     for (String item : items.split(",")) {
-      if ("2.02".equals(item.trim())) {
+      if (wanted.equals(item.trim())) {
         return true;
       }
     }
@@ -269,7 +279,9 @@ public enum FormType {
     EARNINGS("earnings"),
     CHUNKS("chunks"),
     INSTITUTIONAL_HOLDINGS("13f"),
-    BENEFICIAL_OWNERSHIP("13dg");
+    BENEFICIAL_OWNERSHIP("13dg"),
+    /** 8-K Item 1.05 (Material Cybersecurity Incidents); expected only when EDGAR's items name it. */
+    CYBER_INCIDENT("cyber");
 
     private final String suffix;
 

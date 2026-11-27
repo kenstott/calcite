@@ -12363,6 +12363,10 @@ public class McpServer {
      * pay that, including the exact hits that are the common case; running exact alone first
      * returns those in seconds and leaves the scan for terms that genuinely need it.
      */
+    /** ref.sec_company_tickers keeps one capture per as_of date; lookups read the latest. */
+    private static final String CURRENT_TICKER_CAPTURE =
+        "as_of = (SELECT MAX(as_of) FROM ref.sec_company_tickers)";
+
     /**
      * Resolves a ticker to the normalized form of its registered company name, or null.
      *
@@ -12374,7 +12378,7 @@ public class McpServer {
      * filers — see the identifierHit note above — but that backfill still runs off a resolved
      * name, so this ticker-to-name translation remains the way a bare ticker reaches it.)
      *
-     * <p>ref.sec_company_tickers is ~10k rows, so this costs a small scan and only runs when
+     * <p>One capture of ref.sec_company_tickers is ~10k rows, so this costs a small scan and only runs when
      * the term could plausibly be a ticker.
      */
     private static String tickerAlias(String term) {
@@ -12386,8 +12390,8 @@ public class McpServer {
         }
         try {
             ArrayNode rows = runSqlRows(
-                "SELECT title FROM ref.sec_company_tickers WHERE upper(ticker) = "
-                + sqlStr(t.toUpperCase(java.util.Locale.ROOT)), 1);
+                "SELECT title FROM ref.sec_company_tickers WHERE " + CURRENT_TICKER_CAPTURE
+                + " AND upper(ticker) = " + sqlStr(t.toUpperCase(java.util.Locale.ROOT)), 1);
             if (rows.size() == 0) {
                 return null;
             }
@@ -12764,7 +12768,8 @@ public class McpServer {
                     up.add(t.toUpperCase(java.util.Locale.ROOT));
                 }
                 for (JsonNode r : timedRows("tickers", "SELECT ticker, title FROM ref.sec_company_tickers "
-                        + "WHERE upper(ticker) IN (" + inList(up) + ")")) {
+                        + "WHERE " + CURRENT_TICKER_CAPTURE
+                        + " AND upper(ticker) IN (" + inList(up) + ")")) {
                     String tk = rowText(r, "ticker");
                     String title = rowText(r, "title");
                     if (tk != null && title != null) {

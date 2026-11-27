@@ -378,7 +378,7 @@ FROM (
     SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sec_company_tickers', allow_moved_paths := true))
     WHERE approx_unique <= 1
-      AND column_name NOT IN ('type')
+      AND column_name NOT IN ('type', 'as_of')
   )
 );
 
@@ -398,6 +398,32 @@ SELECT 'ref', 'sec_company_tickers', 'T7_cik_format',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sec_company_tickers', allow_moved_paths := true)
       WHERE cik IS NOT NULL
         AND NOT REGEXP_MATCHES(cik, '^\d+$'));
+
+-- T8: latest capture is reachable by an as_of filter (a null as_of partition value prunes to 0)
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T8_latest_capture_filter',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'Rows returned by as_of = MAX(as_of)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sec_company_tickers', allow_moved_paths := true)
+      WHERE as_of = (SELECT MAX(as_of) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sec_company_tickers', allow_moved_paths := true)));
+
+-- T9: every live data file sits in a dated as_of partition
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T9_dated_partitions',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Live data files outside an as_of=YYYY-MM-DD partition'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_metadata('s3://${GOVDATA_DQ_BUCKET}/ref/sec_company_tickers', allow_moved_paths := true)
+      WHERE status <> 'DELETED'
+        AND NOT REGEXP_MATCHES(file_path, '/as_of=\d{4}-\d{2}-\d{2}/'));
+
+-- T10: unique (as_of, cik, ticker)
+INSERT INTO dq_results
+SELECT 'ref', 'sec_company_tickers', 'T10_pk_unique',
+  CASE WHEN dup = 0 THEN 'pass' ELSE 'fail' END,
+  dup, 0, 'Duplicate (as_of, cik, ticker) keys'
+FROM (SELECT COUNT(*) AS dup FROM (
+  SELECT as_of, cik, ticker FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ref/sec_company_tickers', allow_moved_paths := true)
+  GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: figi_instruments

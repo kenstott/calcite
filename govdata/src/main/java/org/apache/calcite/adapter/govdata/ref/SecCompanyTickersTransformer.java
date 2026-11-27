@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -43,18 +45,31 @@ import java.util.Map;
  *
  * <pre>{@code
  * [
- *   {"cik": "1000032", "ticker": "AAON", "title": "AAON, Inc."},
+ *   {"cik": "1000032", "ticker": "AAON", "title": "AAON, Inc.", "as_of": "2026-01-31"},
  *   ...
  * ]
  * }</pre>
  *
  * <p>CIK is stored as a plain numeric string (no zero-padding), matching
  * the format used in {@code gleif_cik_mapping}.
+ *
+ * <p>Each row carries {@code as_of}, the UTC capture date. It is a partition column, so each
+ * day's capture replaces only its own partition and earlier captures are kept.
  */
 public class SecCompanyTickersTransformer implements ResponseTransformer {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SecCompanyTickersTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  private final Clock clock;
+
+  public SecCompanyTickersTransformer() {
+    this(Clock.systemUTC());
+  }
+
+  SecCompanyTickersTransformer(Clock clock) {
+    this.clock = clock;
+  }
 
   @Override public String transform(String response, RequestContext context) {
     if (response == null || response.isEmpty()) {
@@ -73,6 +88,7 @@ public class SecCompanyTickersTransformer implements ResponseTransformer {
 
       ArrayNode result = MAPPER.createArrayNode();
       Iterator<Map.Entry<String, JsonNode>> fields = root.properties().iterator();
+      String asOf = LocalDate.now(clock).toString();
 
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> entry = fields.next();
@@ -98,6 +114,8 @@ public class SecCompanyTickersTransformer implements ResponseTransformer {
         if (titleNode != null && !titleNode.isNull()) {
           record.put("title", titleNode.asText());
         }
+
+        record.put("as_of", asOf);
 
         result.add(record);
       }

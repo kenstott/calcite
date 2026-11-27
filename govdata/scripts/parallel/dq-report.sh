@@ -20,6 +20,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
+_env_dq="$SCRIPT_DIR/../../.env.dq"
+if [ -f "$_env_dq" ]; then source_env_file "$_env_dq"; fi
 
 # ── argument parsing ──────────────────────────────────────────────────────────
 RUN_DATE=$(date +%Y-%m-%d)
@@ -67,6 +69,10 @@ if [ -z "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
   echo "ERROR: AWS_ENDPOINT_OVERRIDE is not set — DQ report requires the MinIO endpoint (source govdata/.env.dq)" >&2
   exit 1
 fi
+if [ -z "${GOVDATA_DQ_RCLONE_REMOTE:-}" ]; then
+  echo "ERROR: GOVDATA_DQ_RCLONE_REMOTE is not set (see .env.dq.sample)" >&2
+  exit 1
+fi
 S3_ENDPOINT="$AWS_ENDPOINT_OVERRIDE"
 [[ "$S3_ENDPOINT" != http* ]] && S3_ENDPOINT="https://${S3_ENDPOINT}"
 ENDPOINT_ARGS="--endpoint-url $S3_ENDPOINT"
@@ -79,7 +85,7 @@ S3_REGION="${AWS_REGION:-us-east-1}"
 # MinIO: path-style addressing URL-encodes the '=' in the keys → HTTP 404. rclone
 # handles '=' correctly, so copy the matching run_date partitions to a temp dir
 # and read with a plain filesystem path. No S3 read, no '=' glob.
-DQ_REMOTE="${GOVDATA_DQ_RCLONE_REMOTE:-${GOVDATA_RCLONE_REMOTE:-minio}}"
+DQ_REMOTE="$GOVDATA_DQ_RCLONE_REMOTE"
 RESULT_BUCKET="${GOVDATA_DQ_TRACKER_BUCKET:-govdata-tracker-v1-dq}"
 LOCAL_RESULTS="$(mktemp -d)"
 trap 'rm -rf "$LOCAL_RESULTS"' EXIT
@@ -106,7 +112,10 @@ WHERE_CLAUSES=()
 
 WHERE_SQL=""
 if [ ${#WHERE_CLAUSES[@]} -gt 0 ]; then
-  WHERE_SQL="WHERE $(IFS=' AND '; echo "${WHERE_CLAUSES[*]}")"
+  for _clause in "${WHERE_CLAUSES[@]}"; do
+    WHERE_SQL="${WHERE_SQL:+${WHERE_SQL} AND }${_clause}"
+  done
+  WHERE_SQL="WHERE ${WHERE_SQL}"
 fi
 
 DETAIL_STATUS_FILTER="status IN ('fail'"

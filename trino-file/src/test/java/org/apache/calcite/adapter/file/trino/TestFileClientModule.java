@@ -276,6 +276,64 @@ class TestFileClientModule
     }
 
     @Test
+    void testDriveGlobPassesStorageConfigAndDriveRelativeDirectory()
+            throws Exception
+    {
+        FileConfig oneDrive = new FileConfig().setGlob("onedrive://reports/2026/*.csv").setStorageConfig(
+                "{\"userPrincipalName\":\"pat@contoso.com\",\"tenantId\":\"t\","
+                        + "\"clientId\":\"c\",\"clientSecret\":\"s\"}");
+        Map<String, Object> operand = firstSchemaOperand(FileClientModule.buildModelJson(oneDrive, NO_ENV));
+        assertEquals("onedrive", operand.get("storageType"));
+        assertEquals("/reports/2026", operand.get("directory"));
+        assertEquals("*.csv", operand.get("glob"));
+        Map<?, ?> storage = (Map<?, ?>) operand.get("storageConfig");
+        assertEquals("pat@contoso.com", storage.get("userPrincipalName"));
+        assertEquals("s", storage.get("clientSecret"));
+
+        FileConfig drive = new FileConfig().setGlob("gdrive:///sales").setStorageConfig(
+                "{\"folderId\":\"abc\",\"serviceAccountKey\":{\"client_email\":\"x@y\"}}");
+        operand = firstSchemaOperand(FileClientModule.buildModelJson(drive, NO_ENV));
+        assertEquals("gdrive", operand.get("storageType"));
+        assertEquals("/sales", operand.get("directory"));
+        assertEquals("abc", ((Map<?, ?>) operand.get("storageConfig")).get("folderId"));
+        assertEquals("x@y", ((Map<?, ?>) ((Map<?, ?>) operand.get("storageConfig")).get("serviceAccountKey"))
+                .get("client_email"));
+
+        FileConfig driveRoot = new FileConfig().setGlob("gdrive://").setStorageConfig("{\"folderId\":\"abc\"}");
+        assertEquals("/", firstSchemaOperand(FileClientModule.buildModelJson(driveRoot, NO_ENV)).get("directory"));
+    }
+
+    @Test
+    void testStorageConfigIsRequiredForDrivesAndRefusedWhereItCannotApply()
+    {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> FileClientModule.buildModelJson(new FileConfig().setGlob("onedrive://data/*.csv"), NO_ENV));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> FileClientModule.buildModelJson(new FileConfig().setGlob("gdrive://data"), NO_ENV));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> FileClientModule.buildModelJson(
+                        new FileConfig().setGlob("/mnt/data").setStorageConfig("{\"a\":1}"), NO_ENV));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> FileClientModule.buildModelJson(
+                        new FileConfig().setGlob("gdrive://data").setStorageConfig("[1]"), NO_ENV));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> FileClientModule.buildModelJson(new FileConfig().setGlob("s3://b/data")
+                        .setAwsAccessKey("k").setStorageConfig("{\"accessKeyId\":\"k\"}"), NO_ENV));
+    }
+
+    @Test
+    void testStorageConfigReplacesDerivedS3Config()
+            throws Exception
+    {
+        FileConfig config = new FileConfig().setGlob("s3://bucket/data/*.parquet").setStorageConfig(
+                "{\"accessKeyId\":\"k\",\"secretAccessKey\":\"s\",\"endpoint\":\"http://minio:9000\"}");
+        Map<String, Object> operand = firstSchemaOperand(FileClientModule.buildModelJson(config, NO_ENV));
+        assertEquals("s3", operand.get("storageType"));
+        assertEquals("s3://bucket/data", operand.get("directory"));
+        assertEquals("http://minio:9000", ((Map<?, ?>) operand.get("storageConfig")).get("endpoint"));
+    }
+
+    @Test
     void testNoRefreshIntervalOmitsOperand()
             throws Exception
     {
