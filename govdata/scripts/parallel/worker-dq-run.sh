@@ -435,7 +435,8 @@ PYEOF
   # an older engine (e.g. null expression: columns from pre-DuckDB evaluator).
   log_info "$WORKER_ID: --rebuild: full data purge for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET}"
   python3 "$(dirname "${BASH_SOURCE[0]}")/s3_purge_prefix.py" "${AWS_ENDPOINT_OVERRIDE}" \
-      "${GOVDATA_DQ_BUCKET}" "${SCHEMA}" "${DQ_S3_TIMEOUT_SECONDS:-30}" "${DQ_S3_ATTEMPTS:-3}"
+      "${GOVDATA_DQ_BUCKET}" "${SCHEMA}" "${DQ_S3_TIMEOUT_SECONDS:-30}" "${DQ_S3_ATTEMPTS:-3}" \
+      "${DQ_S3_LIST_TIMEOUT_SECONDS:-300}"
 fi  # end iceberg/data teardown (only when --rebuild)
 
   # DQ ETL is just the STANDARD daily/historical workers, parameterized by DQ variables:

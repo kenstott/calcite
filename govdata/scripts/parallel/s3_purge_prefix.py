@@ -2,9 +2,12 @@
 """Delete every object under <schema>/ in an S3-compatible bucket (SigV4).
 
 usage: s3_purge_prefix.py <endpoint> <bucket> <schema> [timeout_seconds] [attempts]
+                          [list_timeout_seconds]
 
 Every request carries an explicit socket timeout and is retried a bounded number of
 times. On exhaustion the script exits 1 naming the failing operation and key.
+LIST has its own, longer timeout: the store sends nothing until a page is assembled,
+and an uncached page of 1000 keys means reading the metadata of each from disk.
 Credentials come from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY.
 """
 import datetime
@@ -33,13 +36,14 @@ def main():
     ep, bucket, schema = sys.argv[1:4]
     timeout = float(sys.argv[4]) if len(sys.argv) > 4 else 30.0
     attempts = int(sys.argv[5]) if len(sys.argv) > 5 else 3
+    list_timeout = float(sys.argv[6]) if len(sys.argv) > 6 else 300.0
     kid = os.environ['AWS_ACCESS_KEY_ID']
     secret = os.environ['AWS_SECRET_ACCESS_KEY']
     if not ep:
         return
     host = ep.replace('http://', '').replace('https://', '')
 
-    def request(method, path, qs_dict, what, key):
+    def request(method, path, qs_dict, what, key, wait):
         last = None
         for _ in range(attempts):
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -62,7 +66,7 @@ def main():
                          ('Authorization', auth)]:
                 req.add_header(h, v)
             try:
-                with urllib.request.urlopen(req, timeout=timeout) as r:
+                with urllib.request.urlopen(req, timeout=wait) as r:
                     return r.read().decode()
             except urllib.error.HTTPError as e:
                 if e.code < 500:
@@ -77,12 +81,12 @@ def main():
         params = {'list-type': '2', 'prefix': f'{schema}/', 'max-keys': '1000'}
         if token:
             params['continuation-token'] = token
-        resp = request('GET', '/', params, 'LIST', f'{schema}/')
+        resp = request('GET', '/', params, 'LIST', f'{schema}/', list_timeout)
         root = ET.fromstring(resp)
         keys = [c.find('s:Key', NS).text for c in root.findall('.//s:Contents', NS)]
         for key in keys:
             enc = '/'.join(urllib.parse.quote(p, safe='') for p in key.split('/'))
-            request('DELETE', f'/{enc}', {}, 'DELETE', key)
+            request('DELETE', f'/{enc}', {}, 'DELETE', key, timeout)
             total += 1
         nxt = root.find('s:NextContinuationToken', NS)
         if nxt is None:
