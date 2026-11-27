@@ -1354,11 +1354,11 @@ partitionedTables:
   # every full-date representation (each declared unique → a valid FK target for
   # the heterogeneously-formatted date columns across schemas), plus every date
   # part in numeric and named forms, calendar flags, and US-federal fiscal
-  # attributes. computed_delta append keyed on iso_date (mirrors gleif_entities):
-  # each daily ETL run extends the spine by the newly-reached day. fiscal_year
-  # FKs ref.fiscal_year.
+  # attributes. Snapshot: the provider generates the whole spine on every run and
+  # the write replaces the table, so one row per day holds whatever the tracker
+  # contains. fiscal_year FKs ref.fiscal_year.
   - name: calendar
-    dataset_type: computed_delta
+    dataset_type: snapshot
     pattern: "type=calendar.parquet"
     partitions:
       style: hive
@@ -1530,11 +1530,8 @@ partitionedTables:
         comment: Day of the federal fiscal year (1-366, from Oct 1)
 
     source:
-      # No external source — CalendarDataProvider generates every row. The source
-      # block exists only to declare the computed_delta high-water-mark key.
+      # No external source — CalendarDataProvider generates every row.
       type: http
-      incremental:
-        dateField: iso_date
 
     hooks:
       dataProvider: "org.apache.calcite.adapter.govdata.ref.CalendarDataProvider"
@@ -1558,12 +1555,9 @@ partitionedTables:
         <<: *compaction_defaults
         catalogType: hadoop
         batchPartitionColumns: [type]
-        overwritePartitions: false   # APPEND the computed_delta rows (new days); never rewrite history
+        overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
-        runCompaction: true
-        compactionTargetFileSizeBytes: 134217728
-        compactionMinFiles: 5
 
   # ==========================================================================
   # FISCAL_YEAR — US federal fiscal-year dimension (Oct 1 start)

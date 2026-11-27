@@ -46,10 +46,8 @@ import java.util.Map;
  * plus every date part in numeric and named forms, calendar flags, and US-federal fiscal
  * attributes ({@code fiscal_year} is the FK into {@code ref.fiscal_year}).
  *
- * <p>Wired as {@code dataset_type: computed_delta} keyed on {@code iso_date}: the provider emits
- * the full span on every run and the pipeline appends only days past the stored high-water mark,
- * so each daily ETL run extends the spine by exactly the newly-reached day(s). Mirrors the
- * {@code gleif_entities} append pattern.
+ * <p>Wired as {@code dataset_type: snapshot} with partition overwrite: the provider emits the full
+ * span on every run and the write replaces the table, which keeps exactly one row per day.
  */
 public class CalendarDataProvider implements DataProvider {
 
