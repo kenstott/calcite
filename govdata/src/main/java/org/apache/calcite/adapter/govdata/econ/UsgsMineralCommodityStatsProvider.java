@@ -11,10 +11,8 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
-import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
-import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,14 +22,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -39,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -73,6 +69,10 @@ import java.util.regex.Pattern;
  * <p>The CSV is Windows-1252 encoded (confirmed live: em-dashes in the Section column decode as
  * {@code 0x97}, not valid UTF-8) — read explicitly as {@code windows-1252}, never the platform
  * default charset.
+ *
+ * <p>ScienceBase answers a Cloudflare challenge (HTTP 403) to non-browser clients, so every
+ * request (listing, item file list, CSV) goes through a headed browser session; see
+ * {@link ScienceBaseBrowserSession}. The CSV is still read through the pipeline's raw cache.
  */
 public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
 
@@ -80,12 +80,28 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
       LoggerFactory.getLogger(UsgsMineralCommodityStatsProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final Charset MCS_CHARSET = Charset.forName("windows-1252");
-  private static final String DEFAULT_UA = "Apache-Calcite-GovData/1.0";
 
   private static final Pattern RELEASE_TITLE =
       Pattern.compile("Mineral Commodity Summaries (\\d{4}) Data Release",
           Pattern.CASE_INSENSITIVE);
   private static final Pattern SINGLE_YEAR = Pattern.compile("^\\d{4}$");
+
+  /** Retrieves ScienceBase resources; a resource the site does not serve is an error. */
+  interface Client {
+    String fetchText(String url) throws IOException;
+
+    byte[] fetchBytes(String url) throws IOException;
+  }
+
+  private final Function<Map<String, String>, Client> clients;
+
+  public UsgsMineralCommodityStatsProvider() {
+    this(ScienceBaseBrowserSession::get);
+  }
+
+  UsgsMineralCommodityStatsProvider(Function<Map<String, String>, Client> clients) {
+    this.clients = clients;
+  }
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
@@ -93,9 +109,9 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     if (listingUrl == null || listingUrl.isEmpty()) {
       throw new IOException("USGS MCS: source.url (ScienceBase parent listing) is required");
     }
-    String userAgent = headerOrDefault(config, "User-Agent", DEFAULT_UA);
+    Client client = clients.apply(config.getSource().getParameters());
 
-    List<ReleaseFile> releases = resolveReleases(listingUrl, userAgent);
+    List<ReleaseFile> releases = resolveReleases(listingUrl, client);
     if (releases.isEmpty()) {
       throw new IOException("USGS MCS: no MCS Data Release items with a unified "
           + "Commodities_Data.csv resolved from " + listingUrl);
@@ -103,7 +119,7 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     LOGGER.info("USGS MCS: resolved {} release(s) with a unified Commodities_Data.csv",
         releases.size());
 
-    return new MultiReleaseRowIterator(releases, userAgent, rawCache);
+    return new MultiReleaseRowIterator(releases, client, rawCache);
   }
 
   // ---------------------------------------------------------------------
@@ -120,9 +136,9 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     }
   }
 
-  private List<ReleaseFile> resolveReleases(String listingUrl, String userAgent)
+  private List<ReleaseFile> resolveReleases(String listingUrl, Client client)
       throws IOException {
-    JsonNode items = MAPPER.readTree(getText(listingUrl, userAgent)).path("items");
+    JsonNode items = MAPPER.readTree(client.fetchText(listingUrl)).path("items");
     List<ReleaseFile> releases = new ArrayList<ReleaseFile>();
     if (!items.isArray()) {
       return releases;
@@ -138,7 +154,7 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
       if (itemId == null || itemId.isEmpty()) {
         continue;
       }
-      String csvUrl = findCommoditiesDataCsv(itemId, userAgent);
+      String csvUrl = findCommoditiesDataCsv(itemId, client);
       if (csvUrl == null) {
         LOGGER.info("USGS MCS {}: no unified Commodities_Data.csv on item {} "
             + "(pre-2026-shape release, not ingested by this provider) — skipping",
@@ -150,10 +166,10 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     return releases;
   }
 
-  private String findCommoditiesDataCsv(String itemId, String userAgent) throws IOException {
+  private String findCommoditiesDataCsv(String itemId, Client client) throws IOException {
     String apiUrl = "https://www.sciencebase.gov/catalog/item/" + itemId
         + "?format=json&fields=files";
-    JsonNode files = MAPPER.readTree(getText(apiUrl, userAgent)).path("files");
+    JsonNode files = MAPPER.readTree(client.fetchText(apiUrl)).path("files");
     if (!files.isArray()) {
       return null;
     }
@@ -180,7 +196,7 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
 
   private static final class MultiReleaseRowIterator implements Iterator<Map<String, Object>> {
     private final List<ReleaseFile> releases;
-    private final String userAgent;
+    private final Client client;
     private final RawCache rawCache;
     private int releaseIndex;
     private int currentReleaseYear;
@@ -189,9 +205,9 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     private Map<String, Object> nextRow;
     private boolean done;
 
-    MultiReleaseRowIterator(List<ReleaseFile> releases, String userAgent, RawCache rawCache) {
+    MultiReleaseRowIterator(List<ReleaseFile> releases, Client client, RawCache rawCache) {
       this.releases = releases;
-      this.userAgent = userAgent;
+      this.client = client;
       this.rawCache = rawCache;
     }
 
@@ -224,9 +240,9 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
       currentReleaseYear = release.releaseYear;
       LOGGER.info("USGS MCS {}: streaming {}", currentReleaseYear, release.csvUrl);
       final String csvUrl = release.csvUrl;
-      final String ua = userAgent;
       reader = new BufferedReader(new InputStreamReader(
-          rawCache.openStream(csvUrl, () -> openWithUserAgent(csvUrl, ua)), MCS_CHARSET));
+          rawCache.openStream(csvUrl,
+              () -> new ByteArrayInputStream(client.fetchBytes(csvUrl))), MCS_CHARSET));
       String header = CsvRecordReader.readRecord(reader);
       if (header == null) {
         throw new IOException("USGS MCS " + currentReleaseYear + ": empty file " + csvUrl);
@@ -348,57 +364,5 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
       return Boolean.FALSE;
     }
     return null;
-  }
-
-  // ---------------------------------------------------------------------
-  // HTTP helpers
-  // ---------------------------------------------------------------------
-
-  private static InputStream openWithUserAgent(String url, String userAgent) throws IOException {
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setRequestProperty("User-Agent", userAgent);
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(300000);
-    conn.setInstanceFollowRedirects(true);
-    NetworkOutageWait.connect(conn);
-    int code = conn.getResponseCode();
-    if (code < 200 || code >= 300) {
-      throw new IOException("USGS MCS: HTTP " + code + " for " + url);
-    }
-    return CompleteBody.of(conn);
-  }
-
-  private static String headerOrDefault(EtlPipelineConfig config, String name, String dflt) {
-    Map<String, String> headers = config.getSource() != null
-        ? config.getSource().getHeaders() : null;
-    if (headers != null) {
-      String v = headers.get(name);
-      if (v != null && !v.isEmpty()) {
-        return v;
-      }
-    }
-    return dflt;
-  }
-
-  private static String getText(String url, String userAgent) throws IOException {
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setRequestProperty("User-Agent", userAgent);
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(60000);
-    conn.setInstanceFollowRedirects(true);
-    NetworkOutageWait.connect(conn);
-    int code = conn.getResponseCode();
-    if (code < 200 || code >= 300) {
-      throw new IOException("USGS MCS: HTTP " + code + " for " + url);
-    }
-    ByteArrayOutputStream buf = new ByteArrayOutputStream();
-    try (InputStream in = CompleteBody.of(conn)) {
-      byte[] chunk = new byte[65536];
-      int n;
-      while ((n = in.read(chunk)) != -1) {
-        buf.write(chunk, 0, n);
-      }
-    }
-    return new String(buf.toByteArray(), StandardCharsets.UTF_8);
   }
 }
