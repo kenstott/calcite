@@ -45,7 +45,7 @@ public class PatentsSchemaFactory implements GovDataSubSchemaFactory {
   private static final Logger LOGGER = LoggerFactory.getLogger(PatentsSchemaFactory.class);
 
   private static final List<String> ALL_TABLES = Arrays.asList(
-      "patent_grants", "patent_assignees", "patent_inventors",
+      "patent_grants", "patent_grants_weekly", "patent_assignees", "patent_inventors",
       "patent_cpc_classes", "patent_claims", "patent_summaries",
       // Physical trademark source tables (USPTO TRCFECO2). Each has its own transformer,
       // so they must be enable-gated here. The trademark_applications VIEW joins them —

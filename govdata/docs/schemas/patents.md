@@ -17,6 +17,7 @@ The schema is served by `PatentsSchemaFactory` via `GovDataSchemaFactory` and is
 | Table | Description | Primary source | Cadence |
 |---|---|---|---|
 | `patent_grants` | Granted patents: grant/filing dates, type (utility/design/plant), title, abstract, claims count, figures, forward citation counts, WIPO kind code, withdrawn flag | PatentsView `g_patent.tsv.zip` + `g_application.tsv` + `g_patent_abstract.tsv` + `g_figures.tsv` | Annual |
+| `patent_grants_weekly` | Patents of each weekly issue, all types: issue date, title, claims count, WIPO kind code, application number and filing date. Current to the latest Tuesday issue; overlaps `patent_grants` | USPTO PTBLXML weekly bibliographic XML | Weekly |
 | `patent_assignees` | Disambiguated assignees per patent: sequence, assignee ID, organization name or individual name, assignee type (US company / foreign company / US government / individual) | PatentsView `g_assignee_disambiguated.tsv.zip` | Annual |
 | `patent_inventors` | Disambiguated inventors per patent: sequence, inventor ID, first/last name, inferred gender code | PatentsView `g_inventor_disambiguated.tsv.zip` | Annual |
 | `patent_cpc_classes` | CPC (Cooperative Patent Classification) codes per patent: section, class, subclass, group, code type (inventive/additional) | PatentsView `g_cpc_current.tsv.zip` | Annual |

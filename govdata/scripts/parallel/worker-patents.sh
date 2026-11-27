@@ -135,7 +135,7 @@ ENDJSON
 run_ungrouped_patents_tables() {
   local start="$1" end="$2" unassigned _t quoted=""
   unassigned="$(unassigned_schema_tables patents all \
-    "dated|patent_grants,patent_publications,patent_claims,patent_summaries,trademark_case_file,trademark_owner,trademark_classification,trademark_intl_class,trademark_statement" \
+    "dated|patent_grants,patent_grants_weekly,patent_publications,patent_claims,patent_summaries,trademark_case_file,trademark_owner,trademark_classification,trademark_intl_class,trademark_statement" \
     "forever|patent_locations,patent_abstracts,patent_applications,patent_figures,patent_assignees,patent_cpc_classes,patent_inventors,patent_publication_cpc,patent_publication_applicants")" || return 1
 
   [ -n "$unassigned" ] || return 0
@@ -174,6 +174,9 @@ case "$MODE" in
     run_patents_model "patents-historical-grants" \
       '"patent_grants"' "$START" "$END"
 
+    run_patents_model "patents-historical-grants-weekly" \
+      '"patent_grants_weekly"' "$START" "$END"
+
     run_patents_model "patents-historical-publications" \
       '"patent_publications"' "$START" "$END"
 
@@ -193,6 +196,10 @@ case "$MODE" in
     ;;
 
   daily)
+    # USPTO publishes the weekly issue file every Tuesday, so it runs outside the quarterly gate.
+    run_patents_model "patents-daily-grants-weekly" \
+      '"patent_grants_weekly"' "$INCREMENTAL_YEAR"
+
     # Quarterly cadence — gate on release window months {3, 6, 9, 12}
     if ! $FORCE; then
       within_release_window "patent" "3,6,9,12" || exit 0

@@ -219,7 +219,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
   /** Fetches (and JVM-memoizes + disk-caches with a short TTL) the ODP metadata for a product.
    * Returns null on any failure — the caller then falls back to time-based caching, never blocking
    * a download. */
-  private com.fasterxml.jackson.databind.JsonNode productMetadata(String productId) {
+  protected com.fasterxml.jackson.databind.JsonNode productMetadata(String productId) {
     com.fasterxml.jackson.databind.JsonNode memo = METADATA_MEMO.get(productId);
     if (memo != null) {
       return memo;
@@ -488,6 +488,41 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
    */
   protected void extractZipEntryToFile(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
+    downloadWithRetries(url, () -> extractZipEntryToFileOnce(url, requestHeaders, destPath,
+        extensions));
+  }
+
+  /**
+   * Caches the ZIP behind {@code url} as-is at {@code destPath} and returns that path. For files
+   * whose name identifies their content (a weekly issue file, with its revision suffix), so an
+   * existing copy is reused without a request.
+   */
+  protected String downloadAndCacheZip(String url, String destPath) throws IOException {
+    if (storageProvider().exists(destPath)) {
+      LOGGER.debug("Patents cache hit: {}", destPath);
+      return destPath;
+    }
+    downloadWithRetries(url, () -> {
+      File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile(
+          "patents-zip-", ".zip");
+      try {
+        downloadToFile(url, odpRequestHeaders(), tempZip);
+        try (java.io.InputStream in = new FileInputStream(tempZip)) {
+          storageProvider().writeFile(destPath, in);
+        }
+      } finally {
+        deleteTempFile(tempZip);
+      }
+    });
+    return destPath;
+  }
+
+  /** One complete download attempt. */
+  private interface Download {
+    void run() throws IOException;
+  }
+
+  private void downloadWithRetries(String url, Download download) throws IOException {
     // USPTO ODP meters requests per (key, URI) under TWO budgets that EVERY attempt spends: a
     // short-term burst cap (7 requests / rolling 7 days — the 429 body literally says "wait 604800
     // seconds") layered over a dataset-specific ANNUAL cap. So retries are expensive here, not free.
@@ -501,7 +536,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     IOException lastError = null;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        extractZipEntryToFileOnce(url, requestHeaders, destPath, extensions);
+        download.run();
         return;
       } catch (IOException e) {
         lastError = e;
@@ -597,78 +632,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
     File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("patents-zip-", ".zip");
     try {
       // Phase 1: download the ZIP completely to a local temp file.
-      //
-      // api.uspto.gov's ODP gateway (PVGPATTXT confirmed live 2026-08-31; likely every product)
-      // never serves the file itself -- it 302s to a presigned data.uspto.gov URL (query string
-      // carries Expires/Signature/Key-Pair-Id, a CloudFront/S3-style signed URL). Presigned URLs
-      // validate against an EXACT expected request; HttpURLConnection's automatic redirect
-      // following (the JVM default) carries this method's X-Api-Key and User-Agent headers into
-      // that second request unchanged, which the signed URL was never issued to accept --
-      // confirmed live: the ODP hop alone (X-Api-Key only, no auto-follow) correctly returns 302
-      // + a valid signed Location, but auto-following it inline came back HTTP 200 with a
-      // text/html body instead of the ZIP. Disabling auto-follow and manually re-requesting the
-      // Location URL with NO headers at all (a presigned URL needs none) is the fix -- not a
-      // WAF/UA block despite the old error message's guess.
-      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-      conn.setInstanceFollowRedirects(false);
-      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-      conn.setReadTimeout(READ_TIMEOUT_MS);
-      conn.setRequestProperty("User-Agent", "GovData/1.0");
-      if (requestHeaders != null) {
-        for (Map.Entry<String, String> h : requestHeaders.entrySet()) {
-          conn.setRequestProperty(h.getKey(), h.getValue());
-        }
-      }
-      NetworkOutageWait.connect(conn);
-      int status = conn.getResponseCode();
-      if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
-        String location = conn.getHeaderField("Location");
-        if (location == null || location.isEmpty()) {
-          throw new IOException("HTTP " + status + " from " + url + " with no Location header");
-        }
-        conn.disconnect();
-        conn = (HttpURLConnection) URI.create(location).toURL().openConnection();
-        conn.setInstanceFollowRedirects(false);
-        conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-        conn.setReadTimeout(READ_TIMEOUT_MS);
-        // Deliberately NO headers here -- a presigned URL's signature covers the exact request
-        // it was issued for; any extra header (even a generic User-Agent) risks the same
-        // signature-mismatch failure this fix exists to avoid.
-        NetworkOutageWait.connect(conn);
-        status = conn.getResponseCode();
-      }
-      if (status != 200) {
-        throw new IOException("HTTP " + status + " from " + url);
-      }
-      String contentType = conn.getContentType();
-      if (contentType != null && contentType.contains("text/html")) {
-        throw new IOException(
-            "Expected ZIP but got HTML response from: " + url
-            + " — source may be WAF-blocked or unavailable");
-      }
-      long contentLength = conn.getContentLengthLong();
-      LOGGER.info("Patents: downloading {} ({} bytes) to temp file",
-          url.substring(url.lastIndexOf('/') + 1), contentLength);
-      long bytesRead = 0;
-      byte[] buf = new byte[64 * 1024];
-      try (java.io.InputStream httpIn = conn.getInputStream();
-           OutputStream tmpOut = new FileOutputStream(tempZip)) {
-        int n;
-        while ((n = httpIn.read(buf)) >= 0) {
-          tmpOut.write(buf, 0, n);
-          bytesRead += n;
-        }
-      }
-      // Verify the download is complete. Without this check, a server-side
-      // connection close mid-stream produces a truncated cache file that
-      // subsequent runs blindly reuse, marking the pipeline complete on
-      // partial data.
-      if (contentLength >= 0 && bytesRead != contentLength) {
-        throw new IOException(
-            "Truncated download from " + url + ": expected " + contentLength
-            + " bytes, received " + bytesRead);
-      }
-      LOGGER.info("Patents: download complete, temp file size={}", tempZip.length());
+      downloadToFile(url, requestHeaders, tempZip);
 
       // Phase 2: stream from temp file to storage provider
       ZipInputStream zis = new ZipInputStream(new FileInputStream(tempZip));
@@ -698,10 +662,90 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       }
       throw new IOException("No matching entry found in ZIP from: " + url);
     } finally {
-      if (tempZip.exists() && !tempZip.delete()) {
-        LOGGER.warn("Patents: failed to delete temp file: {}", tempZip.getAbsolutePath());
+      deleteTempFile(tempZip);
+    }
+  }
+
+  private static void deleteTempFile(File tempZip) {
+    if (tempZip.exists() && !tempZip.delete()) {
+      LOGGER.warn("Patents: failed to delete temp file: {}", tempZip.getAbsolutePath());
+    }
+  }
+
+  /** Downloads {@code url} to {@code dest}, failing on a non-ZIP or truncated response. */
+  private void downloadToFile(String url, Map<String, String> requestHeaders, File dest)
+      throws IOException {
+    // api.uspto.gov's ODP gateway (PVGPATTXT confirmed live 2026-08-31; likely every product)
+    // never serves the file itself -- it 302s to a presigned data.uspto.gov URL (query string
+    // carries Expires/Signature/Key-Pair-Id, a CloudFront/S3-style signed URL). Presigned URLs
+    // validate against an EXACT expected request; HttpURLConnection's automatic redirect
+    // following (the JVM default) carries this method's X-Api-Key and User-Agent headers into
+    // that second request unchanged, which the signed URL was never issued to accept --
+    // confirmed live: the ODP hop alone (X-Api-Key only, no auto-follow) correctly returns 302
+    // + a valid signed Location, but auto-following it inline came back HTTP 200 with a
+    // text/html body instead of the ZIP. Disabling auto-follow and manually re-requesting the
+    // Location URL with NO headers at all (a presigned URL needs none) is the fix -- not a
+    // WAF/UA block despite the old error message's guess.
+    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+    conn.setInstanceFollowRedirects(false);
+    conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+    conn.setReadTimeout(READ_TIMEOUT_MS);
+    conn.setRequestProperty("User-Agent", "GovData/1.0");
+    if (requestHeaders != null) {
+      for (Map.Entry<String, String> h : requestHeaders.entrySet()) {
+        conn.setRequestProperty(h.getKey(), h.getValue());
       }
     }
+    NetworkOutageWait.connect(conn);
+    int status = conn.getResponseCode();
+    if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+      String location = conn.getHeaderField("Location");
+      if (location == null || location.isEmpty()) {
+        throw new IOException("HTTP " + status + " from " + url + " with no Location header");
+      }
+      conn.disconnect();
+      conn = (HttpURLConnection) URI.create(location).toURL().openConnection();
+      conn.setInstanceFollowRedirects(false);
+      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+      conn.setReadTimeout(READ_TIMEOUT_MS);
+      // Deliberately NO headers here -- a presigned URL's signature covers the exact request
+      // it was issued for; any extra header (even a generic User-Agent) risks the same
+      // signature-mismatch failure this fix exists to avoid.
+      NetworkOutageWait.connect(conn);
+      status = conn.getResponseCode();
+    }
+    if (status != 200) {
+      throw new IOException("HTTP " + status + " from " + url);
+    }
+    String contentType = conn.getContentType();
+    if (contentType != null && contentType.contains("text/html")) {
+      throw new IOException(
+          "Expected ZIP but got HTML response from: " + url
+          + " — source may be WAF-blocked or unavailable");
+    }
+    long contentLength = conn.getContentLengthLong();
+    LOGGER.info("Patents: downloading {} ({} bytes) to temp file",
+        url.substring(url.lastIndexOf('/') + 1), contentLength);
+    long bytesRead = 0;
+    byte[] buf = new byte[64 * 1024];
+    try (java.io.InputStream httpIn = conn.getInputStream();
+         OutputStream tmpOut = new FileOutputStream(dest)) {
+      int n;
+      while ((n = httpIn.read(buf)) >= 0) {
+        tmpOut.write(buf, 0, n);
+        bytesRead += n;
+      }
+    }
+    // Verify the download is complete. Without this check, a server-side
+    // connection close mid-stream produces a truncated cache file that
+    // subsequent runs blindly reuse, marking the pipeline complete on
+    // partial data.
+    if (contentLength >= 0 && bytesRead != contentLength) {
+      throw new IOException(
+          "Truncated download from " + url + ": expected " + contentLength
+          + " bytes, received " + bytesRead);
+    }
+    LOGGER.info("Patents: download complete, temp file size={}", dest.length());
   }
 
   // ── TSV parsing ────────────────────────────────────────────────────────────
