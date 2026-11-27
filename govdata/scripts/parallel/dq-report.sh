@@ -91,8 +91,16 @@ LOCAL_RESULTS="$(mktemp -d)"
 trap 'rm -rf "$LOCAL_RESULTS"' EXIT
 rclone copy "${DQ_REMOTE}:${RESULT_BUCKET}/dq-results/" "$LOCAL_RESULTS" \
   --include "/schema=*/run_date=${RUN_DATE}/type=*/results.parquet"
+# --tables runs store their results one level down (type=<mode>/scope=<id>/). They are not part of
+# the whole-schema summary, so list them.
+SCOPED_RESULTS="$(rclone lsf -R --files-only "${DQ_REMOTE}:${RESULT_BUCKET}/dq-results/" \
+  --include "/schema=*/run_date=${RUN_DATE}/type=*/scope=*/results.parquet")"
+if [ -n "$SCOPED_RESULTS" ]; then
+  echo "Scoped (--tables) results for run_date=${RUN_DATE}, not included in this report:"
+  printf '%s\n' "$SCOPED_RESULTS" | sed "s|^|  s3://${RESULT_BUCKET}/dq-results/|"
+fi
 if ! find "$LOCAL_RESULTS" -name 'results.parquet' -print -quit | grep -q .; then
-  echo "ERROR: no DQ results found for run_date=${RUN_DATE} in ${DQ_REMOTE}:${RESULT_BUCKET}/dq-results/" >&2
+  echo "ERROR: no whole-schema DQ results found for run_date=${RUN_DATE} in ${DQ_REMOTE}:${RESULT_BUCKET}/dq-results/" >&2
   exit 1
 fi
 GLOB_PATH="${LOCAL_RESULTS}/schema=*/run_date=${RUN_DATE}/type=*/results.parquet"

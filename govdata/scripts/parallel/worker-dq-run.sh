@@ -175,7 +175,17 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$RUN_DIR/dq_${TIMESTAMP}.log"
 ETL_LOG_DIR=""  # set after rebuild ETL so error handler finds the right log
 
-S3_RESULT_PATH="s3://${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
+# A --tables run holds only its tables' checks, so it writes beside the whole-schema results, under a
+# scope id derived from the table set. dq-report.sh reports only the whole-schema file.
+RESULT_KEY_DIR="dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}"
+LOCAL_RESULT_NAME="results_${RUN_DATE}.parquet"
+if [ -n "${GOVDATA_TABLES:-}" ]; then
+  _scope_id=$(printf '%s' "$GOVDATA_TABLES" | tr ', ' '\n\n' | sed '/^$/d' | LC_ALL=C sort -u | sha256sum | cut -c1-12)
+  RESULT_KEY_DIR="${RESULT_KEY_DIR}/scope=${_scope_id}"
+  LOCAL_RESULT_NAME="results_${RUN_DATE}_scope-${_scope_id}.parquet"
+fi
+RESULT_KEY="${RESULT_KEY_DIR}/results.parquet"
+S3_RESULT_PATH="s3://${GOVDATA_DQ_TRACKER_BUCKET}/${RESULT_KEY}"
 
 # ── error handler + EXIT trap (must be defined before rebuild block) ──────────
 _SCRIPT_COMPLETE=false
@@ -355,7 +365,9 @@ if $DRY_RUN && { $REBUILD || $ETL_RESUME; }; then
   if $REBUILD; then
     log_info "$WORKER_ID: [dry-run] would create any missing DQ buckets: ${GOVDATA_DQ_BUCKET}, ${GOVDATA_DQ_TRACKER_BUCKET}, and the raw cache bucket of GOVDATA_CACHE_DIR"
     log_info "$WORKER_ID: [dry-run] would delete every object under s3://${GOVDATA_DQ_BUCKET}/${SCHEMA}/"
-    log_info "$WORKER_ID: [dry-run] would delete s3://${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/"
+    if [ -z "${GOVDATA_TABLES:-}" ]; then
+      log_info "$WORKER_ID: [dry-run] would delete s3://${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/"
+    fi
     log_info "$WORKER_ID: [dry-run] would delete the Postgres tracker rows of schema=${SCHEMA} for s3://${GOVDATA_DQ_BUCKET}"
   fi
   log_info "$WORKER_ID: [dry-run] would run the daily ETL worker, then the historical worker from year ${REBUILD_START_YEAR:-$(get_dq_start_year "$SCHEMA")}, into s3://${GOVDATA_DQ_BUCKET}"
@@ -468,11 +480,14 @@ fi  # end iceberg/data teardown (only when --rebuild)
     export GOVDATA_FILING_TYPES="${GOVDATA_FILING_TYPES:-10-K,10-K/A,10-Q,10-Q/A,8-K,8-K/A,DEF 14A,3,4,5,13F-HR,13F-HR/A,SC 13D,SC 13D/A,SC 13G,SC 13G/A}"
   fi
 
-  # On a full rebuild, clear DQ results + the ETL tracker so the standard workers re-ingest
-  # the (already torn-down) data fresh.
+  # On a rebuild, clear the ETL tracker so the standard workers re-ingest the (already torn-down)
+  # data fresh. DQ results are cleared only by a whole-schema rebuild.
   if $REBUILD; then
-    log_info "$WORKER_ID: --rebuild: purging dq-results + Postgres tracker rows for schema=$SCHEMA"
-    rclone purge "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA"
+    if [ -z "${GOVDATA_TABLES:-}" ]; then
+      log_info "$WORKER_ID: --rebuild: purging dq-results for schema=$SCHEMA"
+      rclone purge "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=$SCHEMA"
+    fi
+    log_info "$WORKER_ID: --rebuild: purging Postgres tracker rows for schema=$SCHEMA"
     # The standard workers resume from the Postgres tracker (namespace derived from the DQ
     # bucket), so every table of the schema must lose its rows or the rebuild skips marked units.
     _pg_ns="$(pg_ns_for_schema "s3://${GOVDATA_DQ_BUCKET}" "$SCHEMA")"
@@ -656,21 +671,20 @@ else
   # Persist results before upload — if upload fails, results survive TMP_DIR cleanup
   _persist_dir="$SCRIPT_DIR/runs/$WORKER_ID"
   mkdir -p "$_persist_dir"
-  _persist_path="$_persist_dir/results_${RUN_DATE}.parquet"
+  _persist_path="$_persist_dir/$LOCAL_RESULT_NAME"
   cp "$RESULT_LOCAL" "$_persist_path"
   log_info "$WORKER_ID: results persisted to $_persist_path"
 
   log_info "$WORKER_ID: uploading results to $S3_RESULT_PATH (retry 3×)"
-  _s3_key="dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
   _ep="${AWS_ENDPOINT_OVERRIDE:-}"
   _upload_ok=false
 
   for _attempt in 1 2 3; do
     if command -v aws >/dev/null 2>&1; then
       _flag=""; [ -n "$_ep" ] && _flag="--endpoint-url $_ep"
-      aws $_flag s3 cp "$RESULT_LOCAL" "s3://${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}" 2>/dev/null && { _upload_ok=true; break; }
+      aws $_flag s3 cp "$RESULT_LOCAL" "s3://${GOVDATA_DQ_TRACKER_BUCKET}/${RESULT_KEY}" 2>/dev/null && { _upload_ok=true; break; }
     elif command -v python3 >/dev/null 2>&1 && [ -n "$_ep" ]; then
-      python3 - "$RESULT_LOCAL" "$_ep" "$_s3_key" "${GOVDATA_DQ_TRACKER_BUCKET}" <<'PYEOF' 2>/dev/null && { _upload_ok=true; break; }
+      python3 - "$RESULT_LOCAL" "$_ep" "$RESULT_KEY" "${GOVDATA_DQ_TRACKER_BUCKET}" <<'PYEOF' 2>/dev/null && { _upload_ok=true; break; }
 import sys, urllib.request, urllib.parse, hmac, hashlib, datetime
 local_file, ep, key, bucket = sys.argv[1:]
 import os
@@ -694,7 +708,7 @@ for h,v in [('Host',host),('x-amz-date',ts),('x-amz-content-sha256',ph),('Author
 urllib.request.urlopen(req, timeout=60)
 PYEOF
     else
-      rclone copyto "$RESULT_LOCAL" "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}" && { _upload_ok=true; break; }
+      rclone copyto "$RESULT_LOCAL" "${GOVDATA_DQ_RCLONE_REMOTE}:${GOVDATA_DQ_TRACKER_BUCKET}/${RESULT_KEY}" && { _upload_ok=true; break; }
     fi
     [ "$_attempt" -lt 3 ] && sleep 5
   done
