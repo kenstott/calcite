@@ -4825,6 +4825,370 @@ partitionedTables:
         compactionMinFiles: 5
         targetFileSizeBytes: 134217728
 
+  # --- LOCAL AREA UNEMPLOYMENT (BLS LAUS) ---
+  - name: county_unemployment
+    # BLS republishes the bulk flat file, with revisions to prior periods, on each monthly
+    # release; a HEAD probe of Last-Modified re-triggers ingest when the file changes.
+    # The file carries the full history, so there is no year dimension: each row's own
+    # year selects its year partition.
+    freshness:
+      type: last_modified
+    pattern: "type=county_unemployment/frequency=*/year=*/county_unemployment.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Monthly unemployment rate, number unemployed, number employed and labor force for U.S.
+      counties and county equivalents (including Puerto Rico municipios), from BLS Local Area
+      Unemployment Statistics (LAUS), not seasonally adjusted, 1990 onward, with M13 annual
+      averages. Long format: one row per (county, measure, period). For county names join
+      laus_areas on area_code. For metropolitan areas see metro_unemployment; for states see
+      regional_employment.
+    dimensions:
+      type:
+        - county_unemployment
+      frequency: *monthly_frequency
+
+    # BLS LA-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    # Series ID layout: LA + seasonal(1) + area code(15) + measure(2).
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS LAUS series identifier, 20 characters: LAU + area code (CN + 5-digit county FIPS +
+          8 zeros) + measure code. E.g. LAUCN150010000000003 is the Hawaii County, HI
+          unemployment rate.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: >
+          BLS period identifier: M01-M12 monthly, M13 annual average. Filter period <> 'M13'
+          for monthly series.
+        source: period
+      - name: period_name
+        type: string
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE src.\"period\" WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' WHEN 'M13' THEN 'Annual' ELSE src.\"period\" END"
+      - name: area_code
+        type: string
+        nullable: true
+        comment: 15-character BLS LAUS area code (series_id positions 4-18). Joins to laus_areas.area_code for the area name.
+        expression: "SUBSTRING(src.\"series_id\", 4, 15)"
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: 2-digit state FIPS code (series_id positions 6-7)
+        expression: "SUBSTRING(src.\"series_id\", 6, 2)"
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit state + county FIPS code (series_id positions 6-10). Joins to geo.counties.county_fips.
+        expression: "SUBSTRING(src.\"series_id\", 6, 5)"
+      - name: measure_code
+        type: string
+        nullable: true
+        comment: "BLS LAUS measure code: 03 unemployment rate, 04 unemployed, 05 employed, 06 labor force"
+        expression: "SUBSTRING(src.\"series_id\", 19, 2)"
+      - name: measure
+        type: string
+        nullable: true
+        comment: >
+          Measure named from measure_code: unemployment_rate (percent), unemployment (persons),
+          employment (persons), labor_force (persons). ALWAYS filter on measure; values of
+          different measures are never additive.
+        expression: "CASE SUBSTRING(src.\"series_id\", 19, 2) WHEN '03' THEN 'unemployment_rate' WHEN '04' THEN 'unemployment' WHEN '05' THEN 'employment' WHEN '06' THEN 'labor_force' ELSE SUBSTRING(src.\"series_id\", 19, 2) END"
+      - name: value
+        type: double
+        nullable: true
+        comment: >
+          Percent for measure unemployment_rate, number of persons for the other measures.
+          NULL where BLS publishes no figure (shown as '-' in the source; see footnotes).
+        source: value
+      - name: preliminary
+        type: boolean
+        nullable: true
+        comment: True when BLS marks the data point preliminary (footnote code P); it is revised in a later release.
+        expression: "COALESCE(src.\"footnote_codes\", '') LIKE '%P%'"
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: "BLS footnote codes, e.g. P preliminary, N not available, X unavailable due to the 2025 lapse in appropriations"
+        source: footnote_codes
+
+    # Bulk flat file: no key and no daily request limit. Rows kept are the not-seasonally-adjusted
+    # (LAU) series of the CN area codes.
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/la/la.data.64.County"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      rowFilter:
+        column: series_id
+        pattern: '^LAUCN\d{13}(03|04|05|06)$'
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=county_unemployment/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: metro_unemployment
+    # BLS republishes the bulk flat file, with revisions to prior periods, on each monthly
+    # release; a HEAD probe of Last-Modified re-triggers ingest when the file changes.
+    # The file carries the full history, so there is no year dimension: each row's own
+    # year selects its year partition.
+    freshness:
+      type: last_modified
+    pattern: "type=metro_unemployment/frequency=*/year=*/metro_unemployment.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Monthly unemployment rate, number unemployed, number employed and labor force for U.S.
+      metropolitan statistical areas (including Puerto Rico), from BLS Local Area Unemployment
+      Statistics (LAUS), not seasonally adjusted, 1990 onward, with M13 annual averages. Long
+      format: one row per (metro area, measure, period). For metro names join laus_areas on
+      area_code. For counties see county_unemployment; for states see regional_employment.
+    dimensions:
+      type:
+        - metro_unemployment
+      frequency: *monthly_frequency
+
+    # BLS LA-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
+    # Series ID layout: LA + seasonal(1) + area code(15) + measure(2).
+    columns:
+      - name: series
+        type: string
+        nullable: true
+        comment: >
+          BLS LAUS series identifier, 20 characters: LAU + area code (MT + state FIPS(2) +
+          CBSA code(5) + 6 zeros) + measure code. E.g. LAUMT154652000000003 is the Urban
+          Honolulu, HI metro area unemployment rate.
+        source: series_id
+      - name: year
+        type: integer
+        nullable: true
+        comment: Data year
+        source: year
+      - name: period
+        type: string
+        nullable: true
+        comment: >
+          BLS period identifier: M01-M12 monthly, M13 annual average. Filter period <> 'M13'
+          for monthly series.
+        source: period
+      - name: period_name
+        type: string
+        nullable: true
+        comment: Human-readable period name derived from period
+        expression: "CASE src.\"period\" WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' WHEN 'M13' THEN 'Annual' ELSE src.\"period\" END"
+      - name: area_code
+        type: string
+        nullable: true
+        comment: 15-character BLS LAUS area code (series_id positions 4-18). Joins to laus_areas.area_code for the area name.
+        expression: "SUBSTRING(src.\"series_id\", 4, 15)"
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: >
+          2-digit FIPS code of the state BLS files the metro area under (series_id positions
+          6-7); a multi-state metro carries only that one state.
+        expression: "SUBSTRING(src.\"series_id\", 6, 2)"
+      - name: cbsa_code
+        type: string
+        nullable: true
+        comment: 5-digit OMB Core Based Statistical Area code (series_id positions 8-12)
+        expression: "SUBSTRING(src.\"series_id\", 8, 5)"
+      - name: measure_code
+        type: string
+        nullable: true
+        comment: "BLS LAUS measure code: 03 unemployment rate, 04 unemployed, 05 employed, 06 labor force"
+        expression: "SUBSTRING(src.\"series_id\", 19, 2)"
+      - name: measure
+        type: string
+        nullable: true
+        comment: >
+          Measure named from measure_code: unemployment_rate (percent), unemployment (persons),
+          employment (persons), labor_force (persons). ALWAYS filter on measure; values of
+          different measures are never additive.
+        expression: "CASE SUBSTRING(src.\"series_id\", 19, 2) WHEN '03' THEN 'unemployment_rate' WHEN '04' THEN 'unemployment' WHEN '05' THEN 'employment' WHEN '06' THEN 'labor_force' ELSE SUBSTRING(src.\"series_id\", 19, 2) END"
+      - name: value
+        type: double
+        nullable: true
+        comment: >
+          Percent for measure unemployment_rate, number of persons for the other measures.
+          NULL where BLS publishes no figure (shown as '-' in the source; see footnotes).
+        source: value
+      - name: preliminary
+        type: boolean
+        nullable: true
+        comment: True when BLS marks the data point preliminary (footnote code P); it is revised in a later release.
+        expression: "COALESCE(src.\"footnote_codes\", '') LIKE '%P%'"
+      - name: footnotes
+        type: string
+        nullable: true
+        comment: "BLS footnote codes, e.g. P preliminary, N not available, X unavailable due to the 2025 lapse in appropriations"
+        source: footnote_codes
+
+    # Bulk flat file: no key and no daily request limit. Rows kept are the not-seasonally-adjusted
+    # (LAU) series of the MT area codes.
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/la/la.data.60.Metro"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      rowFilter:
+        column: series_id
+        pattern: '^LAUMT\d{13}(03|04|05|06)$'
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=metro_unemployment/frequency=*/year=*/"
+      partition:
+        columns: [type, frequency, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: laus_areas
+    freshness:
+      type: last_modified
+    pattern: "type=laus_areas/laus_areas.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Names of the BLS Local Area Unemployment Statistics (LAUS) counties and metropolitan
+      statistical areas: one row per area. Join on area_code to county_unemployment and
+      metro_unemployment.
+
+    dimensions:
+      type:
+        - laus_areas
+
+    columns:
+      - name: area_code
+        type: string
+        nullable: true
+        comment: 15-character BLS LAUS area code
+        source: area_code
+      - name: area_name
+        type: string
+        nullable: true
+        comment: "BLS area title, e.g. 'Hawaii County, HI' or 'Urban Honolulu, HI Metropolitan Statistical Area'"
+        source: area_text
+      - name: area_type_code
+        type: string
+        nullable: true
+        comment: "BLS area type: F county or equivalent, B metropolitan statistical area"
+        source: area_type_code
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit state + county FIPS code for county areas; NULL for metro areas
+        expression: "CASE WHEN src.\"area_type_code\" = 'F' THEN SUBSTRING(src.\"area_code\", 3, 5) END"
+      - name: cbsa_code
+        type: string
+        nullable: true
+        comment: 5-digit CBSA code for metro areas; NULL for counties
+        expression: "CASE WHEN src.\"area_type_code\" = 'B' THEN SUBSTRING(src.\"area_code\", 5, 5) END"
+
+    source:
+      type: http
+      url: "https://download.bls.gov/pub/time.series/la/la.area"
+      method: GET
+      headers:
+        # download.bls.gov 403s fake-browser User-Agents; requires a self-identifying UA
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: tsv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+      rowFilter:
+        column: area_type_code
+        pattern: '^(B|F)$'
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=laus_areas/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728  # 128MB target for optimal read performance
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- WAGE GROWTH ---
   - name: wage_growth
     # BLS revises the prior 1-2 months on every monthly release and restates the

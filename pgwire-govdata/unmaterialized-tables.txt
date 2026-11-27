@@ -13,7 +13,10 @@ census.pep_population_estimates
 disasters.fema_firm_panels
 disasters.fema_nfhl_lomrs
 econ.business_formation_statistics
+econ.county_unemployment
 econ.federal_budget_authority_by_function
+econ.laus_areas
+econ.metro_unemployment
 econ.national_industry_employment
 econ.osha_inspections
 econ.osha_violations
