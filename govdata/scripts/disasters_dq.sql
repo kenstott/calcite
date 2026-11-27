@@ -3,7 +3,7 @@
 -- Schema: disasters
 -- Tables: disaster_declarations, public_assistance_projects, hazard_mitigation_projects,
 --         nfip_claims, nfip_policies, nfip_multiple_loss_properties, storm_events,
---         wildfire_perimeters, ihp_housing_assistance_owners, ihp_housing_assistance_renters, ihp_valid_registrations_by_county
+--         wildfire_perimeters, usgs_seismic_hazard_by_county, ihp_housing_assistance_owners, ihp_housing_assistance_renters, ihp_valid_registrations_by_county
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns 'type' and 'year'.
 -- nfip_policies is capped by dqRowLimit (50k/year) in DQ mode, so its T2 threshold is a
@@ -768,6 +768,86 @@ SELECT 'disasters', 'fema_nri_earthquake_by_county', 'T7_known_exposure',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/fema_nri_earthquake_by_county', allow_moved_paths := true)
       WHERE (county_fips = '06075' AND earthquake_risk_rating IN ('Relatively High', 'Very High'))
          OR (county_fips = '19169' AND earthquake_risk_rating = 'Very Low'));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: usgs_seismic_hazard_by_county (static snapshot)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T2_row_count',
+  CASE WHEN n = 3221 THEN 'pass' ELSE 'fail' END, n, 3221, '2020 counties: 50 states + DC (3143) + Puerto Rico (78)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+-- model_version and method are one constant per snapshot by construction
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'model_version', 'method')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
+      WHERE county_fips IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
+  GROUP BY county_fips HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T7_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'county_fips not 5 digits or not prefixed by state_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
+      WHERE county_fips NOT SIMILAR TO '[0-9]{5}' OR SUBSTR(county_fips, 1, 2) <> state_fips);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T7_value_bounds',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with a null, non-positive or implausible (> 5 g) ground-motion value'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
+      WHERE pga_2pct50yr_g IS NULL OR pga_2pct50yr_g <= 0 OR pga_2pct50yr_g > 5
+         OR ss_g IS NULL OR ss_g <= 0 OR ss_g > 5
+         OR s1_g IS NULL OR s1_g <= 0 OR s1_g > 5
+         OR sds_g IS NULL OR sds_g <= 0 OR sds_g > 5
+         OR sd1_g IS NULL OR sd1_g <= 0 OR sd1_g > 5
+         OR pgam_g IS NULL OR pgam_g <= 0 OR pgam_g > 5
+         OR sds_site_class_bc_g IS NULL OR sds_site_class_bc_g <= 0 OR sds_site_class_bc_g > 5
+         OR sd1_site_class_bc_g IS NULL OR sd1_site_class_bc_g <= 0 OR sd1_site_class_bc_g > 5);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T7_sdc_domain',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'seismic_design_category outside A-F'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
+      WHERE seismic_design_category NOT IN ('A', 'B', 'C', 'D', 'E', 'F'));
+
+-- hazard anchors: San Francisco CA is high-shaking, Story IA is low
+INSERT INTO dq_results
+SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T7_known_hazard',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'San Francisco CA high-hazard + Story IA low-hazard anchor rows present'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
+      WHERE (county_fips = '06075' AND sds_g >= 1.0 AND seismic_design_category = 'D')
+         OR (county_fips = '19169' AND sds_g < 0.2 AND seismic_design_category = 'A'));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
