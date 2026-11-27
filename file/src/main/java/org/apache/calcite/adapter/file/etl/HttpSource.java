@@ -117,6 +117,10 @@ public class HttpSource implements DataSource {
    * {@code GOVDATA_FORCE_DOWNLOAD_TABLES} handling for how this gets set.
    */
   private final boolean bypassRawCache;
+  /** Raw cache entries that count as a miss until this source rewrites them. */
+  private final Set<String> staleRawCachePaths = ConcurrentHashMap.<String>newKeySet();
+  /** Raw cache entries this source has written, which are never stale. */
+  private final Set<String> writtenRawCachePaths = ConcurrentHashMap.<String>newKeySet();
   /**
    * Fetch-time keys of the columns the table declares as textual. Delimited formats carry no
    * types, so {@link #parseValue} otherwise infers one per value — and an all-digit identifier
@@ -1062,6 +1066,7 @@ public class HttpSource implements DataSource {
         storageProvider.createDirectories(parentPath);
         try (java.io.InputStream in = new FileInputStream(tempCacheFile)) {
           storageProvider.writeFile(rawCacheFilePath, in);
+          writtenRawCachePaths.add(rawCacheFilePath);
         }
         mergedCacheWritten = true;
         LOGGER.info("Wrote streaming merged cache: {} ({} records)",
@@ -1190,6 +1195,7 @@ public class HttpSource implements DataSource {
       storageProvider.createDirectories(parentPath);
       try (InputStream in = new FileInputStream(tempFile)) {
         storageProvider.writeFile(rawCacheFilePath, in);
+        writtenRawCachePaths.add(rawCacheFilePath);
       }
       LOGGER.info("CSV_STREAM cached full response to raw: {} ({} bytes)",
           rawCacheFilePath, tempFile.length());
@@ -1810,6 +1816,7 @@ public class HttpSource implements DataSource {
     String parentPath = parentOf(cachePath);
     storageProvider.createDirectories(parentPath);
     storageProvider.writeFile(cachePath, input);
+    writtenRawCachePaths.add(cachePath);
     LOGGER.info("Cached response: {}", cachePath);
     return cachePath;
   }
@@ -1836,6 +1843,7 @@ public class HttpSource implements DataSource {
       }
       try (InputStream is = new java.io.FileInputStream(tmpCache)) {
         storageProvider.writeFile(cachePath, is);
+        writtenRawCachePaths.add(cachePath);
       }
     } finally {
       tmpCache.delete();
@@ -2012,6 +2020,7 @@ public class HttpSource implements DataSource {
       String parentPath = parentOf(cachePath);
       storageProvider.createDirectories(parentPath);
       storageProvider.writeFile(cachePath, fis);
+      writtenRawCachePaths.add(cachePath);
     }
     tempFile.delete();
     LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
@@ -2072,6 +2081,7 @@ public class HttpSource implements DataSource {
         String parentPath = parentOf(cachePath);
         storageProvider.createDirectories(parentPath);
         storageProvider.writeFile(cachePath, fis);
+        writtenRawCachePaths.add(cachePath);
       }
       LOGGER.info("Cached {} MB: {}", totalBytes / (1024 * 1024), cachePath);
     } finally {
@@ -3638,6 +3648,19 @@ public class HttpSource implements DataSource {
   // --- Freshness Probe ---
 
   /**
+   * Makes this batch's fetch read the source: an existing raw cache entry counts as a miss until
+   * this source has rewritten it. The entry stays in storage until the new response replaces it, so
+   * a failed fetch leaves it in place, and batches resolving to the same entry download it once.
+   *
+   * @param variables the batch's dimension values
+   */
+  public void requireFreshRawCache(Map<String, String> variables) {
+    if (isRawCacheEnabled()) {
+      staleRawCachePaths.add(buildRawCachePath(variables));
+    }
+  }
+
+  /**
    * Result of a freshness probe: HTTP response headers plus an optional small body.
    *
    * <p>Headers are captured for {@code ETag}, {@code Last-Modified}, {@code Content-Length},
@@ -4034,6 +4057,10 @@ public class HttpSource implements DataSource {
       LOGGER.debug("Raw cache bypassed (force-download): {}", cachePath);
       return false;
     }
+    if (staleRawCachePaths.contains(cachePath) && !writtenRawCachePaths.contains(cachePath)) {
+      LOGGER.info("Source changed — not reading raw cache entry {}", cachePath);
+      return false;
+    }
     try {
       // Immutable data - if cache exists, it's valid
       // Staleness is determined by IncrementalTracker, not by TTL
@@ -4321,6 +4348,7 @@ public class HttpSource implements DataSource {
 
       // Write content
       storageProvider.writeFile(cachePath, content.getBytes(StandardCharsets.UTF_8));
+      writtenRawCachePaths.add(cachePath);
       LOGGER.info("Raw cache written: {} ({} bytes)", cachePath, content.length());
     } catch (IOException e) {
       LOGGER.warn("Failed to write raw cache: {} - {}", cachePath, SecretRedaction.redact(e.getMessage()));

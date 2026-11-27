@@ -28,9 +28,9 @@ import java.util.regex.Pattern;
  *
  * <p>{@link PartialPartitionGuard} applies the same invariant to tracker-driven partial dispatch.
  *
- * <p>When the invariant does not hold, per-unit skipping is disabled and the pipeline falls back to
- * all-or-nothing freshness. That is the behavior these tables had before per-unit skipping was
- * extended to them, so it removes an optimization rather than changing what is written.
+ * <p>When the invariant does not hold, per-unit skipping is disabled and every unit is fetched and
+ * written, so it removes an optimization rather than changing what is written. The per-unit probe
+ * still decides which of those units re-read the source instead of their raw cache entry.
  *
  * <h3>Exemptions</h3>
  * Three cases cannot produce a partial skip and are therefore safe despite a coarse partition:

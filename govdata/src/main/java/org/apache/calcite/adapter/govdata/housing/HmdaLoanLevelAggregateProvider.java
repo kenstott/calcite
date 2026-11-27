@@ -53,15 +53,10 @@ import java.util.Map;
  * years}, or the API silently returns a small, undocumented partial subset instead of an error
  * (verified: omitting it returned ~261K rows for 2023; passing all 8 action codes returned the
  * real ~4.2GB/~1.11M-row file) — through the pipeline's {@link RawCache} rather than a direct
- * connection. This matters here specifically, not just as a general courtesy: {@code freshness:
- * type: hash} on this table's YAML makes {@code EtlPipeline} call this provider's {@code fetch}
- * <em>twice</em> per batch — once to hash the content, once to write — relying on the raw cache to
- * make the second call free (its own comment: "the raw HTTP response is cached after the first
- * pull, so this re-parses from the warm cache"). Bypassing the cache with a direct download, as an
- * earlier version of this class did, made the second call re-download the full multi-GB file from
- * CFPB's server (confirmed live: a 23-minute, 4.2GB download, twice, for one batch). Routing
- * through {@code rawCache.openStream} fixes that call for free and also means a later reprocess of
- * an already-fetched year does not need to hit CFPB's server again either.
+ * connection. {@code freshness: type: hash} on this table makes {@code EtlPipeline} call
+ * {@code fetch} <em>twice</em> per batch, once to hash the content and once to write, and the
+ * cache makes the second call free. The entry is keyed by the revision of the file the API
+ * redirects to, so a year is downloaded again only when CFPB posts a new file.
  *
  * <p>The cached stream is copied to a local temp file (DuckDB's {@code read_csv_auto} needs a real
  * file path), aggregated to tract grain via an embedded DuckDB query — streamed off disk, never
@@ -71,6 +66,11 @@ import java.util.Map;
  * census tract) is small enough to hold in memory and return directly.
  */
 public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
+
+  /** The key carries the Last-Modified and length of the file the API redirects to. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HmdaLoanLevelAggregateProvider.class);
   private static final int MAX_ATTEMPTS = 3;
@@ -123,7 +123,7 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     File tempCsv = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("hmda-" + year + "-", ".csv");
     try {
       LOGGER.info("HMDA loan-level aggregate {}: fetching {} (through raw cache)", year, url);
-      copyThroughCache(rawCache, url, tempCsv);
+      copyThroughCache(rawCache, url + "#version=" + version(url), url, tempCsv);
       LOGGER.info("HMDA loan-level aggregate {}: {} MB, aggregating to tract grain",
           year, tempCsv.length() / (1024 * 1024));
       List<Map<String, Object>> rows = aggregate(tempCsv, year);
@@ -139,16 +139,18 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
   }
 
   /**
-   * Reads {@code url} through {@code rawCache} (cache hit serves from storage with no network
-   * call; a miss downloads, stores, and serves) and copies the bytes to {@code destFile}. Retries
+   * Reads {@code url} through {@code rawCache} under {@code key} (a cache hit serves from storage
+   * with no download; a miss downloads, stores, and serves) and copies the bytes to
+   * {@code destFile}. Retries
    * the whole call on failure — a multi-GB download run over many minutes is more exposed to a
    * transient network blip than a small one, and a failed attempt leaves no cache entry to
    * conflict with a clean retry.
    */
-  private void copyThroughCache(RawCache rawCache, String url, File destFile) throws IOException {
+  private void copyThroughCache(RawCache rawCache, String key, String url, File destFile)
+      throws IOException {
     IOException last = null;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try (InputStream in = rawCache.openStream(url, () -> openConnectionStream(url));
+      try (InputStream in = rawCache.openStream(key, () -> openConnectionStream(url));
            FileOutputStream out = new FileOutputStream(destFile)) {
         byte[] buf = new byte[1 << 20];
         int n;
@@ -163,6 +165,52 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
       }
     }
     throw last != null ? last : new IOException("HMDA loan-level aggregate: failed to fetch " + url);
+  }
+
+  /**
+   * Identifies the posted revision of a year's file. The API answers a nationwide query with a
+   * redirect to a generated file; that file's headers are the only revision the source publishes.
+   *
+   * @throws IOException if the API does not redirect, or the file reports no revision headers
+   */
+  private static String version(String url) throws IOException {
+    HttpURLConnection query = request(url, "GET");
+    String location;
+    try {
+      int status = query.getResponseCode();
+      location = query.getHeaderField("Location");
+      if (status / 100 != 3 || location == null) {
+        throw new IOException("HMDA loan-level aggregate: expected a redirect to the file, got HTTP "
+            + status + " from " + url);
+      }
+    } finally {
+      query.disconnect();
+    }
+    String fileUrl = URI.create(url).resolve(location).toString();
+    HttpURLConnection file = request(fileUrl, "HEAD");
+    try {
+      int status = file.getResponseCode();
+      String modified = file.getHeaderField("Last-Modified");
+      long length = file.getContentLengthLong();
+      if (status != 200 || modified == null || length < 0) {
+        throw new IOException("HMDA loan-level aggregate: HTTP " + status
+            + " without Last-Modified and Content-Length from " + fileUrl);
+      }
+      return modified + "/" + length;
+    } finally {
+      file.disconnect();
+    }
+  }
+
+  private static HttpURLConnection request(String url, String method) throws IOException {
+    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+    conn.setRequestMethod(method);
+    conn.setInstanceFollowRedirects(false);
+    conn.setConnectTimeout(ResumableHttpStream.CONNECT_TIMEOUT_MS);
+    conn.setReadTimeout(ResumableHttpStream.IDLE_TIMEOUT_MS);
+    conn.setRequestProperty("User-Agent", ResumableHttpStream.HMDA_USER_AGENT);
+    NetworkOutageWait.connect(conn);
+    return conn;
   }
 
   private static InputStream openConnectionStream(String url) throws IOException {

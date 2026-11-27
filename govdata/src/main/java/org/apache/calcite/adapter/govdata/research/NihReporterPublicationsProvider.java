@@ -15,6 +15,7 @@ import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.govdata.MonthlyCacheKey;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,6 +65,11 @@ import java.util.Set;
  * emitted as {@code pub_year}. A pmid iCite does not index has a null {@code pub_year}.
  */
 public class NihReporterPublicationsProvider implements CachingDataProvider {
+
+  /** Keys carry the calendar month: a fiscal year is thousands of paced requests. */
+  @Override public boolean isCacheKeyedByRevision() {
+    return true;
+  }
 
   private static final Logger LOGGER = LoggerFactory.getLogger(NihReporterPublicationsProvider.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -211,7 +217,8 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
         ids.append(pmid);
       }
       String url = ICITE_ENDPOINT + "?fl=pmid,year&pmids=" + ids;
-      try (InputStream in = rawCache.openStream(url, () -> rawGetWithRetry(url, limits.maxRetries))) {
+      try (InputStream in = rawCache.openStream(MonthlyCacheKey.of(url),
+          () -> rawGetWithRetry(url, limits.maxRetries))) {
         for (JsonNode d : MAPPER.readTree(in).path("data")) {
           Long pmid = longOrNull(d, "pmid");
           JsonNode y = d.get("year");
@@ -439,7 +446,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
    */
   private JsonNode postJson(String url, String jsonBody, RawCache rawCache, String pageLabel)
       throws IOException {
-    String key = url + "/" + pageLabel + "?" + jsonBody;
+    String key = MonthlyCacheKey.of(url + "/" + pageLabel + "?" + jsonBody);
     try (InputStream in = rawCache.openStream(key, () -> rawPostPaced(url, jsonBody))) {
       return MAPPER.readTree(in);
     }
