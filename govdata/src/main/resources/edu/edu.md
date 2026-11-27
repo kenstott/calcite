@@ -830,6 +830,9 @@ WHERE c.year = 2015;
 - **county_code padding.** The CCD API returns `county_code` as a 4-digit string
   (e.g., "1073"). Pad to 5 digits with leading zero to match geo.counties.county_fips
   format (e.g., "01073"). Same applies to IPEDS `COUNTYCD`.
+  The CCD transformers null NCES missing codes (negative values) in `county_code`, `cbsa`,
+  `congress_district_id` and the state legislative district columns, and `county_name`
+  where the county code is missing.
 - **Module placement:** New `edu` directory under `govdata/src/main/resources/edu/`
   alongside existing domain directories. Schema file: `edu-schema.yaml`.
   Worker script: `worker-70.sh` (or next available number after reviewing manifest).

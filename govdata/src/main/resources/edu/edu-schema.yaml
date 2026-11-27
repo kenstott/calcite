@@ -93,11 +93,11 @@ partitionedTables:
       - name: county_code
         type: string
         nullable: true
-        comment: County FIPS, zero-padded to 5 chars by the transformer (e.g. '06037') — FK to geo.counties.county_fips
+        comment: "County FIPS, zero-padded to 5 chars by the transformer (e.g. '06037') — FK to geo.counties.county_fips. Null where NCES reports it missing or not applicable."
       - name: county_name
         type: string
         nullable: true
-        comment: County name
+        comment: "County name. Null where NCES reports it missing or not applicable."
       - name: urban_centric_locale
         type: int
         nullable: true
@@ -105,7 +105,7 @@ partitionedTables:
       - name: cbsa
         type: int
         nullable: true
-        comment: Core-Based Statistical Area code
+        comment: "Core-Based Statistical Area code. Null where NCES reports it missing or not applicable."
       - name: latitude
         type: double
         nullable: true
@@ -177,15 +177,15 @@ partitionedTables:
       - name: state_leg_district_lower
         type: string
         nullable: true
-        comment: State lower legislative district
+        comment: "State lower legislative district. Null where NCES reports it missing or not applicable."
       - name: state_leg_district_upper
         type: string
         nullable: true
-        comment: State upper legislative district
+        comment: "State upper legislative district. Null where NCES reports it missing or not applicable."
       - name: congress_district_id
         type: int
         nullable: true
-        comment: Congressional district ID
+        comment: "Congressional district ID. Null where NCES reports it missing or not applicable."
 
     source:
       type: http
@@ -311,7 +311,7 @@ partitionedTables:
       - name: county_code
         type: string
         nullable: true
-        comment: County FIPS, zero-padded to 5 chars by the transformer (e.g. '06037') — FK to geo.counties.county_fips
+        comment: "County FIPS, zero-padded to 5 chars by the transformer (e.g. '06037') — FK to geo.counties.county_fips. Null where NCES reports it missing or not applicable."
       - name: latitude
         type: double
         nullable: true
@@ -327,7 +327,7 @@ partitionedTables:
       - name: cbsa
         type: string
         nullable: true
-        comment: CBSA code (string in API)
+        comment: "CBSA code (string in API). Null where NCES reports it missing or not applicable."
       - name: school_level
         type: int
         nullable: true
@@ -433,15 +433,15 @@ partitionedTables:
       - name: congress_district_id
         type: int
         nullable: true
-        comment: Congressional district
+        comment: "Congressional district. Null where NCES reports it missing or not applicable."
       - name: state_leg_district_lower
         type: string
         nullable: true
-        comment: State lower legislative district
+        comment: "State lower legislative district. Null where NCES reports it missing or not applicable."
       - name: state_leg_district_upper
         type: string
         nullable: true
-        comment: State upper legislative district
+        comment: "State upper legislative district. Null where NCES reports it missing or not applicable."
 
     source:
       type: http
@@ -484,6 +484,7 @@ partitionedTables:
       iceberg:
         <<: *compaction_defaults
         catalogType: hadoop
+        overwritePartitions: true  # one bulk file split by year: a rewrite replaces each year
         runMaintenance: true
         snapshotRetentionDays: 7
         runCompaction: true
@@ -4674,10 +4675,11 @@ views:
       District-level pupil_teacher_ratio (enrollment / teachers_total_fte) and
       district_frpl_rate, a free/reduced-price-lunch poverty proxy computed by summing
       free_or_reduced_price_lunch and enrollment from ccd_schools per (leaid, year) and
-      joining to ccd_districts. One row per district per year. ccd_districts.enrollment
-      and teachers_total_fte and ccd_schools.free_or_reduced_price_lunch/enrollment all
-      carry negative NCES CCD sentinel codes on some rows (see those tables' comments) —
-      this view excludes them (value < 0 treated as null) before computing
+      joining to ccd_districts. One row per district per year. ccd_districts.enrollment,
+      number_of_schools, teachers_total_fte and guidance_counselors_total_fte and
+      ccd_schools.free_or_reduced_price_lunch/enrollment all carry negative NCES CCD
+      sentinel codes on some rows (see those tables' comments) — this view excludes them
+      (value < 0 treated as null) in the columns it exposes and before computing
       pupil_teacher_ratio and before summing into district_frpl_count/frpl_rate, so a
       sentinel code is never silently counted as a real value.
       frpl_rate is NULL for a whole district in any year its state runs the Community
@@ -4698,9 +4700,10 @@ views:
         d.county_code,
         d.urban_centric_locale,
         CASE WHEN d.enrollment >= 0 THEN d.enrollment END                       AS enrollment,
-        d.number_of_schools,
+        CASE WHEN d.number_of_schools >= 0 THEN d.number_of_schools END         AS number_of_schools,
         CASE WHEN d.teachers_total_fte >= 0 THEN d.teachers_total_fte END       AS teachers_total_fte,
-        d.guidance_counselors_total_fte,
+        CASE WHEN d.guidance_counselors_total_fte >= 0
+             THEN d.guidance_counselors_total_fte END                           AS guidance_counselors_total_fte,
         d.school_psychologists_fte,
         CASE WHEN d.enrollment >= 0 AND d.teachers_total_fte >= 0
              THEN d.enrollment / NULLIF(d.teachers_total_fte, 0) END            AS pupil_teacher_ratio,
@@ -4880,10 +4883,12 @@ views:
       district_frpl_rate (free/reduced-price-lunch share of aggregated school
       enrollment). Joins to ccd_districts for district name, FIPS, and district-level
       enrollment/teacher FTE context. One row per district per year via an inner join
-      — districts with no matching ccd_schools rows are excluded. s.enrollment and
+      — districts with no matching ccd_schools rows are excluded. d.enrollment,
+      d.number_of_schools, d.teachers_total_fte, s.enrollment and
       s.free_or_reduced_price_lunch carry negative NCES CCD sentinel codes on some rows
-      (see ccd_schools' comment) — excluded (value < 0 treated as null) before summing
-      into school_enrollment_sum and district_frpl_rate.
+      (see ccd_districts' and ccd_schools' comments) — excluded (value < 0 treated as
+      null) in district_enrollment, number_of_schools and teachers_total_fte and before
+      summing into school_enrollment_sum and district_frpl_rate.
       district_frpl_rate is NULL for a whole district in any year its state runs the
       Community Eligibility Provision — CEP schools take no FRPL applications, so CCD
       publishes nothing in free_or_reduced_price_lunch statewide (2022: DE, DC, MA, MT, TN,
@@ -4898,9 +4903,9 @@ views:
         d.lea_name,
         d.fips,
         d.state_abbr,
-        d.enrollment                                                        AS district_enrollment,
-        d.number_of_schools,
-        d.teachers_total_fte,
+        CASE WHEN d.enrollment >= 0 THEN d.enrollment END                   AS district_enrollment,
+        CASE WHEN d.number_of_schools >= 0 THEN d.number_of_schools END     AS number_of_schools,
+        CASE WHEN d.teachers_total_fte >= 0 THEN d.teachers_total_fte END   AS teachers_total_fte,
         SUM(CASE WHEN s.charter = 1 THEN 1 ELSE 0 END)                     AS charter_school_count,
         SUM(CASE WHEN s.magnet = 1 THEN 1 ELSE 0 END)                      AS magnet_school_count,
         SUM(CASE WHEN s.virtual = 1 THEN 1 ELSE 0 END)                     AS virtual_school_count,

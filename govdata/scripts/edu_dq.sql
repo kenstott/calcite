@@ -1286,6 +1286,35 @@ FROM (
   WHERE enrollment IS NOT NULL AND enrollment NOT IN (-1, -2, -3, -9)
 );
 
+-- ccd_districts / ccd_schools: geography identifiers carry no NCES missing codes
+INSERT INTO dq_results
+SELECT 'edu', 'ccd_districts', 'geography_id_codes',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_districts', allow_moved_paths=true)
+  WHERE NOT regexp_full_match(county_code, '[0-9]{5}')
+     OR CAST(cbsa AS VARCHAR) LIKE '-%'
+     OR congress_district_id < 0
+     OR state_leg_district_lower LIKE '-%'
+     OR state_leg_district_upper LIKE '-%'
+);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ccd_schools', 'geography_id_codes',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ccd_schools', allow_moved_paths=true)
+  WHERE NOT regexp_full_match(county_code, '[0-9]{5}')
+     OR CAST(cbsa AS VARCHAR) LIKE '-%'
+     OR congress_district_id < 0
+     OR state_leg_district_lower LIKE '-%'
+     OR state_leg_district_upper LIKE '-%'
+);
+
 -- library_outlets: outlet_type must be one of the four documented PLS codes, plus the
 -- single confirmed source anomaly 'MO' (library_id='MO0004-037' "Library By Mail",
 -- year=2019 only — verbatim in IMLS's own FY2019 C_OUT_TY column, not a mapping error

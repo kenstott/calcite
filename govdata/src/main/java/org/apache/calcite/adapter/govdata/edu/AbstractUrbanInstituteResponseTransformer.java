@@ -21,7 +21,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.StringWriter;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,6 +103,46 @@ abstract class AbstractUrbanInstituteResponseTransformer implements PerRecordRes
    */
   protected void augmentRecord(ObjectNode row, RequestContext context) {
     // no-op by default
+  }
+
+  /** Geography identifier columns shared by the CCD district and school directories. */
+  private static final String[] CCD_GEOGRAPHY_ID_FIELDS = {
+      "cbsa", "congress_district_id", "state_leg_district_lower", "state_leg_district_upper"
+  };
+
+  /** NCES missing / not applicable codes are negative integers. */
+  private static final Pattern NCES_NEGATIVE_CODE = Pattern.compile("-[0-9]+(\\.0+)?");
+
+  /**
+   * Normalizes the geography identifiers of a CCD directory row. NCES missing / not applicable
+   * codes become null, so no identifier column carries a value that is not an identifier.
+   * {@code county_code}, delivered as an integer (e.g. 6037 for CA/LA), is zero-padded to the
+   * 5-character FIPS string that joins {@code geo.counties.county_fips}. A county with a missing
+   * code has no name either, so {@code county_name} is nulled with it.
+   */
+  protected static void normalizeCcdGeography(ObjectNode row) {
+    JsonNode county = row.path("county_code");
+    if (isNcesNegativeCode(county)) {
+      row.putNull("county_code");
+      if (row.has("county_name")) {
+        row.putNull("county_name");
+      }
+    } else {
+      int code = county.asInt();
+      if (code > 0) {
+        row.put("county_code", String.format(Locale.ROOT, "%05d", code));
+      }
+    }
+
+    for (String field : CCD_GEOGRAPHY_ID_FIELDS) {
+      if (isNcesNegativeCode(row.path(field))) {
+        row.putNull(field);
+      }
+    }
+  }
+
+  private static boolean isNcesNegativeCode(JsonNode node) {
+    return NCES_NEGATIVE_CODE.matcher(node.asText()).matches();
   }
 
   /** Return text value of a node field, or null. */
