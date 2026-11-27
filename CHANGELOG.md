@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.131.1](https://github.com/kenstott/calcite/compare/engine-v0.131.0...engine-v0.131.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **file:** match a drive schema's glob against paths relative to its directory ([#1186](https://github.com/kenstott/calcite/issues/1186)) ([684a090](https://github.com/kenstott/calcite/commit/684a090e670e8c7a522c7c0468204d72ea4355f9))
+
 ## [0.131.0](https://github.com/kenstott/calcite/compare/engine-v0.130.0...engine-v0.131.0) (2026-11-27)
 
 
