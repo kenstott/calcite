@@ -9656,8 +9656,11 @@ views:
           pct_beds as "current hospital capacity relative to other states,"
           not a historical trend.
         - pupil_teacher_inv: inverted (1 - percent_rank) SUM(enrollment) /
-          SUM(teachers_total_fte) from edu.ccd_districts — inverted because a
-          LOWER pupil-teacher ratio is the better outcome.
+          SUM(teachers_total_fte) from edu.ccd_districts, over districts that
+          report both (negative NCES sentinel codes excluded) — inverted because a
+          LOWER pupil-teacher ratio is the better outcome. Fiscal year Y takes the
+          school year ending in it (ccd_districts year Y-1); a fiscal year whose
+          school year ccd_districts does not carry has a null pupil_teacher_ratio.
         - library: edu.library_outlets total square_feet per state per year.
         - access_inv: inverted (1 - percent_rank) average of
           (no_internet_households / total_households) from census.acs_internet
@@ -9697,10 +9700,11 @@ views:
       pupil_teacher AS (
         SELECT
           LPAD(CAST(fips AS VARCHAR), 2, '0') AS state_fips,
-          year,
+          year + 1                 AS year,
           SUM(enrollment)          AS total_enrollment,
           SUM(teachers_total_fte)  AS total_teachers_fte
         FROM "edu"."ccd_districts"
+        WHERE enrollment >= 0 AND teachers_total_fte >= 0
         GROUP BY LPAD(CAST(fips AS VARCHAR), 2, '0'), year
       ),
       libraries AS (

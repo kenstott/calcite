@@ -43,8 +43,8 @@ IPEDS bulk downloads.
 | `field_of_study_roi` | Program-level earnings minus estimated debt cost by CIP code and credential level | `college_scorecard_programs` |
 | `district_charter_profile` | Charter vs. traditional school comparison within each district: enrollment share, staff ratios | `ccd_districts`, `ccd_schools` |
 | `institution_completions_summary` | Institution-level degree completion totals by award level and broad CIP category | `ipeds_completions`, `ipeds_institutions` |
-| `ipeds_financial_efficiency` | Expenditure per completion and revenue mix (tuition vs. government vs. auxiliary) by institution | `ipeds_financials`, `ipeds_completions` |
-| `district_naep_spending` | Correlates district per-pupil spending with state NAEP scores | `ccd_districts`, `naep_scores` |
+| `ipeds_financial_efficiency` | Tuition dependency, salary share of expenses and institutional discount rate by institution and fiscal year | `ipeds_financials`, `ipeds_institutions` |
+| `district_naep_spending` | State NAEP scores with staffing and poverty measures from the school year ending that spring (no dollar figures) | `ccd_districts`, `ccd_schools`, `naep_scores` |
 | `institution_county_context` | Postsecondary institutions enriched with county economic context from `econ.county_wages` | `ipeds_institutions`, `econ.county_wages` |
 | `state_naep_geography` | NAEP scores enriched with state geography for choropleth mapping | `naep_scores`, `geo.states` |
 | `naep_proficiency_summary` | % proficient or above by subject, grade, and year (national and state) | `naep_achievement_levels` |
