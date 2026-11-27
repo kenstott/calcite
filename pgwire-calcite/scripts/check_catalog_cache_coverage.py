@@ -9,20 +9,22 @@ the whole catalog (govdata-ops#940: every fisheries table missing). This compare
 the YAMLs instead.
 
 A declared table the warehouse does not hold yet (its ETL has not run) is absent from every
-complete catalog walk, so no regenerated cache can contain it. Such tables are named, one
-``schema.table`` per line, in the unmaterialized list; a declared table missing from the cache
-must be listed there. The list is kept honest both ways: a listed table the cache holds, or one
-no YAML declares, also fails, so an entry is dropped as soon as its table is materialized and
-the cache regenerated.
+complete catalog walk, so no regenerated cache can contain it. Such tables have a file named
+``schema.table`` in the unmaterialized directory (pgwire_calcite.unmaterialized); a declared
+table missing from the cache must be listed there. The list is kept honest both ways: a listed
+table the cache holds, or one no YAML declares, also fails. Regenerating the cache beside the
+directory deletes the entries of the tables it holds.
 
     PYTHONPATH=pgwire-calcite/src python3 check_catalog_cache_coverage.py \\
-        <cache.pkl> <unmaterialized.txt> <schema-yaml>...
+        <cache.pkl> <unmaterialized-dir> <schema-yaml>...
 """
 import pickle
 import re
 import sys
 
 import yaml
+
+from pgwire_calcite import unmaterialized
 
 _VAR = re.compile(r"\$\{[A-Za-z0-9_]+:([^}]*)\}")
 _DECLARING_KEYS = ("tables", "partitionedTables", "views")
@@ -39,21 +41,6 @@ def declared(yaml_path):
     }
 
 
-def unmaterialized(list_path):
-    """The ``schema.table`` entries of the list; blank lines and ``#`` comments are ignored."""
-    entries = set()
-    with open(list_path) as f:
-        for lineno, raw in enumerate(f, 1):
-            line = raw.split("#", 1)[0].strip()
-            if not line:
-                continue
-            schema, dot, table = line.partition(".")
-            if not dot or not schema or not table or "." in table:
-                raise ValueError(f"{list_path}:{lineno}: expected schema.table, got {line!r}")
-            entries.add((schema, table))
-    return entries
-
-
 def _report(header, pairs):
     print(header, file=sys.stderr)
     for schema, table in sorted(pairs):
@@ -61,12 +48,12 @@ def _report(header, pairs):
 
 
 def main(argv):
-    cache_path, list_path, yaml_paths = argv[1], argv[2], argv[3:]
+    cache_path, list_dir, yaml_paths = argv[1], argv[2], argv[3:]
     with open(cache_path, "rb") as f:
         _, ctx, _ = pickle.load(f)
     present = {(t.schema_name, t.table_name) for t in ctx.tables.values()}
     declared_pairs = {pair for p in yaml_paths for pair in declared(p)}
-    listed = unmaterialized(list_path)
+    listed = unmaterialized.entries(list_dir)
 
     missing = declared_pairs - present - listed
     listed_but_cached = listed & present
@@ -75,18 +62,18 @@ def main(argv):
     if missing:
         _report(
             f"{cache_path} lacks {len(missing)} declared table(s)/view(s) -- regenerate the cache "
-            f"from a complete walk, or, only for a table the warehouse does not hold, list it in "
-            f"{list_path}:",
+            f"from a complete walk, or, only for a table the warehouse does not hold, add an "
+            f"empty file {list_dir}/<schema>.<table> for it:",
             missing)
     if listed_but_cached:
         _report(
-            f"{list_path} lists {len(listed_but_cached)} table(s) the cache holds -- they are "
-            f"materialized now; remove them from the list:",
+            f"{list_dir} lists {len(listed_but_cached)} table(s) the cache holds -- they are "
+            f"materialized now; delete their files:",
             listed_but_cached)
     if listed_but_undeclared:
         _report(
-            f"{list_path} lists {len(listed_but_undeclared)} table(s) no schema YAML declares -- "
-            f"remove them from the list:",
+            f"{list_dir} lists {len(listed_but_undeclared)} table(s) no schema YAML declares -- "
+            f"delete their files:",
             listed_but_undeclared)
     return 1 if (missing or listed_but_cached or listed_but_undeclared) else 0
 

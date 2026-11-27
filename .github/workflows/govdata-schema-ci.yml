@@ -13,7 +13,8 @@ on:
       - 'govdata/src/main/resources/duckdb/seed/iceberg-schema-cache.json'
       - 'govdata/scripts/view_stored_text_check.py'
       - 'pgwire-govdata/catalog-cache-*.pkl'
-      - 'pgwire-govdata/unmaterialized-tables.txt'
+      - 'pgwire-govdata/unmaterialized/**'
+      - 'pgwire-calcite/src/pgwire_calcite/unmaterialized.py'
       - 'pgwire-calcite/scripts/check_catalog_cache_coverage.py'
       - '.github/workflows/govdata-schema-ci.yml'
   workflow_dispatch:
@@ -39,7 +40,7 @@ jobs:
         run: python3 govdata/scripts/view_stored_text_check.py
 
   # A table added to a schema YAML must be in the pgwire catalog cache or in
-  # unmaterialized-tables.txt, or the pgwire-govdata bundle build rejects it at the next release
+  # pgwire-govdata/unmaterialized/, or the pgwire-govdata bundle build rejects it at the next release
   # rather than at the PR that added it (#1419).
   catalog-cache:
     name: New tables are in the pgwire catalog cache or unmaterialized list
@@ -54,5 +55,5 @@ jobs:
           PYTHONPATH=pgwire-calcite/src uv run --with pyyaml python \
             pgwire-calcite/scripts/check_catalog_cache_coverage.py \
             pgwire-govdata/catalog-cache-1ae0451ea1b7254a.pkl \
-            pgwire-govdata/unmaterialized-tables.txt \
+            pgwire-govdata/unmaterialized \
             govdata/src/main/resources/*/*-schema.yaml
