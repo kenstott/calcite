@@ -841,13 +841,14 @@ SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T7_sdc_domain',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
       WHERE seismic_design_category NOT IN ('A', 'B', 'C', 'D', 'E', 'F'));
 
--- hazard anchors: San Francisco CA is high-shaking, Story IA is low
+-- hazard anchors: San Francisco CA is high-shaking; Story IA is low (SDS under 0.167 g, but
+-- SD1 0.080 g is above the 0.067 g line, so its design category is B)
 INSERT INTO dq_results
 SELECT 'disasters', 'usgs_seismic_hazard_by_county', 'T7_known_hazard',
   CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'San Francisco CA high-hazard + Story IA low-hazard anchor rows present'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/usgs_seismic_hazard_by_county', allow_moved_paths := true)
       WHERE (county_fips = '06075' AND sds_g >= 1.0 AND seismic_design_category = 'D')
-         OR (county_fips = '19169' AND sds_g < 0.2 AND seismic_design_category = 'A'));
+         OR (county_fips = '19169' AND sds_g < 0.2 AND seismic_design_category = 'B'));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
