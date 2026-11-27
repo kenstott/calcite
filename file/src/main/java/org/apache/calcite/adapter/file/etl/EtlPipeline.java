@@ -2595,12 +2595,15 @@ public class EtlPipeline {
             batchRows = writer.writeBatch(data, variables);
             standardWriterRows.addAndGet(batchRows);
           }
-          // Zero rows written: distinguish a GENUINE empty (source returned nothing — scanned == 0;
-          // e.g. a period not yet published) from a SUSPECT empty (source returned rows but a
-          // transform/filter dropped every one — scanned > 0). The genuine case is marked 'empty'
-          // (not terminal 'complete') so later runs re-fetch until the period appears; the suspect
-          // case is flagged so it surfaces as a design/coding error rather than silently swallowed.
-          if (batchRows == 0) {
+          // Zero rows written has three causes. An UNCHANGED computed_delta pull — rows reached
+          // the high-water filter and it emitted none — is a normal completion. A GENUINE empty
+          // (source returned nothing — scanned == 0; e.g. a period not yet published) is marked
+          // 'empty' (not terminal 'complete') so later runs re-fetch until the period appears. A
+          // SUSPECT empty (source returned rows but a transform/filter dropped every one —
+          // scanned > 0) is flagged so it surfaces as a design/coding error.
+          boolean unchangedDelta = finalComputedDeltaStreaming
+              && computedDeltaCounts[0] > 0 && computedDeltaCounts[1] == 0;
+          if (batchRows == 0 && !unchangedDelta) {
             if (scannedRows[0] > 0) {
               LOGGER.warn("Pipeline '{}' batch {}: SUSPECT empty — source returned {} rows but 0 "
                   + "were written (a row transformer or filter dropped every row)",
