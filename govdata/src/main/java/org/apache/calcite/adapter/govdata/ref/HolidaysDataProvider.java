@@ -29,9 +29,11 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * DataProvider for {@code ref.holidays} — multi-country public holidays from the free
@@ -43,7 +45,8 @@ import java.util.Map;
  *   <li>For each country, fetches {@code /api/v3/PublicHolidays/{year}/{countryCode}}</li>
  *   <li>Emits one row per (country, holiday), keyed for FK joins to {@code ref.countries}
  *       (via {@code country_code} = ISO 3166-1 alpha-2) and {@code ref.calendar}
- *       (via {@code holiday_date} = ISO {@code YYYY-MM-DD})</li>
+ *       (via {@code holiday_date} = ISO {@code YYYY-MM-DD}). A holiday observed under different
+ *       types or in different subdivisions is one row per variant.</li>
  * </ol>
  *
  * <p>A country that returns no holidays for the year is legitimate and simply contributes no
@@ -110,6 +113,8 @@ public class HolidaysDataProvider implements CachingDataProvider {
   private List<Map<String, Object>> fetchCountryHolidays(int year, String code, String name,
       RawCache rawCache) {
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    // Nager lists some holidays twice with every field identical; the second entry adds nothing.
+    Set<Map<String, Object>> seen = new HashSet<Map<String, Object>>();
     String url = String.format("https://date.nager.at/api/v3/PublicHolidays/%d/%s", year, code);
     String body;
     try {
@@ -137,7 +142,9 @@ public class HolidaysDataProvider implements CachingDataProvider {
         r.put("counties", joinArray(h.get("counties")));
         r.put("launch_year", intOrNull(h, "launchYear"));
         r.put("holiday_types", joinArray(h.get("types")));
-        rows.add(r);
+        if (seen.add(r)) {
+          rows.add(r);
+        }
       }
     } catch (IOException e) {
       LOGGER.warn("HolidaysDataProvider: parse failed for {} {}: {}", code, year, e.getMessage());

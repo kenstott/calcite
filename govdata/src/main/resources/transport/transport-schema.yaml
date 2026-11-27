@@ -593,7 +593,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 574921
-      checkedAt: "2026-11-26T05:36:34Z"
+      checkedAt: "2026-11-27T06:05:28Z"
     partitions: *standard_partitions
     comment: >
       NHTSA Fatality Analysis Reporting System — one row per fatal traffic crash
@@ -766,7 +766,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 112081515
-      checkedAt: "2026-11-26T05:36:47Z"
+      checkedAt: "2026-11-27T06:05:42Z"
     partitions: *month_partitions
     comment: >
       BTS Reporting Carrier On-Time Performance — one row per scheduled domestic
@@ -1297,7 +1297,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 297941
-      checkedAt: "2026-11-26T05:36:53Z"
+      checkedAt: "2026-11-27T06:05:45Z"
     partitions: *month_partitions
     comment: >
       FTA National Transit Database — Complete Monthly Ridership (with
@@ -1441,8 +1441,8 @@ partitionedTables:
       maxYear: 2025
       distinctYears: 19
       contiguous: true
-      rowCount: 7144555
-      checkedAt: "2026-11-26T05:36:56Z"
+      rowCount: 7144531
+      checkedAt: "2026-11-27T06:05:46Z"
     partitions: *standard_partitions
     comment: >
       BTS T-100 Domestic Segment (All Carriers) — monthly air-carrier traffic and
@@ -1596,7 +1596,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 561
-      checkedAt: "2026-11-26T05:36:57Z"
+      checkedAt: "2026-11-27T06:05:47Z"
     partitions: *standard_partitions
     comment: >
       FHWA Highway Statistics table MV-1 — state motor-vehicle registrations by
@@ -1693,7 +1693,7 @@ partitionedTables:
       distinctYears: 5
       contiguous: true
       rowCount: 2856
-      checkedAt: "2026-11-26T05:36:58Z"
+      checkedAt: "2026-11-27T06:05:48Z"
     partitions: *month_partitions
     comment: >
       FHWA Traffic Volume Trends (TVT) Table 5 — estimated vehicle-miles of travel on all
@@ -1788,7 +1788,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 4898
-      checkedAt: "2026-11-26T05:36:59Z"
+      checkedAt: "2026-11-27T06:05:49Z"
     partitions: *standard_partitions
     comment: >
       FHWA Highway Statistics table HM-71 — lane-miles and average daily vehicle-miles
@@ -1950,7 +1950,7 @@ partitionedTables:
       distinctYears: 2
       contiguous: true
       rowCount: 728
-      checkedAt: "2026-11-26T05:37:00Z"
+      checkedAt: "2026-11-27T06:05:50Z"
     partitions: *standard_partitions
     comment: >
       FHWA Highway Statistics table HM-64 — functional-system road mileage by measured
@@ -3760,7 +3760,7 @@ partitionedTables:
       contiguous: false
       years: [2015, 2018, 2019, 2020, 2021, 2022, 2023]
       rowCount: 307439
-      checkedAt: "2026-11-26T05:37:02Z"
+      checkedAt: "2026-11-27T06:05:51Z"
     partitions: *standard_partitions
     comment: >
       Every US-flag commercial vessel on the inland and coastal waterways, one row per vessel
@@ -3926,7 +3926,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 2884
-      checkedAt: "2026-11-26T05:37:03Z"
+      checkedAt: "2026-11-27T06:05:52Z"
     partitions: *standard_partitions
     comment: >
       Daily count of passengers screened at TSA security checkpoints nationwide, one row per
@@ -3992,7 +3992,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 477589
-      checkedAt: "2026-11-26T05:37:06Z"
+      checkedAt: "2026-11-27T06:05:54Z"
     partitions: *standard_partitions
     comment: >
       Every FAA Air Traffic Control System Command Center (ATCSCC) advisory since 2000, one row
@@ -4096,7 +4096,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 9494201
-      checkedAt: "2026-11-26T05:37:07Z"
+      checkedAt: "2026-11-27T06:05:55Z"
     partitions: *standard_partitions
     # Single-fetch bulk table (one national zip per year, dimensions: [type, year] only)
     # — see the govdata-dq-patterns single-fetch-bulk caveat: dqRowLimit takes the first
@@ -5528,7 +5528,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 1487174
-      checkedAt: "2026-11-26T05:37:09Z"
+      checkedAt: "2026-11-27T06:05:56Z"
     partitions: *standard_partitions
     dqRowLimit: 50000
     comment: >
@@ -5685,7 +5685,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 42276
-      checkedAt: "2026-11-26T05:37:10Z"
+      checkedAt: "2026-11-27T06:05:58Z"
     partitions: *standard_partitions
     comment: >
       FRA Railroad Equipment Accident/Incident reports (Form 6180.54), one row per

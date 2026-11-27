@@ -1226,9 +1226,18 @@ public class EntityBridgeListener implements TableLifecycleListener {
 
   private static void stageEinHub(Connection conn, String base) throws SQLException {
     execute(conn,
-        "CREATE OR REPLACE TEMP TABLE ein_hub AS "
-        + "SELECT cik, irs_number FROM iceberg_scan('" + loc(base, "sec", "filing_metadata")
-        + "', allow_moved_paths=true) WHERE irs_number IS NOT NULL AND trim(irs_number) <> ''");
+        einHubSql("iceberg_scan('" + loc(base, "sec", "filing_metadata")
+            + "', allow_moved_paths=true)"));
+  }
+
+  /**
+   * One row per (cik, irs_number). {@code filings} is one row per filing, so without the DISTINCT
+   * an EIN match repeats its bridge row once for each filing the CIK has made.
+   */
+  static String einHubSql(String filings) {
+    return "CREATE OR REPLACE TEMP TABLE ein_hub AS "
+        + "SELECT DISTINCT cik, irs_number FROM " + filings
+        + " WHERE irs_number IS NOT NULL AND trim(irs_number) <> ''";
   }
 
   // Defect Register B2-2: sec_cik was only ever populated via ein_matched (exact_ein against
