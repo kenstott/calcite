@@ -1,0 +1,215 @@
+{
+  "date": "2026-11-27",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 26 or 27, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 27 at 8:27 a.m. ET, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (none was). PBS NewsHour carries Associated Press reporting. Transcripts from Nov. 22 to 25 were searched only to confirm quotes; none held any of the day's quotes. Five of the seven readable stories quoted no officeholder in scope. Quotes under five words, a rhetorical question, reporters' paraphrases of opinions, the administration's court filings, and statements by people outside the offices in scope (including a White House spokeswoman, a governor-elect, a state senator, a federal district judge and a party spokesperson) were left out. Statements are worded as the outlet reported them.",
+  "lede": [
+    "Two officeholders in scope were quoted in the day's politics coverage from NPR and PBS NewsHour. President Donald Trump posted on social media on Nov. 26 about the Commerce Department's revision of third-quarter GDP growth from 3.4% to 4.3%, saying the numbers published before the election were fake, that a correction had been issued the day before, and that he was asking for an investigation.",
+    "Both factual parts of the post were checked. The Bureau of Economic Analysis did issue its revised second estimate on Nov. 25, the day before the post. Its release attributes the revision to updated source data in its scheduled sequence of estimates, which runs against the claim that the earlier figure was fake; the investigation the president requested remains open.",
+    "Rep. Ro Khanna of California, in a video posted after Democrats' midterm wins, said DEI was back. The other five stories, on Trump's planned visit to a TSMC chip plant in Arizona, a court ruling on government-funded ads, climate policy after the midterms, public opinion research and the asylum ban, quoted no officeholder in scope."
+  ],
+  "stories": [
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-calls-gdp-figures-fake-and-demands-an-investigation-of-commerce-department",
+      "headline": "Trump calls GDP figures 'fake' and demands an investigation of Commerce Department",
+      "published": "2026-11-26T11:36-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-heads-to-arizona-next-week-for-a-high-stakes-expansion-of-tsmcs-computer-chip-factories",
+      "headline": "Trump heads to Arizona next week for a high-stakes expansion of TSMC's computer chip factories",
+      "published": "2026-11-26T12:52-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/judge-declines-to-issue-a-long-term-ban-on-taxpayer-funded-pro-trump-ads-critics-called-propaganda",
+      "headline": "Judge declines to issue a long-term ban on taxpayer-funded, pro-Trump ads critics called propaganda",
+      "published": "2026-11-26T17:20-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/26/nx-s1-6036795-e1/after-democrats-midterm-wins-some-hope-attacks-on-dei-will-ease",
+      "headline": "After Democrats' midterm wins, some hope attacks on DEI will ease",
+      "published": "2026-11-26T18:06-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/how-democrats-election-successes-could-lead-to-new-climate-change-policies",
+      "headline": "How Democrats' election successes could lead to new climate change policies",
+      "published": "2026-11-26T18:40-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/despite-political-divide-americans-often-speak-in-one-voice",
+      "headline": "Despite political divide, Americans often 'speak in one voice'",
+      "published": "2026-11-26T18:45-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/27/nx-s1-6037854/trump-effectively-ended-asylum-supreme-court",
+      "headline": "Trump effectively ended asylum. Advocates look to the Supreme Court to restore it",
+      "published": "2026-11-27T05:00-05:00"
+    }
+  ],
+  "statements": [
+    {
+      "id": 1,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump posted on social media after the Commerce Department revised third-quarter 2026 GDP growth upward from 3.4% to 4.3%, referring to economic numbers published before the November midterm elections.",
+      "topic": "Economic data and GDP revision",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "It was just revealed that the REAL Numbers on the Economy, published before the Election, were FAKE",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-calls-gdp-figures-fake-and-demands-an-investigation-of-commerce-department"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the third-quarter GDP estimate published before the Nov. 3 election was fabricated or knowingly misstated by the agency. False if the official record shows it was a scheduled estimate later revised in the agency's routine revision cycle, with no finding of fabrication. Cannot be determined if the record does not show whether the pre-election figure was a routine estimate.",
+      "premise": null,
+      "result": "contradicted",
+      "finding": "The Bureau of Economic Analysis's Nov. 25 second estimate, read directly, revised third-quarter growth up 0.9 point from the 3.4% advance estimate of Oct. 29 and attributes the change to updated source data, chiefly revised BLS producer prices for software and Census retail and services surveys, in its scheduled release sequence. What remains open is the investigation the president requested; no finding from it has been published.",
+      "evidence": [
+        {
+          "label": "BEA news release: GDP (second estimate), 3rd quarter 2026",
+          "url": "https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026"
+        },
+        {
+          "label": "BEA release dates (GDP: Oct. 29, Nov. 25, Dec. 23, 2026)",
+          "url": "https://apps.bea.gov/API/signup/release_dates.json"
+        },
+        {
+          "label": "BEA release schedule",
+          "url": "https://www.bea.gov/news/schedule"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-27",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 2,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump posted on social media on Nov. 26, 2026, about the Commerce Department's revision of third-quarter 2026 GDP growth from 3.4% to 4.3% issued the day before.",
+      "topic": "Economic data and GDP revision",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "a correction was issued yesterday by the people in the Government Agency that does these numbers",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-calls-gdp-figures-fake-and-demands-an-investigation-of-commerce-department"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Bureau of Economic Analysis issued a revised third-quarter 2026 GDP estimate on Nov. 25, 2026, the day before the post. False if no revision of that figure was issued on that date. Cannot be determined if the release date cannot be established.",
+      "premise": null,
+      "result": "supported",
+      "finding": "The Bureau of Economic Analysis released its second estimate of third-quarter 2026 GDP on Wednesday, Nov. 25, the day before the post, revising growth to 4.3% from the 3.4% advance estimate; BEA calls it a revised estimate rather than a correction. AskAmerica's econ.real_gdp_growth shows third-quarter growth of 1.05% at a quarterly rate, consistent with the revised figure.",
+      "evidence": [
+        {
+          "label": "econ.real_gdp_growth (Q3 2026, quarterly rate)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#real_gdp_growth-table",
+          "askamerica": true,
+          "sql": "SELECT \"date\", real_gdp_billions, qoq_growth_pct FROM econ.real_gdp_growth ORDER BY \"date\" DESC FETCH FIRST 4 ROWS ONLY"
+        },
+        {
+          "label": "BEA news release: GDP (second estimate), 3rd quarter 2026",
+          "url": "https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026"
+        },
+        {
+          "label": "BEA release dates (GDP: Oct. 29, Nov. 25, Dec. 23, 2026)",
+          "url": "https://apps.bea.gov/API/signup/release_dates.json"
+        },
+        {
+          "label": "BEA GDP product page",
+          "url": "https://www.bea.gov/data/gdp/gross-domestic-product"
+        }
+      ],
+      "check_run": "q201/askamerica/2026-11-27",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 3,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Trump posted on social media on Nov. 26, 2026, calling for an investigation of the Commerce Department's revision of third-quarter 2026 GDP growth.",
+      "topic": "Economic data and GDP revision",
+      "broad_topic": "Economy and Jobs",
+      "speaker_state": null,
+      "about_states": [],
+      "quote": "I am asking for an immediate investigation of this situation.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-calls-gdp-figures-fake-and-demands-an-investigation-of-commerce-department"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    },
+    {
+      "id": 4,
+      "speaker": "Ro Khanna",
+      "office": "U.S. Representative",
+      "party": "D",
+      "context": "After Democrats won the November 2026 midterm elections, Khanna posted a video on election night about diversity, equity and inclusion programs.",
+      "topic": "Diversity, equity and inclusion programs",
+      "broad_topic": "Civil Rights and Social Issues",
+      "speaker_state": "CA",
+      "about_states": [],
+      "quote": "Tonight, DEI is back as America celebrated diversity and inclusion.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/26/nx-s1-6036795-e1/after-democrats-midterm-wins-some-hope-attacks-on-dei-will-ease"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": []
+    }
+  ]
+}

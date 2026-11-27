@@ -708,8 +708,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         // Relative path - resolve against model file directory
         directoryPath = new File(modelFileDirPath, directory).getPath();
         LOGGER.info("Resolved relative path against model directory: {} -> {}", directory, directoryPath);
+      } else if (!"local".equals(storageType)) {
+        // A path in the storage provider's own namespace (an object key, a drive folder): used
+        // as given. LocalPaths.normalize would turn "run1/inner" into "run1\\inner" on Windows.
+        directoryPath = directory;
+        LOGGER.info("Using storage directory path: {}", directoryPath);
       } else {
-        // Absolute path or cloud URI - used as given, but for a local path on Windows
+        // Absolute local path - used as given, but for a local path on Windows
         // written with both separators, which is given one
         directoryPath = LocalPaths.normalize(directory);
         LOGGER.info("Using directory path: {}", directoryPath);
