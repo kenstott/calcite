@@ -1253,14 +1253,11 @@ public class XbrlToParquetConverter implements FileConverter {
         data.put("footnote_refs", footnoteRefs);
 
         // Store element ID for relationship tracking
-        // Generate synthetic ID if element lacks one (required for primary key)
+        // An element without an ID is identified by its position among the filing's facts,
+        // which no other fact shares (element_id is part of the primary key).
         String elementId = element.getAttribute("id");
         if (elementId == null || elementId.isEmpty()) {
-          // Generate synthetic ID from concept + context_ref + hash
-          String conceptName = concept != null ? concept : "";
-          String ctxRef = element.getAttribute("contextRef");
-          ctxRef = ctxRef != null ? ctxRef : "";
-          elementId = "gen_" + Math.abs((conceptName + "_" + ctxRef + "_" + dataList.size()).hashCode());
+          elementId = "gen_" + dataList.size();
         }
         data.put("element_id", elementId);
 
