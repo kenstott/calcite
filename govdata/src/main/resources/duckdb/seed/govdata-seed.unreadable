@@ -1,3 +1,5 @@
-health.ahrf_physician_specialty	read as no columns
+sec.cyber_incident_disclosures	read as no columns
+sec.enforcement_annual_results	read as no columns
+econ.social_security_retirement_applications	read as no columns
 patents.patent_publication_cpc	read as no columns
 patents.patent_publication_applicants	read as no columns

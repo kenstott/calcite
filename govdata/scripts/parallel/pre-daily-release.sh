@@ -18,7 +18,8 @@
 #               seed (exit 10: no, and nothing below happens). If so: build a jar from HEAD,
 #               regenerate the seed with it, commit the seed files and push, so the release and
 #               the jar below carry the new seed. A failed seed rebuild is reported and the
-#               release continues on the committed seed. Seed generation uses the jar phase 1
+#               release continues on the committed seed; the failed build's full output is kept
+#               in runs/pre-daily-seed-<timestamp>.log. Seed generation uses the jar phase 1
 #               staged when that jar is built from HEAD, else a jar built from HEAD. The tables
 #               build-seed.sh reports as FAILED (for example no data yet) are logged by name.
 #   2c. CI gate the release and the staged jar ship only code whose CI is green. Commits above the
@@ -161,6 +162,8 @@ fi
 # builds, commits or releases anything.
 SEED_DIR_REL="govdata/src/main/resources/duckdb/seed"
 SEED_NOT_NEEDED=10
+# The output of a failed seed build stays here; a successful build's output is removed.
+SEED_LOG_DIR="$GOVDATA_ROOT/scripts/parallel/runs"
 if $BUILD_ONLY; then
   log "--build-only: skipping the seed check"
 elif ! $RELEASE_PHASE; then
@@ -187,12 +190,16 @@ else
       seed_jar="$STAGE_DIR/sih-govdata.jar"; seed_jar_own=false
       log "generating the seed with the jar staged for $head_sha"
     fi
-    seed_out="$(mktemp "${TMPDIR:-/tmp}/pre-daily-seed.XXXXXX")"
+    seed_failed=false
+    mkdir -p "$SEED_LOG_DIR"
+    seed_out="$SEED_LOG_DIR/pre-daily-seed-$(date +%Y%m%d-%H%M%S).log"
     if $seed_jar_own && ! build_jar "$head_sha" "$seed_jar"; then
       log "ERROR: no jar to generate the seed with; continuing on the committed seed"
     elif ! { MODEL_VERIFY_JAR="$seed_jar" timeout 7200 "$GOVDATA_ROOT/scripts/build-seed.sh" >"$seed_out" 2>&1; seed_build_rc=$?; \
              tail -n 40 "$seed_out" | sed 's/^/    /'; [ "$seed_build_rc" -eq 0 ]; }; then
       log "ERROR: build-seed.sh failed (rc=$seed_build_rc); continuing on the committed seed"
+      seed_failed=true
+      log "full seed build output kept at $seed_out"
       failed_tables="$(grep -E '(FAILED|UNREADABLE) [A-Za-z0-9_]+\.[A-Za-z0-9_]+' "$seed_out" | sed 's/^/    /' || true)"
       [ -z "$failed_tables" ] || { log "tables the seed could not be built for (no data yet, or other):"; echo "$failed_tables"; }
     elif { unreadable_tables="$(grep -E 'UNREADABLE [A-Za-z0-9_]+\.[A-Za-z0-9_]+' "$seed_out" | sed 's/^/    /' || true)"; \
@@ -214,7 +221,7 @@ else
         fi
       fi
     fi
-    rm -f "$seed_out"
+    $seed_failed || rm -f "$seed_out"
     ! $seed_jar_own || rm -f "$seed_jar"
   fi
 fi

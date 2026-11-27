@@ -352,7 +352,7 @@ public class UsaceVesselInventoryTransformer implements ResponseTransformer {
     }
   }
 
-  private static byte[] download(String url, byte[] postBody) throws IOException {
+  static byte[] download(String url, byte[] postBody) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
@@ -361,6 +361,9 @@ public class UsaceVesselInventoryTransformer implements ResponseTransformer {
       conn.setRequestMethod("POST");
       conn.setRequestProperty("Content-Type", "application/json");
       conn.setDoOutput(true);
+    }
+    NetworkOutageWait.connect(conn);
+    if (postBody != null) {
       OutputStream os = conn.getOutputStream();
       try {
         os.write(postBody);
@@ -368,7 +371,6 @@ public class UsaceVesselInventoryTransformer implements ResponseTransformer {
         os.close();
       }
     }
-    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200 && status != 201) {
       throw new IOException("HTTP " + status + " from " + url);

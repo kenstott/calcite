@@ -34,7 +34,15 @@ rootProject {
         // the driver compileOnly so it is absent from runtimeClasspath. Without it the bundle
         // fails at startup with ClassNotFoundException: org.duckdb.DuckDBDriver (caught by the
         // adapters smoke job). Version matches file/build.gradle.kts.
-        dependencies.create("org.duckdb:duckdb_jdbc:1.5.6.0"))
+        dependencies.create("org.duckdb:duckdb_jdbc:1.5.6.0"),
+        // A logging backend. The adapters log through SLF4J 2 and some libraries through the
+        // Log4j API; with neither provider bundled, every message (the file adapter's storage
+        // listing, its discovery errors) was dropped. log4j-core with no configuration file logs
+        // ERROR to the console; -Dorg.apache.logging.log4j.level=DEBUG (JAVA_TOOL_OPTIONS) raises
+        // it, -Dlog4j2.configurationFile=<file> configures it per logger. Version matches the
+        // log4j-api on the file adapter's runtime classpath.
+        dependencies.create("org.apache.logging.log4j:log4j-core:2.25.5"),
+        dependencies.create("org.apache.logging.log4j:log4j-slf4j2-impl:2.25.5"))
       new File("/tmp/pgw-arrow-cp.txt").text = cfg.asPath
       println "WROTE /tmp/pgw-arrow-cp.txt (" + cfg.files.size() + " entries)"
     }

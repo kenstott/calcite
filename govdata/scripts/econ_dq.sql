@@ -60,6 +60,7 @@ INSERT INTO dq_existence_counts SELECT 'state_ui_claims',      (SELECT COUNT(*) 
 INSERT INTO dq_existence_counts SELECT 'osha_inspections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'osha_violations', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t);
+INSERT INTO dq_existence_counts SELECT 'social_security_retirement_applications', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t);
 INSERT INTO dq_existence_counts SELECT 'treasury_foreign_holdings', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1) t);
@@ -126,6 +127,7 @@ INSERT INTO dq_row_count_counts SELECT 'state_ui_claims',       (SELECT COUNT(*)
 INSERT INTO dq_row_count_counts SELECT 'osha_inspections',      (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_inspections', allow_moved_paths := true)), 200000;  -- ~30-40k inspections/yr over 2019 onward; DQ run may cover fewer years
 INSERT INTO dq_row_count_counts SELECT 'osha_violations',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)), 200000;
 INSERT INTO dq_row_count_counts SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50;  -- one row per year 1975-2026
+INSERT INTO dq_row_count_counts SELECT 'social_security_retirement_applications', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true)), 170;  -- monthly since Oct 2011
 INSERT INTO dq_row_count_counts SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)), 20000;  -- CSL carries ~26,000 listings
 INSERT INTO dq_row_count_counts SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20;  -- one row per year 2005-2026
 INSERT INTO dq_row_count_counts SELECT 'treasury_foreign_holdings',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true)), 8000;  -- monthly 2012-2026, ~40-50 holders per month
@@ -200,6 +202,7 @@ SELECT 'jolts_state'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'wage_growth'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',            allow_moved_paths := true) LIMIT 1;
 SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_cola'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1;
+SELECT 'social_security_retirement_applications' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true) LIMIT 1;
 SELECT 'export_control_restricted_parties' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1;
 SELECT 'medicare_part_b_premiums'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1;
 SELECT 'treasury_foreign_holdings' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_foreign_holdings', allow_moved_paths := true) LIMIT 1;
@@ -422,6 +425,40 @@ SELECT 'econ', 'osha_violations', 'expected_values', 'fail', 'penalties', 'initi
   CAST(COUNT(*) AS VARCHAR) || ' bad rows'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/osha_violations', allow_moved_paths := true)
 WHERE initial_penalty < 0 OR current_penalty < 0
+HAVING COUNT(*) > 0;
+
+-- social_security_retirement_applications
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_retirement_applications', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- social_security_retirement_applications PK uniqueness and the published October-April comparison
+-- (October 2024-April 2025 minus the same months a year earlier = +276,572; October 2025-April 2026 = -235,208)
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_retirement_applications', 'pk_duplicates', 'fail', 'year,month', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_retirement_applications', 'known_value', 'fail', 'fiscal_year 2024/2025/2026 Oct-Apr', 'diff +276572 / -235208',
+  'got ' || CAST(SUM(total_applications) FILTER (WHERE fiscal_year = 2025 AND (month >= 10 OR month <= 4))
+               - SUM(total_applications) FILTER (WHERE fiscal_year = 2024 AND (month >= 10 OR month <= 4)) AS VARCHAR)
+  || ' / ' || CAST(SUM(total_applications) FILTER (WHERE fiscal_year = 2026 AND (month >= 10 OR month <= 4))
+               - SUM(total_applications) FILTER (WHERE fiscal_year = 2025 AND (month >= 10 OR month <= 4)) AS VARCHAR)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true)
+HAVING COALESCE(SUM(total_applications) FILTER (WHERE fiscal_year = 2025 AND (month >= 10 OR month <= 4))
+               - SUM(total_applications) FILTER (WHERE fiscal_year = 2024 AND (month >= 10 OR month <= 4)), 0) <> 276572
+    OR COALESCE(SUM(total_applications) FILTER (WHERE fiscal_year = 2026 AND (month >= 10 OR month <= 4))
+               - SUM(total_applications) FILTER (WHERE fiscal_year = 2025 AND (month >= 10 OR month <= 4)), 0) <> -235208;
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_retirement_applications', 'internet_exceeds_total', 'fail', 'internet_applications', '<= total_applications',
+  CAST(COUNT(*) AS VARCHAR) || ' rows where internet exceeds total'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true)
+WHERE internet_applications > total_applications
 HAVING COUNT(*) > 0;
 
 -- social_security_cola
@@ -864,6 +901,13 @@ INSERT INTO dq_results
 SELECT 'econ', 'state_ui_claims', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+
+-- social_security_retirement_applications
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_retirement_applications', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_retirement_applications', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 
 -- social_security_cola (footnote is set only for 1999, so it has one distinct value by design)
@@ -1318,6 +1362,23 @@ FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry', allow_moved_paths := true)
   WHERE value IS NOT NULL AND value < 0
+);
+
+-- state_industry: both seasonal adjustments loaded, each covering statewide total nonfarm for
+-- all 50 states + DC, and seasonal agreeing with the series prefix (#1492)
+INSERT INTO dq_results
+SELECT
+  'econ', 'state_industry', 'expected_values',
+  CASE WHEN sa >= 51 AND nsa >= 51 AND mismatched = 0 THEN 'pass' ELSE 'fail' END,
+  'SA=' || sa || ' NSA=' || nsa || ' mismatched=' || mismatched, 'SA>=51 NSA>=51 mismatched=0',
+  'states with statewide total nonfarm per seasonal code; rows whose seasonal differs from series char 3'
+FROM (
+  SELECT
+    COUNT(DISTINCT CASE WHEN series LIKE 'SMS__000000000000001' THEN SUBSTR(series, 4, 2) END) AS sa,
+    COUNT(DISTINCT CASE WHEN series LIKE 'SMU__000000000000001' THEN SUBSTR(series, 4, 2) END) AS nsa,
+    COUNT(*) FILTER (WHERE seasonal IS DISTINCT FROM SUBSTR(series, 3, 1)
+                        OR seasonal NOT IN ('S', 'U')) AS mismatched
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_industry', allow_moved_paths := true)
 );
 
 -- state_wages: must cover all 51 US states+DC (distinct area_fips ending in 000)

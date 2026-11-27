@@ -45,6 +45,7 @@ FROM (
   UNION ALL SELECT 'institutional_holdings', (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings/metadata/*.json'))
   UNION ALL SELECT 'beneficial_ownership',   (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership/metadata/*.json'))
   UNION ALL SELECT 'earnings_transcripts',   (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts/metadata/*.json'))
+  UNION ALL SELECT 'cyber_incident_disclosures', (SELECT COUNT(*) FROM glob('s3://${GOVDATA_DQ_BUCKET}/sec/cyber_incident_disclosures/metadata/*.json'))
 );
 
 SELECT '=== T2: ROW COUNTS ===' AS section;
@@ -56,6 +57,10 @@ INSERT INTO dq_results SELECT 'sec_secondary','insider_transactions','row_count'
 INSERT INTO dq_results SELECT 'sec_secondary','institutional_holdings','row_count', CASE WHEN n>=50 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'50', CASE WHEN n>=50 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths=true)) t;
 INSERT INTO dq_results SELECT 'sec_secondary','beneficial_ownership','row_count', CASE WHEN n>=1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1', CASE WHEN n>=1 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/beneficial_ownership', allow_moved_paths=true)) t;
 INSERT INTO dq_results SELECT 'sec_secondary','earnings_transcripts','row_count', CASE WHEN n>=10 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'10', CASE WHEN n>=10 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/earnings_transcripts', allow_moved_paths=true)) t;
+INSERT INTO dq_results SELECT 'sec_secondary','cyber_incident_disclosures','row_count', CASE WHEN n>=1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'1', CASE WHEN n>=1 THEN 'row count meets minimum' ELSE 'row count below minimum' END FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/cyber_incident_disclosures', allow_moved_paths=true)) t;
+-- Every row must be a real Item 1.05 filing from on/after the rule's effective date, one row per accession.
+INSERT INTO dq_results SELECT 'sec_secondary','cyber_incident_disclosures','item_1_05_and_date_range', CASE WHEN n=0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'0', 'rows whose items lack 1.05 or whose filing_date is before 2023-12-18' FROM (SELECT COUNT(*) n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/cyber_incident_disclosures', allow_moved_paths=true) WHERE NOT list_contains(string_split(replace(items,' ',''),','),'1.05') OR CAST(filing_date AS DATE) < DATE '2023-12-18') t;
+INSERT INTO dq_results SELECT 'sec_secondary','cyber_incident_disclosures','pk_duplicates', CASE WHEN n=0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR),'0', 'duplicate (cik, accession_number) groups' FROM (SELECT COUNT(*) n FROM (SELECT cik, accession_number FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/cyber_incident_disclosures', allow_moved_paths=true) GROUP BY 1,2 HAVING COUNT(*)>1)) t;
 
 SELECT '=== DQ RESULTS ===' AS section;
 SELECT * FROM dq_results ORDER BY schema, tbl, test;

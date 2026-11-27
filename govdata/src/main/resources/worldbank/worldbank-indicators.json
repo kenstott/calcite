@@ -168,7 +168,7 @@
         {
           "code": "FS.AST.DOMS.GD.ZS",
           "name": "DOMESTIC_CREDIT",
-          "description": "Domestic credit to private sector (% of GDP)",
+          "description": "Domestic credit provided by financial sector (% of GDP)",
           "unit": "% of GDP"
         },
         {
@@ -304,10 +304,10 @@
           "unit": "kg of oil equivalent per capita"
         },
         {
-          "code": "EN.ATM.CO2E.PC",
+          "code": "EN.GHG.CO2.PC.CE.AR5",
           "name": "CO2_EMISSIONS",
-          "description": "CO2 emissions (metric tons per capita)",
-          "unit": "metric tons per capita"
+          "description": "Carbon dioxide (CO2) emissions excluding LULUCF per capita (t CO2e/capita)",
+          "unit": "t CO2e per capita"
         },
         {
           "code": "EN.ATM.PM25.MC.M3",

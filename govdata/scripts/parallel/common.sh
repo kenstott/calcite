@@ -607,7 +607,10 @@ verify_closure_on_r2() {
 #   - the candidate total is lower than the published total by more than GOVDATA_R2_ROWDROP_PCT
 #     percent (default 5), or
 #   - a replace/overwrite/delete snapshot between the two removed more records than it added by
-#     more than that percent of the published total.
+#     more than that percent of the published total, and the candidate total has not regained the
+#     pre-rewrite total (within that percent): a rewrite whose rows are back does not hold.
+# A candidate that is byte-identical to the published version file changes nothing a reader sees:
+# no guard. The same version NUMBER proves nothing: a dropped and recreated table reuses numbers.
 # The lead overrides one table with a file <state>/force-publish/<schema>__<table>, consumed by
 # the publish that uses it. A table with no pointer on R2 yet is a first publish: no guard. A
 # total that cannot be read is a hold too, never a pass.
@@ -627,6 +630,8 @@ r2_pointer_guard() {
   if ! r2_rclone 300 cat "${minio_remote}:${base}/metadata/v${version}.metadata.json" > "$cand_json" \
      || ! r2_rclone 300 cat "${r2_remote}:${base}/metadata/v${cur}.metadata.json" > "$pub_json"; then
     reason="cannot read metadata json of v${version} (MinIO) or v${cur} (R2)"
+  elif [ "$cur" = "$version" ] && cmp -s "$cand_json" "$pub_json"; then
+    reason=""
   else
     reason=$(jq -rn --slurpfile c "$cand_json" --slurpfile p "$pub_json" --argjson pct "$pct" '
       def cur($m): ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0];
@@ -640,7 +645,9 @@ r2_pointer_guard() {
           (cur($pm) | .["timestamp-ms"] // 0) as $pts
           | [ ($cm.snapshots // [])[] | select(."timestamp-ms" > $pts)
               | select(.summary.operation == "replace" or .summary.operation == "overwrite" or .summary.operation == "delete")
-              | select(((.summary["deleted-records"] // "0" | tonumber) - (.summary["added-records"] // "0" | tonumber)) > $pt * $pct / 100)
+              | ((.summary["deleted-records"] // "0" | tonumber) - (.summary["added-records"] // "0" | tonumber)) as $lost
+              | select($lost > $pt * $pct / 100)
+              | select($ct < (.summary["total-records"] | tonumber) + $lost - $pt * $pct / 100)
               | "snapshot \(."snapshot-id") \(.summary.operation) deleted \(.summary["deleted-records"]) added \(.summary["added-records"])" ] | .[0] // ""
         end' 2>&1) || reason="guard could not evaluate metadata: $reason"
   fi
@@ -658,19 +665,80 @@ r2_pointer_guard() {
   ct=$(jq -r '. as $m | ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0].summary["total-records"] // "n/a"' "$cand_json" 2>/dev/null || echo n/a)
   pt=$(jq -r '. as $m | ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0].summary["total-records"] // "n/a"' "$pub_json" 2>/dev/null || echo n/a)
   rm -f "$cand_json" "$pub_json"
+  local at first=""
+  at=$(date -u +%FT%TZ)
+  if [ -e "$state/held/$key.json" ]; then
+    first=$(jq -r '.first_held_at // empty' "$state/held/$key.json") || first=""
+  fi
   jq -n --arg t "$schema/$table" --arg r "$reason" --arg cv "$version" --arg pv "$cur" \
-        --arg ct "$ct" --arg pt "$pt" --arg at "$(date -u +%FT%TZ)" \
-        '{table:$t, reason:$r, candidate_version:$cv, published_version:$pv, candidate_total_records:$ct, published_total_records:$pt, held_at:$at}' \
+        --arg ct "$ct" --arg pt "$pt" --arg at "$at" --arg first "${first:-$at}" \
+        '{table:$t, reason:$r, candidate_version:$cv, published_version:$pv, candidate_total_records:$ct, published_total_records:$pt, held_at:$at, first_held_at:$first}' \
         > "$state/held/$key.json"
   log_error "sync-to-r2: [$schema/$table] row-drop guard HELD pointer: $reason (candidate v${version} total ${ct}, published v${cur} total ${pt}); marker $state/held/$key.json"
   return 1
 }
 
+# copy_version_metadata_to_r2 <minio_remote> <r2_remote> <bucket> <schema> <table> <version>
+# metadata/v<N>.metadata.json is the one closure file whose name is not unique to its content: a
+# dropped and recreated table numbers its versions from 0 again, and R2 (copy-only) still holds the
+# earlier table's files under those names. So it is never skipped as already present: it is
+# uploaded unconditionally and then read back and compared byte for byte with MinIO's. The
+# read-back retries a short, bounded number of times for the read-after-write gap of S3-compatible
+# stores. Returns nonzero unless R2 serves exactly MinIO's bytes.
+copy_version_metadata_to_r2() {
+  local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5 version=$6
+  local rel="metadata/v${version}.metadata.json" base="${bucket}/${schema}/${table}"
+  local tag="sync-to-r2: [$schema/$table]" want got _try
+  if ! r2_rclone 300 copyto --ignore-times "${minio_remote}:${base}/${rel}" \
+      "${r2_remote}:${base}/${rel}" >&2; then
+    log_error "$tag copy of ${rel} to R2 FAILED — version-hint.text NOT advanced"
+    return 1
+  fi
+  want=$(mktemp) || return 1
+  got=$(mktemp) || return 1
+  if ! r2_rclone 300 cat "${minio_remote}:${base}/${rel}" > "$want"; then
+    log_error "$tag cannot read ${rel} on MinIO — version-hint.text NOT advanced"
+    rm -f "$want" "$got"
+    return 1
+  fi
+  for _try in 1 2 3 4 5; do
+    if r2_rclone 300 cat "${r2_remote}:${base}/${rel}" > "$got" 2>/dev/null \
+        && cmp -s "$want" "$got"; then
+      rm -f "$want" "$got"
+      return 0
+    fi
+    sleep 2
+  done
+  rm -f "$want" "$got"
+  log_error "$tag ${rel} on R2 does not match MinIO after 5 retries — version-hint.text NOT advanced, retry next pass"
+  return 1
+}
+
+# r2_report_holds
+# Logs every standing row-drop hold at error level: table, how long it has been held, reason.
+# A marker that cannot be read is itself logged.
+r2_report_holds() {
+  local state="${GOVDATA_R2_SYNC_STATE_DIR:-$HOME/.r2-sync-state}" f line n=0
+  for f in "$state"/held/*.json; do
+    [ -e "$f" ] || continue
+    n=$((n + 1))
+    if line=$(jq -er '"\(.table) held since \(.first_held_at // .held_at) (published v\(.published_version)): \(.reason)"' "$f"); then
+      log_error "sync-to-r2: HELD $line"
+    else
+      log_error "sync-to-r2: HELD marker unreadable: $f"
+    fi
+  done
+  [ "$n" -eq 0 ] || log_error "sync-to-r2: $n table pointer(s) held; R2 serves the older version of each until published"
+}
+
 # publish_r2_pointer <minio_remote> <r2_remote> <bucket> <schema> <table> <version>
-# The only place a version-hint.text is written on R2: the row-drop guard first, then the write.
+# The only place a version-hint.text or the version metadata json it names is written on R2: the
+# row-drop guard first (it reads what R2 publishes now), then the metadata json, then the pointer.
 publish_r2_pointer() {
   local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5 version=$6
   r2_pointer_guard "$minio_remote" "$r2_remote" "$bucket" "$schema" "$table" "$version" || return 1
+  copy_version_metadata_to_r2 "$minio_remote" "$r2_remote" "$bucket" "$schema" "$table" "$version" \
+    || return 1
   if ! printf '%s' "$version" | r2_rclone 300 rcat "${r2_remote}:${bucket}/${schema}/${table}/metadata/version-hint.text"; then
     log_error "sync-to-r2: [$schema/$table] closure copied but version-hint.text write FAILED — R2 still on its prior version, retry next pass"
     return 1
@@ -845,6 +913,18 @@ _sync_iceberg_table_closure_body() {
   local sizes_list paths_list present todo_list
   sizes_list=$(mktemp); paths_list=$(mktemp); present=$(mktemp); todo_list=$(mktemp)
   echo "$resolved" | grep -v '^VERSION ' > "$sizes_list"
+  # The version metadata json is published with the pointer (publish_r2_pointer), after the guard:
+  # every other closure file has a name unique to its content and is skipped when already present.
+  local metadata_rel="metadata/v${version}.metadata.json"
+  if ! awk -F'\t' -v m="$metadata_rel" '$1 == m { found = 1 } END { exit !found }' "$sizes_list"; then
+    log_error "$tag resolver output lacks ${metadata_rel} — treating as failure"
+    rm -f "$sizes_list" "$paths_list" "$present" "$todo_list"
+    return 1
+  fi
+  local others
+  others=$(mktemp)
+  awk -F'\t' -v m="$metadata_rel" '$1 != m' "$sizes_list" > "$others"
+  mv "$others" "$sizes_list"
   cut -f1 "$sizes_list" > "$paths_list"
   local file_count
   file_count=$(wc -l < "$sizes_list" | tr -d ' ')
@@ -891,27 +971,6 @@ _sync_iceberg_table_closure_body() {
     return 1
   fi
   rm -f "$sizes_list"
-
-  # Read-back verification gate, mirroring the writer's own gate (S3FileIOTableOperations#commit,
-  # "a write returning without an exception is not proof the object is durably present and
-  # readable"): rclone reporting the copy succeeded confirms the PUTs were accepted, not that R2
-  # is already serving them back on a GET — S3-compatible stores can have a brief read-after-write
-  # gap. Retry a short, bounded number of times rather than either trusting the copy blindly or
-  # failing outright on what is normally a sub-second window closing.
-  local metadata_rel="metadata/v${version}.metadata.json"
-  local verified=false
-  local _try
-  for _try in 1 2 3 4 5; do
-    if r2_rclone 300 cat "${r2_remote}:${bucket}/${schema}/${table}/${metadata_rel}" >/dev/null 2>&1; then
-      verified=true
-      break
-    fi
-    sleep 2
-  done
-  if ! $verified; then
-    log_error "$tag closure copied but ${metadata_rel} still not readable on R2 after 5 retries — version-hint.text NOT advanced, retry next pass"
-    return 1
-  fi
 
   publish_r2_pointer "$minio_remote" "$r2_remote" "$bucket" "$schema" "$table" "$version" || return 1
   echo "$version"

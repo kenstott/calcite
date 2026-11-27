@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
+import org.apache.calcite.adapter.govdata.HeadedPageSession;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -53,7 +54,7 @@ public class TanfWorkParticipationTransformer implements StreamingResponseTransf
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context) {
     int minFy = Integer.parseInt(param(context, "minFiscalYear"));
     int currentFy = currentFiscalYear();
-    FiscalBrowserSession session = FiscalBrowserSession.get(context);
+    HeadedPageSession session = HeadedPageSession.get(context);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     try {
       for (int fy = minFy; fy <= currentFy; fy++) {

@@ -35,12 +35,12 @@ import java.util.Map;
  * published at county grain before USGS moved to an annual, HUC12, model-based approach) from its
  * wide per-year layout into long-format rows of one (county, sector) withdrawal observation each.
  *
- * <p>2000/2005/2010 are fetched as the legacy tab-delimited {@code usco<year>.txt} files under
- * {@code water.usgs.gov/watuse/data/<year>/}; 2015 is fetched from its ScienceBase data-release
- * CSV (the legacy site never published a 2015 county file), which carries one non-data citation
- * line before the real header row. Column names drift release to release even though the sector
- * abbreviation convention (e.g. {@code IN-WGWFr} = Industrial groundwater withdrawal, fresh) is
- * stable from 2005 onward; 2000 uses {@code IT-} for the irrigation total instead of {@code IR-}.
+ * <p>2000/2005/2010 are the tab-delimited {@code usco<year>.txt} files published under
+ * {@code water.usgs.gov/watuse/data/<year>/}; 2015 is the ScienceBase data-release CSV, which
+ * carries one non-data citation line before the real header row. The table's {@code urlRules}
+ * name the capture each year is fetched from. Column names drift release to release even though
+ * the sector abbreviation convention (e.g. {@code IN-WGWFr} = Industrial groundwater withdrawal,
+ * fresh) is stable from 2005 onward; 2000 uses {@code IT-} for the irrigation total instead of {@code IR-}.
  * The crosswalk in {@link #sectorsFor} was built from each year's live header row plus the 2015
  * release's FGDC metadata attribute definitions (confirmed 2026-09-21) — never guessed from
  * column-name pattern-matching, since sector codes are reused for different meanings across years
@@ -113,7 +113,7 @@ public class UsgsWaterUseTransformer implements ResponseTransformer {
     }
 
     // The 2015 ScienceBase CSV carries one non-data citation line before the real header row;
-    // the legacy 2000/2005/2010 tab-delimited files start with the header on line 0.
+    // the 2000/2005/2010 tab-delimited files start with the header on line 0.
     char delimiter = year == 2015 ? ',' : '\t';
     int headerLineIndex = year == 2015 ? 1 : 0;
 

@@ -849,6 +849,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return result[0];
   }
 
+  @Override public synchronized boolean isRebuildPending() {
+    return pendingRecreate != null;
+  }
+
   /** Drift-driven recreate waiting for the first batch that has rows to commit. */
   private static final class PendingRecreate {
     final String tableId;
@@ -2729,6 +2733,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
           return Double.parseDouble(value);
         case BOOLEAN:
           return Boolean.parseBoolean(value);
+        case DATE:
+          // Iceberg holds a date partition value as days since the epoch. An unreadable date
+          // throws rather than filing the rows under a null partition.
+          return Integer.valueOf(
+              (int) java.time.LocalDate.parse(value).toEpochDay());
         default:
           return value;
       }

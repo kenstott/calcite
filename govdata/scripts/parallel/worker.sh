@@ -309,7 +309,8 @@ case "$SCHEMA" in
 
   sec_secondary)
     # Secondary SEC forms → tables insider_transactions (3/4/5),
-    # beneficial_ownership (13D/G), earnings_transcripts (8-K). Two vocabularies share this arm:
+    # beneficial_ownership (13D/G), earnings_transcripts and
+    # cyber_incident_disclosures (8-K). Two vocabularies share this arm:
     #   • daily|historical (DQ harness)         → DQ_SAMPLE scope (or caller GOVDATA_CIKS)
     #   • <year>|current   (run-pool prod)      → _ALL_EDGAR_FILERS full universe
     SEC2_FORMS='"8-K","8-K/A","DEF 14A","3","4","5","SC 13D","SC 13D/A","SC 13G","SC 13G/A"'

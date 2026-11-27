@@ -38,6 +38,8 @@ release_schema_years_claim "$CL" $DQ2; rm -f "$CL/$FR.claim"
 
 echo "-- the real worker-dq-run.sh (schema zzclaimtest has no DQ script)"
 export GOVDATA_CLAIM_DIR="$T/rc"; mkdir -p "$GOVDATA_CLAIM_DIR"
+# required by the script; nothing here gets far enough to connect to it
+export AWS_ENDPOINT_OVERRIDE="${AWS_ENDPOINT_OVERRIDE:-http://127.0.0.1:1}"
 HOLD=$(own worker-dq-run.sh); sleep 0.3
 printf "c_pid=$HOLD\nc_bucket='$DQ'\nc_schema='zzclaimtest'\nc_start=0\nc_end=9999\nc_tables='x'\nc_since=$(date +%%s)\nc_pattern='worker-dq-run.sh'\n" > "$GOVDATA_CLAIM_DIR/$HOLD.claim"
 out=$(timeout 120 bash "$D/worker-dq-run.sh" zzclaimtest --rebuild --start-year 2020 --tables t 2>&1); rc=$?
@@ -64,11 +66,11 @@ out=$(timeout 120 bash "$D/worker-dq-run.sh" zzclaimtest --dry-run 2>&1); rc=$?
 ck "--dry-run is not refused by a holder (it starts nothing)"                   '[ $rc -ne 3 ]'
 
 echo "-- release wiring (the real _on_exit, extracted)"
-awk '/^_on_exit\(\) \{/{p=1} p{print} p && /^}/{exit}' "$D/worker-dq-run.sh" > "$T/on_exit.sh"
+awk '/^(_on_exit|_release_guards)\(\) \{/{p=1} p{print} p && /^}/{p=0}' "$D/worker-dq-run.sh" > "$T/on_exit.sh"
 ck "_on_exit was found in worker-dq-run.sh"                                      'grep -q "^_on_exit()" "$T/on_exit.sh"'
 run_exit() { # held(true|false) -> prints whether the claim file survived
   ( source "$D/schema-claim.sh"; _file_script_error_issue() { :; }; _SCRIPT_COMPLETE=true; TMP_DIR=""
-    source "$T/on_exit.sh"; CLAIM_DIR="$T/oe"; mkdir -p "$CLAIM_DIR"; : > "$CLAIM_DIR/$$.claim"; export _DQ_CLAIM_HELD=$1
+    source "$T/on_exit.sh"; _DQ_GUARD_FILES=(); CLAIM_DIR="$T/oe"; mkdir -p "$CLAIM_DIR"; : > "$CLAIM_DIR/$$.claim"; export _DQ_CLAIM_HELD=$1
     ( _on_exit ) ; [ -e "$CLAIM_DIR/$$.claim" ] && echo kept || echo released )
 }
 ck "_on_exit releases the claim when the run holds one"                           '[ "$(run_exit true)" = released ]'

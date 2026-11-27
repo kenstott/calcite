@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fortune article's claims about the defense share of the federal budget, CBO FY2026 spending and the China gap are balanced and partly false; 1 claim could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Fortune article's claims about the defense share of the federal budget, CBO FY2026 spending and the China gap are balanced and partly false; 1 claim could not be confirmed.</h1>
+<p class="subtitle">Warehouse: Treasury MTS, OMB Hist. Tables 3.2/4.1, Treasury debt. Primary read: Brookings. CBO and RAND pages returned HTTP 403 and were not read.</p>
+<p class="under-review"><span>Article under review</span><a href="https://fortune.com/2026/11/25/u-s-defense-federal-budget-china-military-investment-gap/">https://fortune.com/2026/11/25/u-s-defense-federal-budget-china-military-investment-gap/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Defense outlays as share of federal outlays (OMB) and FY2026 defense</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="303" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="303" viewBox="0 0 412 303" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="303" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Defense share of outlays, %</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="57" y1="56" x2="57" y2="249" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="57" y="265" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.0</text>
+      <line class="grid" x1="123.60" y1="56" x2="123.60" y2="249" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="123.60" y="265" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">10.0</text>
+      <line class="grid" x1="190.20" y1="56" x2="190.20" y2="249" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="190.20" y="265" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">20.0</text>
+      <line class="grid" x1="256.80" y1="56" x2="256.80" y2="249" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="256.80" y="265" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">30.0</text>
+      <line class="grid" x1="323.40" y1="56" x2="323.40" y2="249" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="323.40" y="265" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">40.0</text>
+      <line class="grid" x1="390" y1="56" x2="390" y2="249" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="390" y="265" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">50.0</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="57" y1="56" x2="57" y2="249" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="57" y1="249" x2="390" y2="249" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-1962" class="tick" x="49" y="72.06" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1962</text>
+      <text id="p1-xtick-fy2020" class="tick" x="49" y="96.19" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">FY2020</text>
+      <text id="p1-xtick-fy2021" class="tick" x="49" y="120.31" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">FY2021</text>
+      <text id="p1-xtick-fy2022" class="tick" x="49" y="144.44" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">FY2022</text>
+      <text id="p1-xtick-fy2023" class="tick" x="49" y="168.56" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">FY2023</text>
+      <text id="p1-xtick-fy2024" class="tick" x="49" y="192.69" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">FY2024</text>
+      <text id="p1-xtick-fy2025" class="tick" x="49" y="216.81" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">FY2025</text>
+      <text id="p1-xtick-fy2026" class="tick" x="49" y="240.94" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">FY2026</text>
+    </g>
+    <g id="p1-series-defense-share" class="series">
+      <g class="hover">
+        <title>1962 — Defense share: 49.0</title>
+        <rect id="p1-mark-defense-share-1962" class="bar" x="57" y="60.34" width="326.34" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="59.56" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2020 — Defense share: 11.1</title>
+        <rect id="p1-mark-defense-share-fy2020" class="bar" x="57" y="84.47" width="73.93" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="83.69" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2021 — Defense share: 11.1</title>
+        <rect id="p1-mark-defense-share-fy2021" class="bar" x="57" y="108.59" width="73.93" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="107.81" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2022 — Defense share: 12.2</title>
+        <rect id="p1-mark-defense-share-fy2022" class="bar" x="57" y="132.72" width="81.25" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="131.94" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2023 — Defense share: 13.4</title>
+        <rect id="p1-mark-defense-share-fy2023" class="bar" x="57" y="156.84" width="89.24" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="156.06" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2024 — Defense share: 13.0</title>
+        <rect id="p1-mark-defense-share-fy2024" class="bar" x="57" y="180.97" width="86.58" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="180.19" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2025 — Defense share: 13.1</title>
+        <rect id="p1-mark-defense-share-fy2025" class="bar" x="57" y="205.09" width="87.25" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="204.31" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2026 — Defense share: 12.8</title>
+        <rect id="p1-mark-defense-share-fy2026" class="bar" x="57" y="229.22" width="85.25" height="14.44" fill="#2563eb"/>
+        <rect class="hit" x="57" y="228.44" width="333" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <rect class="panel-edge" x="448" y="64" width="412" height="303" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="64" width="412" height="303" viewBox="0 0 412 303" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="303" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="14" style="font-size:14px" font-weight="600" text-anchor="middle">Defense outlays, $B (Treasury MTS) vs Fortune</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="56" y1="249" x2="390" y2="249" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="48" y="253" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="56" y1="210.40" x2="390" y2="210.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="48" y="214.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">200</text>
+      <line class="grid" x1="56" y1="171.80" x2="390" y2="171.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="48" y="175.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">400</text>
+      <line class="grid" x1="56" y1="133.20" x2="390" y2="133.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="48" y="137.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">600</text>
+      <line class="grid" x1="56" y1="94.60" x2="390" y2="94.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="48" y="98.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">800</text>
+      <line class="grid" x1="56" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="48" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1000</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="56" y1="56" x2="56" y2="249" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="56" y1="249" x2="390" y2="249" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-fy2025-actual" class="tick" x="111.67" y="267" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">FY2025 actual</text>
+      <text id="p2-xtick-fy2026-actual" class="tick" x="223" y="267" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">FY2026 actual</text>
+      <text id="p2-xtick-fortune-fy2026" class="tick" x="334.33" y="267" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Fortune 'FY2026'</text>
+    </g>
+    <g id="p2-series-b" class="series">
+      <g class="hover">
+        <title>FY2025 actual — $B: 917</title>
+        <rect id="p2-mark-b-fy2025-actual" class="bar" x="76.04" y="72.10" width="70.25" height="176.90" fill="#2563eb"/>
+        <rect class="hit" x="76.04" y="56" width="70.25" height="193" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2026 actual — $B: 965</title>
+        <rect id="p2-mark-b-fy2026-actual" class="bar" x="187.37" y="62.72" width="70.25" height="186.28" fill="#2563eb"/>
+        <rect class="hit" x="187.37" y="56" width="70.25" height="193" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Fortune 'FY2026' — $B: 917</title>
+        <rect id="p2-mark-b-fortune-fy2026" class="bar" x="298.71" y="72.02" width="70.25" height="176.98" fill="#2563eb"/>
+        <rect class="hit" x="298.71" y="56" width="70.25" height="193" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="footnote" x="20" y="393" fill="#6b7280">OMB Hist. Tables 3.2 and 4.1; Treasury MTS.</text>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62747/a/b47602fbc643a215daaf6894d111d943.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: 2 Pinocchios. The Brookings-sourced core (49% to 13% of the budget, about 3% of GDP) holds. But Fortune gives FY2026 defense outlays as $917 billion (the FY2025 level; Treasury and OMB show about $965-966 billion), rounds the deficit to $1.9 trillion (about $2.0 trillion), misdates and misattributes the China quote to RAND three years ago (a July 2024 congressional commission), and its headline 'lowest share of the federal budget since World War II' fails: defense was 11.1% of outlays in FY2020-21 and 12.2% in FY2022 (OMB).</p><p>Not verified: JEC/Schweikert interest quote, CRFB countdown, 'half of tax receipts by 2036'. CBO and RAND pages returned HTTP 403 and were not read.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 50/100 — mixed (capped by central claim #1; 71 before the cap)</strong> &middot; <strong>Bias +10/100 — no consistent lean</strong></p><p>7 claims graded, 0 not gradable, 5 fell short. In this article only.</p></div>
+<p><strong>2</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>1</strong> mostly false &middot; <strong>1</strong> unsupported &middot; <strong>7</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-false"><td>1</td><td>America’s defense budget is being squeezed to its lowest share of the federal budget since World War II</td><td><strong>mostly false</strong> &middot; central claim</td><td>Checked against: <code>econ.federal_outlays_by_function / federal_outlays_by_agency</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>The total for the government’s largest mandatory spending programs (Social Security benefits, Medicare, and Medicaid) came in at nearly $3.5 trillion, a $217 billion uptick on the year before and a 6.7% increase.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>$917 billion was spent on defense for fiscal year 2026, a 5.8% increase of $48 billion from the prior year.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny (Fiscal Data)</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The government ran a total deficit of $1.9 trillion, the CBO reported, adding to the current national debt burden of $40.7 trillion</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_debt</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>the Treasury paid $1.14 trillion in net interest on the public debt—an 11.1% or $114 billion increase on the previous fiscal year.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-true"><td>2</td><td>since 1962 defense spending has been squeezed from 49% to 13% of the federal budget.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_outlays_by_function</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-true"><td>3</td><td>Defense spending accounted for 2.8% of U.S. GDP in 2026 and is expected to remain at approximately 3% through 2030.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.cbo_budget_projections</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-unsupported"><td>8</td><td>The total for the government’s largest mandatory spending programs (Social Security benefits, Medicare, and Medicaid) came in at nearly $3.5 trillion, a $217 billion uptick on the year before and a 6.7% increase.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>the Treasury paid $1.14 trillion in net interest on the public debt—an 11.1% or $114 billion increase on the previous fiscal year.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The government ran a total deficit of $1.9 trillion, the CBO reported, adding to the current national debt burden of $40.7 trillion</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_debt</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>$917 billion was spent on defense for fiscal year 2026, a 5.8% increase of $48 billion from the prior year.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny (Fiscal Data)</a></td></tr><tr class="verdict-true"><td>3</td><td>Defense spending accounted for 2.8% of U.S. GDP in 2026 and is expected to remain at approximately 3% through 2030.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.cbo_budget_projections</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-true"><td>2</td><td>since 1962 defense spending has been squeezed from 49% to 13% of the federal budget.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_outlays_by_function</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-mostly-false"><td>1</td><td>America’s defense budget is being squeezed to its lowest share of the federal budget since World War II</td><td><strong>mostly false</strong> &middot; central claim</td><td>Checked against: <code>econ.federal_outlays_by_function / federal_outlays_by_agency</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-partially-false"><td>5</td><td>$917 billion was spent on defense for fiscal year 2026, a 5.8% increase of $48 billion from the prior year.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny (Fiscal Data)</a></td></tr><tr class="verdict-mostly-false"><td>1</td><td>America’s defense budget is being squeezed to its lowest share of the federal budget since World War II</td><td><strong>mostly false</strong> &middot; central claim</td><td>Checked against: <code>econ.federal_outlays_by_function / federal_outlays_by_agency</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-true"><td>3</td><td>Defense spending accounted for 2.8% of U.S. GDP in 2026 and is expected to remain at approximately 3% through 2030.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.cbo_budget_projections</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-true"><td>2</td><td>since 1962 defense spending has been squeezed from 49% to 13% of the federal budget.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_outlays_by_function</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The government ran a total deficit of $1.9 trillion, the CBO reported, adding to the current national debt burden of $40.7 trillion</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_debt</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>The total for the government’s largest mandatory spending programs (Social Security benefits, Medicare, and Medicaid) came in at nearly $3.5 trillion, a $217 billion uptick on the year before and a 6.7% increase.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>the Treasury paid $1.14 trillion in net interest on the public debt—an 11.1% or $114 billion increase on the previous fiscal year.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>1</td><td>America’s defense budget is being squeezed to its lowest share of the federal budget since World War II</td><td><strong>mostly false</strong> &middot; central claim</td><td>Checked against: <code>econ.federal_outlays_by_function / federal_outlays_by_agency</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The government ran a total deficit of $1.9 trillion, the CBO reported, adding to the current national debt burden of $40.7 trillion</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_debt</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>the Treasury paid $1.14 trillion in net interest on the public debt—an 11.1% or $114 billion increase on the previous fiscal year.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>$917 billion was spent on defense for fiscal year 2026, a 5.8% increase of $48 billion from the prior year.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny (Fiscal Data)</a></td></tr><tr class="verdict-true"><td>2</td><td>since 1962 defense spending has been squeezed from 49% to 13% of the federal budget.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_outlays_by_function</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-true"><td>3</td><td>Defense spending accounted for 2.8% of U.S. GDP in 2026 and is expected to remain at approximately 3% through 2030.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.cbo_budget_projections</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>The total for the government’s largest mandatory spending programs (Social Security benefits, Medicare, and Medicaid) came in at nearly $3.5 trillion, a $217 billion uptick on the year before and a 6.7% increase.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-false"><td>1</td><td>America’s defense budget is being squeezed to its lowest share of the federal budget since World War II</td><td><strong>mostly false</strong> &middot; central claim</td><td>Checked against: <code>econ.federal_outlays_by_function / federal_outlays_by_agency</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>The government ran a total deficit of $1.9 trillion, the CBO reported, adding to the current national debt burden of $40.7 trillion</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_debt</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-true"><td>2</td><td>since 1962 defense spending has been squeezed from 49% to 13% of the federal budget.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function; econ.federal_outlays_by_function</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>the Treasury paid $1.14 trillion in net interest on the public debt—an 11.1% or $114 billion increase on the previous fiscal year.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>$917 billion was spent on defense for fiscal year 2026, a 5.8% increase of $48 billion from the prior year.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny (Fiscal Data)</a></td></tr><tr class="verdict-true"><td>3</td><td>Defense spending accounted for 2.8% of U.S. GDP in 2026 and is expected to remain at approximately 3% through 2030.</td><td><strong>true</strong></td><td>Checked against: <code>fiscal.cbo_budget_projections</code>; <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr><tr class="verdict-unsupported"><td>8</td><td>The total for the government’s largest mandatory spending programs (Social Security benefits, Medicare, and Medicaid) came in at nearly $3.5 trillion, a $217 billion uptick on the year before and a 6.7% increase.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by RAND National Security Research Division (per Fortune; actually the Commission on the National Defense Strategy, July 2024) — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 50/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> partially false &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-partially-false"><td>4</td><td>in many ways, China is outpacing the United States and has largely negated the U.S. military advantage in the Western Pacific through two decades of focused military investment.</td><td><strong>partially false</strong> &middot; central claim</td><td>Checked against: <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr>
+</tbody></table>
+<h3>Claims by Rep. David Schweikert (Joint Economic Committee chairman) — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>9</td><td>Under this higher interest rate scenario, we could spend $23 trillion on interest alone over the next decade.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-mostly-false"><summary>#1 &middot; <strong>mostly false</strong> &mdash; America’s defense budget is being squeezed to its lowest share of the federal budget since World War II</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>FY2021 11.05%, FY2026 12.8% of outlays <code>econ.federal_outlays_by_function / federal_outlays_by_agency</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says lowest budget share since WWII; OMB data show defense at 11.1% of outlays in FY2020-21 and 12.2% in FY2022, below 2026's 12.8-13%, and Brookings says only that the GDP share is lowest since the 1930s.</dd>
+<dt>Windows tested</dt><dd>FY2021: 11.05%; FY2026: 12.8%</dd>
+<dt>Warehouse searched for</dt><dd>federal outlays national defense percent of GDP budget</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT d.year, d.outlays_millions/t.outlays_millions*100 FROM federal_outlays_by_function d JOIN federal_outlays_by_agency t</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; since 1962 defense spending has been squeezed from 49% to 13% of the federal budget.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>1962: 52.3/106.8=49.0%; FY2026 MTS 13.05% (7,396B total, 965.2B defense) <code>econ.mts_outlays_by_function; econ.federal_outlays_by_function</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('140','340')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Defense spending accounted for 2.8% of U.S. GDP in 2026 and is expected to remain at approximately 3% through 2030.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CBO FY2025 defense 2.94% of GDP; $966B over roughly $34T GDP is about 2.8%; Brookings states about 3% <code>fiscal.cbo_budget_projections</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT value FROM fiscal.cbo_budget_projections WHERE variable='disc_defense_gdp_share' AND fiscal_year=2025</code></pre></details>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#4 &middot; <strong>partially false</strong> &mdash; in many ways, China is outpacing the United States and has largely negated the U.S. military advantage in the Western Pacific through two decades of focused military investment.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by RAND National Security Research Division (per Fortune; actually the Commission on the National Defense Strategy, July 2024) — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Search results identify the July 2024 commission report; Brookings (read) calls it a 2024 bipartisan commission<ul class="claim-sources"><li><a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says RAND warned three years ago; the evidence says the quote is from the congressionally mandated Commission on the National Defense Strategy, July 2024 (about two years ago).</dd>
+<dt>Windows tested</dt><dd>2024 report date: about 2 years before Nov 2026; Fortune 'three years': 2023</dd>
+<dt>Warehouse searched for</dt><dd>federal outlays national defense percent of GDP budget</dd>
+<dt>Web searches run</dt><dd>Commission on the National Defense Strategy report China is outpacing the United States July 2024 RAND</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#5 &middot; <strong>partially false</strong> &mdash; $917 billion was spent on defense for fiscal year 2026, a 5.8% increase of $48 billion from the prior year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>MTS FY2026 $965.2B vs FY2025 $916.6B; OMB $966.4B vs $916.1B <code>econ.mts_outlays_by_function</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny (Fiscal Data)</a></li></ul></dd>
+<dt>Errs</dt><dd>against their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says $917 billion for FY2026; the evidence says $965.2 billion (Treasury MTS) and $966.4 billion (OMB), with $917 billion being the FY2025 level.</dd>
+<dt>Evidence found and set aside because</dt><dd>The Brookings hit for '5.8%' is an unrelated 1970-1991 mandatory-spending share of GDP, so it does not bear on this claim.</dd>
+<dt>Windows tested</dt><dd>MTS FY2026 vs FY2025: +5.3%; OMB FY2026 vs FY2025: +5.5%</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr='140'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; The government ran a total deficit of $1.9 trillion, the CBO reported, adding to the current national debt burden of $40.7 trillion</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>receipts 5,403B, outlays 7,396B; debt 40.79T <code>econ.mts_outlays_by_function; econ.federal_debt</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says $1.9 trillion; the evidence says about $1.99 trillion (MTS receipts $5,403B vs outlays $7,396B).</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('120','340')</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; the Treasury paid $1.14 trillion in net interest on the public debt—an 11.1% or $114 billion increase on the previous fiscal year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>MTS net interest $1.052T vs $0.970T prior (different definition from CBO's net interest on the public debt) <code>econ.mts_outlays_by_function</code></dd>
+<dt>Independent evidence</dt><dd>Search summary of CBO: +$115B, 11%<ul class="claim-sources"><li><a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says $1.14 trillion; the warehouse says $1.05 trillion, because CBO's net interest on the public debt is a broader measure, so only the +$115B/11% change is corroborated.</dd>
+<dt>Web searches run</dt><dd>CBO Monthly Budget Review fiscal year 2026 defense outlays net interest on the public debt</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr='320'</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#8 &middot; <strong>unsupported</strong> &mdash; The total for the government’s largest mandatory spending programs (Social Security benefits, Medicare, and Medicaid) came in at nearly $3.5 trillion, a $217 billion uptick on the year before and a 6.7% increase.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fiscaldata.treasury.gov/datasets/debt-to-the-penny/debt-to-the-penny">Treasury Debt to the Penny</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Medicaid not isolated in warehouse; SS+Medicare alone are $2.74T (+$163B); the $217B equals the reported CBO deficit increase, so possible conflation.</dd>
+<dt>No page loaded because</dt><dd>cbo.gov PDF, publication page and home page all returned HTTP 403 and no CBO mirror was found; the Treasury and Brookings pages read do not state the figure.</dd>
+<dt>Warehouse searched for</dt><dd>federal outlays Social Security Medicare Medicaid FY2026 Treasury MTS</dd>
+<dt>Web searches run</dt><dd>CBO Monthly Budget Review fiscal year 2026 defense outlays net interest on the public debt</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#9 &middot; <strong>unsupported</strong> &mdash; Under this higher interest rate scenario, we could spend $23 trillion on interest alone over the next decade.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Rep. David Schweikert (Joint Economic Committee chairman) — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.brookings.edu/articles/in-a-dangerous-world-defense-spending-will-be-squeezed/">Brookings</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>JEC report not located or fetched; relayed quote of a projection, not checked.</dd>
+<dt>No page loaded because</dt><dd>No JEC report page was found or fetched; the off-site pages read (Brookings, Treasury) do not state the figure.</dd>
+<dt>Warehouse searched for</dt><dd>federal interest costs projection next decade net interest</dd>
+<dt>Web searches run</dt><dd>none beyond catalog search</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>$23</strong> &mdash; Part of the Schweikert quote graded in its own claim.</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>CBO MBR and RAND verified from primary pages</strong>: cbo.gov and rand.org returned HTTP 403; graded from Treasury MTS/OMB tables and search summaries.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 6 rows — 1673 ms</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('140','320','340','120','270','250')</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
