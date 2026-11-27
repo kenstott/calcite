@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- U.S. Patents and Trademarks Data Quality Checks
 -- Schema: patents
--- Tables: patent_grants, patent_publications, patent_publication_cpc,
+-- Tables: patent_grants, patent_grants_weekly, patent_publications, patent_publication_cpc,
 --         patent_publication_applicants, patent_assignees, patent_inventors, patent_cpc_classes,
 --         patent_claims, patent_summaries, trademark_applications
 -- All tables are Iceberg; reads via iceberg_scan.
@@ -140,6 +140,101 @@ SELECT 'patents', 'patent_grants', 'T8_pk_duplication',
   CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
   dups, 0, 'Rows sharing a duplicate patent_id'
 FROM (SELECT COUNT(*) - COUNT(DISTINCT patent_id) AS dups FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: patent_grants_weekly (USPTO PTBLXML weekly issue files)
+-- ─────────────────────────────────────────────────────────────
+
+-- T0: readability
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true) LIMIT 1;
+
+-- T1_existence
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true));
+
+-- T2_row_count
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'A single weekly issue holds more than 5000 patents'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true));
+
+-- T2c_daily_coverage
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T2c_daily_coverage',
+  CASE WHEN age <= 14 THEN 'pass' ELSE 'fail' END,
+  age, 14, 'Days since the newest loaded issue date'
+FROM (SELECT DATE_DIFF('day', MAX(CAST(patent_date AS DATE)), CURRENT_DATE) AS age FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true) LIMIT 3;
+
+-- T4_all_null_cols
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0, CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true))
+  WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'grant_year')
+);
+
+-- T5_all_same_value
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0, CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true))
+  WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'grant_year')
+);
+
+-- T6_pk_nulls
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL patent_id, patent_date, patent_type or grant_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true)
+      WHERE patent_id IS NULL OR patent_date IS NULL OR patent_type IS NULL OR grant_year IS NULL);
+
+-- T7_patent_type
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T7_patent_type',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'patent_type outside utility/design/plant/reissue/sir'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true)
+      WHERE patent_type NOT IN ('utility', 'design', 'plant', 'reissue', 'sir'));
+
+-- T7_patent_id_format
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T7_patent_id_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'patent_id not in PatentsView form (letters then digits, no leading zero)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true)
+      WHERE NOT regexp_full_match(patent_id, '[A-Z]*[1-9][0-9]*'));
+
+-- T7_weekly_issues
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T7_weekly_issues',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Issue dates that are not Tuesdays, or are over 7 days after the previous issue of the same year'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT d, LAG(d) OVER (PARTITION BY year(d) ORDER BY d) AS prev
+        FROM (SELECT DISTINCT CAST(patent_date AS DATE) AS d FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true)))
+      WHERE isodow(d) <> 2 OR date_diff('day', prev, d) > 7);
+
+-- T8_pk_duplication
+INSERT INTO dq_results
+SELECT 'patents', 'patent_grants_weekly', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'duplicate patent_id rows'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT patent_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/patents/patent_grants_weekly', allow_moved_paths := true) GROUP BY patent_id HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: patent_assignees
