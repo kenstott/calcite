@@ -393,9 +393,10 @@ public class EtlPipelineDeepCoverageTest5 {
     long rows =
         (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(), rp, w, tracker, "t_rp_empty");
     assertEquals(0L, rows);
-    // Empty result should still mark as processed with 0 rows
-    verify(tracker).markProcessedWithRowCount(
-        eq("t_rp_empty"), eq("t_rp_empty"), any(Map.class), any(), eq(0L));
+    // Empty result should still mark as processed with 0 rows, once the writer commits
+    verify(tracker, never()).markProcessedWithRowCount(
+        any(String.class), any(String.class), any(Map.class), any(), anyLong());
+    assertEquals(Collections.singletonList(0L), deferredMarkRowCounts(pipeline));
   }
 
   @Test void testWriteWithResponsePartitioning_noYearFilterNoFiltering() throws Exception {
@@ -424,8 +425,22 @@ public class EtlPipelineDeepCoverageTest5 {
     long rows =
         (long) m.invoke(pipeline, data.iterator(), new HashMap<String, String>(), rp, w, tracker, "t_rp_noyr");
     assertEquals(5L, rows);
-    verify(tracker).markProcessedWithRowCount(
-        eq("t_rp_noyr"), eq("t_rp_noyr"), any(Map.class), any(), eq(5L));
+    verify(tracker, never()).markProcessedWithRowCount(
+        any(String.class), any(String.class), any(Map.class), any(), anyLong());
+    assertEquals(Collections.singletonList(5L), deferredMarkRowCounts(pipeline));
+  }
+
+  /** Row counts of the completion marks the pipeline holds until its writer commits. */
+  private static List<Long> deferredMarkRowCounts(EtlPipeline pipeline) throws Exception {
+    Field marksField = EtlPipeline.class.getDeclaredField("pendingComboMarks");
+    marksField.setAccessible(true);
+    List<Long> counts = new ArrayList<Long>();
+    for (Object mark : (Iterable<?>) marksField.get(pipeline)) {
+      Field rowCount = mark.getClass().getDeclaredField("rowCount");
+      rowCount.setAccessible(true);
+      counts.add((Long) rowCount.get(mark));
+    }
+    return counts;
   }
 
   // -----------------------------------------------------------------------
