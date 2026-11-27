@@ -8,10 +8,9 @@
  * machine learning models is strictly prohibited without explicit written
  * permission from the copyright holder.
  */
-package org.apache.calcite.adapter.govdata.fiscal;
+package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.govdata.BrowserHelperProcess;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,25 +29,25 @@ import java.util.Map;
  * unusable one throws {@link IllegalStateException} naming the cause. There is no fallback to a
  * plain HTTP client.
  */
-final class FiscalBrowserSession {
+public final class HeadedPageSession {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String LABEL = "browser";
   private static final String INSTALL_HINT =
       "run govdata/scripts/browser-fetch/install.sh and set SSA_BROWSER_SCRIPT";
 
-  private static FiscalBrowserSession current;
+  private static HeadedPageSession current;
 
   private final String key;
   private final BrowserHelperProcess helper;
 
-  private FiscalBrowserSession(String key, BrowserHelperProcess helper) {
+  private HeadedPageSession(String key, BrowserHelperProcess helper) {
     this.key = key;
     this.helper = helper;
   }
 
   /** The shared session for the source parameters in {@code context}, started if needed. */
-  static synchronized FiscalBrowserSession get(RequestContext context) {
+  public static synchronized HeadedPageSession get(RequestContext context) {
     Map<String, String> p = context.getParameters();
     String node = require(p, "browserNodeCommand");
     String script = p.get("browserScript");
@@ -65,7 +64,7 @@ final class FiscalBrowserSession {
     }
     BrowserHelperProcess h = BrowserHelperProcess.start(LABEL, node, script, INSTALL_HINT,
         Arrays.asList(entry, delay, chrome == null ? "" : chrome));
-    current = new FiscalBrowserSession(key, h);
+    current = new HeadedPageSession(key, h);
     return current;
   }
 
@@ -79,7 +78,7 @@ final class FiscalBrowserSession {
   }
 
   /** The body of {@code url}, or null when the site answers 404. */
-  synchronized String fetchText(String url) throws IOException {
+  public synchronized String fetchText(String url) throws IOException {
     ObjectNode req = MAPPER.createObjectNode();
     req.put("url", url);
     JsonNode reply = helper.call(req);
@@ -90,7 +89,7 @@ final class FiscalBrowserSession {
   }
 
   /** The bytes of {@code url}, or null when the site answers 404. */
-  synchronized byte[] fetchBytes(String url) throws IOException {
+  public synchronized byte[] fetchBytes(String url) throws IOException {
     ObjectNode req = MAPPER.createObjectNode();
     req.put("url", url);
     req.put("binary", true);

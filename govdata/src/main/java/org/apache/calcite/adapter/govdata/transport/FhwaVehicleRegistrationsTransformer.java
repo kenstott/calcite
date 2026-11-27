@@ -10,13 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.transport;
 
-import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
-import org.apache.calcite.adapter.file.etl.ResponseTransformer;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -29,13 +24,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -52,19 +48,19 @@ import java.util.regex.Pattern;
  *   M(12) motorcycles total   P(15) all motor vehicles total
  * </pre>
  *
- * <p>The HTTP body is UTF-8-decoded and useless for a binary XLSX, so — as the
- * energy XLSX transformers do — the class ignores {@code response} and
- * re-downloads the URL as raw bytes, then reads it with POI via
- * {@link WorkbookFactory} (content-sniffing, so it also handles any {@code .xls}
- * year). State FIPS is derived from the cleaned state name for the geo join; the
+ * <p>The workbook is located and downloaded by {@link FhwaHighwayStatistics}; the source URL of
+ * the table is not read. It is parsed with POI via {@link WorkbookFactory} (content-sniffing, so
+ * it handles {@code .xls} and {@code .xlsx}). Some years store the measures as formulas, whose
+ * cached results are the published values.
+ *
+ * <p>State FIPS is derived from the cleaned state name for the geo join; the
  * {@code year} partition comes from the {@code effective_year} dimension, so it
  * is not emitted here.
  */
-public class FhwaVehicleRegistrationsTransformer implements ResponseTransformer {
+public class FhwaVehicleRegistrationsTransformer implements StreamingResponseTransformer {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(FhwaVehicleRegistrationsTransformer.class);
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final String SHEET_NAME = "CY MV-1 Publish";
   private static final int FIRST_DATA_ROW = 9;   // 0-indexed row 10
@@ -81,74 +77,64 @@ public class FhwaVehicleRegistrationsTransformer implements ResponseTransformer 
   static final Map<String, String> STATE_FIPS = buildStateFips();
 
   @Override public String transform(String response, RequestContext context) {
-    String url = context.getUrl();
+    throw new UnsupportedOperationException(
+        "vehicle_registrations is a StreamingResponseTransformer; call fetchAndTransform");
+  }
+
+  @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context) {
+    int year = Integer.parseInt(context.getDimensionValues().get("effective_year"));
+    FhwaHighwayStatistics.Workbook source =
+        FhwaHighwayStatistics.fetch(context, "mv1", "xlsx", year);
     try {
-      byte[] bytes = downloadBytes(url);
-      Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(bytes));
-      try {
-        Sheet sheet = wb.getSheet(SHEET_NAME);
-        if (sheet == null) {
-          sheet = wb.getSheetAt(0);
-        }
-        ArrayNode out = MAPPER.createArrayNode();
-        int last = sheet.getLastRowNum();
-        for (int r = FIRST_DATA_ROW; r <= last; r++) {
-          Row row = sheet.getRow(r);
-          if (row == null) {
-            continue;
-          }
-          String rawState = cellString(row.getCell(COL_STATE));
-          if (rawState == null) {
-            continue;
-          }
-          String stateName = FOOTNOTE.matcher(rawState.trim()).replaceAll("").trim();
-          String fips = STATE_FIPS.get(stateName.toUpperCase());
-          if (fips == null) {
-            // Skips the "Total" row, footnote text rows, and any non-state row.
-            continue;
-          }
-          ObjectNode o = MAPPER.createObjectNode();
-          o.put("state_fips", fips);
-          o.put("state_name", stateName);
-          putLong(o, "automobiles", row.getCell(COL_AUTOMOBILES));
-          putLong(o, "buses", row.getCell(COL_BUSES));
-          putLong(o, "trucks", row.getCell(COL_TRUCKS));
-          putLong(o, "motorcycles", row.getCell(COL_MOTORCYCLES));
-          putLong(o, "all_motor_vehicles", row.getCell(COL_ALL));
-          out.add(o);
-        }
-        LOGGER.debug("vehicle_registrations: transformed {} state rows from {}", out.size(), url);
-        return MAPPER.writeValueAsString(out);
-      } finally {
-        wb.close();
-      }
-    } catch (Exception e) {
-      LOGGER.error("vehicle_registrations: failed to parse MV-1 from {}: {}", url, e.getMessage(), e);
-      throw new RuntimeException("vehicle_registrations transform failed for " + url, e);
+      List<Map<String, Object>> rows = parseWorkbook(source.bytes, source.url);
+      LOGGER.debug("vehicle_registrations: {} state rows from {}", rows.size(), source.url);
+      return rows.iterator();
+    } catch (IOException e) {
+      throw new RuntimeException("vehicle_registrations: failed to parse MV-1 from " + source.url
+          + ": " + e.getMessage(), e);
     }
   }
 
-  private static byte[] downloadBytes(String url) throws IOException {
-    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(120000);
-    conn.setRequestProperty("User-Agent", "GovData/1.0");
-    NetworkOutageWait.connect(conn);
-    int status = conn.getResponseCode();
-    if (status != 200) {
-      throw new IOException("HTTP " + status + " from " + url);
-    }
-    InputStream is = conn.getInputStream();
+  static List<Map<String, Object>> parseWorkbook(byte[] bytes, String url) throws IOException {
+    Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(bytes));
     try {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      byte[] buf = new byte[65536];
-      int len;
-      while ((len = is.read(buf)) > 0) {
-        baos.write(buf, 0, len);
+      Sheet sheet = wb.getSheet(SHEET_NAME);
+      if (sheet == null) {
+        sheet = wb.getSheetAt(0);
       }
-      return baos.toByteArray();
+      List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+      int last = sheet.getLastRowNum();
+      for (int r = FIRST_DATA_ROW; r <= last; r++) {
+        Row row = sheet.getRow(r);
+        if (row == null) {
+          continue;
+        }
+        String rawState = cellString(row.getCell(COL_STATE));
+        if (rawState == null) {
+          continue;
+        }
+        String stateName = FOOTNOTE.matcher(rawState.trim()).replaceAll("").trim();
+        String fips = STATE_FIPS.get(stateName.toUpperCase(Locale.ROOT));
+        if (fips == null) {
+          // Skips the "Total" row, footnote text rows, and any non-state row.
+          continue;
+        }
+        Map<String, Object> o = new LinkedHashMap<String, Object>();
+        o.put("state_fips", fips);
+        o.put("state_name", stateName);
+        o.put("automobiles", measure(row.getCell(COL_AUTOMOBILES), stateName, url));
+        o.put("buses", measure(row.getCell(COL_BUSES), stateName, url));
+        o.put("trucks", measure(row.getCell(COL_TRUCKS), stateName, url));
+        o.put("motorcycles", measure(row.getCell(COL_MOTORCYCLES), stateName, url));
+        o.put("all_motor_vehicles", measure(row.getCell(COL_ALL), stateName, url));
+        out.add(o);
+      }
+      if (out.isEmpty()) {
+        throw new IOException("no state rows in " + url);
+      }
+      return out;
     } finally {
-      is.close();
+      wb.close();
     }
   }
 
@@ -166,29 +152,18 @@ public class FhwaVehicleRegistrationsTransformer implements ResponseTransformer 
     return null;
   }
 
-  private static void putLong(ObjectNode row, String col, Cell cell) {
-    if (cell == null) {
-      row.putNull(col);
-      return;
+  /** The count in a measure cell; null only when the cell is blank. */
+  private static Long measure(Cell cell, String state, String url) throws IOException {
+    if (cell == null || cell.getCellType() == CellType.BLANK) {
+      return null;
     }
-    try {
-      if (cell.getCellType() == CellType.NUMERIC) {
-        row.put(col, Math.round(cell.getNumericCellValue()));
-        return;
-      }
-      if (cell.getCellType() == CellType.STRING) {
-        String s = cell.getStringCellValue().replace(",", "").trim();
-        if (s.isEmpty()) {
-          row.putNull(col);
-          return;
-        }
-        row.put(col, Math.round(Double.parseDouble(s)));
-        return;
-      }
-    } catch (NumberFormatException e) {
-      // fall through to null
+    CellType type = cell.getCellType() == CellType.FORMULA
+        ? cell.getCachedFormulaResultType() : cell.getCellType();
+    if (type == CellType.NUMERIC) {
+      return Math.round(cell.getNumericCellValue());
     }
-    row.putNull(col);
+    throw new IOException("non-numeric measure in cell " + cell.getAddress() + " for " + state
+        + " in " + url);
   }
 
   private static Map<String, String> buildStateFips() {

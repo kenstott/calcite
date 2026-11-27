@@ -576,7 +576,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 10100
-      checkedAt: "2026-11-26T05:22:32Z"
+      checkedAt: "2026-11-27T05:43:20Z"
     partitions: *standard_partitions
     comment: >
       U.S. employment and unemployment statistics from BLS including national unemployment rate, labor force participation, job openings, and employment by sector. Also includes CPS unemployment rate, labor force participation rate, and employment-population ratio broken out by educational attainment for ages 25 and over (seasonally adjusted), and CPS labor force/employment/unemployment level unemployment rate, and labor force participation rate broken out by veteran status (total veterans, nonveterans, Gulf War-era II veterans; not seasonally adjusted). Updated monthly with seasonal adjustments. Each row is the CURRENT (most-revised) value only; for first-print vs. revised payroll figures (size and direction of revisions, benchmark revisions) use ces_revision_vintages, which carries the as-published history of total nonfarm and total private payrolls.
@@ -863,7 +863,7 @@ partitionedTables:
       distinctYears: 114
       contiguous: true
       rowCount: 6001
-      checkedAt: "2026-11-26T05:22:34Z"
+      checkedAt: "2026-11-27T05:43:23Z"
     partitions: *standard_partitions
     comment: >
       National monthly CPI-U (all items, core less food and energy, and water/sewerage
@@ -1060,7 +1060,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 856
-      checkedAt: "2026-11-26T05:22:35Z"
+      checkedAt: "2026-11-27T05:43:25Z"
     partitions: *standard_partitions
     comment: >
       Monthly CPI-U all items index level (not seasonally adjusted, base 1982-84=100) for the 4
@@ -1204,7 +1204,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 2038
-      checkedAt: "2026-11-26T05:22:36Z"
+      checkedAt: "2026-11-27T05:43:27Z"
     partitions: *standard_partitions
 
     # Dimension definitions for iteration
@@ -1397,7 +1397,7 @@ partitionedTables:
       distinctYears: 92
       contiguous: true
       rowCount: 7817
-      checkedAt: "2026-11-26T05:22:37Z"
+      checkedAt: "2026-11-27T05:43:30Z"
     partitions: *standard_partitions
     # BLS republishes cu.data.11.USFoodBeverage on every monthly CPI release. A HEAD probe of
     # Last-Modified re-triggers ingest when the file changes, matching the BEA bulk-download
@@ -1516,7 +1516,7 @@ partitionedTables:
       distinctYears: 32
       contiguous: true
       rowCount: 28842
-      checkedAt: "2026-11-26T05:22:38Z"
+      checkedAt: "2026-11-27T05:43:32Z"
     partitions: *standard_partitions
     # BLS republishes ap.data.0.Current on every monthly CPI release. A HEAD probe of
     # Last-Modified re-triggers ingest when the file changes (same as food_cpi). Average prices
@@ -1653,7 +1653,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 808
-      checkedAt: "2026-11-26T05:22:39Z"
+      checkedAt: "2026-11-27T05:43:33Z"
     partitions: *standard_partitions
     comment: >
       Monthly CPI-U Food at Home (SAF11) index level (not seasonally adjusted, base 1982-84=100)
@@ -1799,7 +1799,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 3274
-      checkedAt: "2026-11-26T05:22:40Z"
+      checkedAt: "2026-11-27T05:43:34Z"
     partitions: *standard_partitions
 
     dimensions:
@@ -1957,7 +1957,7 @@ partitionedTables:
       distinctYears: 114
       contiguous: true
       rowCount: 5750
-      checkedAt: "2026-11-26T05:22:42Z"
+      checkedAt: "2026-11-27T05:43:37Z"
     partitions: *standard_partitions
     comment: >
       Monthly CPI-U Apparel (SAA) index level and its subcomponents — Men's and boys'
@@ -2075,7 +2075,7 @@ partitionedTables:
       distinctYears: 92
       contiguous: true
       rowCount: 3379
-      checkedAt: "2026-11-26T05:22:43Z"
+      checkedAt: "2026-11-27T05:43:39Z"
     partitions: *standard_partitions
     comment: >
       Monthly CPI-U Furniture and bedding (SEHJ, + Bedroom/Living-kitchen-dining/Other
@@ -2196,7 +2196,7 @@ partitionedTables:
       distinctYears: 92
       contiguous: true
       rowCount: 22025
-      checkedAt: "2026-11-26T05:22:44Z"
+      checkedAt: "2026-11-27T05:43:41Z"
     partitions: *standard_partitions
     comment: >
       Monthly CPI-U vehicle price indexes, U.S. city average only (area 0000), base
@@ -2332,7 +2332,7 @@ partitionedTables:
       distinctYears: 88
       contiguous: true
       rowCount: 9922611
-      checkedAt: "2026-11-26T05:22:46Z"
+      checkedAt: "2026-11-27T05:43:43Z"
     partitions: *standard_partitions
     comment: >
       Monthly employment by industry (22 NAICS supersectors: manufacturing, construction, retail,
@@ -2477,7 +2477,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 160
-      checkedAt: "2026-11-26T05:22:47Z"
+      checkedAt: "2026-11-27T05:43:44Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2615,7 +2615,7 @@ partitionedTables:
       distinctYears: 24
       contiguous: true
       rowCount: 3317
-      checkedAt: "2026-11-26T05:22:48Z"
+      checkedAt: "2026-11-27T05:43:45Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2741,7 +2741,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 317183
-      checkedAt: "2026-11-26T05:22:49Z"
+      checkedAt: "2026-11-27T05:43:47Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2864,7 +2864,7 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 2102
-      checkedAt: "2026-11-26T05:22:50Z"
+      checkedAt: "2026-11-27T05:43:48Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -3133,7 +3133,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 97493
-      checkedAt: "2026-11-26T05:22:51Z"
+      checkedAt: "2026-11-27T05:43:49Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -3266,7 +3266,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 2635282
-      checkedAt: "2026-11-26T05:22:53Z"
+      checkedAt: "2026-11-27T05:43:53Z"
     # QCEW data year Y stays preliminary until it is finalized alongside the following year's Q1
     # release (~Sept Y+1), and BLS rewrites the annual singlefile in between. Reopening the 2 most
     # recently published years picks up that preliminary-to-final rewrite; BLS does not edit the
@@ -3448,7 +3448,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 77832
-      checkedAt: "2026-11-26T05:22:54Z"
+      checkedAt: "2026-11-27T05:43:55Z"
     # Same BLS per-year zip as state_wages (filtered to area_fips='US000' below), so the
     # same preliminary-to-final rewrite applies — see the comment on state_wages.
     lookbackPeriods: 2
@@ -3619,7 +3619,7 @@ partitionedTables:
       distinctYears: 78
       contiguous: true
       rowCount: 4509199
-      checkedAt: "2026-11-26T05:22:56Z"
+      checkedAt: "2026-11-27T05:43:58Z"
     partitions: *standard_partitions
     comment: >
       Monthly employment by industry (22 NAICS supersectors: manufacturing, retail, healthcare,
@@ -3745,7 +3745,7 @@ partitionedTables:
       distinctYears: 88
       contiguous: true
       rowCount: 14314340
-      checkedAt: "2026-11-26T05:22:57Z"
+      checkedAt: "2026-11-27T05:44:02Z"
     partitions: *standard_partitions
     comment: >
       Monthly national nonfarm payroll employment (all employees, thousands) for every NAICS
@@ -3888,7 +3888,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 10073699
-      checkedAt: "2026-11-26T05:22:59Z"
+      checkedAt: "2026-11-27T05:44:04Z"
     partitions: *standard_partitions
     comment: >
       Annual establishment counts, employment levels, total wages, average weekly wage, and
@@ -4044,7 +4044,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 55034569
-      checkedAt: "2026-11-26T05:23:01Z"
+      checkedAt: "2026-11-27T05:44:08Z"
     # Same BLS per-year zip as state_wages (filtered differently by rowFilter below), so the
     # same preliminary-to-final rewrite applies — see the comment on state_wages.
     lookbackPeriods: 2
@@ -4214,7 +4214,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 55034569
-      checkedAt: "2026-11-26T05:23:03Z"
+      checkedAt: "2026-11-27T05:44:12Z"
     # DQ sample cap (GOVDATA_DQ mode): same QCEW annual bulk as county_qcew, county-filtered
     # to all ~6,038 county area codes x industries (millions of rows/year). Cap the stream so
     # DQ samples fast; prod full. Cache-safe (post-fetch iterator wrap).
@@ -4375,7 +4375,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 278850
-      checkedAt: "2026-11-26T05:23:05Z"
+      checkedAt: "2026-11-27T05:44:16Z"
     partitions: *standard_partitions
     sourcePaths:
       ftpFiles:
@@ -4537,7 +4537,7 @@ partitionedTables:
       distinctYears: 27
       contiguous: true
       rowCount: 1840410
-      checkedAt: "2026-11-26T05:23:07Z"
+      checkedAt: "2026-11-27T05:44:19Z"
     partitions: *standard_partitions
     sourcePaths:
       ftpFiles:
@@ -4684,7 +4684,7 @@ partitionedTables:
       distinctYears: 26
       contiguous: true
       rowCount: 2763180
-      checkedAt: "2026-11-26T05:23:10Z"
+      checkedAt: "2026-11-27T05:44:23Z"
     partitions: *standard_partitions
     sourcePaths:
       ftpFiles:
@@ -4841,7 +4841,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 642
-      checkedAt: "2026-11-26T05:23:11Z"
+      checkedAt: "2026-11-27T05:44:25Z"
     partitions: *standard_partitions
     comment: >
       Monthly average hourly earnings (all employees, and production/nonsupervisory employees
@@ -5082,7 +5082,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 548929
-      checkedAt: "2026-11-26T05:23:12Z"
+      checkedAt: "2026-11-27T05:44:27Z"
     # Current-year rows change daily (new inspections, penalty revisions): re-pull the last year each run.
     lookbackPeriods: 1
     freshness:
@@ -5341,7 +5341,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 1050600
-      checkedAt: "2026-11-26T05:23:13Z"
+      checkedAt: "2026-11-27T05:44:30Z"
     # Current-year rows change daily (new inspections, penalty revisions): re-pull the last year each run.
     lookbackPeriods: 1
     freshness:
@@ -6139,7 +6139,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 425
-      checkedAt: "2026-11-26T05:23:14Z"
+      checkedAt: "2026-11-27T05:44:33Z"
     partitions: *standard_partitions
     comment: >
       BLS Major Sector Productivity and Costs (PR survey) labor productivity index — output per
@@ -6262,7 +6262,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 43656
-      checkedAt: "2026-11-26T05:23:15Z"
+      checkedAt: "2026-11-27T05:44:35Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -6437,7 +6437,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 3548
-      checkedAt: "2026-11-26T05:23:16Z"
+      checkedAt: "2026-11-27T05:44:37Z"
     partitions: *standard_partitions
     comment: >
       Average interest rates on U.S. Treasury securities (Treasury Bills, Notes, Bonds, TIPS, and
@@ -6550,7 +6550,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 4495
-      checkedAt: "2026-11-26T05:23:17Z"
+      checkedAt: "2026-11-27T05:44:39Z"
     partitions: *standard_partitions
     comment: >
       U.S. federal debt statistics including total public debt, debt held by public, and intragovernmental holdings. Tracks debt levels, composition, and trends. Source: Treasury Fiscal Data API.
@@ -6754,7 +6754,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 4620
-      checkedAt: "2026-11-26T05:23:19Z"
+      checkedAt: "2026-11-27T05:44:40Z"
     # Treasury releases MTS ~8th business day after month-end; reopen the 2 most recently
     # published fiscal years so a lookback-window fetch picks up any prior-month restatement.
     lookbackPeriods: 2
@@ -6921,7 +6921,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 280
-      checkedAt: "2026-11-26T05:23:20Z"
+      checkedAt: "2026-11-27T05:44:42Z"
     lookbackPeriods: 2
     freshness:
       type: hash
@@ -7074,7 +7074,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 7397
-      checkedAt: "2026-11-26T05:23:21Z"
+      checkedAt: "2026-11-27T05:44:44Z"
     # Treasury publishes this with the Monthly Treasury Statement cycle; reopen the 2 most
     # recently published years so a lookback-window fetch picks up any prior-month restatement.
     lookbackPeriods: 2
@@ -8186,8 +8186,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 60
       contiguous: true
-      rowCount: 178161
-      checkedAt: "2026-11-26T05:23:25Z"
+      rowCount: 178193
+      checkedAt: "2026-11-27T05:45:05Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -8560,12 +8560,12 @@ partitionedTables:
       type: hash
     pattern: "type=national_accounts/frequency=*/year=*/tablename=*/national_accounts.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
-      minYear: 2009
+      minYear: 1998
       maxYear: 2025
-      distinctYears: 17
+      distinctYears: 28
       contiguous: true
-      rowCount: 5729
-      checkedAt: "2026-11-26T05:23:27Z"
+      rowCount: 89219
+      checkedAt: "2026-11-27T05:45:26Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -8796,7 +8796,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 37315
-      checkedAt: "2026-11-26T05:23:28Z"
+      checkedAt: "2026-11-27T05:45:31Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -8944,7 +8944,7 @@ partitionedTables:
       distinctYears: 97
       contiguous: true
       rowCount: 2364768
-      checkedAt: "2026-11-26T05:23:30Z"
+      checkedAt: "2026-11-27T05:45:38Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9111,7 +9111,7 @@ partitionedTables:
       distinctYears: 29
       contiguous: true
       rowCount: 1449468
-      checkedAt: "2026-11-26T05:23:31Z"
+      checkedAt: "2026-11-27T05:45:42Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9542,7 +9542,7 @@ partitionedTables:
       distinctYears: 29
       contiguous: true
       rowCount: 546838
-      checkedAt: "2026-11-26T05:23:38Z"
+      checkedAt: "2026-11-27T05:45:54Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -9701,7 +9701,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 27311411
-      checkedAt: "2026-11-26T05:23:40Z"
+      checkedAt: "2026-11-27T05:45:56Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -10010,7 +10010,7 @@ partitionedTables:
       distinctYears: 28
       contiguous: true
       rowCount: 308
-      checkedAt: "2026-11-26T05:23:45Z"
+      checkedAt: "2026-11-27T05:46:03Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -10233,7 +10233,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 66240
-      checkedAt: "2026-11-26T05:23:48Z"
+      checkedAt: "2026-11-27T05:46:07Z"
     partitions:
       style: hive
       columnDefinitions: &fdi_partition_columns
@@ -10389,7 +10389,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 151116
-      checkedAt: "2026-11-26T05:23:50Z"
+      checkedAt: "2026-11-27T05:46:11Z"
     partitions:
       style: hive
       columnDefinitions: *fdi_partition_columns
@@ -10482,7 +10482,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 8538
-      checkedAt: "2026-11-26T05:23:51Z"
+      checkedAt: "2026-11-27T05:46:13Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -10628,7 +10628,7 @@ partitionedTables:
       distinctYears: 28
       contiguous: true
       rowCount: 3500
-      checkedAt: "2026-11-26T05:23:53Z"
+      checkedAt: "2026-11-27T05:46:17Z"
     partitions: *standard_partitions
     comment: >
       National GDP growth rates, nominal and real GDP levels, and other line items from BEA NIPA
@@ -10750,7 +10750,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 58644
-      checkedAt: "2026-11-26T05:23:54Z"
+      checkedAt: "2026-11-27T05:46:19Z"
     dimensions:
       type:
         - industry_gdp
@@ -10985,7 +10985,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 108126
-      checkedAt: "2026-11-26T05:23:56Z"
+      checkedAt: "2026-11-27T05:46:21Z"
     dimensions:
       type:
         - input_output
@@ -11135,11 +11135,11 @@ partitionedTables:
     pattern: "type=trade/direction=exports/year=*/month=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2013
-      maxYear: 2025
-      distinctYears: 13
+      maxYear: 2026
+      distinctYears: 14
       contiguous: true
-      rowCount: 49424173
-      checkedAt: "2026-11-26T05:24:01Z"
+      rowCount: 52030505
+      checkedAt: "2026-11-27T05:46:28Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -11290,11 +11290,11 @@ partitionedTables:
     pattern: "type=trade/direction=imports/year=*/month=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2013
-      maxYear: 2025
-      distinctYears: 13
+      maxYear: 2026
+      distinctYears: 14
       contiguous: true
-      rowCount: 31133269
-      checkedAt: "2026-11-26T05:24:06Z"
+      rowCount: 32973513
+      checkedAt: "2026-11-27T05:46:34Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -11454,11 +11454,11 @@ partitionedTables:
     pattern: "type=trade_by_state/year=*/month=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2020
-      maxYear: 2025
-      distinctYears: 6
+      maxYear: 2026
+      distinctYears: 7
       contiguous: true
-      rowCount: 156604589
-      checkedAt: "2026-11-26T05:24:10Z"
+      rowCount: 177221647
+      checkedAt: "2026-11-27T05:46:41Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -11621,11 +11621,11 @@ partitionedTables:
     pattern: "type=trade_critical_minerals/direction=imports/year=*/month=*/chapter=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2013
-      maxYear: 2025
-      distinctYears: 13
+      maxYear: 2026
+      distinctYears: 14
       contiguous: true
-      rowCount: 6953463
-      checkedAt: "2026-11-26T05:24:28Z"
+      rowCount: 7342053
+      checkedAt: "2026-11-27T05:47:13Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -11790,11 +11790,11 @@ partitionedTables:
     pattern: "type=trade_critical_minerals/direction=exports/year=*/month=*/chapter=*/*.parquet"
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2013
-      maxYear: 2025
-      distinctYears: 13
+      maxYear: 2026
+      distinctYears: 14
       contiguous: true
-      rowCount: 7359130
-      checkedAt: "2026-11-26T05:24:40Z"
+      rowCount: 7735754
+      checkedAt: "2026-11-27T05:47:33Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -11949,7 +11949,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 113412958
-      checkedAt: "2026-11-26T05:25:16Z"
+      checkedAt: "2026-11-27T05:48:15Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -12231,7 +12231,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 2696878
-      checkedAt: "2026-11-26T05:25:18Z"
+      checkedAt: "2026-11-27T05:48:17Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -12365,7 +12365,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 26807
-      checkedAt: "2026-11-26T05:25:19Z"
+      checkedAt: "2026-11-27T05:48:19Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -12479,7 +12479,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 10003
-      checkedAt: "2026-11-26T05:25:20Z"
+      checkedAt: "2026-11-27T05:48:20Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -12591,7 +12591,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 8886
-      checkedAt: "2026-11-26T05:25:21Z"
+      checkedAt: "2026-11-27T05:48:22Z"
     partitions:
       style: hive
       columnDefinitions:
