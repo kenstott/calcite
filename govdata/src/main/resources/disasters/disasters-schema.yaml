@@ -2819,6 +2819,8 @@ partitionedTables:
       not the .fema.gov domain itself — same accepted "agency-hosted ArcGIS mirror"
       pattern as housing.opportunity_zones; re-verify the item id if this 404s (the
       canonical hazards.fema.gov/nri URLs only redirect to a landing page, not this data).
+      The rating blends hazard with exposure and expected loss; for ground-shaking hazard
+      alone (PGA, SDS, Seismic Design Category) use disasters.usgs_seismic_hazard_by_county.
       Joins to geo.counties via county_fips.
 
     dimensions:
@@ -2982,6 +2984,156 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: fema_nri_earthquake_by_county
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  - name: usgs_seismic_hazard_by_county
+    # Latest-snapshot table (no year axis). The values change only when USGS publishes a new
+    # model version, which the version probe reads from one design-service response; a run with
+    # an unchanged version skips the per-county requests.
+    dataset_type: snapshot
+    freshness:
+      type: version
+      probe_url: "https://earthquake.usgs.gov/ws/building-codes/asce7-22/calculate?latitude=37.7749&longitude=-122.4194&riskCategory=II&siteClass=Default&title=probe"
+      version_field: "$.response.metadata.modelVersion"
+    pattern: "type=usgs_seismic_hazard_by_county/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      USGS earthquake ground-shaking hazard by county: peak ground acceleration with a 2%
+      probability of exceedance in 50 years (PGA), ASCE 7-22 / 2020 NEHRP mapped spectral
+      accelerations Ss and S1, design values SDS and SD1, and Seismic Design Category
+      (SDC), one row per county. Use this to define "high seismic hazard" counties by shaking
+      alone; disasters.fema_nri_earthquake_by_county is a risk rating that blends hazard with
+      exposure and expected loss, so large cities rate high there on exposure. Covers the 50
+      states, DC and Puerto Rico (no Guam, American Samoa, Northern Marianas or US Virgin
+      Islands). Each county is evaluated at ONE point, its 2020 Census center of population,
+      not averaged over its area: hazard can differ substantially across a large county.
+      County geography is 2020: Connecticut is its eight counties (09001 to 09015), not the
+      nine planning regions, so Connecticut data keyed on 09110 to 09190 does not join.
+      Source: USGS seismic design web service (earthquake.usgs.gov/ws/building-codes,
+      public domain), which interpolates the USGS gridded design ground motions derived from
+      the National Seismic Hazard Models. Joins to geo.counties on county_fips.
+
+    dimensions:
+      type:
+        - usgs_seismic_hazard_by_county
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: false
+        comment: >-
+          County name as published by the Census Bureau, 2020 geography
+      - name: state_name
+        type: string
+        nullable: false
+        comment: >-
+          State name; includes the District of Columbia and Puerto Rico
+      - name: population_2020
+        type: int
+        nullable: false
+        comment: >-
+          2020 Census population of the county (the population whose center is evaluated)
+      - name: latitude
+        type: double
+        nullable: false
+        comment: >-
+          Latitude of the 2020 center of population: the point the hazard is evaluated at
+      - name: longitude
+        type: double
+        nullable: false
+        comment: >-
+          Longitude of the 2020 center of population
+      - name: pga_2pct50yr_g
+        type: double
+        nullable: false
+        comment: >-
+          Peak ground acceleration (g) with a 2% probability of exceedance in 50 years,
+          uniform-hazard geometric mean, site class BC. Pure probabilistic ground-shaking hazard:
+          no exposure, loss, risk-targeting or deterministic cap
+      - name: ss_g
+        type: double
+        nullable: false
+        comment: >-
+          ASCE 7-22 mapped MCE-R spectral acceleration at 0.2 s (g); risk-targeted, no exposure term
+      - name: s1_g
+        type: double
+        nullable: false
+        comment: >-
+          ASCE 7-22 mapped MCE-R spectral acceleration at 1 s (g); risk-targeted, no exposure term
+      - name: sds_g
+        type: double
+        nullable: false
+        comment: >-
+          Design spectral acceleration SDS at short periods (g), ASCE 7-22 default site class
+          (soil unknown). The usual column for hazard thresholds such as sds_g >= 0.5 or >= 1.0
+      - name: sd1_g
+        type: double
+        nullable: false
+        comment: >-
+          Design spectral acceleration SD1 at 1 s (g), ASCE 7-22 default site class
+      - name: pgam_g
+        type: double
+        nullable: false
+        comment: >-
+          MCE-G peak ground acceleration PGA-M (g), default site class (includes deterministic limits)
+      - name: seismic_design_category
+        type: string
+        nullable: false
+        comment: >-
+          ASCE 7-22 Seismic Design Category, A (lowest) to E or F (highest),
+          default site class, risk category II
+      - name: sds_site_class_bc_g
+        type: double
+        nullable: false
+        comment: >-
+          SDS (g) at reference site class BC (firm rock / very dense soil, Vs30 760 m/s)
+      - name: sd1_site_class_bc_g
+        type: double
+        nullable: false
+        comment: >-
+          SD1 (g) at reference site class BC
+      - name: model_version
+        type: string
+        nullable: false
+        comment: >-
+          USGS design service model version the values were read from
+      - name: method
+        type: string
+        nullable: false
+        comment: >-
+          How the row was derived: service, evaluation point and risk category
+
+    # source.url is the county list and evaluation points; UsgsSeismicHazardByCountyProvider
+    # calls the USGS design service twice per county (site classes BC and Default).
+    source:
+      type: http
+      url: "https://www2.census.gov/geo/docs/reference/cenpop2020/county/CenPop2020_Mean_CO.txt"
+      method: GET
+      headers:
+        User-Agent: "GovData/1.0"
+      response:
+        format: TEXT
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.disasters.UsgsSeismicHazardByCountyProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usgs_seismic_hazard_by_county/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: usgs_seismic_hazard_by_county
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
@@ -3160,6 +3312,18 @@ constraints:
 
   wildfire_perimeters:
     primaryKey: [incident_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  usgs_seismic_hazard_by_county:
+    primaryKey: [county_fips]
     foreignKeys:
       - columns: [state_fips]
         targetSchema: geo
