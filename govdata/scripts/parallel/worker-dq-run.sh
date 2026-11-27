@@ -161,6 +161,13 @@ ETL_LOG_DIR=""  # set after rebuild ETL so error handler finds the right log
 
 S3_RESULT_PATH="s3://${GOVDATA_DQ_TRACKER_BUCKET}/dq-results/schema=${SCHEMA}/run_date=${RUN_DATE}/type=${MODE}/results.parquet"
 
+# A --tables run checks only the listed tables, so its entries on the schema's DQ issue say so and
+# it never closes that issue: the other tables' findings were not re-checked.
+SCOPE_NOTE=""
+if [ -n "${GOVDATA_TABLES:-}" ]; then
+  SCOPE_NOTE="Scoped run: only \`${GOVDATA_TABLES}\` checked; the schema's other tables were not."
+fi
+
 # ── error handler + EXIT trap (must be defined before rebuild block) ──────────
 _SCRIPT_COMPLETE=false
 
@@ -257,7 +264,9 @@ _file_script_error_issue() {
     gh issue comment "$open_issue" \
       --repo kenstott/calcite \
       --body "**Script error ${RUN_DATE}** — ${detail}
-
+${SCOPE_NOTE:+
+${SCOPE_NOTE}
+}
 **Root cause:** \`${root_cause}\`
 
 ${log_sections}" \
@@ -274,7 +283,9 @@ ${log_sections}" \
 **Date:** ${RUN_DATE}
 **Mode:** ${MODE}
 **Worker:** \`${WORKER_ID}\`
-
+${SCOPE_NOTE:+
+${SCOPE_NOTE}
+}
 ## Root Cause
 
 \`\`\`
@@ -739,7 +750,15 @@ if ! $DRY_RUN && _gh_available; then
     --jq ".[] | select(.title | startswith(\"[DQ] ${SCHEMA}:\")) | .number" \
     2>/dev/null | head -1 || true)
 
-  if [ "$VERDICT" = "PASS" ]; then
+  if [ "$VERDICT" = "PASS" ] && [ -n "$SCOPE_NOTE" ]; then
+    if [ -n "$OPEN_ISSUE" ]; then
+      gh issue comment "$OPEN_ISSUE" \
+        --repo kenstott/calcite \
+        --body "**Re-run ${RUN_DATE}** (${MODE} mode) — PASS. ${SCOPE_NOTE} Left open." \
+        2>/dev/null && log_info "$WORKER_ID: scoped PASS — left DQ issue #${OPEN_ISSUE} open" || \
+        log_info "$WORKER_ID: WARNING: failed to comment on DQ issue #${OPEN_ISSUE}"
+    fi
+  elif [ "$VERDICT" = "PASS" ]; then
     if [ -n "$OPEN_ISSUE" ]; then
       gh issue close "$OPEN_ISSUE" \
         --repo kenstott/calcite \
@@ -779,7 +798,9 @@ ${FINDINGS_TABLE}"
       gh issue comment "$OPEN_ISSUE" \
         --repo kenstott/calcite \
         --body "**Re-run ${RUN_DATE}** — ${VERDICT}: ${FAIL_COUNT} fails, ${WARN_COUNT} warns
-
+${SCOPE_NOTE:+
+${SCOPE_NOTE}
+}
 ${FINDINGS_MD}
 
 Results: ${RESULTS_LOCATION_NOTE:-\`${S3_RESULT_PATH}\`}" \
@@ -796,7 +817,9 @@ Results: ${RESULTS_LOCATION_NOTE:-\`${S3_RESULT_PATH}\`}" \
 **Date:** ${RUN_DATE}
 **Mode:** ${MODE}
 **Fails:** ${FAIL_COUNT} | **Warns:** ${WARN_COUNT}
-
+${SCOPE_NOTE:+
+${SCOPE_NOTE}
+}
 ## Findings
 
 ${FINDINGS_MD}

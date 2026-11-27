@@ -160,6 +160,8 @@ worker-dq-run.sh edu --etl-resume   # run unfinished ETL partitions, then DQ
 worker-dq-run.sh edu --rebuild      # purge the schema in the DQ bucket, re-run ETL, then DQ
 ```
 
+A run that passes closes the schema's open `[DQ] <schema>:` issue in `kenstott/calcite`. A `--tables` run checks only the listed tables: it comments on that issue and leaves it open.
+
 ### Viewing results
 
 ```bash
