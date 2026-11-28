@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fortune article's claims about Massachusetts' millionaires tax, IRS migration data and wealth-tax debate are accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Fortune article's claims about Massachusetts' millionaires tax, IRS migration data and wealth-tax debate are accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://fortune.com/2026/11/27/massachusetts-millionaires-tax-irs-migration-new-hampshire-florida/">https://fortune.com/2026/11/27/massachusetts-millionaires-tax-irs-migration-new-hampshire-florida/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Fortune MA millionaires-tax claims</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="237" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="273" fill="#6b7280">Overall grade</text>
+  <text class="stat-value" x="36" y="303" fill="#1f2328">0 Pinocchios</text>
+  </g>
+  <rect class="panel-edge" x="448" y="64" width="412" height="454" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="64" width="412" height="454" viewBox="0 0 412 454" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="454" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Massachusetts surtax revenue ($B)</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="45" y1="400" x2="390" y2="400" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="37" y="404" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0.0</text>
+      <line class="grid" x1="45" y1="350.86" x2="390" y2="350.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="37" y="354.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0.5</text>
+      <line class="grid" x1="45" y1="301.71" x2="390" y2="301.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="37" y="305.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1.0</text>
+      <line class="grid" x1="45" y1="252.57" x2="390" y2="252.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="37" y="256.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1.5</text>
+      <line class="grid" x1="45" y1="203.43" x2="390" y2="203.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="37" y="207.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2.0</text>
+      <line class="grid" x1="45" y1="154.29" x2="390" y2="154.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="37" y="158.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2.5</text>
+      <line class="grid" x1="45" y1="105.14" x2="390" y2="105.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-6" class="tick" x="37" y="109.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3.0</text>
+      <line class="grid" x1="45" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-7" class="tick" x="37" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3.5</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="45" y1="56" x2="45" y2="400" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="45" y1="400" x2="390" y2="400" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-fy2025" class="tick" x="102.50" y="418" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">FY2025</text>
+      <text id="p2-xtick-fy2026" class="tick" x="217.50" y="418" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">FY2026</text>
+      <text id="p2-xtick-fy2026-budget" class="tick" x="332.50" y="418" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">FY2026 budget</text>
+    </g>
+    <g id="p2-series-b" class="series">
+      <g class="hover">
+        <title>FY2025 — $B: 2.99</title>
+        <rect id="p2-mark-b-fy2025" class="bar" x="65.70" y="106.42" width="72.60" height="293.58" fill="#2563eb"/>
+        <rect class="hit" x="65.70" y="56" width="72.60" height="344" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2026 — $B: 3.38</title>
+        <rect id="p2-mark-b-fy2026" class="bar" x="180.70" y="67.79" width="72.60" height="332.21" fill="#2563eb"/>
+        <rect class="hit" x="180.70" y="56" width="72.60" height="344" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>FY2026 budget — $B: 2.4</title>
+        <rect id="p2-mark-b-fy2026-budget" class="bar" x="295.70" y="164.11" width="72.60" height="235.89" fill="#2563eb"/>
+        <rect class="hit" x="295.70" y="56" width="72.60" height="344" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62991/a/f9128e6c802a29014d1393b5c14c885a.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The Fortune piece is accurate: 0 Pinocchios. Every figure traces to Boston.com's report of the IRS release, the Mass. DOR release and CommonWealth Beacon. Caveats: the 2023-24 IRS figures and Pioneer's age and income splits could not be checked against the IRS file or Pioneer's own report, and the piece does not mention MassBudget's finding that about 9 in 10 leavers earn under $200,000, or that AGI flows are not surtax-payer flows.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 95/100 — honest</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>11 claims graded, 0 not gradable, 2 fell short. In this article only.</p></div>
+<p><strong>9</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>11</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Massachusetts lost a net 31,384 residents to other states and countries between 2023 and 2024, according to IRS data... Those departing households took $3.64 billion in adjusted gross income with them.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>fiscal.county_migration_flows</code>; <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>California's Proposition 40, which voters rejected on Nov. 3, targeted wealth itself, with a one-time 5% tax on the net worth of the state's roughly 200 billionaires.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://edsource.org/california-prop-40-billionaire-tax-has-failed-backers-vow-to-try-again">EdSource</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>The numbers arrive nearly four years after the so-called millionaires tax, a 4% surcharge on annual income above roughly $1.1 million, indexed to inflation, took effect.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-true"><td>2</td><td>The net migration loss was slightly larger than the year before, though the income loss shrank from $4.18 billion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a>; <a href="https://massbudget.org/2026/03/20/massachusetts-loses-4-18-billion-in-income-as-young-workers-leave-boston-business-journal/">MassBudget</a></td></tr><tr class="verdict-true"><td>3</td><td>New Hampshire gained a net 7,818 residents from Massachusetts, while Florida picked up 6,032. Together, those two states accounted for roughly 44% of Massachusetts' net migration loss.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>4</td><td>Massachusetts lost a net $1.29 billion in adjusted gross income to Florida and $869 million to New Hampshire, together about 59% of the state's total.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>6</td><td>New York sent the most newcomers to Massachusetts (13,394), followed by Florida (11,728) and California (8,728). ... net gain of 855 residents from New Jersey, plus smaller gains from Louisiana and Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>7</td><td>Each of Massachusetts' New England neighbors also gained more residents from the Bay State than it sent back.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>8</td><td>The Massachusetts Department of Revenue preliminarily certified $3.38 billion in surtax collections for fiscal 2026, a record, and well above the $2.4 billion the state budget had assumed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.mass.gov/news/fiscal-year-2026-revenue-collections-totaled-45542-billion">Mass. DOR</a>; <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-true"><td>9</td><td>That compares with roughly $3 billion in fiscal 2025 and the $1.8 billion the state reported in May 2024, double what officials expected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fortune.com/2024/05/24/massachusetts-taxing-rich-millionaires-tax-victory-double-expectations/">Fortune 2024</a></td></tr><tr class="verdict-true"><td>10</td><td>Washington voters on Nov. 3 kept a new 9.9% tax on income above $1 million, and Maine and Rhode Island enacted their own surcharges on millionaire income this year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.axios.com/local/seattle/2026/11/06/washington-i-645-election-results-millionaires-tax-repeal-2026">Axios Seattle</a>; <a href="https://taxnews.ey.com/news/2026-1486-rhode-island-law-imposes-a-personal-income-tax-surtax-on-income-exceeding-1-million">EY Tax News</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>13</td><td>The numbers arrive nearly four years after the so-called millionaires tax, a 4% surcharge on annual income above roughly $1.1 million, indexed to inflation, took effect.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>California's Proposition 40, which voters rejected on Nov. 3, targeted wealth itself, with a one-time 5% tax on the net worth of the state's roughly 200 billionaires.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://edsource.org/california-prop-40-billionaire-tax-has-failed-backers-vow-to-try-again">EdSource</a></td></tr><tr class="verdict-true"><td>10</td><td>Washington voters on Nov. 3 kept a new 9.9% tax on income above $1 million, and Maine and Rhode Island enacted their own surcharges on millionaire income this year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.axios.com/local/seattle/2026/11/06/washington-i-645-election-results-millionaires-tax-repeal-2026">Axios Seattle</a>; <a href="https://taxnews.ey.com/news/2026-1486-rhode-island-law-imposes-a-personal-income-tax-surtax-on-income-exceeding-1-million">EY Tax News</a></td></tr><tr class="verdict-true"><td>9</td><td>That compares with roughly $3 billion in fiscal 2025 and the $1.8 billion the state reported in May 2024, double what officials expected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fortune.com/2024/05/24/massachusetts-taxing-rich-millionaires-tax-victory-double-expectations/">Fortune 2024</a></td></tr><tr class="verdict-true"><td>8</td><td>The Massachusetts Department of Revenue preliminarily certified $3.38 billion in surtax collections for fiscal 2026, a record, and well above the $2.4 billion the state budget had assumed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.mass.gov/news/fiscal-year-2026-revenue-collections-totaled-45542-billion">Mass. DOR</a>; <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-true"><td>7</td><td>Each of Massachusetts' New England neighbors also gained more residents from the Bay State than it sent back.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>6</td><td>New York sent the most newcomers to Massachusetts (13,394), followed by Florida (11,728) and California (8,728). ... net gain of 855 residents from New Jersey, plus smaller gains from Louisiana and Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>4</td><td>Massachusetts lost a net $1.29 billion in adjusted gross income to Florida and $869 million to New Hampshire, together about 59% of the state's total.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>3</td><td>New Hampshire gained a net 7,818 residents from Massachusetts, while Florida picked up 6,032. Together, those two states accounted for roughly 44% of Massachusetts' net migration loss.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>2</td><td>The net migration loss was slightly larger than the year before, though the income loss shrank from $4.18 billion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a>; <a href="https://massbudget.org/2026/03/20/massachusetts-loses-4-18-billion-in-income-as-young-workers-leave-boston-business-journal/">MassBudget</a></td></tr><tr class="verdict-true"><td>1</td><td>Massachusetts lost a net 31,384 residents to other states and countries between 2023 and 2024, according to IRS data... Those departing households took $3.64 billion in adjusted gross income with them.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>fiscal.county_migration_flows</code>; <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>11</td><td>California's Proposition 40, which voters rejected on Nov. 3, targeted wealth itself, with a one-time 5% tax on the net worth of the state's roughly 200 billionaires.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://edsource.org/california-prop-40-billionaire-tax-has-failed-backers-vow-to-try-again">EdSource</a></td></tr><tr class="verdict-true"><td>7</td><td>Each of Massachusetts' New England neighbors also gained more residents from the Bay State than it sent back.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>4</td><td>Massachusetts lost a net $1.29 billion in adjusted gross income to Florida and $869 million to New Hampshire, together about 59% of the state's total.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>1</td><td>Massachusetts lost a net 31,384 residents to other states and countries between 2023 and 2024, according to IRS data... Those departing households took $3.64 billion in adjusted gross income with them.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>fiscal.county_migration_flows</code>; <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>3</td><td>New Hampshire gained a net 7,818 residents from Massachusetts, while Florida picked up 6,032. Together, those two states accounted for roughly 44% of Massachusetts' net migration loss.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>6</td><td>New York sent the most newcomers to Massachusetts (13,394), followed by Florida (11,728) and California (8,728). ... net gain of 855 residents from New Jersey, plus smaller gains from Louisiana and Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>9</td><td>That compares with roughly $3 billion in fiscal 2025 and the $1.8 billion the state reported in May 2024, double what officials expected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fortune.com/2024/05/24/massachusetts-taxing-rich-millionaires-tax-victory-double-expectations/">Fortune 2024</a></td></tr><tr class="verdict-true"><td>8</td><td>The Massachusetts Department of Revenue preliminarily certified $3.38 billion in surtax collections for fiscal 2026, a record, and well above the $2.4 billion the state budget had assumed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.mass.gov/news/fiscal-year-2026-revenue-collections-totaled-45542-billion">Mass. DOR</a>; <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-true"><td>2</td><td>The net migration loss was slightly larger than the year before, though the income loss shrank from $4.18 billion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a>; <a href="https://massbudget.org/2026/03/20/massachusetts-loses-4-18-billion-in-income-as-young-workers-leave-boston-business-journal/">MassBudget</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>The numbers arrive nearly four years after the so-called millionaires tax, a 4% surcharge on annual income above roughly $1.1 million, indexed to inflation, took effect.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-true"><td>10</td><td>Washington voters on Nov. 3 kept a new 9.9% tax on income above $1 million, and Maine and Rhode Island enacted their own surcharges on millionaire income this year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.axios.com/local/seattle/2026/11/06/washington-i-645-election-results-millionaires-tax-repeal-2026">Axios Seattle</a>; <a href="https://taxnews.ey.com/news/2026-1486-rhode-island-law-imposes-a-personal-income-tax-surtax-on-income-exceeding-1-million">EY Tax News</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>11</td><td>California's Proposition 40, which voters rejected on Nov. 3, targeted wealth itself, with a one-time 5% tax on the net worth of the state's roughly 200 billionaires.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://edsource.org/california-prop-40-billionaire-tax-has-failed-backers-vow-to-try-again">EdSource</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>The numbers arrive nearly four years after the so-called millionaires tax, a 4% surcharge on annual income above roughly $1.1 million, indexed to inflation, took effect.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-true"><td>2</td><td>The net migration loss was slightly larger than the year before, though the income loss shrank from $4.18 billion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a>; <a href="https://massbudget.org/2026/03/20/massachusetts-loses-4-18-billion-in-income-as-young-workers-leave-boston-business-journal/">MassBudget</a></td></tr><tr class="verdict-true"><td>3</td><td>New Hampshire gained a net 7,818 residents from Massachusetts, while Florida picked up 6,032. Together, those two states accounted for roughly 44% of Massachusetts' net migration loss.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>4</td><td>Massachusetts lost a net $1.29 billion in adjusted gross income to Florida and $869 million to New Hampshire, together about 59% of the state's total.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>6</td><td>New York sent the most newcomers to Massachusetts (13,394), followed by Florida (11,728) and California (8,728). ... net gain of 855 residents from New Jersey, plus smaller gains from Louisiana and Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>7</td><td>Each of Massachusetts' New England neighbors also gained more residents from the Bay State than it sent back.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>8</td><td>The Massachusetts Department of Revenue preliminarily certified $3.38 billion in surtax collections for fiscal 2026, a record, and well above the $2.4 billion the state budget had assumed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.mass.gov/news/fiscal-year-2026-revenue-collections-totaled-45542-billion">Mass. DOR</a>; <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-true"><td>9</td><td>That compares with roughly $3 billion in fiscal 2025 and the $1.8 billion the state reported in May 2024, double what officials expected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fortune.com/2024/05/24/massachusetts-taxing-rich-millionaires-tax-victory-double-expectations/">Fortune 2024</a></td></tr><tr class="verdict-true"><td>10</td><td>Washington voters on Nov. 3 kept a new 9.9% tax on income above $1 million, and Maine and Rhode Island enacted their own surcharges on millionaire income this year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.axios.com/local/seattle/2026/11/06/washington-i-645-election-results-millionaires-tax-repeal-2026">Axios Seattle</a>; <a href="https://taxnews.ey.com/news/2026-1486-rhode-island-law-imposes-a-personal-income-tax-surtax-on-income-exceeding-1-million">EY Tax News</a></td></tr><tr class="verdict-true"><td>1</td><td>Massachusetts lost a net 31,384 residents to other states and countries between 2023 and 2024, according to IRS data... Those departing households took $3.64 billion in adjusted gross income with them.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>fiscal.county_migration_flows</code>; <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>10</td><td>Washington voters on Nov. 3 kept a new 9.9% tax on income above $1 million, and Maine and Rhode Island enacted their own surcharges on millionaire income this year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.axios.com/local/seattle/2026/11/06/washington-i-645-election-results-millionaires-tax-repeal-2026">Axios Seattle</a>; <a href="https://taxnews.ey.com/news/2026-1486-rhode-island-law-imposes-a-personal-income-tax-surtax-on-income-exceeding-1-million">EY Tax News</a></td></tr><tr class="verdict-true"><td>3</td><td>New Hampshire gained a net 7,818 residents from Massachusetts, while Florida picked up 6,032. Together, those two states accounted for roughly 44% of Massachusetts' net migration loss.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>4</td><td>Massachusetts lost a net $1.29 billion in adjusted gross income to Florida and $869 million to New Hampshire, together about 59% of the state's total.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>6</td><td>New York sent the most newcomers to Massachusetts (13,394), followed by Florida (11,728) and California (8,728). ... net gain of 855 residents from New Jersey, plus smaller gains from Louisiana and Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>7</td><td>Each of Massachusetts' New England neighbors also gained more residents from the Bay State than it sent back.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>2</td><td>The net migration loss was slightly larger than the year before, though the income loss shrank from $4.18 billion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a>; <a href="https://massbudget.org/2026/03/20/massachusetts-loses-4-18-billion-in-income-as-young-workers-leave-boston-business-journal/">MassBudget</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>The numbers arrive nearly four years after the so-called millionaires tax, a 4% surcharge on annual income above roughly $1.1 million, indexed to inflation, took effect.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>California's Proposition 40, which voters rejected on Nov. 3, targeted wealth itself, with a one-time 5% tax on the net worth of the state's roughly 200 billionaires.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://edsource.org/california-prop-40-billionaire-tax-has-failed-backers-vow-to-try-again">EdSource</a></td></tr><tr class="verdict-true"><td>1</td><td>Massachusetts lost a net 31,384 residents to other states and countries between 2023 and 2024, according to IRS data... Those departing households took $3.64 billion in adjusted gross income with them.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>fiscal.county_migration_flows</code>; <a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></td></tr><tr class="verdict-true"><td>9</td><td>That compares with roughly $3 billion in fiscal 2025 and the $1.8 billion the state reported in May 2024, double what officials expected.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fortune.com/2024/05/24/massachusetts-taxing-rich-millionaires-tax-victory-double-expectations/">Fortune 2024</a></td></tr><tr class="verdict-true"><td>8</td><td>The Massachusetts Department of Revenue preliminarily certified $3.38 billion in surtax collections for fiscal 2026, a record, and well above the $2.4 billion the state budget had assumed.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.mass.gov/news/fiscal-year-2026-revenue-collections-totaled-45542-billion">Mass. DOR</a>; <a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Peter Barnes — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>14</td><td>France saw flight from its wealth tax and has since effectively eliminated it, replacing it in 2018 with a narrower levy on real estate.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://cms.law/en/mco/publication/french-wealth-tax-isf-abolished-and-replaced-with-a-new-property-wealth-tax-ifi">CMS Law</a>; <a href="https://www.strategie.gouv.fr/english-articles/committee-evaluation-capital-tax-reforms-third-report">France Strategie</a></td></tr>
+</tbody></table>
+<h3>Claims by Chester Spatt — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>0 claims graded, 1 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> not checkable here &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>15</td><td>It would indirectly represent a very heavy tax on investment income... I suspect it won't raise much revenue.</td><td><strong>not checkable here</strong> &middot; central claim</td><td>Checked against: <a href="https://fortune.com/2026/11/23/norway-wealth-tax-us-billionaire-tax-prop-40/">Fortune 2026-11-23</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>2</strong> true &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>5</td><td>Tax filers ages 26 to 34 made up 43% of the state's net loss of filers in 2024, and those earning $200,000 or more accounted for $2.32 billion, or 64%, of the net income loss.</td><td><strong>true</strong></td></tr>
+<tr class="verdict-true"><td>12</td><td>After the IRS's March release, MassBudget argued the data showed affordability, not taxes, driving the state's out-migration.</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Massachusetts lost a net 31,384 residents to other states and countries between 2023 and 2024, according to IRS data... Those departing households took $3.64 billion in adjusted gross income with them.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2022 file: net individuals about -39.8k, AGI about -$4.0B (pairs above disclosure threshold), same order of magnitude <code>fiscal.county_migration_flows</code></dd>
+<dt>Independent evidence</dt><dd>Boston.com 2026-11-20 reports net 31,384 and $3.64B AGI; IRS file itself not opened<ul class="claim-sources"><li><a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>IRS SOI state to state migration adjusted gross income</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; The net migration loss was slightly larger than the year before, though the income loss shrank from $4.18 billion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Boston.com; MassBudget/BBJ headline $4.18B<ul class="claim-sources"><li><a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></li><li><a href="https://massbudget.org/2026/03/20/massachusetts-loses-4-18-billion-in-income-as-young-workers-leave-boston-business-journal/">MassBudget</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; New Hampshire gained a net 7,818 residents from Massachusetts, while Florida picked up 6,032. Together, those two states accounted for roughly 44% of Massachusetts' net migration loss.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>(7,818+6,032)/31,384 = 44.1%<ul class="claim-sources"><li><a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; Massachusetts lost a net $1.29 billion in adjusted gross income to Florida and $869 million to New Hampshire, together about 59% of the state's total.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>(1.29+0.869)/3.64 = 59.3%<ul class="claim-sources"><li><a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Tax filers ages 26 to 34 made up 43% of the state's net loss of filers in 2024, and those earning $200,000 or more accounted for $2.32 billion, or 64%, of the net income loss.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Matches Boston.com's relay of Pioneer; arithmetic 2.32/3.64 = 63.7%. Pioneer's own report not located.<ul class="claim-sources"><li><a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Pioneer Institute IRS migration data Massachusetts 2024 ages 26 to 34 43% $200,000 $2.32 billion</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; New York sent the most newcomers to Massachusetts (13,394), followed by Florida (11,728) and California (8,728). ... net gain of 855 residents from New Jersey, plus smaller gains from Louisiana and Indiana.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Matches Boston.com (Louisiana +130, Indiana +121)<ul class="claim-sources"><li><a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Each of Massachusetts' New England neighbors also gained more residents from the Bay State than it sent back.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Boston.com states same<ul class="claim-sources"><li><a href="https://www.boston.com/news/local-news/2026/11/20/massachusetts-keeps-losing-residents-heres-where-theyre-going/">Boston.com</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; The Massachusetts Department of Revenue preliminarily certified $3.38 billion in surtax collections for fiscal 2026, a record, and well above the $2.4 billion the state budget had assumed.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>DOR release 2026-08-13: certified $3.380B on July 20, 2026; budgeted benchmark $2.400B; FY2025 $2.987B so a record<ul class="claim-sources"><li><a href="https://www.mass.gov/news/fiscal-year-2026-revenue-collections-totaled-45542-billion">Mass. DOR</a></li><li><a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; That compares with roughly $3 billion in fiscal 2025 and the $1.8 billion the state reported in May 2024, double what officials expected.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FY2025 $2.987B (CommonWealth Beacon); Fortune 2024: $1.8B with three months left vs $900M expected<ul class="claim-sources"><li><a href="https://fortune.com/2024/05/24/massachusetts-taxing-rich-millionaires-tax-victory-double-expectations/">Fortune 2024</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; Washington voters on Nov. 3 kept a new 9.9% tax on income above $1 million, and Maine and Rhode Island enacted their own surcharges on millionaire income this year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>I-645 repeal failed (~58% no); Maine LD 2212 signed Apr 2026; RI surtax in FY2027 budget (EY, ITEP)<ul class="claim-sources"><li><a href="https://www.axios.com/local/seattle/2026/11/06/washington-i-645-election-results-millionaires-tax-repeal-2026">Axios Seattle</a></li><li><a href="https://taxnews.ey.com/news/2026-1486-rhode-island-law-imposes-a-personal-income-tax-surtax-on-income-exceeding-1-million">EY Tax News</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Washington voters millionaires income tax 9.9% November 3 2026 result; Maine Rhode Island 2026 enacted surcharge millionaire income tax</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#11 &middot; <strong>mostly true</strong> &mdash; California's Proposition 40, which voters rejected on Nov. 3, targeted wealth itself, with a one-time 5% tax on the net worth of the state's roughly 200 billionaires.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Fox/EdSource: failed about 52.8% no; one-time 5% on about 200 billionaires<ul class="claim-sources"><li><a href="https://edsource.org/california-prop-40-billionaire-tax-has-failed-backers-vow-to-try-again">EdSource</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says voters rejected it on Nov. 3; the AP called the race on Nov. 9 after a multi-day count, and sources put billionaires at 200 to 250.</dd>
+<dt>Web searches run</dt><dd>California Proposition 40 billionaire tax rejected voters November 2026 5% one-time</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; After the IRS's March release, MassBudget argued the data showed affordability, not taxes, driving the state's out-migration.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>MassBudget 2026-03-19 release covers 2022-23 filings; says no evidence of surtax-driven outmigration, points to affordability; about 9 in 10 leavers under $200k<ul class="claim-sources"><li><a href="https://massbudget.org/2026/03/19/new-irs-migration-data-shows-no-evidence-of-surtax-driven-outmigration-highlights-affordability-challenges/">MassBudget</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#13 &middot; <strong>mostly true</strong> &mdash; The numbers arrive nearly four years after the so-called millionaires tax, a 4% surcharge on annual income above roughly $1.1 million, indexed to inflation, took effect.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CommonWealth Beacon: 4% above about $1.1M<ul class="claim-sources"><li><a href="https://commonwealthbeacon.org/government/state-government/surtax-supporters-say-haul-shows-wealthy-are-staying-in-mass/">CommonWealth Beacon</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says nearly four years; the surtax took effect Jan 1, 2023, about 3 years 11 months before the Nov 2026 data, while Boston.com says three years.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#14 &middot; <strong>true</strong> &mdash; France saw flight from its wealth tax and has since effectively eliminated it, replacing it in 2018 with a narrower levy on real estate.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Peter Barnes — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>2018 budget law abolished ISF and created real-estate-only IFI (CMS, service-public.fr results); extent of capital flight is contested, the speaker's characterization is a view not a measured fact<ul class="claim-sources"><li><a href="https://cms.law/en/mco/publication/french-wealth-tax-isf-abolished-and-replaced-with-a-new-property-wealth-tax-ifi">CMS Law</a></li><li><a href="https://www.strategie.gouv.fr/english-articles/committee-evaluation-capital-tax-reforms-third-report">France Strategie</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>France wealth tax ISF IFI 2018</dd>
+<dt>Web searches run</dt><dd>France 2018 wealth tax ISF replaced IFI real estate capital flight</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#15 &middot; <strong>not checkable here</strong> &mdash; It would indirectly represent a very heavy tax on investment income... I suspect it won't raise much revenue.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Chester Spatt — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Quote appears in Fortune 2026-11-23<ul class="claim-sources"><li><a href="https://fortune.com/2026/11/23/norway-wealth-tax-us-billionaire-tax-prop-40/">Fortune 2026-11-23</a></li></ul></dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: A prediction and judgment about future revenue; quote confirmed in Fortune 11/23 but no evidence can test it now.</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Why</dt><dd>A prediction and judgment about future revenue; quote confirmed in Fortune 11/23 but no evidence can test it now.</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Pioneer Institute 2024 figures (43%, $2.32B/64%)</strong>: Pioneer page not located; figures verified only as relayed by Boston.com.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 3 rows — 2143 ms</summary><pre><code>SELECT year, SUM(CASE WHEN origin_state_fips='25' AND dest_state_fips&lt;&gt;'25' THEN num_individuals ELSE 0 END) AS out_ind, SUM(CASE WHEN dest_state_fips='25' AND origin_state_fips&lt;&gt;'25' THEN num_individuals ELSE 0 END) AS in_ind, SUM(CASE WHEN origin_state_fips='25' AND dest_state_fips&lt;&gt;'25' THEN agi ELSE 0 END)/1e6 AS out_agi_b, SUM(CASE WHEN dest_state_fips='25' AND origin_state_fips&lt;&gt;'25' THEN agi ELSE 0 END)/1e6 AS in_agi_b FROM fiscal.county_migration_flows WHERE year IN (2020,2021,2022) AND (origin_state_fips='25' OR dest_state_fips='25') GROUP BY year ORDER BY year</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

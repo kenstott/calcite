@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Breitbart article's claims about state unemployment rates and 2026 Democratic election wins are biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Breitbart article's claims about state unemployment rates and 2026 Democratic election wins are biased and mostly accurate.</h1>
+<p class="subtitle">BLS LAUS October 2026 (preliminary), warehouse econ.regional_employment, checked 2026-11-28; election results from news reports</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.breitbart.com/politics/2026/11/26/states-with-highest-unemployment-rates-kept-democrats-in-power/">https://www.breitbart.com/politics/2026/11/26/states-with-highest-unemployment-rates-kept-democrats-in-power/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">October 2026 state unemployment rates (BLS LAUS, preliminary)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Highest and lowest state rates, with DC</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="33" y1="56" x2="33" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="33" y="278" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0</text>
+      <line class="grid" x1="88.17" y1="56" x2="88.17" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="88.17" y="278" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1</text>
+      <line class="grid" x1="143.33" y1="56" x2="143.33" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="143.33" y="278" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2</text>
+      <line class="grid" x1="198.50" y1="56" x2="198.50" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="198.50" y="278" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3</text>
+      <line class="grid" x1="253.67" y1="56" x2="253.67" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="253.67" y="278" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">4</text>
+      <line class="grid" x1="308.83" y1="56" x2="308.83" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="308.83" y="278" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">5</text>
+      <line class="grid" x1="364" y1="56" x2="364" y2="262" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-6" class="tick" x="364" y="278" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">6</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="33" y1="56" x2="33" y2="262" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="33" y1="262" x2="364" y2="262" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-value-axis-title" class="axis-title" x="198.50" y="306" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">Percent</text>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-dc" class="tick" x="25" y="67.92" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">DC</text>
+      <text id="p1-xtick-ct" class="tick" x="25" y="83.77" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">CT</text>
+      <text id="p1-xtick-ca" class="tick" x="25" y="99.62" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">CA</text>
+      <text id="p1-xtick-mi" class="tick" x="25" y="115.46" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">MI</text>
+      <text id="p1-xtick-az" class="tick" x="25" y="131.31" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">AZ</text>
+      <text id="p1-xtick-or" class="tick" x="25" y="147.15" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">OR</text>
+      <text id="p1-xtick-nm" class="tick" x="25" y="163" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">NM</text>
+      <text id="p1-xtick-sd" class="tick" x="25" y="178.85" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">SD</text>
+      <text id="p1-xtick-nd" class="tick" x="25" y="194.69" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">ND</text>
+      <text id="p1-xtick-nh" class="tick" x="25" y="210.54" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">NH</text>
+      <text id="p1-xtick-vt" class="tick" x="25" y="226.38" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">VT</text>
+      <text id="p1-xtick-hi" class="tick" x="25" y="242.23" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">HI</text>
+      <text id="p1-xtick-ne" class="tick" x="25" y="258.08" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">NE</text>
+    </g>
+    <g id="p1-series-unemployment-rate" class="series">
+      <g class="hover">
+        <title>DC — Unemployment rate %: 5.4</title>
+        <rect id="p1-mark-unemployment-rate-dc" class="bar" x="33" y="58.85" width="297.90" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="55.42" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-dc" class="value-label" x="334.90" y="67.92" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">5.4</text>
+      <g class="hover">
+        <title>CT — Unemployment rate %: 5.1</title>
+        <rect id="p1-mark-unemployment-rate-ct" class="bar" x="33" y="74.70" width="281.35" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="71.27" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-ct" class="value-label" x="318.35" y="83.77" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">5.1</text>
+      <g class="hover">
+        <title>CA — Unemployment rate %: 5</title>
+        <rect id="p1-mark-unemployment-rate-ca" class="bar" x="33" y="90.54" width="275.83" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="87.12" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-ca" class="value-label" x="312.83" y="99.62" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">5</text>
+      <g class="hover">
+        <title>MI — Unemployment rate %: 5</title>
+        <rect id="p1-mark-unemployment-rate-mi" class="bar" x="33" y="106.39" width="275.83" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="102.96" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-mi" class="value-label" x="312.83" y="115.46" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">5</text>
+      <g class="hover">
+        <title>AZ — Unemployment rate %: 4.9</title>
+        <rect id="p1-mark-unemployment-rate-az" class="bar" x="33" y="122.24" width="270.32" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="118.81" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-az" class="value-label" x="307.32" y="131.31" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">4.9</text>
+      <g class="hover">
+        <title>OR — Unemployment rate %: 4.9</title>
+        <rect id="p1-mark-unemployment-rate-or" class="bar" x="33" y="138.08" width="270.32" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="134.65" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-or" class="value-label" x="307.32" y="147.15" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">4.9</text>
+      <g class="hover">
+        <title>NM — Unemployment rate %: 4.8</title>
+        <rect id="p1-mark-unemployment-rate-nm" class="bar" x="33" y="153.93" width="264.80" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="150.50" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-nm" class="value-label" x="301.80" y="163.00" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">4.8</text>
+      <g class="hover">
+        <title>SD — Unemployment rate %: 2</title>
+        <rect id="p1-mark-unemployment-rate-sd" class="bar" x="33" y="169.78" width="110.33" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="166.35" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-sd" class="value-label" x="147.33" y="178.85" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2</text>
+      <g class="hover">
+        <title>ND — Unemployment rate %: 2.2</title>
+        <rect id="p1-mark-unemployment-rate-nd" class="bar" x="33" y="185.62" width="121.37" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="182.19" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-nd" class="value-label" x="158.37" y="194.69" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.2</text>
+      <g class="hover">
+        <title>NH — Unemployment rate %: 2.5</title>
+        <rect id="p1-mark-unemployment-rate-nh" class="bar" x="33" y="201.47" width="137.92" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="198.04" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-nh" class="value-label" x="174.92" y="210.54" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.5</text>
+      <g class="hover">
+        <title>VT — Unemployment rate %: 2.6</title>
+        <rect id="p1-mark-unemployment-rate-vt" class="bar" x="33" y="217.31" width="143.43" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="213.88" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-vt" class="value-label" x="180.43" y="226.38" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.6</text>
+      <g class="hover">
+        <title>HI — Unemployment rate %: 2.8</title>
+        <rect id="p1-mark-unemployment-rate-hi" class="bar" x="33" y="233.16" width="154.47" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="229.73" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-hi" class="value-label" x="191.47" y="242.23" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.8</text>
+      <g class="hover">
+        <title>NE — Unemployment rate %: 2.8</title>
+        <rect id="p1-mark-unemployment-rate-ne" class="bar" x="33" y="249.01" width="154.47" height="9.14" fill="#2563eb"/>
+        <rect class="hit" x="33" y="245.58" width="331" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-unemployment-rate-ne" class="value-label" x="191.47" y="258.08" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.8</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62236/a/32dec4204ef622f443187df38402d454.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The unemployment figures are accurate: Connecticut 5.1, California and Michigan 5.0, Arizona and Oregon 4.9 (BLS and the warehouse agree), and the Democratic wins are real. But the piece has one clear factual error (Becerra was never a U.S. Senator), drops Democratic-led Hawaii from the lowest-unemployment list where it ties Nebraska for fifth, and implies a causal story that five hand-picked states in one midterm cannot show. Rating: 1 Pinocchio.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 80/100 — mostly honest</strong> &middot; <strong>Bias +56/100 — biased</strong></p><p>11 claims graded, 0 not gradable, 4 fell short. In this article only. <strong>Citejacking:</strong> #12 leans on cited evidence that does not carry it.</p></div>
+<p><strong>7</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>2</strong> mostly false &middot; <strong>11</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>The five states are Arizona, Oregon, California, Michigan, and Connecticut.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS state rankings</a></td></tr><tr class="verdict-mostly-false"><td>6</td><td>California voters chose former Senator and Biden Health and Human Services Secretary Xavier Beccera to lead the state</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/xavier-becerra-will-be-californias-next-governor">KTVU AP projection</a></td></tr><tr class="verdict-mostly-false"><td>12</td><td>States with Highest Unemployment Rates Kept Democrats in Power</td><td><strong>mostly false</strong> &middot; causal claim</td><td>#1 — overreach<br>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>By contrast, five states with the lowest unemployment rates are led by Republicans: South Dakota, North Dakota, New Hampshire, Vermont, and Nebraska.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Connecticut, the state with the highest unemployment rate at 5.1 percent</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>3</td><td>The unemployment rate in both states is 4.9 percent</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>4</td><td>Both states recorded unemployment rates of 5 percent, according to BLS.</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>7</td><td>in Oregon voters reelected Gov. Tina Kotek by a 10-point margin</td><td><strong>true</strong></td><td>Checked against: <a href="https://opb.org/article/2026/11/03/oregon-governors-race-election-results-kotek-drazan/">OPB</a></td></tr><tr class="verdict-true"><td>8</td><td>In Arizona, voters returned Gov. Katie Hobbs to another four years in charge and flipped control of the state legislature and statewide offices to Democrats</td><td><strong>true</strong></td><td>Checked against: <a href="https://ktar.com/arizona-politics-news/election/legislature-2026-lection-democrats-control">KTAR</a>; <a href="https://www.foxnews.com/elections/2026/midterm-results/state/arizona">Fox News Arizona results</a></td></tr><tr class="verdict-true"><td>9</td><td>Connecticut ... elected Ned Lamont to a third term as governor and expanded Democrats' control in their state legislature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a></td></tr><tr class="verdict-true"><td>10</td><td>voters rejected a proposed 'billionaires' tax' that was on the ballot.</td><td><strong>true</strong></td><td>Checked against: <a href="https://abc7news.com/20028513/">ABC7 Prop 40</a>; <a href="https://www.ktvu.com/news/prop-40-californias-billionaire-tax-fails-ballot-box">KTVU Prop 40</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-false"><td>12</td><td>States with Highest Unemployment Rates Kept Democrats in Power</td><td><strong>mostly false</strong> &middot; causal claim</td><td>#1 — overreach<br>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>10</td><td>voters rejected a proposed 'billionaires' tax' that was on the ballot.</td><td><strong>true</strong></td><td>Checked against: <a href="https://abc7news.com/20028513/">ABC7 Prop 40</a>; <a href="https://www.ktvu.com/news/prop-40-californias-billionaire-tax-fails-ballot-box">KTVU Prop 40</a></td></tr><tr class="verdict-true"><td>9</td><td>Connecticut ... elected Ned Lamont to a third term as governor and expanded Democrats' control in their state legislature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a></td></tr><tr class="verdict-true"><td>8</td><td>In Arizona, voters returned Gov. Katie Hobbs to another four years in charge and flipped control of the state legislature and statewide offices to Democrats</td><td><strong>true</strong></td><td>Checked against: <a href="https://ktar.com/arizona-politics-news/election/legislature-2026-lection-democrats-control">KTAR</a>; <a href="https://www.foxnews.com/elections/2026/midterm-results/state/arizona">Fox News Arizona results</a></td></tr><tr class="verdict-true"><td>7</td><td>in Oregon voters reelected Gov. Tina Kotek by a 10-point margin</td><td><strong>true</strong></td><td>Checked against: <a href="https://opb.org/article/2026/11/03/oregon-governors-race-election-results-kotek-drazan/">OPB</a></td></tr><tr class="verdict-mostly-false"><td>6</td><td>California voters chose former Senator and Biden Health and Human Services Secretary Xavier Beccera to lead the state</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/xavier-becerra-will-be-californias-next-governor">KTVU AP projection</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>By contrast, five states with the lowest unemployment rates are led by Republicans: South Dakota, North Dakota, New Hampshire, Vermont, and Nebraska.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>4</td><td>Both states recorded unemployment rates of 5 percent, according to BLS.</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>3</td><td>The unemployment rate in both states is 4.9 percent</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Connecticut, the state with the highest unemployment rate at 5.1 percent</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>1</td><td>The five states are Arizona, Oregon, California, Michigan, and Connecticut.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS state rankings</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>4</td><td>Both states recorded unemployment rates of 5 percent, according to BLS.</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>By contrast, five states with the lowest unemployment rates are led by Republicans: South Dakota, North Dakota, New Hampshire, Vermont, and Nebraska.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-mostly-false"><td>6</td><td>California voters chose former Senator and Biden Health and Human Services Secretary Xavier Beccera to lead the state</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/xavier-becerra-will-be-californias-next-governor">KTVU AP projection</a></td></tr><tr class="verdict-true"><td>9</td><td>Connecticut ... elected Ned Lamont to a third term as governor and expanded Democrats' control in their state legislature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Connecticut, the state with the highest unemployment rate at 5.1 percent</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>8</td><td>In Arizona, voters returned Gov. Katie Hobbs to another four years in charge and flipped control of the state legislature and statewide offices to Democrats</td><td><strong>true</strong></td><td>Checked against: <a href="https://ktar.com/arizona-politics-news/election/legislature-2026-lection-democrats-control">KTAR</a>; <a href="https://www.foxnews.com/elections/2026/midterm-results/state/arizona">Fox News Arizona results</a></td></tr><tr class="verdict-true"><td>7</td><td>in Oregon voters reelected Gov. Tina Kotek by a 10-point margin</td><td><strong>true</strong></td><td>Checked against: <a href="https://opb.org/article/2026/11/03/oregon-governors-race-election-results-kotek-drazan/">OPB</a></td></tr><tr class="verdict-mostly-false"><td>12</td><td>States with Highest Unemployment Rates Kept Democrats in Power</td><td><strong>mostly false</strong> &middot; causal claim</td><td>#1 — overreach<br>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>1</td><td>The five states are Arizona, Oregon, California, Michigan, and Connecticut.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS state rankings</a></td></tr><tr class="verdict-true"><td>3</td><td>The unemployment rate in both states is 4.9 percent</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>10</td><td>voters rejected a proposed 'billionaires' tax' that was on the ballot.</td><td><strong>true</strong></td><td>Checked against: <a href="https://abc7news.com/20028513/">ABC7 Prop 40</a>; <a href="https://www.ktvu.com/news/prop-40-californias-billionaire-tax-fails-ballot-box">KTVU Prop 40</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>6</td><td>California voters chose former Senator and Biden Health and Human Services Secretary Xavier Beccera to lead the state</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/xavier-becerra-will-be-californias-next-governor">KTVU AP projection</a></td></tr><tr class="verdict-mostly-false"><td>12</td><td>States with Highest Unemployment Rates Kept Democrats in Power</td><td><strong>mostly false</strong> &middot; causal claim</td><td>#1 — overreach<br>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Connecticut, the state with the highest unemployment rate at 5.1 percent</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>By contrast, five states with the lowest unemployment rates are led by Republicans: South Dakota, North Dakota, New Hampshire, Vermont, and Nebraska.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>3</td><td>The unemployment rate in both states is 4.9 percent</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>4</td><td>Both states recorded unemployment rates of 5 percent, according to BLS.</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>7</td><td>in Oregon voters reelected Gov. Tina Kotek by a 10-point margin</td><td><strong>true</strong></td><td>Checked against: <a href="https://opb.org/article/2026/11/03/oregon-governors-race-election-results-kotek-drazan/">OPB</a></td></tr><tr class="verdict-true"><td>8</td><td>In Arizona, voters returned Gov. Katie Hobbs to another four years in charge and flipped control of the state legislature and statewide offices to Democrats</td><td><strong>true</strong></td><td>Checked against: <a href="https://ktar.com/arizona-politics-news/election/legislature-2026-lection-democrats-control">KTAR</a>; <a href="https://www.foxnews.com/elections/2026/midterm-results/state/arizona">Fox News Arizona results</a></td></tr><tr class="verdict-true"><td>9</td><td>Connecticut ... elected Ned Lamont to a third term as governor and expanded Democrats' control in their state legislature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a></td></tr><tr class="verdict-true"><td>10</td><td>voters rejected a proposed 'billionaires' tax' that was on the ballot.</td><td><strong>true</strong></td><td>Checked against: <a href="https://abc7news.com/20028513/">ABC7 Prop 40</a>; <a href="https://www.ktvu.com/news/prop-40-californias-billionaire-tax-fails-ballot-box">KTVU Prop 40</a></td></tr><tr class="verdict-true"><td>1</td><td>The five states are Arizona, Oregon, California, Michigan, and Connecticut.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS state rankings</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-false"><td>12</td><td>States with Highest Unemployment Rates Kept Democrats in Power</td><td><strong>mostly false</strong> &middot; causal claim</td><td>#1 — overreach<br>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>10</td><td>voters rejected a proposed 'billionaires' tax' that was on the ballot.</td><td><strong>true</strong></td><td>Checked against: <a href="https://abc7news.com/20028513/">ABC7 Prop 40</a>; <a href="https://www.ktvu.com/news/prop-40-californias-billionaire-tax-fails-ballot-box">KTVU Prop 40</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>By contrast, five states with the lowest unemployment rates are led by Republicans: South Dakota, North Dakota, New Hampshire, Vermont, and Nebraska.</td><td><strong>partially false</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>Connecticut, the state with the highest unemployment rate at 5.1 percent</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>3</td><td>The unemployment rate in both states is 4.9 percent</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>4</td><td>Both states recorded unemployment rates of 5 percent, according to BLS.</td><td><strong>true</strong></td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></td></tr><tr class="verdict-true"><td>1</td><td>The five states are Arizona, Oregon, California, Michigan, and Connecticut.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.regional_employment</code>; <a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS state rankings</a></td></tr><tr class="verdict-true"><td>8</td><td>In Arizona, voters returned Gov. Katie Hobbs to another four years in charge and flipped control of the state legislature and statewide offices to Democrats</td><td><strong>true</strong></td><td>Checked against: <a href="https://ktar.com/arizona-politics-news/election/legislature-2026-lection-democrats-control">KTAR</a>; <a href="https://www.foxnews.com/elections/2026/midterm-results/state/arizona">Fox News Arizona results</a></td></tr><tr class="verdict-mostly-false"><td>6</td><td>California voters chose former Senator and Biden Health and Human Services Secretary Xavier Beccera to lead the state</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/xavier-becerra-will-be-californias-next-governor">KTVU AP projection</a></td></tr><tr class="verdict-true"><td>7</td><td>in Oregon voters reelected Gov. Tina Kotek by a 10-point margin</td><td><strong>true</strong></td><td>Checked against: <a href="https://opb.org/article/2026/11/03/oregon-governors-race-election-results-kotek-drazan/">OPB</a></td></tr><tr class="verdict-true"><td>9</td><td>Connecticut ... elected Ned Lamont to a third term as governor and expanded Democrats' control in their state legislature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>11</td><td>'We did have good news in that they did see through this horrible idea that would have accelerated the outmigration even further,' Williams said</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The five states are Arizona, Oregon, California, Michigan, and Connecticut.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CT 5.1, CA 5.0, MI 5.0, AZ 4.9, OR 4.9 (DC 5.4 is not a state) <code>econ.regional_employment</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS state rankings</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>state unemployment rate LAUS monthly</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_fips, value FROM econ.regional_employment WHERE year=2026 AND period='M10' ORDER BY value DESC</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#2 &middot; <strong>mostly true</strong> &mdash; Connecticut, the state with the highest unemployment rate at 5.1 percent</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CT 5.1; DC 5.4 <code>econ.regional_employment</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says highest; the data show DC at 5.4 is higher, though DC is not a state.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_fips, value FROM econ.regional_employment WHERE year=2026 AND period='M10' ORDER BY value DESC</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; The unemployment rate in both states is 4.9 percent</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>AZ 4.9, OR 4.9 <code>econ.regional_employment</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_fips, value FROM econ.regional_employment WHERE year=2026 AND period='M10'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; Both states recorded unemployment rates of 5 percent, according to BLS.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CA 5.0, MI 5.0 <code>econ.regional_employment</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_fips, value FROM econ.regional_employment WHERE year=2026 AND period='M10'</code></pre></details>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#5 &middot; <strong>partially false</strong> &mdash; By contrast, five states with the lowest unemployment rates are led by Republicans: South Dakota, North Dakota, New Hampshire, Vermont, and Nebraska.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>SD 2.0, ND 2.2, NH 2.5, VT 2.6, HI 2.8, NE 2.8 <code>econ.regional_employment</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim lists five states; the data show Hawaii (Democratic governor) tied with Nebraska at 2.8 for fifth lowest, so the bottom group includes a Democratic-led state.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_fips, value FROM econ.regional_employment WHERE year=2026 AND period='M10' ORDER BY value</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#6 &middot; <strong>mostly false</strong> &mdash; California voters chose former Senator and Biden Health and Human Services Secretary Xavier Beccera to lead the state</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Becerra won the governor race over Steve Hilton<ul class="claim-sources"><li><a href="https://www.ktvu.com/news/xavier-becerra-will-be-californias-next-governor">KTVU AP projection</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says former Senator; Becerra never served in the Senate (U.S. House 1993-2017, California AG, HHS Secretary). Name is misspelled.</dd>
+<dt>Web searches run</dt><dd>California governor election 2026 results Becerra wins</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; in Oregon voters reelected Gov. Tina Kotek by a 10-point margin</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Kotek 53.4% to Drazan 43.7%<ul class="claim-sources"><li><a href="https://opb.org/article/2026/11/03/oregon-governors-race-election-results-kotek-drazan/">OPB</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Oregon governor 2026 election results Kotek</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; In Arizona, voters returned Gov. Katie Hobbs to another four years in charge and flipped control of the state legislature and statewide offices to Democrats</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Hobbs about 55.7% to 42.5%; Democrats won both Arizona chambers (projected 20-10 Senate, 37-23 House). Statewide-office flip not separately verified.<ul class="claim-sources"><li><a href="https://ktar.com/arizona-politics-news/election/legislature-2026-lection-democrats-control">KTAR</a></li><li><a href="https://www.foxnews.com/elections/2026/midterm-results/state/arizona">Fox News Arizona results</a></li></ul></dd>
+<dt>Web searches run</dt><dd>2026 election results Arizona Hobbs reelected legislature Democrats flip</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; Connecticut ... elected Ned Lamont to a third term as governor and expanded Democrats' control in their state legislature.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>AP called Lamont win over Ryan Fazio; Republicans lost eight legislative seats<ul class="claim-sources"><li><a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Lamont wins third term Connecticut 2026 legislature</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; voters rejected a proposed 'billionaires' tax' that was on the ballot.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Prop 40 failed (about 52.8% no)<ul class="claim-sources"><li><a href="https://abc7news.com/20028513/">ABC7 Prop 40</a></li><li><a href="https://www.ktvu.com/news/prop-40-californias-billionaire-tax-fails-ballot-box">KTVU Prop 40</a></li></ul></dd>
+<dt>Web searches run</dt><dd>California billionaire tax ballot measure November 2026 voters reject</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; 'We did have good news in that they did see through this horrible idea that would have accelerated the outmigration even further,' Williams said</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Verbatim on ALEC page<ul class="claim-sources"><li><a href="https://alec.org/article/the-policy-solutions-that-matter-beyond-election-day-jonathan-williams-on-the-hugh-hewitt-show/">ALEC</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#12 &middot; <strong>mostly false</strong> &mdash; States with Highest Unemployment Rates Kept Democrats in Power</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Lamont and Democrats attributed results largely to voter reaction to Trump (WFSB/NBC Connecticut)<ul class="claim-sources"><li><a href="https://www.wfsb.com/2026/11/04/lamont-wins-historic-third-term-connecticut-governor/">WFSB</a></li><li><a href="https://www.bls.gov/web/laus/laumstrk.htm">BLS LAUS</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#1</dd>
+<dt>What that evidence found</dt><dd>Rates verified; no analysis links unemployment to outcome; two open seats and national midterm environment.</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The headline implies a pattern; the evidence is five selected states in one election, with Lamont crediting reaction to President Trump and Democratic-led Hawaii and New Mexico also at the extremes or near it.</dd>
+<dt>Web searches run</dt><dd>Lamont wins third term Connecticut 2026 legislature</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Findings</h2>
+<ul><li>Highest five non-DC states are CT, CA, MI, AZ, OR: confirmed. DC (5.4) is higher but not a state. New Mexico (4.8, Democratic-led) is only 0.1 behind, on preliminary data.</li><li>Lowest five: SD 2.0, ND 2.2, NH 2.5, VT 2.6, then Hawaii and Nebraska tied at 2.8. The article omits Hawaii (Democratic governor).</li><li>Election outcomes confirmed by news reports; Arizona 'statewide offices' flip not verified.</li><li>False: Becerra described as 'former Senator' (he served in the U.S. House, as California AG and as HHS Secretary); name misspelled.</li><li>Whitmer/Newsom as 'far-left' is opinion. The Newsom clemency video quote was not found verbatim; 548 commutations were confirmed.</li></ul>
+</section>
+<section>
+<h2>Misleading framing</h2>
+<p>The headline implies voters rewarded Democrats despite weak labor markets. Two of five races were open seats, the national midterm environment (which Lamont tied to President Trump) is a confound, and 0.1 to 0.2 point differences are within preliminary-estimate noise. Omitting Hawaii made the contrast with Republican-led low-unemployment states cleaner than the data.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 12 rows — 1362 ms</summary><pre><code>SELECT state_fips, value FROM econ.regional_employment WHERE year=2026 AND period='M10' AND measure ILIKE '%rate%' ORDER BY value DESC FETCH FIRST 12 ROWS ONLY</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

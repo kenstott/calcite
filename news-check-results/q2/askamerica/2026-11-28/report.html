@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fortune article's claims about corporate profits as a share of GDP are somewhat biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Fortune article's claims about corporate profits as a share of GDP are somewhat biased and mostly accurate.</h1>
+<p class="subtitle">Warehouse econ.national_accounts (BEA NIPA T11200, through 2025Q4), econ.fred_indicators GDP (through 2026Q3); FRED CP and BEA release for 2026 quarters</p>
+<p class="under-review"><span>Article under review</span><a href="https://fortune.com/2026/11/28/corporate-profits-gdp-wall-street-bad-bet/">https://fortune.com/2026/11/28/corporate-profits-gdp-wall-street-bad-bet/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Corporate profits (after tax) as % of GDP</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">FRED CP / GDP; warehouse NIPA line 45 matches CP for 2025Q2-Q4</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="246" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="282" fill="#6b7280">Q3 2026 ratio</text>
+  <text class="stat-value" x="36" y="312" fill="#1f2328">13.37%</text>
+  <text class="stat-delta" x="36" y="332" fill="#059669">vs 11.04% in Q2 2025</text>
+  </g>
+  <rect class="panel-edge" x="448" y="82" width="412" height="436" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="82" width="412" height="436" viewBox="0 0 412 436" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="436" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">After-tax profits / GDP, selected quarters (%)</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="60" y1="358.32" x2="390" y2="358.32" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="52" y="362.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="315.13" x2="390" y2="315.13" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="52" y="319.13" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2</text>
+      <line class="grid" x1="60" y1="271.94" x2="390" y2="271.94" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="52" y="275.94" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4</text>
+      <line class="grid" x1="60" y1="228.75" x2="390" y2="228.75" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="52" y="232.75" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6</text>
+      <line class="grid" x1="60" y1="185.57" x2="390" y2="185.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="52" y="189.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8</text>
+      <line class="grid" x1="60" y1="142.38" x2="390" y2="142.38" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="52" y="146.38" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="99.19" x2="390" y2="99.19" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-6" class="tick" x="52" y="103.19" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">12</text>
+      <line class="grid" x1="60" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-7" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">14</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="358.32" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="358.32" x2="390" y2="358.32" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-y-axis-title" class="axis-title" x="14" y="207.16" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 207.16)">% of GDP</text>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-2000q1" class="tick" x="75" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 75 372.32)">2000Q1</text>
+      <text id="p2-xtick-2006q3" class="tick" x="105" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 105 372.32)">2006Q3</text>
+      <text id="p2-xtick-2008q4" class="tick" x="135" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 135 372.32)">2008Q4</text>
+      <text id="p2-xtick-2012q1" class="tick" x="165" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 165 372.32)">2012Q1</text>
+      <text id="p2-xtick-2021q2" class="tick" x="195" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 195 372.32)">2021Q2</text>
+      <text id="p2-xtick-2025q2" class="tick" x="225" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 225 372.32)">2025Q2</text>
+      <text id="p2-xtick-2025q3" class="tick" x="255" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 255 372.32)">2025Q3</text>
+      <text id="p2-xtick-2025q4" class="tick" x="285" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 285 372.32)">2025Q4</text>
+      <text id="p2-xtick-2026q1" class="tick" x="315" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 315 372.32)">2026Q1</text>
+      <text id="p2-xtick-2026q2" class="tick" x="345" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 345 372.32)">2026Q2</text>
+      <text id="p2-xtick-2026q3" class="tick" x="375" y="372.32" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end" transform="rotate(-45 375 372.32)">2026Q3</text>
+    </g>
+    <g id="p2-series-profits-gdp" class="series">
+      <path id="p2-line-profits-gdp" class="line" d="M 75 237.39 L 105 125.10 L 135 243.87 L 165 97.03 L 195 84.07 L 225 120.78 L 255 109.99 L 285 99.19 L 315 90.55 L 345 75.43 L 375 68.96" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>2000Q1 — Profits/GDP %: 5.6</title>
+        <circle id="p2-mark-profits-gdp-2000q1" class="point" cx="75" cy="237.39" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="75" cy="237.39" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2006Q3 — Profits/GDP %: 10.8</title>
+        <circle id="p2-mark-profits-gdp-2006q3" class="point" cx="105" cy="125.10" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="105" cy="125.10" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2008Q4 — Profits/GDP %: 5.3</title>
+        <circle id="p2-mark-profits-gdp-2008q4" class="point" cx="135" cy="243.87" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="135" cy="243.87" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2012Q1 — Profits/GDP %: 12.1</title>
+        <circle id="p2-mark-profits-gdp-2012q1" class="point" cx="165" cy="97.03" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="165" cy="97.03" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021Q2 — Profits/GDP %: 12.7</title>
+        <circle id="p2-mark-profits-gdp-2021q2" class="point" cx="195" cy="84.07" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="195" cy="84.07" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2025Q2 — Profits/GDP %: 11</title>
+        <circle id="p2-mark-profits-gdp-2025q2" class="point" cx="225" cy="120.78" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="225" cy="120.78" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2025Q3 — Profits/GDP %: 11.5</title>
+        <circle id="p2-mark-profits-gdp-2025q3" class="point" cx="255" cy="109.99" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="255" cy="109.99" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2025Q4 — Profits/GDP %: 12</title>
+        <circle id="p2-mark-profits-gdp-2025q4" class="point" cx="285" cy="99.19" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="285" cy="99.19" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2026Q1 — Profits/GDP %: 12.4</title>
+        <circle id="p2-mark-profits-gdp-2026q1" class="point" cx="315" cy="90.55" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="315" cy="90.55" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2026Q2 — Profits/GDP %: 13.1</title>
+        <circle id="p2-mark-profits-gdp-2026q2" class="point" cx="345" cy="75.43" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="345" cy="75.43" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2026Q3 — Profits/GDP %: 13.4</title>
+        <circle id="p2-mark-profits-gdp-2026q3" class="point" cx="375" cy="68.96" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="375" cy="68.96" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:53424/a/e7921b01b592e1cd0806b4cfb2766169.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The headline numbers hold. After-tax profits (FRED CP, identical to warehouse NIPA line 45) rose from $3,590B (Q3 2025) to $4,419B (Q3 2026), +23.1%; GDP rose 6.0% to $33,056B; the ratio was 13.37% versus 13.14% in Q2. Two problems: the ratio did not reach 10% in the dot-com run-up (about 5-7%; 10% came in 2005-06), and the 'consensus' of a further 25% profit rise is not what published forecasts say (about 15% for 2027). Rating: 1 Pinocchio.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 82/100 — mostly honest</strong> &middot; <strong>Bias +25/100 — somewhat biased</strong></p><p>11 claims graded, 0 not gradable, 6 fell short. In this article only.</p></div>
+<p><strong>5</strong> true &middot; <strong>4</strong> mostly true &middot; <strong>2</strong> partially false &middot; <strong>11</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Corporate profits hit roughly 13.5% of GDP / In the third quarter, according to government figures released Nov. 25, the ratio hit 13.37%, up from 13.14% in Q2 (headline also cites 13.4%).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators / econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a>; <a href="https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026">BEA release</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>It shot to 10% in the dot.com run-up, cratered in the GFC in 2008 and 2009, and from 2010 to Q2 of last year averaged around 11%.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-partially-false"><td>11</td><td>The consensus among market strategists: Profits will rise another 25% by the close of 2027.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://247wallst.com/investing/2026/10/03/wall-street-expects-sp-500-profit-growth-to-collapse-from-35-to-15-in-2027/">24/7 Wall St citing Reuters/LSEG IBES: 15% in 2027</a>; <a href="https://fortune.com/2026/11/21/stock-market-correction-sp500-2027-forecasts-ai-boom-fed-rate-hikes/">Fortune Nov 21 strategist forecasts</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>the ratio hovered mainly between 6% and 7% from 1945 to 2003.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>If that happens, the ratio of earnings to GDP would reach a stupendous 15.7%, twice the 80 year average and 40% above the 11%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>That's the never-before-seen explosion in earnings that has lifted America's bottom line so high.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Rob Arnott, founder and chairman of Syzygy Asset Management (formerly Research Affiliates) which oversees over $32 billion</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://privatefunddata.com/fund-companies/syzygy-asset-management-llc/">Private Fund Data</a></td></tr><tr class="verdict-true"><td>2</td><td>In the year ending in Q3 2026, nominal GDP grew 6%, from $31.18 trillion on an annualized basis to $33.06 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code></td></tr><tr class="verdict-true"><td>3</td><td>corporate earnings jumped at nearly four times that clip, by 23%, from $3.59 trillion to $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-true"><td>6</td><td>Starting in mid-2025, the ratio exploded.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-true"><td>8</td><td>Total corporate profits would drop to $3.9 trillion. That's 12% below the current run-rate of $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-partially-false"><td>11</td><td>The consensus among market strategists: Profits will rise another 25% by the close of 2027.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://247wallst.com/investing/2026/10/03/wall-street-expects-sp-500-profit-growth-to-collapse-from-35-to-15-in-2027/">24/7 Wall St citing Reuters/LSEG IBES: 15% in 2027</a>; <a href="https://fortune.com/2026/11/21/stock-market-correction-sp500-2027-forecasts-ai-boom-fed-rate-hikes/">Fortune Nov 21 strategist forecasts</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Rob Arnott, founder and chairman of Syzygy Asset Management (formerly Research Affiliates) which oversees over $32 billion</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://privatefunddata.com/fund-companies/syzygy-asset-management-llc/">Private Fund Data</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>That's the never-before-seen explosion in earnings that has lifted America's bottom line so high.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-true"><td>8</td><td>Total corporate profits would drop to $3.9 trillion. That's 12% below the current run-rate of $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>If that happens, the ratio of earnings to GDP would reach a stupendous 15.7%, twice the 80 year average and 40% above the 11%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-true"><td>6</td><td>Starting in mid-2025, the ratio exploded.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-partially-false"><td>5</td><td>It shot to 10% in the dot.com run-up, cratered in the GFC in 2008 and 2009, and from 2010 to Q2 of last year averaged around 11%.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>the ratio hovered mainly between 6% and 7% from 1945 to 2003.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-true"><td>3</td><td>corporate earnings jumped at nearly four times that clip, by 23%, from $3.59 trillion to $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-true"><td>2</td><td>In the year ending in Q3 2026, nominal GDP grew 6%, from $31.18 trillion on an annualized basis to $33.06 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code></td></tr><tr class="verdict-true"><td>1</td><td>Corporate profits hit roughly 13.5% of GDP / In the third quarter, according to government figures released Nov. 25, the ratio hit 13.37%, up from 13.14% in Q2 (headline also cites 13.4%).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators / econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a>; <a href="https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026">BEA release</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>3</td><td>corporate earnings jumped at nearly four times that clip, by 23%, from $3.59 trillion to $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-true"><td>1</td><td>Corporate profits hit roughly 13.5% of GDP / In the third quarter, according to government figures released Nov. 25, the ratio hit 13.37%, up from 13.14% in Q2 (headline also cites 13.4%).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators / econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a>; <a href="https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026">BEA release</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>If that happens, the ratio of earnings to GDP would reach a stupendous 15.7%, twice the 80 year average and 40% above the 11%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-true"><td>2</td><td>In the year ending in Q3 2026, nominal GDP grew 6%, from $31.18 trillion on an annualized basis to $33.06 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code></td></tr><tr class="verdict-partially-false"><td>5</td><td>It shot to 10% in the dot.com run-up, cratered in the GFC in 2008 and 2009, and from 2010 to Q2 of last year averaged around 11%.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Rob Arnott, founder and chairman of Syzygy Asset Management (formerly Research Affiliates) which oversees over $32 billion</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://privatefunddata.com/fund-companies/syzygy-asset-management-llc/">Private Fund Data</a></td></tr><tr class="verdict-true"><td>6</td><td>Starting in mid-2025, the ratio exploded.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-mostly-true"><td>9</td><td>That's the never-before-seen explosion in earnings that has lifted America's bottom line so high.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-partially-false"><td>11</td><td>The consensus among market strategists: Profits will rise another 25% by the close of 2027.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://247wallst.com/investing/2026/10/03/wall-street-expects-sp-500-profit-growth-to-collapse-from-35-to-15-in-2027/">24/7 Wall St citing Reuters/LSEG IBES: 15% in 2027</a>; <a href="https://fortune.com/2026/11/21/stock-market-correction-sp500-2027-forecasts-ai-boom-fed-rate-hikes/">Fortune Nov 21 strategist forecasts</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>the ratio hovered mainly between 6% and 7% from 1945 to 2003.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-true"><td>8</td><td>Total corporate profits would drop to $3.9 trillion. That's 12% below the current run-rate of $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>the ratio hovered mainly between 6% and 7% from 1945 to 2003.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>If that happens, the ratio of earnings to GDP would reach a stupendous 15.7%, twice the 80 year average and 40% above the 11%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>That's the never-before-seen explosion in earnings that has lifted America's bottom line so high.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Rob Arnott, founder and chairman of Syzygy Asset Management (formerly Research Affiliates) which oversees over $32 billion</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://privatefunddata.com/fund-companies/syzygy-asset-management-llc/">Private Fund Data</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>It shot to 10% in the dot.com run-up, cratered in the GFC in 2008 and 2009, and from 2010 to Q2 of last year averaged around 11%.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-partially-false"><td>11</td><td>The consensus among market strategists: Profits will rise another 25% by the close of 2027.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://247wallst.com/investing/2026/10/03/wall-street-expects-sp-500-profit-growth-to-collapse-from-35-to-15-in-2027/">24/7 Wall St citing Reuters/LSEG IBES: 15% in 2027</a>; <a href="https://fortune.com/2026/11/21/stock-market-correction-sp500-2027-forecasts-ai-boom-fed-rate-hikes/">Fortune Nov 21 strategist forecasts</a></td></tr><tr class="verdict-true"><td>2</td><td>In the year ending in Q3 2026, nominal GDP grew 6%, from $31.18 trillion on an annualized basis to $33.06 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code></td></tr><tr class="verdict-true"><td>3</td><td>corporate earnings jumped at nearly four times that clip, by 23%, from $3.59 trillion to $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-true"><td>6</td><td>Starting in mid-2025, the ratio exploded.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-true"><td>8</td><td>Total corporate profits would drop to $3.9 trillion. That's 12% below the current run-rate of $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-true"><td>1</td><td>Corporate profits hit roughly 13.5% of GDP / In the third quarter, according to government figures released Nov. 25, the ratio hit 13.37%, up from 13.14% in Q2 (headline also cites 13.4%).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators / econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a>; <a href="https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026">BEA release</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-partially-false"><td>11</td><td>The consensus among market strategists: Profits will rise another 25% by the close of 2027.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://247wallst.com/investing/2026/10/03/wall-street-expects-sp-500-profit-growth-to-collapse-from-35-to-15-in-2027/">24/7 Wall St citing Reuters/LSEG IBES: 15% in 2027</a>; <a href="https://fortune.com/2026/11/21/stock-market-correction-sp500-2027-forecasts-ai-boom-fed-rate-hikes/">Fortune Nov 21 strategist forecasts</a></td></tr><tr class="verdict-true"><td>2</td><td>In the year ending in Q3 2026, nominal GDP grew 6%, from $31.18 trillion on an annualized basis to $33.06 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code></td></tr><tr class="verdict-true"><td>1</td><td>Corporate profits hit roughly 13.5% of GDP / In the third quarter, according to government figures released Nov. 25, the ratio hit 13.37%, up from 13.14% in Q2 (headline also cites 13.4%).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators / econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a>; <a href="https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026">BEA release</a></td></tr><tr class="verdict-mostly-true"><td>9</td><td>That's the never-before-seen explosion in earnings that has lifted America's bottom line so high.</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-true"><td>6</td><td>Starting in mid-2025, the ratio exploded.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code></td></tr><tr class="verdict-true"><td>3</td><td>corporate earnings jumped at nearly four times that clip, by 23%, from $3.59 trillion to $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <code>econ.national_accounts</code>; <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-true"><td>8</td><td>Total corporate profits would drop to $3.9 trillion. That's 12% below the current run-rate of $4.42 trillion.</td><td><strong>true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></td></tr><tr class="verdict-partially-false"><td>5</td><td>It shot to 10% in the dot.com run-up, cratered in the GFC in 2008 and 2009, and from 2010 to Q2 of last year averaged around 11%.</td><td><strong>partially false</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>the ratio hovered mainly between 6% and 7% from 1945 to 2003.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>If that happens, the ratio of earnings to GDP would reach a stupendous 15.7%, twice the 80 year average and 40% above the 11%.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>Rob Arnott, founder and chairman of Syzygy Asset Management (formerly Research Affiliates) which oversees over $32 billion</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://privatefunddata.com/fund-companies/syzygy-asset-management-llc/">Private Fund Data</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Sahil Kapoor — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>12</td><td>Corporate profitability is the most mean-reverting series in finance.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.cxoadvisory.com/fundamental-valuation/classic-research-mean-reversion-in-corporate-profitability/">CXO Advisory on mean reversion in profitability</a></td></tr>
+</tbody></table>
+<h3>Claims by Mark Zandi — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>0 claims graded, 1 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> not checkable here &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>13</td><td>The ratio has permanently reset at far higher levels.</td><td><strong>not checkable here</strong> &middot; central claim</td><td>none cited</td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Corporate profits hit roughly 13.5% of GDP / In the third quarter, according to government figures released Nov. 25, the ratio hit 13.37%, up from 13.14% in Q2 (headline also cites 13.4%).</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>GDP Q3 2026 33,056.2; FRED CP Q3 4,419.0 and Q2 4,279.9 -&gt; 13.37% and 13.14% <code>econ.fred_indicators / econ.national_accounts</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></li><li><a href="https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026">BEA release</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>corporate profits after tax share of GDP</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;,&quot;value&quot; FROM econ.fred_indicators WHERE series='GDP' AND &quot;date&quot;&gt;='2025-04-01'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; In the year ending in Q3 2026, nominal GDP grew 6%, from $31.18 trillion on an annualized basis to $33.06 trillion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>31,180.5 to 33,056.2 (+6.0%) <code>econ.fred_indicators</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;,&quot;value&quot; FROM econ.fred_indicators WHERE series='GDP' AND &quot;date&quot; IN ('2025-07-01','2026-07-01')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; corporate earnings jumped at nearly four times that clip, by 23%, from $3.59 trillion to $4.42 trillion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Q3 2025 after-tax profits 3,590.3 (NIPA line 45); FRED CP Q3 2026 4,419.0; +23.1%; growth ratio 3.9 <code>econ.national_accounts</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT value FROM econ.national_accounts WHERE table_id='T11200' AND line_number='45' AND time_period='2025Q3'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; the ratio hovered mainly between 6% and 7% from 1945 to 2003.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FRED CP/GDP 1947Q1-2003Q4 average 6.26%, computed from fredgraph.csv<ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>1947-2003 average is 6.3% but quarterly range is 3.7%-9.9%; 1945-46 not in series</dd>
+<dt>Web searches run</dt><dd>FRED CP and GDP csv computed ratio</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#5 &middot; <strong>partially false</strong> &mdash; It shot to 10% in the dot.com run-up, cratered in the GFC in 2008 and 2009, and from 2010 to Q2 of last year averaged around 11%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FRED CP/GDP computed<ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Dot-com era ratio was about 5.4%-7.0%; about 10% was reached in 2005-06 (peak 10.8% in 2006Q3). GFC trough 5.3% (2008Q4) and 2010-Q2 2025 average 10.8% are correct.</dd>
+<dt>Evidence found and set aside because</dt><dd>The Goldman IPO-float '10%' passage in the fetched Fortune June 7 page concerns share floats, not the profit ratio, so it does not change the grade.</dd>
+<dt>Web searches run</dt><dd>FRED CP and GDP csv computed ratio</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Starting in mid-2025, the ratio exploded.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>11.0% (2025Q2) rising each quarter to 13.4% (2026Q3) <code>econ.national_accounts</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT time_period, value FROM econ.national_accounts WHERE table_id='T11200' AND line_number='45' AND frequency='Q' AND time_period&gt;='2025Q1'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; If that happens, the ratio of earnings to GDP would reach a stupendous 15.7%, twice the 80 year average and 40% above the 11%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>arithmetic from FRED CP/GDP (1947-2003 average 6.3%)<ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/graph/fredgraph.csv?id=CP,GDP">FRED CP and GDP</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>15.7/11 = 1.43 ok; 15.7/6.3 = 2.5x the long-run average, so 'twice' understates; 15.7% also requires GDP of about $35.2T by end-2027, an unstated assumption</dd>
+<dt>Web searches run</dt><dd>FRED CP and GDP csv computed ratio</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; Total corporate profits would drop to $3.9 trillion. That's 12% below the current run-rate of $4.42 trillion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>-11.8% by arithmetic on FRED CP Q3 2026 4,419.0<ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></li></ul></dd>
+<dt>Why</dt><dd>Conditional projection; arithmetic 3.9/4.42 = -11.8%, implies GDP near $35.5T.</dd>
+<dt>Web searches run</dt><dd>FRED CP Q3 2026 4419.035</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#9 &middot; <strong>mostly true</strong> &mdash; That's the never-before-seen explosion in earnings that has lifted America's bottom line so high.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CP with IVA/CCAdj / GDP 13.5% in 2025Q4 <code>econ.national_accounts</code></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>True for after-tax profits without IVA/CCAdj (prior high 12.7% in 2021Q2). Not labelled as after-tax; on BEA's profits with IVA/CCAdj the warehouse already shows 13.5% of GDP in 2025Q4.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT time_period, value FROM econ.national_accounts WHERE table_id='T11200' AND line_number='13' AND frequency='Q' AND time_period='2025Q4'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; Rob Arnott, founder and chairman of Syzygy Asset Management (formerly Research Affiliates) which oversees over $32 billion</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>$32.2B<ul class="claim-sources"><li><a href="https://privatefunddata.com/fund-companies/syzygy-asset-management-llc/">Private Fund Data</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Private Fund Data lists $32.2B regulatory AUM; another report says about $30B</dd>
+<dt>Web searches run</dt><dd>Rob Arnott Syzygy Asset Management formerly Research Affiliates assets under management billion</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#11 &middot; <strong>partially false</strong> &mdash; The consensus among market strategists: Profits will rise another 25% by the close of 2027.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>About 15% 2027 S&amp;P 500 EPS growth consensus (LSEG IBES via Reuters, 24/7 Wall St Oct 3 2026)<ul class="claim-sources"><li><a href="https://247wallst.com/investing/2026/10/03/wall-street-expects-sp-500-profit-growth-to-collapse-from-35-to-15-in-2027/">24/7 Wall St citing Reuters/LSEG IBES: 15% in 2027</a></li><li><a href="https://fortune.com/2026/11/21/stock-market-correction-sp500-2027-forecasts-ai-boom-fed-rate-hikes/">Fortune Nov 21 strategist forecasts</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>Published consensus is about 15% S&amp;P 500 EPS growth for 2027 (LSEG IBES via Reuters, Oct 2026; FactSet similar). The linked Fortune Nov 21 piece has no 25% figure; a Nov 20 Fortune piece says Goldman estimates AI boom lifted S&amp;P earnings 25% above trend, a different quantity. 25% could only arise by compounding remaining 2026 growth, which the article does not say. S&amp;P EPS and NIPA profits also differ.</dd>
+<dt>Evidence found and set aside because</dt><dd>The 25% in the fetched Nov 20 Fortune page is Goldman's above-trend estimate, not a forward consensus, so it does not support the claim.</dd>
+<dt>Warehouse searched for</dt><dd>S&amp;P 500 earnings consensus 2027 (analyst consensus not in catalog: unmatched term 'consensus')</dd>
+<dt>Web searches run</dt><dd>Wall Street consensus S&amp;P 500 earnings growth 2027 estimate percent FactSet LSEG; strategists consensus profits 2027 25%</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#12 &middot; <strong>unsupported</strong> &mdash; Corporate profitability is the most mean-reverting series in finance.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Sahil Kapoor — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cxoadvisory.com/fundamental-valuation/classic-research-mean-reversion-in-corporate-profitability/">CXO Advisory on mean reversion in profitability</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Quote not located; academic literature (Fama-French 1999) supports mean reversion in profitability, but 'most' is a superlative no source states.</dd>
+<dt>No page loaded because</dt><dd>Searched; no page quoting Kapoor surfaced.</dd>
+<dt>Warehouse searched for</dt><dd>corporate profit mean reversion (no catalog table)</dd>
+<dt>Web searches run</dt><dd>Sahil Kapoor DSP most mean-reverting series in finance</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#13 &middot; <strong>not checkable here</strong> &mdash; The ratio has permanently reset at far higher levels.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Mark Zandi — what they assert, as the piece reports it</dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: A belief about the future that no present evidence can test; meant as a forecast, not a literal fact.</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Why</dt><dd>A belief about the future that no present evidence can test; meant as a forecast, not a literal fact.</dd>
+<dt>Web searches run</dt><dd>Zandi permanent reset profits share of GDP</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Misleading framing</h2>
+<ul><li>It describes 'earnings to national income' but computes against GDP.</li><li>The measure is after-tax profits without inventory/capital-consumption adjustments. On BEA's headline profits with those adjustments the warehouse already shows 13.5% of GDP in 2025Q4, so the 'mid-2025 explosion' depends on the chosen series.</li><li>Lower corporate taxes lift after-tax profits; the piece raises this only via Zandi.</li><li>The 15.7% scenario rests on an overstated forward consensus; at the published ~15% growth the ratio would stay lower.</li></ul><p>Kapoor, Zandi and Friedman quotes could not be independently verified.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Verify third-party quotes</strong>: Kapoor, Zandi, Friedman quotes not independently located; graded unsupported or opinion.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>10 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 1 rows — 8581 ms</summary><pre><code>SELECT series, MIN(&quot;date&quot;) mn, MAX(&quot;date&quot;) mx, COUNT(*) n FROM econ.fred_indicators WHERE series IN ('CP','A053RC1Q027SBEA','GDP','CPATAX','A446RC1Q027SBEA') GROUP BY series</code></pre></details>
+<details class="sqltoggle"><summary>query — 40 rows — 4906 ms</summary><pre><code>SELECT DISTINCT line_description, line_number FROM econ.national_accounts WHERE tablename='T11200' FETCH FIRST 40 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 6 rows — 2287 ms</summary><pre><code>SELECT &quot;date&quot;, &quot;value&quot; FROM econ.fred_indicators WHERE series='GDP' AND &quot;date&quot;&gt;='2025-04-01' ORDER BY &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 39653 ms</summary><pre><code>SELECT time_period, line_number, CAST(value AS DOUBLE) v FROM econ.national_accounts WHERE table_id='T11200' AND line_number IN ('1','13') AND time_period IN ('2025Q2','2025Q3','2025Q4','2000','2008','2009','2010','2019','2024','2025') ORDER BY line_number, time_period</code></pre></details>
+<details class="sqltoggle"><summary>query — 14 rows — 13145 ms</summary><pre><code>SELECT table_id, MAX(time_period) mx FROM econ.national_accounts WHERE frequency='Q' GROUP BY table_id</code></pre></details>
+<details class="sqltoggle"><summary>query — 24 rows — 1794 ms</summary><pre><code>SELECT time_period, line_number, CAST(value AS DOUBLE) v FROM econ.national_accounts WHERE table_id='T11200' AND frequency='Q' AND line_number IN ('13','15','43') AND time_period &gt;= '2024Q1' ORDER BY time_period, line_number</code></pre></details>
+<details class="sqltoggle"><summary>query — 28 rows — 7297 ms</summary><pre><code>SELECT p.time_period, CAST(p.value AS DOUBLE)/CAST(g.value AS DOUBLE) ratio_cp_gdp, CAST(p.value AS DOUBLE)/CAST(n.value AS DOUBLE) ratio_cp_ni FROM econ.national_accounts p JOIN econ.national_accounts g ON g.table_id='T10101' AND g.line_number='1' AND g.frequency='A' AND g.time_period=p.time_period JOIN econ.national_accounts n ON n.table_id='T11200' AND n.line_number='1' AND n.frequency='A' AND n.time_period=p.time_period WHERE p.table_id='T11200' AND p.line_number='13' AND p.frequency='A' ORDER BY p.time_period</code></pre></details>
+<details class="sqltoggle"><summary>query — 28 rows — 12150 ms</summary><pre><code>SELECT p.time_period, CAST(p.value AS DOUBLE)/1000.0 cp_bn, a.g gdp_bn, CAST(p.value AS DOUBLE)/1000.0/a.g ratio FROM econ.national_accounts p JOIN (SELECT CAST(EXTRACT(YEAR FROM &quot;date&quot;) AS VARCHAR) y, AVG(&quot;value&quot;) g FROM econ.fred_indicators WHERE series='GDP' GROUP BY CAST(EXTRACT(YEAR FROM &quot;date&quot;) AS VARCHAR)) a ON a.y=p.time_period WHERE p.table_id='T11200' AND p.line_number='13' AND p.frequency='A' ORDER BY p.time_period</code></pre></details>
+<details class="sqltoggle"><summary>query — 12 rows — 7784 ms</summary><pre><code>SELECT p.time_period, CAST(p.value AS DOUBLE)/1000.0/f.&quot;value&quot; ratio FROM econ.national_accounts p JOIN econ.fred_indicators f ON f.series='GDP' AND f.&quot;date&quot;=CASE WHEN SUBSTR(p.time_period,5,2)='Q1' THEN CAST(SUBSTR(p.time_period,1,4)||'-01-01' AS DATE) WHEN SUBSTR(p.time_period,5,2)='Q2' THEN CAST(SUBSTR(p.time_period,1,4)||'-04-01' AS DATE) WHEN SUBSTR(p.time_period,5,2)='Q3' THEN CAST(SUBSTR(p.time_period,1,4)||'-07-01' AS DATE) ELSE CAST(SUBSTR(p.time_period,1,4)||'-10-01' AS DATE) END WHERE p.table_id='T11200' AND p.line_number='13' AND p.frequency='Q' AND p.time_period&gt;='2023Q1' ORDER BY p.time_period</code></pre></details>
+<details class="sqltoggle"><summary>query — 12 rows — 1411 ms</summary><pre><code>SELECT time_period, line_number, line_description, CAST(value AS DOUBLE)/1000 v FROM econ.national_accounts WHERE table_id='T11200' AND frequency='Q' AND time_period IN ('2025Q2','2025Q3','2025Q4') AND line_number IN ('15','45','43','44') ORDER BY line_number,time_period</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.bea.gov/data/income-saving/corporate-profits">AskAmerica econ.national_accounts T11200</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT time_period, line_number, CAST(value AS DOUBLE)/1000 FROM econ.national_accounts WHERE table_id='T11200' AND frequency='Q' AND line_number IN ('13','45')</code></pre></details></li>
+<li><a href="https://fred.stlouisfed.org/series/GDP">AskAmerica econ.fred_indicators GDP</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;,&quot;value&quot; FROM econ.fred_indicators WHERE series='GDP'</code></pre></details></li>
+<li><a href="https://fred.stlouisfed.org/data/CP.txt">FRED CP</a></li>
+<li><a href="https://www.bea.gov/news/2026/gdp-second-estimate-and-corporate-profits-3rd-quarter-2026">BEA release</a></li>
+<li><a href="https://247wallst.com/investing/2026/10/03/wall-street-expects-sp-500-profit-growth-to-collapse-from-35-to-15-in-2027/">24/7 Wall St on 2027 EPS consensus</a></li>
+</ol>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

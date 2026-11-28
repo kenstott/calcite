@@ -2899,5 +2899,145 @@
       "everyman"
     ],
     "note": "shape ok (Trump quote subject_claims); no gap; GDPC1 values match q1's independent read"
+  },
+  {
+    "topic_slug": "breitbart-high-unemployment-states-kept-democrats",
+    "headline": "Breitbart: States with Highest Unemployment Rates Kept Democrats in Power",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q1/askamerica/2026-11-28",
+    "pinocchios": 1,
+    "source_url": "https://www.breitbart.com/politics/2026/11/26/states-with-highest-unemployment-rates-kept-democrats-in-power/",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "askamerica #1; shape ok; no new gap (governor_election_results exists, 2026 uncertified)"
+  },
+  {
+    "topic_slug": "fortune-corporate-profits-13-4-pct-gdp",
+    "headline": "Fortune: Corporate profits just hit 13.4% of GDP (Shawn Tully)",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q2/askamerica/2026-11-28",
+    "pinocchios": 1,
+    "source_url": "https://fortune.com/2026/11/28/corporate-profits-gdp-wall-street-bad-bet/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica #1; shape ok; filed govdata-ops #1634 (national_accounts quarterly ends 2025)"
+  },
+  {
+    "topic_slug": "foxbusiness-amtrak-record-ridership-37-1m",
+    "headline": "Fox Business: Amtrak hits record 37.1M riders amid high flight, gas prices",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q3/askamerica/2026-11-28",
+    "pinocchios": 0,
+    "source_url": "https://foxbusiness.com/lifestyle/amtrak-ridership-hits-record-high-gas-prices-drive-more-americans-train-travel",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica #1; shape ok; filed govdata-ops #1635 (no Amtrak ridership); airfare CPI live-verified"
+  },
+  {
+    "topic_slug": "foxbusiness-realtor-home-buying-harder-than-1980s",
+    "headline": "Fox Business: Why buying a home is harder today than in the 1980s",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q4/askamerica/2026-11-28",
+    "pinocchios": 1,
+    "source_url": "https://www.foxbusiness.com/economy/why-buying-home-harder-today-than-1980s",
+    "ranks": [
+      "askamerica",
+      "everyman",
+      "expert"
+    ],
+    "note": "askamerica #1; shape ok; no gap; PSAVERT 7.3->4.5 live-verified"
+  },
+  {
+    "topic_slug": "icn-maine-electricity-64-pct-vs-38-national",
+    "headline": "Inside Climate News: Storm Costs Are Sending Maine's Power Bills Soaring",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q5/askamerica/2026-11-28",
+    "pinocchios": null,
+    "source_url": "https://insideclimatenews.org/news/25112026/maine-storms-power-bill-costs/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica #1 despite engine 403 (never tried client WebFetch); engine report 'too few to rate' (agent said 1 provisional); no gap"
+  },
+  {
+    "topic_slug": "icn-socal-king-tide-record-flooding",
+    "headline": "Inside Climate News: Southern California Endures Historic Coastal Flooding and Devastating Waves Over Thanksgiving",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q6/askamerica/2026-11-28",
+    "pinocchios": 0,
+    "source_url": "https://insideclimatenews.org/news/26112026/california-endures-historic-coastal-flooding-waves-thanksgiving/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "first pass [expert, askamerica, everyman]; recipe step 18 (read agency live data when warehouse ends before event); rerun read NOAA CO-OPS -> askamerica #1"
+  },
+  {
+    "topic_slug": "chalkbeat-colorado-college-wage-premium-55pct-second-lowest",
+    "headline": "Chalkbeat Colorado: A college education pays off in Colorado, but not as much as in other states",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q7/askamerica/2026-11-28",
+    "pinocchios": 0,
+    "source_url": "https://www.chalkbeat.org/colorado/2026/11/24/the-hea-group-analsysis-shows-colorado-college-education-payoff/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica #1; shape ok; no gap (scorecard_programs could test the 11% share; not queried)"
+  },
+  {
+    "topic_slug": "fortune-massachusetts-millionaires-tax-migration",
+    "headline": "Fortune: Massachusetts millionaires tax and IRS migration data",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q8/askamerica/2026-11-28",
+    "pinocchios": 0,
+    "source_url": "https://fortune.com/2026/11/27/massachusetts-millionaires-tax-irs-migration-new-hampshire-florida/",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica #1; shape ok; filed govdata-ops #1636 (IRS migration flows end 2022)"
+  },
+  {
+    "topic_slug": "brownfield-nopa-record-october-soy-crush-234m",
+    "headline": "Brownfield Ag News: NOPA reports record October soybean crush",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q9/askamerica/2026-11-28",
+    "pinocchios": null,
+    "source_url": "https://brownfieldagnews.com/news/nopa-reports-record-october-soybean-crush/",
+    "ranks": [
+      "expert",
+      "everyman",
+      "askamerica"
+    ],
+    "note": "SEVERITY: askamerica below everyman (narrow: 5 vs 6 claims, no evidence on 10% distillate claim); cause no NASS crush / EIA biodiesel series; resolution (a) filed #1638, #1637; engine 'too few to rate' (agent 1)"
+  },
+  {
+    "topic_slug": "medicaldaily-acs-black-white-mortality-gap-shrank",
+    "headline": "Medical Daily: Black-White death rate gap shrank by over half in 30 years",
+    "checked_date": "2026-11-28",
+    "run_subpath": "q10/askamerica/2026-11-28",
+    "pinocchios": 0,
+    "source_url": "https://www.medicaldaily.com/black-white-mortality-gap-shrank-us-study-1993-2023-481710",
+    "ranks": [
+      "askamerica",
+      "expert",
+      "everyman"
+    ],
+    "note": "askamerica #1; shape ok; filed govdata-ops #1639 (no mortality by race/sex)"
   }
 ]
