@@ -1,0 +1,578 @@
+{
+ "date": "2026-11-28",
+ "stories": [
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump",
+   "headline": "Republicans rethink tariffs, giving Democrats an opening to challenge Trump",
+   "published": "2026-11-27T11:51-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/27/nx-s1-6045833/postmortem-of-ai-ads",
+   "headline": "Postmortem of AI ads",
+   "published": "2026-11-27T16:58-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/27/nx-s1-6048749/with-abbott-out-what-does-the-future-look-like-for-data-centers-in-texas",
+   "headline": "With Abbott out, what does the future look like for data centers in Texas?",
+   "published": "2026-11-27T17:20-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/rachel-maddow-discusses-how-the-justice-department-has-strayed-from-its-mission",
+   "headline": "Rachel Maddow discusses how the Justice Department has strayed from its mission",
+   "published": "2026-11-27T18:30-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/show/brooks-and-capehart-on-trumps-new-tariffs-nvidias-future-and-democratic-leadership",
+   "headline": "Brooks and Capehart on Trump's new tariffs, Nvidia's future and Democratic leadership",
+   "published": "2026-11-27T18:40-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/28/g-s1-155837/democratic-attorneys-general-justice-system-texas",
+   "headline": "New wave of Democratic attorneys general may reshape the justice system",
+   "published": "2026-11-28T05:00-05:00"
+  }
+ ],
+ "statements": [
+  {
+   "id": 1,
+   "speaker": "Todd Young",
+   "office": "U.S. Senator from Indiana",
+   "party": "R",
+   "context": "Said in an AP interview after the November election about reconsidering President Trump's tariffs.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "IN",
+   "about_states": [],
+   "quote": "A rethink is indeed in order",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 2,
+   "speaker": "Todd Young",
+   "office": "U.S. Senator from Indiana",
+   "party": "R",
+   "context": "Said in an AP interview after the November election about his approach to tariff policy.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "IN",
+   "about_states": [],
+   "quote": "I'll be a bipartisan voice for making sure we have the most consumer friendly tariff approaches",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 3,
+   "speaker": "Todd Young",
+   "office": "U.S. Senator from Indiana",
+   "party": "R",
+   "context": "Said in social media posts after the November election about the effect of the current tariff structure on costs.",
+   "topic": "Tariffs and costs",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "IN",
+   "about_states": [],
+   "quote": "overly broad, and as a result, it is negatively affecting too many American factory floors, farms, small businesses, and family budgets",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 4,
+   "speaker": "Todd Young",
+   "office": "U.S. Senator from Indiana",
+   "party": "R",
+   "context": "Said in an AP interview about Congress's role in renewing the U.S.-Mexico-Canada Agreement trade pact.",
+   "topic": "Tariffs on Canada",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "IN",
+   "about_states": [],
+   "quote": "The USMCA process seems to work if Congress is actively involved and not patted on the head",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 5,
+   "speaker": "Michael Guest",
+   "office": "U.S. Representative from Mississippi",
+   "party": "R",
+   "context": "Said to AP about legislation from Democrats to limit the president's power to impose tariffs.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "MS",
+   "about_states": [],
+   "quote": "I would personally be opposed to just a blanket restriction on the president's ability to impose tariffs",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 6,
+   "speaker": "Michael Guest",
+   "office": "U.S. Representative from Mississippi",
+   "party": "R",
+   "context": "Said to AP about legislation from Democrats to limit the president's power to impose tariffs.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "MS",
+   "about_states": [],
+   "quote": "But I would be willing to look at it on a case-by-case basis based on what the Democrats may bring forward.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "promise",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 7,
+   "speaker": "John Kennedy",
+   "office": "U.S. Senator from Louisiana",
+   "party": "R",
+   "context": "Said to AP about tariffs on Canada, which he distinguished from tariffs on China.",
+   "topic": "Tariffs on Canada",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "LA",
+   "about_states": [],
+   "quote": "Tariffs with respect to Canada don't make sense to me",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 8,
+   "speaker": "Mike Rounds",
+   "office": "U.S. Senator from South Dakota",
+   "party": "R",
+   "context": "Said to AP about Congress's past delegation of tariff authority to the executive branch.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "SD",
+   "about_states": [],
+   "quote": "So they've given authorities to the executive branch over a period of years.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if statutes passed by Congress in different years give the executive branch authority to impose or adjust tariffs (for example Section 232 of the Trade Expansion Act of 1962, Section 301 of the Trade Act of 1974 or the International Emergency Economic Powers Act of 1977). False if no statute delegates tariff authority to the executive. Cannot be determined if the statutory record does not show who holds the authority.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "supported",
+   "finding": "The U.S. Code, read in AskAmerica's law.usc_sections table, gives the President or the U.S. Trade Representative power over imports under statutes enacted in different years: Section 232 (19 U.S.C. 1862, enacted 1962) lets the President act to \"adjust the imports\" of an article, Section 301 (19 U.S.C. 2411, enacted 1974) assigns actions to the Trade Representative, and the International Emergency Economic Powers Act (50 U.S.C. 1702, enacted 1977) lets the President regulate or prohibit importation.",
+   "evidence": [
+    {
+     "label": "law.usc_sections (19 U.S.C. 1862, 19 U.S.C. 2411, 50 U.S.C. 1702: headings and source credits)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#usc_sections-table",
+     "askamerica": true,
+     "sql": "SELECT title_number, section_number, heading, source_credit, substr(section_text,1,300) AS t FROM law.usc_sections WHERE (title_number=19 AND section_number IN ('1862','2411')) OR (title_number=50 AND section_number='1702')"
+    },
+    {
+     "label": "law.usc_sections (19 U.S.C. 1862(c): action by the President to adjust imports)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#usc_sections-table",
+     "askamerica": true,
+     "sql": "SELECT substr(section_text, position('(c)' IN section_text), 700) AS t FROM law.usc_sections WHERE title_number=19 AND section_number='1862'"
+    }
+   ],
+   "check_run": "q201/askamerica/2026-11-28"
+  },
+  {
+   "id": 9,
+   "speaker": "Steve Womack",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Said to AP about the effect of tariffs on affordability.",
+   "topic": "Tariffs and costs",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "AR",
+   "about_states": [],
+   "quote": "have played a role in some of the affordability issues",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 10,
+   "speaker": "Steve Womack",
+   "office": "U.S. Representative from Arkansas",
+   "party": "R",
+   "context": "Said to AP about producers in his Arkansas district and tariff costs.",
+   "topic": "Tariffs and costs",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "AR",
+   "about_states": [
+    "AR"
+   ],
+   "quote": "I have producers in my district that lament the fact that they're paying higher for goods that can't be sourced domestically",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if a public record (testimony, statements, local reporting or trade data) shows producers in Arkansas's 3rd congressional district paying higher prices for tariffed goods that have no domestic source. False if the record shows producers there face no such higher costs. Cannot be determined if no record of those producers' costs or complaints is found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 11,
+   "speaker": "Josh Hawley",
+   "office": "U.S. Senator from Missouri",
+   "party": "R",
+   "context": "Said to AP about Republican colleagues' willingness to join Democrats in repealing tariffs.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "MO",
+   "about_states": [],
+   "quote": "I bet a lot of my Republican colleagues will be happy to join Democrats and get rid of a bunch of them",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 12,
+   "speaker": "Ron Wyden",
+   "office": "U.S. Senator from Oregon",
+   "party": "D",
+   "context": "Said to AP about Democratic efforts to repeal tariffs on Canada, which he identified as a top target.",
+   "topic": "Tariffs on Canada",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "OR",
+   "about_states": [],
+   "quote": "we'll have some momentum for going after other tariffs",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 13,
+   "speaker": "Richard Neal",
+   "office": "U.S. Representative from Massachusetts",
+   "party": "D",
+   "context": "Said to AP about taking up the tariff discussion broadly in the next Congress.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "MA",
+   "about_states": [],
+   "quote": "But I think taking up the tariffs discussion in totality is really important, largely because the way they've been used in a punitive manner",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 14,
+   "speaker": "Rand Paul",
+   "office": "U.S. Senator from Kentucky",
+   "party": "R",
+   "context": "Said to AP about whether a standalone tariff repeal bill could become law.",
+   "topic": "Tariffs and Congress",
+   "broad_topic": "Trade and Tariffs",
+   "speaker_state": "KY",
+   "about_states": [],
+   "quote": "On its own, he'll just veto it",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/republicans-rethink-tariffs-giving-democrats-an-opening-to-challenge-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 18,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "PBS NewsHour's host stated that the president acknowledged his role in Jensen Huang's reinstatement as chief executive of Nvidia.",
+   "topic": "Nvidia leadership",
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": [],
+   "quote": "Reported as: President Trump acknowledged he personally pushed for it.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/show/brooks-and-capehart-on-trumps-new-tariffs-nvidias-future-and-democratic-leadership"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "factual",
+   "test": "True if President Trump publicly said he personally pushed for Jensen Huang's reinstatement as Nvidia's chief executive. False if he publicly denied any role in it. Cannot be determined if no public statement by him on his role is found.",
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": "not_checked",
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 19,
+   "speaker": "Greg Abbott",
+   "office": "Governor of Texas",
+   "party": "R",
+   "context": "Said in an archived recording from his summer 2026 campaign about proposed AI data centers in Texas neighborhoods.",
+   "topic": "Data centers in Texas",
+   "broad_topic": "AI and Technology",
+   "speaker_state": "TX",
+   "about_states": [
+    "TX"
+   ],
+   "quote": "Pushing back against these AI data centers that are trying to build in our neighborhoods.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/27/nx-s1-6048749/with-abbott-out-what-does-the-future-look-like-for-data-centers-in-texas"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": ""
+   },
+   "kind": "opinion_or_prediction",
+   "test": null,
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "also_said": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  }
+ ],
+ "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 27 or 28, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 28, less the stories earlier pages already used, plus every transcript from the fixed transcript sources dated in that window (none was). PBS NewsHour carries Associated Press reporting. One listed NPR story (Week in Politics, Nov. 28) returned no readable text and was not used. Transcripts from Nov. 22 to 25 were searched only to confirm quotes; none held any of the day's quotes. Reporters' and commentators' paraphrases of opinions, an AI-generated voice in a campaign ad, and statements by people outside the offices in scope (including a governor-elect and state attorneys general) were left out. Statements are worded as the outlet reported them.",
+ "lede": [
+  "Eleven officeholders in scope were quoted in the day's politics coverage from NPR and PBS NewsHour. Most of the statements came from an Associated Press story on members of Congress reconsidering tariffs after the November election.",
+  "Nine members of Congress spoke about tariffs: Republicans Todd Young, Michael Guest, John Kennedy, Mike Rounds, Steve Womack, Josh Hawley and Rand Paul, and Democrats Ron Wyden and Richard Neal. Their statements covered Congress's role in setting tariffs, tariffs on Canada, the effect of tariffs on costs, and whether a repeal bill could become law.",
+  "Texas Gov. Greg Abbott was heard in an archived campaign recording about AI data centers, and PBS NewsHour reported that President Donald Trump acknowledged pushing for Jensen Huang's reinstatement as Nvidia's chief executive."
+ ]
+}
