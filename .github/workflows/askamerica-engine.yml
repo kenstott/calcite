@@ -1034,10 +1034,25 @@ jobs:
           pip install build
           python -m build
 
+      # The upload runs only while the repository variable PYPI_PUBLISH is 'true'. PyPI's trusted
+      # publisher names the repository it trusts; while it does not name this one (after the move
+      # to simpleishard-llc, until the publisher is re-pointed), the variable is set to anything
+      # else and the upload is skipped with a warning, so the rest of the release still ships.
       - name: Publish to PyPI
+        if: vars.PYPI_PUBLISH == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: askamerica-python/python/dist/
+
+      - name: PyPI upload switched off
+        if: vars.PYPI_PUBLISH != 'true'
+        env:
+          VERSION: ${{ steps.pyver.outputs.version }}
+          SWITCH: ${{ vars.PYPI_PUBLISH }}
+        run: |
+          msg="askamerica ${VERSION} was built but NOT uploaded to PyPI: repository variable PYPI_PUBLISH is '${SWITCH}', not 'true'."
+          echo "::warning title=PyPI upload skipped::${msg}"
+          echo "- ${msg}" >> "$GITHUB_STEP_SUMMARY"
 
   # ── GitHub Release ────────────────────────────────────────────────────────
   release:
