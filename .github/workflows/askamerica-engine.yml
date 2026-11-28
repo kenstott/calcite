@@ -310,7 +310,7 @@ jobs:
           path: askamerica-engine/build/platform-jars/askamerica-engine-*.jar
           retention-days: 30
 
-  # ── Browser extension (source lives in kenstott/askamerica) ────────────────
+  # ── Browser extension (source lives in simpleishard-llc/askamerica) ────────
   browser-extension:
     name: Package browser extension
     runs-on: ubuntu-latest
@@ -319,7 +319,7 @@ jobs:
       - name: Checkout askamerica Python/extension repo
         uses: actions/checkout@v4
         with:
-          repository: kenstott/askamerica
+          repository: simpleishard-llc/askamerica
           token: ${{ secrets.ASKAMERICA_REPO_PAT }}
           path: askamerica-python
 
@@ -976,7 +976,7 @@ jobs:
       - name: Checkout askamerica Python repo
         uses: actions/checkout@v4
         with:
-          repository: kenstott/askamerica
+          repository: simpleishard-llc/askamerica
           token: ${{ secrets.ASKAMERICA_REPO_PAT }}
           path: askamerica-python
 
