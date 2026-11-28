@@ -369,10 +369,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Statewide reporting by Little Rock Public Radio (July 1, 2025) describes Arkansas growers paying more for fertilizer and equipment under tariffs and an Arkansas importer saying his China-sourced products are no longer made in the United States. No record found names producers in the 3rd district or their costs, so the evidence does not speak to the district-level point; AskAmerica's warehouse has no state- or district-level import data.",
+   "evidence": [
+    {
+     "label": "Little Rock Public Radio: Arkansas farmers, manufacturers decry new tariff policy (2025-07-01)",
+     "url": "https://www.ualrpublicradio.org/local-regional-news/2025-07-01/arkansas-farmers-manufacturers-decry-new-tariff-policy"
+    }
+   ],
+   "check_run": "q202/askamerica/2026-11-28"
   },
   {
    "id": 11,
@@ -529,10 +534,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "As reported by NBC News and CNBC from his Nov. 23, 2026 phone interview with CNBC, Trump said \"I believe my intervention was very important\" and that he had spoken to Nvidia's board \"directly and indirectly\" and convinced them. No transcript of the interview or White House page could be read directly; \"personally pushed\" is the PBS host's wording.",
+   "evidence": [
+    {
+     "label": "NBC News: Trump says he spoke 'directly and indirectly' with Nvidia's board",
+     "url": "https://www.nbcnews.com/politics/trump-administration/trump-nvidia-board-reinstates-jensen-huang-rcna610882"
+    },
+    {
+     "label": "CNBC: Trump sealed deal for Nvidia to rehire Jensen Huang as CEO",
+     "url": "https://www.cnbc.com/2026/11/23/trump-nvidia-jensen-huang.html"
+    }
+   ],
+   "check_run": "q203/askamerica/2026-11-28"
   },
   {
    "id": 19,
@@ -573,6 +587,6 @@
  "lede": [
   "Eleven officeholders in scope were quoted in the day's politics coverage from NPR and PBS NewsHour. Most of the statements came from an Associated Press story on members of Congress reconsidering tariffs after the November election.",
   "Nine members of Congress spoke about tariffs: Republicans Todd Young, Michael Guest, John Kennedy, Mike Rounds, Steve Womack, Josh Hawley and Rand Paul, and Democrats Ron Wyden and Richard Neal. Their statements covered Congress's role in setting tariffs, tariffs on Canada, the effect of tariffs on costs, and whether a repeal bill could become law.",
-  "Texas Gov. Greg Abbott was heard in an archived campaign recording about AI data centers, and PBS NewsHour reported that President Donald Trump acknowledged pushing for Jensen Huang's reinstatement as Nvidia's chief executive."
+  "Texas Gov. Greg Abbott was heard in an archived campaign recording about AI data centers, and PBS NewsHour reported that President Donald Trump acknowledged pushing for Jensen Huang's reinstatement as Nvidia's chief executive. Three statements were checkable: two were supported and one was unsettled."
  ]
 }
