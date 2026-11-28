@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.132.0](https://github.com/simpleishard-llc/calcite/compare/engine-v0.131.1...engine-v0.132.0) (2026-11-28)
+
+
+### Features
+
+* **govdata/banking:** loan and total-deposit columns on banking.financials ([b1749f4](https://github.com/simpleishard-llc/calcite/commit/b1749f4da86ff5871c5a13b83062e06f2a9dbb60))
+* **govdata:** econ.social_security_retirement_applications monthly SSA retirement applications ([e399a1a](https://github.com/simpleishard-llc/calcite/commit/e399a1a0794446759a3959abe4be50ec19cf62e8))
+* **said-and-checked:** 2026-11-27, 4 statements, 2 checked ([7b9ce50](https://github.com/simpleishard-llc/calcite/commit/7b9ce50395135ede61bf27faca35b1f854eded01))
+* **said-and-checked:** 2026-11-28, 16 statements, 1 checked ([7c148c6](https://github.com/simpleishard-llc/calcite/commit/7c148c635d24b64c87c8020475a371d37d47f21c))
+* **said-and-checked:** 2026-11-28, 16 statements, 3 checked ([e210a1e](https://github.com/simpleishard-llc/calcite/commit/e210a1e026f3223c85c2c3f4a0d86ff812b31697))
+
+
+### Bug Fixes
+
+* **file:** A drop-and-recreate invalidates the table's tracker state and refills it ([01e02e4](https://github.com/simpleishard-llc/calcite/commit/01e02e478d1a61461c39c6ea46382eab6e240f80))
+* **govdata/dq:** release the writer guard, require the DQ endpoint and remote ([fb41394](https://github.com/simpleishard-llc/calcite/commit/fb41394fa83f48fc7030dd0297e08da62583e6d3))
+* **govdata/environment:** read water_withdrawals vintages from Internet Archive captures ([f80b53c](https://github.com/simpleishard-llc/calcite/commit/f80b53c5a90309a061bb761347b89cc52cbec4cf))
+* **govdata/scripts:** R2 publish always uploads and verifies the version metadata json ([abfefd6](https://github.com/simpleishard-llc/calcite/commit/abfefd628593b5dba71eaae9e5b958b86198248c))
+* **govdata/scripts:** runners-dashboard --watch survives a failed gh call and marks the row unreadable ([43c6b2d](https://github.com/simpleishard-llc/calcite/commit/43c6b2d6a4a741fb62e33f232b25b359fdec2577))
+* **govdata/sec:** generated financial_line_items element_id is unique within a filing ([ffdd9af](https://github.com/simpleishard-llc/calcite/commit/ffdd9afd2cae85ecd373bf1b4534319664e1b97e))
+* **govdata:** connect the USACE vessel inventory POST inside the network outage wait ([1e6789e](https://github.com/simpleishard-llc/calcite/commit/1e6789e03d03cf528af510656504bd78d826c39d))
+* **govdata:** floor acs_rent_burden_by_income at the 2014 ACS vintage ([01b2bda](https://github.com/simpleishard-llc/calcite/commit/01b2bdada82bf044da996c30204cda7a543082db))
+* **govdata:** load private_dir and private_log in the sec cool-down test harness ([1253c3c](https://github.com/simpleishard-llc/calcite/commit/1253c3c9307197b2dbd6d61dedff165fd567ae85))
+* **pgwire-calcite,govdata:** accept Unicode string literals ([dbd9330](https://github.com/simpleishard-llc/calcite/commit/dbd9330c9b79ccd550c82f4354fa7c91921d99cf))
+* **transport:** read tvt_state_monthly from the FHWA index on highways.dot.gov ([4aca807](https://github.com/simpleishard-llc/calcite/commit/4aca807ba9e255f067d621c7894a3cc98dba5750))
+
 ## [0.131.1](https://github.com/kenstott/calcite/compare/engine-v0.131.0...engine-v0.131.1) (2026-11-27)
 
 
